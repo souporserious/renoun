@@ -24,6 +24,9 @@ import {
   vi,
 } from 'vitest'
 
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
+
 const BLOG_APP_PATH = fileURLToPath(
   new URL('../../../../apps/blog', import.meta.url)
 )
@@ -79,6 +82,12 @@ vi.mock('./prewarm.ts', () => ({
 }))
 
 let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
+const originalEnvironment = captureProcessEnv([
+  PROCESS_ENV_KEYS.renounServerPort,
+  PROCESS_ENV_KEYS.renounServerId,
+  PROCESS_ENV_KEYS.renounServerHost,
+  PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective,
+])
 
 async function waitForAssertion(
   assertion: () => void,
@@ -114,6 +123,7 @@ beforeEach(() => {
 
 afterEach(() => {
   process.chdir(originalCwd)
+  restoreProcessEnv(originalEnvironment)
 })
 
 describe('runAppCommand integration', () => {
@@ -161,6 +171,18 @@ describe('runAppCommand integration', () => {
 
     const rootOverridePath = join(projectRoot, 'root-config.ts')
     await writeFile(rootOverridePath, 'export const root = true\n')
+
+    createServerMock.mockImplementationOnce(async () => {
+      process.env[PROCESS_ENV_KEYS.renounServerHost] = '127.0.0.1'
+      process.env[PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective] =
+        '0'
+
+      return {
+        getPort: getPortMock,
+        getId: getIdMock,
+        cleanup: serverCleanupMock,
+      }
+    })
 
     let resolveExit!: (code: number) => void
     let exitResolved = false
@@ -236,6 +258,10 @@ describe('runAppCommand integration', () => {
       expect(spawnOptions?.cwd).toBe(runtimeRoot)
       expect(spawnOptions?.env).toMatchObject({
         RENOUN_RUNTIME_DIRECTORY: runtimeRoot,
+        [PROCESS_ENV_KEYS.renounServerPort]: '4321',
+        [PROCESS_ENV_KEYS.renounServerId]: 'integration-test-server',
+        [PROCESS_ENV_KEYS.renounServerHost]: '127.0.0.1',
+        [PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]: '0',
       })
 
       const runtimePackageJson = JSON.parse(

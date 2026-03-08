@@ -61,7 +61,23 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('wss://preview.example.dev:43123')
+    ).toBe('wss://preview.example.dev')
+  })
+
+  test('preserves the browser-visible port for proxied browser sessions', () => {
+    expect(
+      resolveBrowserWebSocketUrl(
+        {
+          port: '43123',
+          host: '127.0.0.1',
+        },
+        {
+          protocol: 'https:',
+          hostname: 'preview.example.dev',
+          port: '8443',
+        }
+      )
+    ).toBe('wss://preview.example.dev:8443')
   })
 
   test('falls back to the browser origin when no runtime host is exported', () => {
@@ -75,7 +91,7 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('wss://preview.example.dev:43123')
+    ).toBe('wss://preview.example.dev')
   })
 
   test('defaults to localhost when hostname is missing', () => {

@@ -35,6 +35,7 @@ type RpcCallCounters = {
   quickInfoFailuresByPosition: Map<number, number>
   quickInfoByRuntimeKey: Map<string, number>
   tokensByValue: Map<string, number>
+  tokensFailuresByValue: Map<string, number>
   tokensByThemeKey: Map<string, number>
   tokensWarmRequests: number
   sockets: Set<MockWebSocketInstance>
@@ -99,6 +100,7 @@ describe('QuickInfo browser regression', () => {
       quickInfoFailuresByPosition: new Map(),
       quickInfoByRuntimeKey: new Map(),
       tokensByValue: new Map(),
+      tokensFailuresByValue: new Map(),
       tokensByThemeKey: new Map(),
       tokensWarmRequests: 0,
       sockets: new Set(),
@@ -277,6 +279,77 @@ describe('QuickInfo browser regression', () => {
     expect(counters.tokensByThemeKey.get(`${shortDisplayText}:dark`)).toBe(1)
     expect(counters.tokensByThemeKey.get(`${shortDisplayText}:light`)).toBe(1)
     expect(counters.tokensWarmRequests).toBeGreaterThanOrEqual(2)
+  })
+
+  it('retries display tokenization after a transient transport failure', async () => {
+    const shortDisplayText = QUICK_INFO_BY_POSITION.get(
+      SHORT_SYMBOL_POSITION
+    )!.displayText
+    counters.tokensFailuresByValue.set(shortDisplayText, 1)
+    renderQuickInfoFixture(root, 'token-transient-failure')
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+      1_000
+    )
+    const symbol = getSymbolAnchor('symbol-short')
+
+    hoverSymbol(symbol)
+    await waitFor(
+      () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
+      1_000
+    )
+    await waitFor(() => counters.tokensByValue.get(shortDisplayText) === 1, 1_000)
+    leaveSymbol(symbol)
+    await waitFor(() => !getPopover(), 1_000)
+
+    hoverSymbol(symbol)
+    await waitFor(() => counters.tokensByValue.get(shortDisplayText) === 2, 1_000)
+    await waitFor(() => {
+      const tokenNode = getPopover()?.querySelector('pre span')
+      if (!tokenNode) {
+        return false
+      }
+
+      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+    }, 1_000)
+  })
+
+  it('re-highlights quick info when the active theme changes while the popover stays open', async () => {
+    renderQuickInfoFixture(root, 'theme-switch-open')
+    const shortDisplayText = QUICK_INFO_BY_POSITION.get(
+      SHORT_SYMBOL_POSITION
+    )!.displayText
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+      1_000
+    )
+    const symbol = getSymbolAnchor('symbol-short')
+
+    hoverSymbol(symbol)
+    await waitFor(() => {
+      const tokenNode = getPopover()?.querySelector('pre span')
+      if (!tokenNode) {
+        return false
+      }
+
+      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+    }, 1_000)
+
+    document.documentElement.setAttribute('data-theme', 'light')
+    await waitFor(() => {
+      const tokenNode = getPopover()?.querySelector('pre span')
+      if (!tokenNode) {
+        return false
+      }
+
+      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(255, 0, 0)'
+    }, 1_000)
+
+    expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBe(1)
+    expect(counters.tokensByThemeKey.get(`${shortDisplayText}:dark`)).toBe(1)
+    expect(counters.tokensByThemeKey.get(`${shortDisplayText}:light`)).toBe(1)
   })
 
   it('resizes between different hover targets without keeping stale dimensions', async () => {
@@ -753,6 +826,18 @@ function resolveMockRpcResponse(
       tokenThemeKey,
       (counters.tokensByThemeKey.get(tokenThemeKey) ?? 0) + 1
     )
+
+    const remainingFailures = counters.tokensFailuresByValue.get(displayText) ?? 0
+    if (remainingFailures > 0) {
+      counters.tokensFailuresByValue.set(displayText, remainingFailures - 1)
+      return {
+        id: request.id,
+        error: {
+          code: -32000,
+          message: 'Transient getTokens failure',
+        },
+      }
+    }
 
     return {
       id: request.id,

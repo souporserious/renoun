@@ -493,6 +493,10 @@ export async function runAppCommand({
 
     const frameworkArgs = [frameworkBinPath, command]
     frameworkArgs.push(...forwardedArgs)
+    const serverHost =
+      process.env[PROCESS_ENV_KEYS.renounServerHost]
+    const serverRefreshNotificationsEffective =
+      process.env[PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]
 
     subProcess = spawn(process.execPath, frameworkArgs, {
       stdio: ['inherit', 'pipe', 'pipe'],
@@ -503,6 +507,18 @@ export async function runAppCommand({
         RENOUN_RUNTIME_DIRECTORY: runtimeDirectory,
         [PROCESS_ENV_KEYS.renounServerPort]: port,
         [PROCESS_ENV_KEYS.renounServerId]: id,
+        ...(typeof serverHost === 'string' && serverHost.length > 0
+          ? {
+              [PROCESS_ENV_KEYS.renounServerHost]: serverHost,
+            }
+          : {}),
+        ...(typeof serverRefreshNotificationsEffective === 'string' &&
+        serverRefreshNotificationsEffective.length > 0
+          ? {
+              [PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]:
+                serverRefreshNotificationsEffective,
+            }
+          : {}),
       },
     })
 

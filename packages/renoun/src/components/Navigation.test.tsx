@@ -93,6 +93,21 @@ interface FakeCollectionSource {
   getRootEntries: () => readonly FakeDirectoryEntry[]
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 function createFakeDirectoryEntry(
   pathname: string,
   options?: {
@@ -243,6 +258,70 @@ describe('Navigation development SWR', () => {
 
     expect(firstSource.getEntries).toHaveBeenCalledTimes(1)
     expect(secondSource.getEntries).toHaveBeenCalledTimes(2)
+  })
+
+  test('does not mark a slow refresh as current when another invalidation lands mid-flight', async () => {
+    let invalidateListener: ((path: string) => void) | undefined
+    const onInvalidate = vi.fn((listener: (path: string) => void) => {
+      invalidateListener = listener
+      return () => {}
+    })
+
+    const rootDirectory = createFakeDirectoryEntry('/docs')
+    const oldEntries = [
+      createFakeFileEntry('Old Page', '/docs/old-page', rootDirectory),
+    ] as const
+    const firstEditEntries = [
+      createFakeFileEntry('First Edit', '/docs/first-edit', rootDirectory),
+    ] as const
+    const secondEditEntries = [
+      createFakeFileEntry('Second Edit', '/docs/second-edit', rootDirectory),
+    ] as const
+    const slowRefresh = createDeferred<readonly FakeFileEntry[]>()
+    let getEntriesCallCount = 0
+
+    const source = createFakeDirectoryEntry('/docs', {
+      onInvalidate,
+      getEntries: vi.fn(async () => {
+        getEntriesCallCount += 1
+
+        if (getEntriesCallCount === 1) {
+          return oldEntries
+        }
+
+        if (getEntriesCallCount === 2) {
+          return slowRefresh.promise
+        }
+
+        return secondEditEntries
+      }),
+    })
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    const firstElement = await Navigation({ source: source as any })
+    const firstMarkup = renderToStaticMarkup(<>{firstElement}</>)
+    expect(firstMarkup).toContain('Old Page')
+    expect(invalidateListener).toBeTypeOf('function')
+
+    invalidateListener?.('/docs/first-edit.mdx')
+    const secondNavigationPromise = Navigation({ source: source as any })
+    await Promise.resolve()
+    expect(source.getEntries).toHaveBeenCalledTimes(2)
+
+    invalidateListener?.('/docs/second-edit.mdx')
+    slowRefresh.resolve(firstEditEntries)
+
+    const secondElement = await secondNavigationPromise
+    const secondMarkup = renderToStaticMarkup(<>{secondElement}</>)
+    expect(secondMarkup).toContain('First Edit')
+    expect(secondMarkup).not.toContain('Second Edit')
+
+    const thirdElement = await Navigation({ source: source as any })
+    const thirdMarkup = renderToStaticMarkup(<>{thirdElement}</>)
+    expect(source.getEntries).toHaveBeenCalledTimes(3)
+    expect(thirdMarkup).toContain('Second Edit')
+    expect(thirdMarkup).not.toContain('First Edit')
   })
 
   test('unsubscribes invalidation listeners when a source is finalized', async () => {

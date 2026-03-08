@@ -154,6 +154,47 @@ describe('project client transport guards', () => {
     expect(callMethod).toHaveBeenCalledTimes(2)
   })
 
+  test('disables client RPC cache when refresh notifications are effectively unavailable', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    delete process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+    delete process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
+    delete process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS']
+
+    let resolveTypeCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'resolveTypeAtLocationWithDependencies') {
+        return { resolveTypeCallCount: ++resolveTypeCallCount }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const first = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const second = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(first).toMatchObject({ resolveTypeCallCount: 1 })
+    expect(second).toMatchObject({ resolveTypeCallCount: 2 })
+    expect(callMethod).toHaveBeenCalledTimes(2)
+  })
+
   test('resolveTypeAtLocation preserves the legacy public API shape', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

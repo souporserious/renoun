@@ -182,6 +182,14 @@ function useProjectClientRefreshVersionSnapshot(): string {
   )
 }
 
+function useActiveThemeName(anchorId: string | undefined): string | undefined {
+  return React.useSyncExternalStore(
+    subscribeToQuickInfoThemeChanges,
+    () => readActiveThemeName(anchorId),
+    () => readActiveThemeName(anchorId)
+  )
+}
+
 export function QuickInfoClientPopover({
   diagnostics,
   quickInfo,
@@ -211,6 +219,7 @@ export function QuickInfoClientPopover({
   const { quickInfo: activeQuickInfo } = useQuickInfoContext()
   const activeRuntime = useActiveProjectServerRuntime(request?.runtime)
   const refreshVersion = useProjectClientRefreshVersionSnapshot()
+  const activeThemeName = useActiveThemeName(activeQuickInfo?.anchorId)
   const effectiveProjectVersion = React.useMemo(() => {
     if (!activeRuntime) {
       return request?.projectVersion
@@ -238,9 +247,6 @@ export function QuickInfoClientPopover({
       projectVersion: effectiveProjectVersion,
     } satisfies QuickInfoRequest
   }, [activeRuntime, effectiveProjectVersion, request])
-  const activeThemeName = React.useMemo(() => {
-    return readActiveThemeName(activeQuickInfo?.anchorId)
-  }, [activeQuickInfo?.anchorId])
   const requestKey = effectiveRequest ? toQuickInfoCacheKey(effectiveRequest) : ''
   const requestThemeKey = effectiveRequest
     ? toQuickInfoThemeCacheKey(effectiveRequest.themeConfig)
@@ -599,7 +605,11 @@ async function getQuickInfoDisplayTokensForRequest(
     requestDisplayTokensOverWebSocket(request, displayText, tokenThemeConfig)
   )
     .then((value) => {
-      writeQuickInfoDisplayTokensCache(cacheKey, value)
+      // Transport failures and empty token payloads are both normalized to null.
+      // Retry those on the next hover instead of pinning an unhighlighted fallback.
+      if (value !== null) {
+        writeQuickInfoDisplayTokensCache(cacheKey, value)
+      }
       return value
     })
     .finally(() => {
@@ -764,6 +774,37 @@ function readActiveThemeName(anchorId: string | undefined): string | undefined {
   }
 
   return undefined
+}
+
+function subscribeToQuickInfoThemeChanges(onStoreChange: () => void): () => void {
+  if (
+    typeof document === 'undefined' ||
+    typeof MutationObserver !== 'function'
+  ) {
+    return () => {}
+  }
+
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (
+        mutation.type === 'attributes' &&
+        mutation.attributeName === 'data-theme'
+      ) {
+        onStoreChange()
+        return
+      }
+    }
+  })
+
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+    subtree: true,
+  })
+
+  return () => {
+    observer.disconnect()
+  }
 }
 
 function toQuickInfoDisplayTokensCacheKey(

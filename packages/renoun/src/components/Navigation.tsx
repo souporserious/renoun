@@ -227,6 +227,7 @@ async function getNavigationEntriesWithDevSWR({
     }
 
     if (!cacheEntry.refreshTask) {
+      const refreshEpoch = sourceState.invalidationEpoch
       cacheEntry.refreshTask = readNavigationEntriesWithTracking(
         source,
         readEntries
@@ -234,7 +235,7 @@ async function getNavigationEntriesWithDevSWR({
         .then((nextEntries) => {
           cacheEntry.value = nextEntries
           cacheEntry.updatedAt = Date.now()
-          cacheEntry.invalidationEpoch = sourceState.invalidationEpoch
+          cacheEntry.invalidationEpoch = refreshEpoch
           return nextEntries
         })
         .catch((error) => {
@@ -259,9 +260,10 @@ async function getNavigationEntriesWithDevSWR({
     return cacheEntry.refreshTask
   }
 
+  const refreshEpoch = sourceState.invalidationEpoch
   const createdEntry: DevNavigationEntriesCacheEntry = {
     updatedAt: 0,
-    invalidationEpoch: sourceState.invalidationEpoch,
+    invalidationEpoch: refreshEpoch,
   }
   const refreshTask = readNavigationEntriesWithTracking(source, readEntries)
   createdEntry.refreshTask = refreshTask
@@ -271,7 +273,7 @@ async function getNavigationEntriesWithDevSWR({
     const entries = await refreshTask
     createdEntry.value = entries
     createdEntry.updatedAt = Date.now()
-    createdEntry.invalidationEpoch = sourceState.invalidationEpoch
+    createdEntry.invalidationEpoch = refreshEpoch
     return entries
   } catch (error) {
     if (cacheBucket.get(cacheKey) === createdEntry) {
