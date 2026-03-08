@@ -78,6 +78,7 @@ describe('project server refresh invalidations', () => {
     server = undefined
 
     globalThis.WebSocket = originalWebSocket
+    vi.useRealTimers()
     vi.restoreAllMocks()
     watcherState.callback = undefined
     restoreProcessEnv(originalEnvironment)
@@ -103,6 +104,51 @@ describe('project server refresh invalidations', () => {
     expect(response.nextCursor).toBe(0)
     expect(response.filePaths?.length).toBe(1)
     expect(response.filePath).toBe(response.filePaths?.[0])
+  })
+
+  test('resyncs from the cursor immediately before retained refresh history', async () => {
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
+    server = await createServer({ host: '127.0.0.1' })
+
+    const callback = watcherState.callback
+    expect(typeof callback).toBe('function')
+
+    if (!callback) {
+      throw new Error('[renoun] expected root watcher callback to be defined')
+    }
+
+    vi.useFakeTimers()
+
+    try {
+      for (let index = 1; index <= 251; index += 1) {
+        callback('change', `src/retained-history-${index}.ts`)
+        await vi.advanceTimersByTimeAsync(60)
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+    const response = await client.callMethod<
+      { sinceCursor: number },
+      RefreshInvalidationsSinceResponse
+    >('getRefreshInvalidationsSince', {
+      sinceCursor: 1,
+    })
+
+    expect(response.fullRefresh).toBe(false)
+    expect(response.nextCursor).toBe(251)
+    expect(response.filePath).toBe(response.filePaths?.[0])
+    expect(response.filePaths).toHaveLength(250)
+    expect(response.filePaths).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('src/retained-history-2.ts'),
+        expect.stringContaining('src/retained-history-251.ts'),
+      ])
+    )
   })
 
   test('publishes the effective refresh notification mode to process env', async () => {

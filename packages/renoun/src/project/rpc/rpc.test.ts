@@ -180,6 +180,64 @@ describe('project WebSocket RPC', () => {
     expect(sum).toBe(5)
   })
 
+  it('connects to an explicit runtime endpoint without relying on process env', async () => {
+    const explicitServer = new WebSocketServer({
+      port: 0,
+      host: '127.0.0.1',
+    })
+    await explicitServer.isReady()
+
+    explicitServer.registerMethod('whichServer', () => 'explicit-endpoint', {
+      memoize: false,
+      concurrency: 0,
+    })
+
+    const explicitPort = await explicitServer.getPort()
+    const previousExplicitPort = process.env.RENOUN_SERVER_PORT
+    const previousExplicitHost = process.env.RENOUN_SERVER_HOST
+    delete process.env.RENOUN_SERVER_PORT
+    delete process.env.RENOUN_SERVER_HOST
+
+    let explicitClient: WebSocketClient | undefined
+
+    try {
+      explicitClient = new WebSocketClient(explicitServer.getId(), {
+        port: explicitPort.toString(),
+        host: '127.0.0.1',
+      })
+      await explicitClient.ready(2_000)
+
+      const result = await explicitClient.callMethod<{}, string>(
+        'whichServer',
+        {}
+      )
+      expect(result).toBe('explicit-endpoint')
+    } finally {
+      if (previousExplicitPort === undefined) {
+        delete process.env.RENOUN_SERVER_PORT
+      } else {
+        process.env.RENOUN_SERVER_PORT = previousExplicitPort
+      }
+
+      if (previousExplicitHost === undefined) {
+        delete process.env.RENOUN_SERVER_HOST
+      } else {
+        process.env.RENOUN_SERVER_HOST = previousExplicitHost
+      }
+
+      if (explicitClient) {
+        await new Promise<void>((resolve) => {
+          explicitClient.once('disconnected', () => resolve())
+          explicitClient.close()
+        })
+        explicitClient.removeAllListeners()
+      }
+
+      explicitServer.cleanup()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+  })
+
   it('memoises results when enabled', async () => {
     const first = await client.callMethod<{}, number>('random', {})
     const second = await client.callMethod<{}, number>('random', {})

@@ -1212,7 +1212,7 @@ export async function createServer(options?: CreateServerOptions) {
       const oldestAvailableCursor = refreshHistory[0]?.cursor
       if (
         oldestAvailableCursor !== undefined &&
-        normalizedSinceCursor < oldestAvailableCursor
+        normalizedSinceCursor < oldestAvailableCursor - 1
       ) {
         return {
           nextCursor: refreshCursor,

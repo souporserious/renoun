@@ -1,4 +1,3 @@
-import { getRootDirectory } from './get-root-directory.ts'
 import { PROCESS_ENV_KEYS } from './env-keys.ts'
 
 export type DebugLevel = 'error' | 'warn' | 'info' | 'debug' | 'trace'
@@ -27,7 +26,28 @@ const MAX_PRINTED_JSON = 16_384 // 16KB
 
 /** Replace absolute workspace roots with a placeholder. */
 function trimRootDirectory(input: string): string {
-  return input.replaceAll(getRootDirectory(), '')
+  const rootDirectory = getDebugRootDirectory()
+  if (!rootDirectory) {
+    return input
+  }
+
+  return input.replaceAll(rootDirectory, '')
+}
+
+function getDebugRootDirectory(): string | undefined {
+  if (typeof window !== 'undefined' || typeof process === 'undefined') {
+    return undefined
+  }
+
+  if (typeof process.cwd === 'function') {
+    try {
+      return process.cwd()
+    } catch {
+      return process.env?.PWD
+    }
+  }
+
+  return process.env?.PWD
 }
 
 const RE_OSC = /\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g // OSC ... BEL or ST
@@ -295,6 +315,10 @@ const ANSI = {
 
 function supportsAnsiColor(): boolean {
   try {
+    if (typeof process === 'undefined') {
+      return false
+    }
+
     if ('NO_COLOR' in process.env) {
       return false
     }
@@ -391,8 +415,10 @@ class DebugLogger {
   #maxObjectKeys: number
 
   constructor() {
-    const envValue = String(process.env[PROCESS_ENV_KEYS.renounDebug] || '')
-      .toLowerCase()
+    const envValue =
+      typeof process === 'undefined'
+        ? ''
+        : String(process.env[PROCESS_ENV_KEYS.renounDebug] || '').toLowerCase()
     const validLevels: DebugLevel[] = [
       'error',
       'warn',

@@ -12,10 +12,13 @@ import {
   onProjectClientBrowserRefreshVersionChange,
   onProjectClientBrowserRuntimeChange,
 } from '../../project/browser-runtime.ts'
+import {
+  getQuickInfoAtPosition as getProjectClientQuickInfoAtPosition,
+  getTokens as getProjectClientTokens,
+} from '../../project/browser-client.ts'
 import { retainProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
-import { resolveBrowserWebSocketUrl } from '../../project/rpc/browser-websocket-url.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { QuickInfoPopover } from './QuickInfoPopover.tsx'
 import { useQuickInfoContext } from './QuickInfoProvider.tsx'
@@ -38,6 +41,7 @@ interface QuickInfoRequest {
   position: number
   projectVersion?: string
   valueSignature?: string
+  cacheDisabled?: boolean
   runtime: ProjectServerRuntime
   themeConfig?: ConfigurationOptions['theme']
 }
@@ -111,7 +115,6 @@ const QUICK_INFO_KEYWORDS = new Set([
 
 const QUICK_INFO_TOKEN_PATTERN =
   /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[\r\n]+|[ \t]+|[^\sA-Za-z0-9_$]+)/g
-const QUICK_INFO_REQUEST_TIMEOUT_MS = 12_000
 const QUICK_INFO_FETCH_CONCURRENCY = 4
 const QUICK_INFO_CACHE_MAX_ENTRIES = 1_000
 const QUICK_INFO_CACHE_TTL_MS =
@@ -138,7 +141,6 @@ const quickInfoDocumentationInFlightByKey = new Map<
   string,
   Promise<React.ReactNode | string>
 >()
-let nextQuickInfoRequestId = 1
 let quickInfoFetchActiveCount = 0
 const quickInfoFetchWaiters: Array<() => void> = []
 
@@ -164,7 +166,9 @@ function useActiveProjectServerRuntime(
   initialRuntime: ProjectServerRuntime | undefined
 ): ProjectServerRuntime | undefined {
   React.useEffect(() => {
-    return retainProjectClientBrowserRuntime(initialRuntime)
+    return retainProjectClientBrowserRuntime(initialRuntime, {
+      preferCurrentRuntime: true,
+    })
   }, [initialRuntime?.host, initialRuntime?.id, initialRuntime?.port])
 
   return React.useSyncExternalStore(
@@ -544,9 +548,13 @@ async function getQuickInfoForRequest(
   request: QuickInfoRequest
 ): Promise<QuickInfoData | null> {
   const cacheKey = toQuickInfoCacheKey(request)
-  const cached = readQuickInfoCache(cacheKey)
-  if (cached !== undefined) {
-    return cached
+  const shouldBypassCache = request.cacheDisabled === true
+
+  if (!shouldBypassCache) {
+    const cached = readQuickInfoCache(cacheKey)
+    if (cached !== undefined) {
+      return cached
+    }
   }
 
   const inFlight = quickInfoInFlightByKey.get(cacheKey)
@@ -555,12 +563,12 @@ async function getQuickInfoForRequest(
   }
 
   const requestPromise = runQuickInfoFetchTask(async () =>
-    requestQuickInfoOverWebSocket(request)
+    requestQuickInfo(request)
   )
     .then((value) => {
       // Transport failures and missing quick info are both normalized to null.
       // Retry those on the next hover instead of pinning an empty result.
-      if (value !== null) {
+      if (value !== null && !shouldBypassCache) {
         writeQuickInfoCache(cacheKey, value)
       }
       return value
@@ -602,7 +610,7 @@ async function getQuickInfoDisplayTokensForRequest(
   }
 
   const requestPromise = runQuickInfoFetchTask(async () =>
-    requestDisplayTokensOverWebSocket(request, displayText, tokenThemeConfig)
+    requestDisplayTokens(request, displayText, tokenThemeConfig)
   )
     .then((value) => {
       // Transport failures and empty token payloads are both normalized to null.
@@ -1044,159 +1052,53 @@ function normalizeQuickInfoTokenStyle(style: unknown): Record<string, string> {
   return normalized
 }
 
-function readRpcResponseForRequest(
-  payload: unknown,
-  requestId: number
-):
-  | {
-      result?: unknown
-      error?: unknown
-    }
-  | undefined {
-  if (Array.isArray(payload)) {
-    for (const item of payload) {
-      const response = readRpcResponseForRequest(item, requestId)
-      if (response) {
-        return response
-      }
-    }
-
-    return undefined
-  }
-
-  if (!payload || typeof payload !== 'object') {
-    return undefined
-  }
-
-  const candidate = payload as {
-    id?: unknown
-    result?: unknown
-    error?: unknown
-  }
-
-  if (candidate.id !== requestId) {
-    return undefined
-  }
-
-  return {
-    result: candidate.result,
-    error: candidate.error,
-  }
-}
-
-async function requestQuickInfoOverWebSocket(
+async function requestQuickInfo(
   request: QuickInfoRequest
 ): Promise<QuickInfoData | null> {
-  return requestRpcMethodOverWebSocket(
-    request,
-    'getQuickInfoAtPosition',
-    {
-      filePath: request.filePath,
-      position: request.position,
-    },
-    normalizeQuickInfoResult
-  )
+  try {
+    const result = await getProjectClientQuickInfoAtPosition(
+      request.filePath,
+      request.position
+    )
+    return normalizeQuickInfoResult(result)
+  } catch {
+    return null
+  }
 }
 
-async function requestDisplayTokensOverWebSocket(
-  request: QuickInfoRequest,
+async function requestDisplayTokens(
+  _request: QuickInfoRequest,
   value: string,
   tokenThemeConfig: ConfigurationOptions['theme'] | undefined
 ): Promise<QuickInfoTokenizedDisplayText | null> {
-  return requestRpcMethodOverWebSocket(
-    request,
-    'getTokens',
-    {
+  try {
+    const result = await getProjectClientTokens({
       value,
       language: 'typescript',
       theme: tokenThemeConfig,
       allowErrors: true,
       waitForWarmResult: true,
-    },
-    normalizeQuickInfoTokenizedDisplayText
-  )
-}
-
-async function requestRpcMethodOverWebSocket<Result>(
-  request: QuickInfoRequest,
-  method: string,
-  params: Record<string, unknown>,
-  normalizeResult: (value: unknown) => Result | null
-): Promise<Result | null> {
-  if (typeof window === 'undefined' || typeof WebSocket === 'undefined') {
+    })
+    return normalizeQuickInfoTokenizedDisplayText(result)
+  } catch {
     return null
   }
+}
 
-  return new Promise((resolve) => {
-    const requestId = nextQuickInfoRequestId++
-    const url = resolveBrowserWebSocketUrl(request.runtime)
-    const socket = new WebSocket(url, request.runtime.id)
-    let settled = false
+export function clearQuickInfoClientPopoverCaches(): void {
+  quickInfoCacheByKey.clear()
+  quickInfoInFlightByKey.clear()
+  quickInfoDisplayTokensCacheByKey.clear()
+  quickInfoDisplayTokensInFlightByKey.clear()
+  quickInfoDocumentationCacheByKey.clear()
+  quickInfoDocumentationInFlightByKey.clear()
+  quickInfoFetchActiveCount = 0
+  quickInfoFetchWaiters.length = 0
+}
 
-    const finalize = (value: Result | null) => {
-      if (settled) {
-        return
-      }
-
-      settled = true
-      clearTimeout(timeoutId)
-      try {
-        socket.close()
-      } catch {
-        // Ignore close failures.
-      }
-      resolve(value)
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      finalize(null)
-    }, QUICK_INFO_REQUEST_TIMEOUT_MS)
-
-    socket.addEventListener('open', () => {
-      try {
-        socket.send(
-          JSON.stringify({
-            id: requestId,
-            method,
-            params,
-          })
-        )
-      } catch {
-        finalize(null)
-      }
-    })
-
-    socket.addEventListener('message', (event) => {
-      if (typeof event.data !== 'string') {
-        return
-      }
-
-      try {
-        const payload = JSON.parse(event.data)
-        const response = readRpcResponseForRequest(payload, requestId)
-        if (!response) {
-          return
-        }
-
-        if (response.error) {
-          finalize(null)
-          return
-        }
-
-        finalize(normalizeResult(response.result))
-      } catch {
-        // Ignore malformed messages and continue waiting.
-      }
-    })
-
-    socket.addEventListener('error', () => {
-      finalize(null)
-    })
-
-    socket.addEventListener('close', () => {
-      finalize(null)
-    })
-  })
+export const __TEST_ONLY__ = {
+  clearQuickInfoClientPopoverCaches,
+  getQuickInfoForRequest,
 }
 
 const Container = styled('div', {

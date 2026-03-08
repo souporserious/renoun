@@ -49,6 +49,8 @@ import {
 } from './cache.ts'
 import {
   getProjectClientBrowserRuntime as getSharedProjectClientBrowserRuntime,
+  getProjectServerRuntimeKey,
+  normalizeProjectServerRuntime,
   onProjectClientBrowserRefreshVersionChange as onSharedProjectClientBrowserRefreshVersionChange,
   onProjectClientBrowserRuntimeChange as onSharedProjectClientBrowserRuntimeChange,
   setProjectClientBrowserRefreshVersion as setSharedProjectClientBrowserRefreshVersion,
@@ -209,21 +211,13 @@ export function onProjectClientBrowserRuntimeChange(
 export function setProjectClientBrowserRuntime(
   runtime?: ProjectServerRuntime
 ): void {
-  const normalizedRuntime = runtime
-    ? {
-        id: String(runtime.id),
-        port: String(runtime.port),
-        ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
-          ? { host: runtime.host.trim() }
-          : {}),
-      }
-    : undefined
+  const normalizedRuntime = normalizeProjectServerRuntime(runtime)
   const currentRuntime = getSharedProjectClientBrowserRuntime()
   const currentRuntimeKey = currentRuntime
-    ? toServerRuntimeKey(currentRuntime)
+    ? getProjectServerRuntimeKey(currentRuntime)
     : undefined
   const nextRuntimeKey = normalizedRuntime
-    ? toServerRuntimeKey(normalizedRuntime)
+    ? getProjectServerRuntimeKey(normalizedRuntime)
     : undefined
 
   if (currentRuntimeKey === nextRuntimeKey) {
@@ -945,7 +939,7 @@ function attachClientRefreshSubscriptions(
 }
 
 function toServerRuntimeKey(runtime: ProjectServerRuntime): string {
-  return `${runtime.id}:${runtime.host ?? 'localhost'}:${runtime.port}`
+  return getProjectServerRuntimeKey(runtime) ?? `${runtime.id}:${runtime.port}`
 }
 
 function disposeActiveClient(): void {
@@ -982,7 +976,7 @@ function disposeActiveClient(): void {
 function createClientForRuntime(
   runtime: ProjectServerRuntime
 ): WebSocketClient {
-  client = new WebSocketClient(runtime.id)
+  client = new WebSocketClient(runtime.id, runtime)
   clientRuntimeKey = toServerRuntimeKey(runtime)
   hasAttachedClientRefreshSubscriptions = false
   clientReadyProbePromise = null

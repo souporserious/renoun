@@ -44,6 +44,8 @@ import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 import {
   getServerRuntimeFromProcessEnv,
+  resolveServerRefreshNotificationsEffectiveFromEnv,
+  resolveServerRefreshNotificationsEnvOverride,
   type ProjectServerRuntime,
 } from '../../project/runtime-env.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
@@ -550,6 +552,20 @@ export function getQuickInfoProjectVersion(
   return `${runtime.id}:${getProjectClientRefreshVersion()}`
 }
 
+export function shouldDisableQuickInfoClientCache(
+  runtime: ProjectServerRuntime | undefined
+): boolean {
+  if (!runtime) {
+    return false
+  }
+
+  if (resolveServerRefreshNotificationsEffectiveFromEnv() === false) {
+    return true
+  }
+
+  return resolveServerRefreshNotificationsEnvOverride() === false
+}
+
 interface RenderTokenOptions {
   token: Token
   tokenIndex: number
@@ -678,6 +694,9 @@ function renderToken({
                 position: token.start,
                 projectVersion: quickInfoProjectVersion,
                 valueSignature: quickInfoValueSignature,
+                cacheDisabled: shouldDisableQuickInfoClientCache(
+                  quickInfoRuntime
+                ),
                 runtime: quickInfoRuntime!,
                 themeConfig: quickInfoThemeConfig,
               }

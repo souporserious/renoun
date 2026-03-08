@@ -1,12 +1,10 @@
-import { EventEmitter } from 'node:events'
-
 import { getDebugLogger } from '../../utils/debug.ts'
 import { PROCESS_ENV_KEYS } from '../../utils/env-keys.ts'
 import { safeAssign } from '../../utils/safe-assign.ts'
 import {
   getServerHostFromProcessEnv,
-  getServerPortForLogging,
   getServerPortFromProcessEnv,
+  type ProjectServerRuntime,
 } from '../runtime-env.ts'
 import { resolveBrowserWebSocketUrl } from './browser-websocket-url.ts'
 import type { WebSocketResponse } from './server.ts'
@@ -41,6 +39,77 @@ interface WebSocketClientErrorContext {
 type WebSocketClientErrorMessageFn = (
   context: WebSocketClientErrorContext
 ) => string
+
+type EventListener = (...args: any[]) => void
+
+class EventEmitter {
+  readonly #listeners = new Map<string | symbol, Set<EventListener>>()
+
+  on(eventName: string | symbol, listener: EventListener): this {
+    const listeners = this.#listeners.get(eventName)
+    if (listeners) {
+      listeners.add(listener)
+    } else {
+      this.#listeners.set(eventName, new Set([listener]))
+    }
+
+    return this
+  }
+
+  once(eventName: string | symbol, listener: EventListener): this {
+    const wrappedListener: EventListener = (...args: any[]) => {
+      this.off(eventName, wrappedListener)
+      listener(...args)
+    }
+
+    return this.on(eventName, wrappedListener)
+  }
+
+  off(eventName: string | symbol, listener: EventListener): this {
+    const listeners = this.#listeners.get(eventName)
+    if (!listeners) {
+      return this
+    }
+
+    listeners.delete(listener)
+    if (listeners.size === 0) {
+      this.#listeners.delete(eventName)
+    }
+
+    return this
+  }
+
+  removeListener(eventName: string | symbol, listener: EventListener): this {
+    return this.off(eventName, listener)
+  }
+
+  removeAllListeners(eventName?: string | symbol): this {
+    if (eventName === undefined) {
+      this.#listeners.clear()
+      return this
+    }
+
+    this.#listeners.delete(eventName)
+    return this
+  }
+
+  emit(eventName: string | symbol, ...args: any[]): boolean {
+    const listeners = this.#listeners.get(eventName)
+    if (!listeners || listeners.size === 0) {
+      return false
+    }
+
+    for (const listener of Array.from(listeners)) {
+      listener(...args)
+    }
+
+    return true
+  }
+
+  listenerCount(eventName: string | symbol): number {
+    return this.#listeners.get(eventName)?.size ?? 0
+  }
+}
 
 const REQUEST_TIMEOUT_MS = 120_000 // 120s
 const PENDING_LIMIT = 1000 // 1000 requests
@@ -144,8 +213,9 @@ class WebSocketClientError extends Error {
 export class WebSocketClient extends EventEmitter {
   #ws!: WebSocket
   #serverId: string
+  #runtime?: ProjectServerRuntime
   #shouldRetry = true
-  #retryTimeout?: NodeJS.Timeout
+  #retryTimeout?: ReturnType<typeof setTimeout>
   #isConnected = false
   #connectionState: ConnectionState = 'connecting'
   #connectionStartTime: number = 0
@@ -169,7 +239,7 @@ export class WebSocketClient extends EventEmitter {
   // frames that have been sent on the current socket and still have unresolved ids
   #framesInFlight: Array<{ ids: Set<number>; payload: string }> = []
 
-  #flushTimer?: NodeJS.Timeout
+  #flushTimer?: ReturnType<typeof setTimeout>
   #MAX_BUFFERED = 8 * 1024 * 1024
 
   // reconnect tuning (faster + more tries for CI flaps)
@@ -188,15 +258,45 @@ export class WebSocketClient extends EventEmitter {
     this.#handleMessage(event.data)
   #handleErrorEvent = (event: any) => this.#handleError(event)
   #handleCloseEvent = (event: CloseEvent) =>
-    this.#handleClose(
-      event.code,
-      event.reason ? Buffer.from(event.reason) : undefined
-    )
+    this.#handleClose(event.code, event.reason)
 
-  constructor(serverId: string) {
+  constructor(serverId: string, runtime?: ProjectServerRuntime) {
     super()
     this.#serverId = serverId
+    this.#runtime = runtime
+      ? {
+          id: String(runtime.id),
+          port: String(runtime.port),
+          ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
+            ? { host: runtime.host.trim() }
+            : {}),
+        }
+      : undefined
     this.#connect()
+  }
+
+  #getConnectionHost(): string | undefined {
+    if (this.#runtime) {
+      return this.#runtime.host
+    }
+
+    return getServerHostFromProcessEnv()
+  }
+
+  #getConnectionPort(): string | undefined {
+    if (this.#runtime) {
+      return this.#runtime.port
+    }
+
+    return getServerPortFromProcessEnv()
+  }
+
+  #getConnectionPortForLogging(): string {
+    return this.#getConnectionPort() ?? 'unknown'
+  }
+
+  #getConnectionHostForLogging(): string {
+    return this.#getConnectionHost() ?? 'localhost'
   }
 
   /** Optional: await until connected (good for startup sequencing). */
@@ -231,8 +331,8 @@ export class WebSocketClient extends EventEmitter {
             {
               connectionState: this.#connectionState,
               connectionTime: formatConnectionTime(this.#connectionStartTime),
-              port: getServerPortForLogging(),
-              host: getServerHostFromProcessEnv() ?? 'localhost',
+              port: this.#getConnectionPortForLogging(),
+              host: this.#getConnectionHostForLogging(),
             }
           )
         )
@@ -252,7 +352,7 @@ export class WebSocketClient extends EventEmitter {
       this.#sendFrame(ids, payload)
       return true
     }
-    const bytes = Buffer.byteLength(payload)
+    const bytes = getPayloadByteLength(payload)
     if (
       this.#pendingRequests.length >= PENDING_LIMIT ||
       this.#pendingBytes + bytes > PENDING_BYTES_LIMIT
@@ -263,8 +363,8 @@ export class WebSocketClient extends EventEmitter {
         {
           connectionState: this.#connectionState,
           connectionTime: formatConnectionTime(this.#connectionStartTime),
-          port: getServerPortForLogging(),
-          host: getServerHostFromProcessEnv() ?? 'localhost',
+          port: this.#getConnectionPortForLogging(),
+          host: this.#getConnectionHostForLogging(),
         }
       )
       // reject all ids that would have been part of this frame
@@ -284,7 +384,10 @@ export class WebSocketClient extends EventEmitter {
       return
     }
 
-    while (this.#queue.length && this.#ws.bufferedAmount < this.#MAX_BUFFERED) {
+    while (
+      this.#queue.length &&
+      this.#getBufferedAmount() < this.#MAX_BUFFERED
+    ) {
       const frame = this.#queue.shift()!
       try {
         this.#ws.send(frame.payload)
@@ -299,7 +402,7 @@ export class WebSocketClient extends EventEmitter {
         })
         // push back to pending so reconnect can retry
         this.#pendingRequests.unshift(frame)
-        this.#pendingBytes += Buffer.byteLength(frame.payload)
+        this.#pendingBytes += getPayloadByteLength(frame.payload)
         break
       }
     }
@@ -310,6 +413,12 @@ export class WebSocketClient extends EventEmitter {
         this.#flush()
       }, 50)
     }
+  }
+
+  #getBufferedAmount(): number {
+    return typeof this.#ws.bufferedAmount === 'number'
+      ? this.#ws.bufferedAmount
+      : 0
   }
 
   #flushing = false
@@ -329,11 +438,11 @@ export class WebSocketClient extends EventEmitter {
         this.#pendingRequests.shift()
         this.#pendingBytes = Math.max(
           0,
-          this.#pendingBytes - Buffer.byteLength(frame.payload)
+          this.#pendingBytes - getPayloadByteLength(frame.payload)
         )
 
         // Yield to the event loop to allow the server to handle the request
-        await new Promise((resolve) => setImmediate(resolve))
+        await waitForNextMacrotask()
       }
     } finally {
       this.#flushing = false
@@ -358,14 +467,15 @@ export class WebSocketClient extends EventEmitter {
     this.#connectionState = 'connecting'
     this.#connectionStartTime = performance.now()
 
-    const host = getServerHostFromProcessEnv() ?? 'localhost'
+    const host = this.#getConnectionHost()
+    const hostForLogging = this.#getConnectionHostForLogging()
+    const port = this.#getConnectionPort()
 
     getDebugLogger().logWebSocketClientEvent('connecting', {
-      port: getServerPortFromProcessEnv(),
-      host,
+      port,
+      host: hostForLogging,
     })
 
-    const port = getServerPortFromProcessEnv()
     if (!port) {
       const err = new WebSocketClientError(
         `[renoun] Missing ${PROCESS_ENV_KEYS.renounServerPort}`,
@@ -374,7 +484,7 @@ export class WebSocketClient extends EventEmitter {
           connectionState: this.#connectionState,
           connectionTime: 0,
           port: 'unknown',
-          host,
+          host: hostForLogging,
         }
       )
       this.#connectionState = 'failed'
@@ -389,8 +499,8 @@ export class WebSocketClient extends EventEmitter {
         {
           connectionState: this.#connectionState,
           connectionTime: 0,
-          port: getServerPortForLogging(),
-          host,
+          port: this.#getConnectionPortForLogging(),
+          host: hostForLogging,
         }
       )
       this.#connectionState = 'failed'
@@ -483,12 +593,18 @@ export class WebSocketClient extends EventEmitter {
       }, delay)
 
       // let the process exit naturally if nothing else is pending
-      this.#retryTimeout?.unref()
+      if (
+        this.#retryTimeout &&
+        typeof (this.#retryTimeout as { unref?: () => void }).unref ===
+          'function'
+      ) {
+        ;(this.#retryTimeout as { unref: () => void }).unref()
+      }
     } else {
       const error = this.#createClientError('MAX_RETRIES_EXCEEDED', {
         connectionTime: formatConnectionTime(this.#connectionStartTime),
-        port: getServerPortForLogging(),
-        host: getServerHostFromProcessEnv() ?? 'localhost',
+        port: this.#getConnectionPortForLogging(),
+        host: this.#getConnectionHostForLogging(),
         connectionState: this.#connectionState,
         maxRetries: this.#maxRetries,
       })
@@ -515,7 +631,7 @@ export class WebSocketClient extends EventEmitter {
 
   #handleError(event: any) {
     const connectionTime = formatConnectionTime(this.#connectionStartTime)
-    const port = getServerPortForLogging()
+    const port = this.#getConnectionPortForLogging()
 
     // While connecting we only log; close handler will decide whether to retry
     if (this.#connectionState === 'connecting') {
@@ -537,11 +653,11 @@ export class WebSocketClient extends EventEmitter {
     return
   }
 
-  #handleClose(code?: number, reasonBuffer?: Buffer) {
+  #handleClose(code?: number, reasonText?: string) {
     this.#isConnected = false
     this.#connectionState = 'disconnected'
 
-    const reason = (reasonBuffer?.toString() || '').trim()
+    const reason = typeof reasonText === 'string' ? reasonText.trim() : ''
     const connectionTime = formatConnectionTime(this.#connectionStartTime)
 
     getDebugLogger().logWebSocketClientEvent('closed', {
@@ -599,7 +715,7 @@ export class WebSocketClient extends EventEmitter {
       this.#pendingRequests = [...requeued, ...this.#pendingRequests]
       // Recompute pending bytes conservatively
       this.#pendingBytes = this.#pendingRequests.reduce(
-        (total, request) => total + Buffer.byteLength(request.payload),
+        (total, request) => total + getPayloadByteLength(request.payload),
         0
       )
       this.#framesInFlight = []
@@ -647,8 +763,8 @@ export class WebSocketClient extends EventEmitter {
 
         const error = this.#createClientError('REQUEST_TIMEOUT', {
           connectionTime: formatConnectionTime(this.#connectionStartTime),
-          port: getServerPortForLogging(),
-          host: getServerHostFromProcessEnv() ?? 'localhost',
+          port: this.#getConnectionPortForLogging(),
+          host: this.#getConnectionHostForLogging(),
           connectionState: this.#connectionState,
           method,
           params,
@@ -666,10 +782,10 @@ export class WebSocketClient extends EventEmitter {
             if (Array.isArray(parsed)) {
               const filtered = parsed.filter((r: any) => r?.id !== id)
               if (filtered.length !== parsed.length) {
-                const oldBytes = Buffer.byteLength(frame.payload)
+                const oldBytes = getPayloadByteLength(frame.payload)
                 frame.payload = JSON.stringify(filtered)
                 frame.ids = frame.ids.filter((n) => n !== id)
-                const newBytes = Buffer.byteLength(frame.payload)
+                const newBytes = getPayloadByteLength(frame.payload)
                 this.#pendingBytes = Math.max(
                   0,
                   this.#pendingBytes - (oldBytes - newBytes)
@@ -683,7 +799,7 @@ export class WebSocketClient extends EventEmitter {
                 }
               }
             } else if ((parsed && parsed.id) === id) {
-              const bytes = Buffer.byteLength(frame.payload)
+              const bytes = getPayloadByteLength(frame.payload)
               this.#pendingBytes = Math.max(0, this.#pendingBytes - bytes)
               this.#pendingRequests.splice(index, 1)
             }
@@ -749,7 +865,7 @@ export class WebSocketClient extends EventEmitter {
     const payload = JSON.stringify({ method, params, id })
     let nextResolve: ((result: IteratorResult<Value>) => void) | null = null
     let ended = false
-    let idleTimeout: NodeJS.Timeout | undefined
+    let idleTimeout: ReturnType<typeof setTimeout> | undefined
     const resetIdleTimeout = () => {
       if (idleTimeout) {
         clearTimeout(idleTimeout)
@@ -832,16 +948,7 @@ export class WebSocketClient extends EventEmitter {
   }
 
   #handleMessage(data: any) {
-    let raw: string
-    if (typeof data === 'string') {
-      raw = data
-    } else if (Buffer.isBuffer(data)) {
-      raw = data.toString()
-    } else if (Array.isArray(data)) {
-      raw = Buffer.concat(data as Buffer[]).toString()
-    } else {
-      raw = Buffer.from(data as ArrayBuffer).toString()
-    }
+    const raw = decodeWebSocketMessageData(data)
 
     let parsed: any
     try {
@@ -1012,8 +1119,8 @@ export class WebSocketClient extends EventEmitter {
       {
         connectionState: this.#connectionState,
         connectionTime: formatConnectionTime(this.#connectionStartTime),
-        port: getServerPortForLogging(),
-        host: getServerHostFromProcessEnv() ?? 'localhost',
+        port: this.#getConnectionPortForLogging(),
+        host: this.#getConnectionHostForLogging(),
       }
     )
 
@@ -1036,6 +1143,101 @@ export class WebSocketClient extends EventEmitter {
 /** Format connection time in milliseconds */
 function formatConnectionTime(time: number) {
   return Math.round((performance.now() - time) * 1000) / 1000
+}
+
+const payloadSizeEncoder = new TextEncoder()
+const webSocketMessageDecoder = new TextDecoder()
+
+function getPayloadByteLength(payload: string): number {
+  return payloadSizeEncoder.encode(payload).byteLength
+}
+
+function waitForNextMacrotask(): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof setImmediate === 'function') {
+      setImmediate(() => resolve())
+      return
+    }
+
+    setTimeout(resolve, 0)
+  })
+}
+
+function decodeWebSocketMessageData(data: unknown): string {
+  if (typeof data === 'string') {
+    return data
+  }
+
+  const globalBuffer = (
+    globalThis as typeof globalThis & {
+      Buffer?: {
+        concat?: (values: Uint8Array[]) => Uint8Array
+        isBuffer?: (value: unknown) => value is Uint8Array
+      }
+    }
+  ).Buffer
+
+  if (globalBuffer?.isBuffer?.(data)) {
+    return data.toString()
+  }
+
+  if (Array.isArray(data)) {
+    if (
+      data.every((entry) => globalBuffer?.isBuffer?.(entry)) &&
+      typeof globalBuffer.concat === 'function'
+    ) {
+      return globalBuffer.concat(data as Uint8Array[]).toString()
+    }
+
+    return webSocketMessageDecoder.decode(concatenateBinaryChunks(data))
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    return webSocketMessageDecoder.decode(
+      new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+    )
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return webSocketMessageDecoder.decode(new Uint8Array(data))
+  }
+
+  if (typeof Blob !== 'undefined' && data instanceof Blob) {
+    throw new Error(
+      '[renoun] Blob messages are not supported by the WebSocket client.'
+    )
+  }
+
+  return String(data)
+}
+
+function concatenateBinaryChunks(chunks: unknown[]): Uint8Array {
+  const arrays = chunks
+    .map((chunk) => toUint8Array(chunk))
+    .filter((chunk): chunk is Uint8Array => chunk !== undefined)
+
+  const totalLength = arrays.reduce((sum, chunk) => sum + chunk.byteLength, 0)
+  const result = new Uint8Array(totalLength)
+  let offset = 0
+
+  for (const chunk of arrays) {
+    result.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return result
+}
+
+function toUint8Array(value: unknown): Uint8Array | undefined {
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+  }
+
+  if (value instanceof ArrayBuffer) {
+    return new Uint8Array(value)
+  }
+
+  return undefined
 }
 
 /** Parses errors from the RPC server. */

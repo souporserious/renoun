@@ -38,6 +38,7 @@ type RpcCallCounters = {
   tokensFailuresByValue: Map<string, number>
   tokensByThemeKey: Map<string, number>
   tokensWarmRequests: number
+  socketsOpened: number
   sockets: Set<MockWebSocketInstance>
 }
 
@@ -103,6 +104,7 @@ describe('QuickInfo browser regression', () => {
       tokensFailuresByValue: new Map(),
       tokensByThemeKey: new Map(),
       tokensWarmRequests: 0,
+      socketsOpened: 0,
       sockets: new Set(),
     }
 
@@ -209,6 +211,39 @@ describe('QuickInfo browser regression', () => {
 
     expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBe(1)
     expect(counters.tokensByValue.get(shortDisplayText)).toBe(1)
+  })
+
+  it('reuses the shared project client socket for follow-up token requests', async () => {
+    renderQuickInfoFixture(root, 'socket-reuse')
+    const shortDisplayText = QUICK_INFO_BY_POSITION.get(
+      SHORT_SYMBOL_POSITION
+    )!.displayText
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+      1_000
+    )
+    const symbol = getSymbolAnchor('symbol-short')
+
+    hoverSymbol(symbol)
+    await waitFor(
+      () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
+      1_000
+    )
+    await waitFor(
+      () =>
+        counters.tokensByValue.get(
+          QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)!.displayText
+        ) === 1,
+      1_000
+    )
+    expect(counters.socketsOpened).toBe(2)
+    document.documentElement.setAttribute('data-theme', 'light')
+    await waitFor(
+      () => counters.tokensByThemeKey.get(`${shortDisplayText}:light`) === 1,
+      1_000
+    )
+    expect(counters.socketsOpened).toBe(2)
   })
 
   it('invalidates cached quick info when the rendered source signature changes', async () => {
@@ -512,7 +547,7 @@ describe('QuickInfo browser regression', () => {
       () => getProjectClientBrowserRuntime()?.id === RUNTIME.id,
       1_000
     )
-    expect(counters.sockets.size).toBe(1)
+    expect(counters.sockets.size).toBe(2)
 
     root?.unmount()
     root = null
@@ -721,6 +756,7 @@ function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
         ? protocol[0]
         : protocol
       this.#runtimeKey = `${resolvedProtocol ?? 'unknown'}@${url}`
+      counters.socketsOpened += 1
       counters.sockets.add(this)
       queueMicrotask(() => {
         this.readyState = MockWebSocket.OPEN

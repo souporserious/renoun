@@ -342,6 +342,7 @@ describe('project client transport guards', () => {
 
   test('recreates the websocket client when the active server runtime changes', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_HOST'] = '127.0.0.1'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '1'
@@ -405,12 +406,23 @@ describe('project client transport guards', () => {
     const firstResult = await module.getOutlineRanges('/project/src/a.ts')
     expect(firstResult).toEqual(['first-client'])
     expect(mocks.WebSocketClient).toHaveBeenCalledTimes(1)
+    expect(mocks.WebSocketClient).toHaveBeenNthCalledWith(1, 'server-id', {
+      id: 'server-id',
+      port: '4545',
+      host: '127.0.0.1',
+    })
 
     process.env['RENOUN_SERVER_PORT'] = '5454'
+    process.env['RENOUN_SERVER_HOST'] = 'localhost'
     runtimeEnvModule.notifyServerRuntimeEnvChanged()
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(mocks.WebSocketClient).toHaveBeenCalledTimes(2)
+    expect(mocks.WebSocketClient).toHaveBeenNthCalledWith(2, 'server-id', {
+      id: 'server-id',
+      port: '5454',
+      host: 'localhost',
+    })
     expect(firstRemoveAllListeners).toHaveBeenCalledTimes(1)
     expect(firstClose).toHaveBeenCalledTimes(1)
     expect(secondCallMethod).toHaveBeenCalledWith('getRefreshInvalidationsSince', {

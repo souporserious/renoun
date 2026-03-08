@@ -1,6 +1,9 @@
 import {
   getProjectClientBrowserRefreshVersion,
   getProjectClientBrowserRuntime,
+  getProjectServerRuntimeKey,
+  normalizeProjectServerRuntime,
+  parseProjectClientRefreshVersion,
   setProjectClientBrowserRefreshVersion,
   setProjectClientBrowserRuntime as setSharedProjectClientBrowserRuntime,
 } from './browser-runtime.ts'
@@ -32,11 +35,6 @@ const browserRuntimeRegistrations: Array<{
   runtime: ProjectServerRuntime
 }> = []
 
-interface ParsedRefreshVersion {
-  cursor: number
-  epoch: number
-}
-
 export function onProjectClientBrowserRefreshNotification(
   listener: (message: RefreshNotificationMessage) => void
 ): () => void {
@@ -52,10 +50,10 @@ export function setProjectClientBrowserRuntime(
   const normalizedRuntime = normalizeProjectServerRuntime(runtime)
   const previousRuntime = getProjectClientBrowserRuntime()
   const previousRuntimeKey = previousRuntime
-    ? toBrowserRuntimeKey(previousRuntime)
+    ? getProjectServerRuntimeKey(previousRuntime)
     : undefined
   const nextRuntimeKey = normalizedRuntime
-    ? toBrowserRuntimeKey(normalizedRuntime)
+    ? getProjectServerRuntimeKey(normalizedRuntime)
     : undefined
 
   setSharedProjectClientBrowserRuntime(normalizedRuntime)
@@ -82,9 +80,16 @@ export function setProjectClientBrowserRuntime(
 }
 
 export function retainProjectClientBrowserRuntime(
-  runtime?: ProjectServerRuntime
+  runtime?: ProjectServerRuntime,
+  options: {
+    preferCurrentRuntime?: boolean
+  } = {}
 ): () => void {
-  const normalizedRuntime = normalizeProjectServerRuntime(runtime)
+  const normalizedRuntime = normalizeProjectServerRuntime(
+    options.preferCurrentRuntime === true
+      ? getProjectClientBrowserRuntime() ?? runtime
+      : runtime
+  )
   if (!normalizedRuntime) {
     return () => {}
   }
@@ -111,7 +116,8 @@ export function retainProjectClientBrowserRuntime(
     const currentRuntime = getProjectClientBrowserRuntime()
     if (
       !currentRuntime ||
-      toBrowserRuntimeKey(currentRuntime) !== toBrowserRuntimeKey(releasedRuntime)
+      getProjectServerRuntimeKey(currentRuntime) !==
+        getProjectServerRuntimeKey(releasedRuntime)
     ) {
       return
     }
@@ -138,7 +144,7 @@ function ensureRefreshNotificationSocket(
   }
 
   const runtime = getProjectClientBrowserRuntime()
-  const runtimeKey = runtime ? toBrowserRuntimeKey(runtime) : undefined
+  const runtimeKey = runtime ? getProjectServerRuntimeKey(runtime) : undefined
   if (!runtime || !runtimeKey) {
     disposeRefreshNotificationSocket()
     return
@@ -519,34 +525,8 @@ function syncProjectClientBrowserRefreshCursor(cursor?: number): void {
   setProjectClientBrowserRefreshVersion(`${nextCursor}:${current.epoch}`)
 }
 
-function readProjectClientBrowserRefreshVersion(): ParsedRefreshVersion {
-  const [rawCursor = '0', rawEpoch = '0'] =
-    getProjectClientBrowserRefreshVersion().split(':')
-  const cursor = Number.parseInt(rawCursor, 10)
-  const epoch = Number.parseInt(rawEpoch, 10)
-
-  return {
-    cursor: Number.isFinite(cursor) && cursor >= 0 ? cursor : 0,
-    epoch: Number.isFinite(epoch) && epoch >= 0 ? epoch : 0,
-  }
-}
-
-function toBrowserRuntimeKey(runtime: ProjectServerRuntime): string {
-  return `${runtime.id}:${runtime.host ?? 'localhost'}:${runtime.port}`
-}
-
-function normalizeProjectServerRuntime(
-  runtime?: ProjectServerRuntime
-): ProjectServerRuntime | undefined {
-  if (!runtime) {
-    return undefined
-  }
-
-  return {
-    id: String(runtime.id),
-    port: String(runtime.port),
-    ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
-      ? { host: runtime.host.trim() }
-      : {}),
-  }
+function readProjectClientBrowserRefreshVersion() {
+  return parseProjectClientRefreshVersion(
+    getProjectClientBrowserRefreshVersion()
+  )
 }

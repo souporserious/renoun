@@ -10,7 +10,12 @@ const browserProjectClientRefreshVersionListeners = new Set<
   (version: string) => void
 >()
 
-function toBrowserRuntimeKey(
+export interface ParsedProjectClientRefreshVersion {
+  cursor: number
+  epoch: number
+}
+
+export function getProjectServerRuntimeKey(
   runtime: ProjectServerRuntime | undefined
 ): string | undefined {
   if (!runtime) {
@@ -18,6 +23,35 @@ function toBrowserRuntimeKey(
   }
 
   return `${runtime.id}:${runtime.host ?? 'localhost'}:${runtime.port}`
+}
+
+export function normalizeProjectServerRuntime(
+  runtime?: ProjectServerRuntime
+): ProjectServerRuntime | undefined {
+  if (!runtime) {
+    return undefined
+  }
+
+  return {
+    id: String(runtime.id),
+    port: String(runtime.port),
+    ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
+      ? { host: runtime.host.trim() }
+      : {}),
+  }
+}
+
+export function parseProjectClientRefreshVersion(
+  version: string
+): ParsedProjectClientRefreshVersion {
+  const [rawCursor = '0', rawEpoch = '0'] = version.split(':')
+  const cursor = Number.parseInt(rawCursor, 10)
+  const epoch = Number.parseInt(rawEpoch, 10)
+
+  return {
+    cursor: Number.isFinite(cursor) && cursor >= 0 ? cursor : 0,
+    epoch: Number.isFinite(epoch) && epoch >= 0 ? epoch : 0,
+  }
 }
 
 export function getProjectClientBrowserRuntime():
@@ -38,17 +72,9 @@ export function onProjectClientBrowserRuntimeChange(
 export function setProjectClientBrowserRuntime(
   runtime?: ProjectServerRuntime
 ): void {
-  const normalizedRuntime = runtime
-    ? {
-        id: String(runtime.id),
-        port: String(runtime.port),
-        ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
-          ? { host: runtime.host.trim() }
-          : {}),
-      }
-    : undefined
-  const currentKey = toBrowserRuntimeKey(browserProjectServerRuntime)
-  const nextKey = toBrowserRuntimeKey(normalizedRuntime)
+  const normalizedRuntime = normalizeProjectServerRuntime(runtime)
+  const currentKey = getProjectServerRuntimeKey(browserProjectServerRuntime)
+  const nextKey = getProjectServerRuntimeKey(normalizedRuntime)
 
   if (currentKey === nextKey) {
     return

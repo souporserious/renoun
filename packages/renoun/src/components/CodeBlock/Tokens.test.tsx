@@ -282,6 +282,46 @@ describe('Tokens', () => {
     expect(mockGetProjectClientRefreshVersion).toHaveBeenCalledTimes(2)
   })
 
+  test('disables client quick-info caching when refresh notifications are effectively unavailable', async () => {
+    const previousServerRefreshNotifications =
+      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS
+    const previousServerRefreshNotificationsEffective =
+      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE
+    const runtime = {
+      id: 'tokens-dev-runtime',
+      port: '43123',
+    }
+
+    try {
+      const { shouldDisableQuickInfoClientCache } = await import('./Tokens.tsx')
+
+      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE = '0'
+      expect(shouldDisableQuickInfoClientCache(runtime)).toBe(true)
+
+      delete process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE
+      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS = '0'
+      expect(shouldDisableQuickInfoClientCache(runtime)).toBe(true)
+
+      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS = '1'
+      expect(shouldDisableQuickInfoClientCache(runtime)).toBe(false)
+      expect(shouldDisableQuickInfoClientCache(undefined)).toBe(false)
+    } finally {
+      if (previousServerRefreshNotificationsEffective === undefined) {
+        delete process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE
+      } else {
+        process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE =
+          previousServerRefreshNotificationsEffective
+      }
+
+      if (previousServerRefreshNotifications === undefined) {
+        delete process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS
+      } else {
+        process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS =
+          previousServerRefreshNotifications
+      }
+    }
+  })
+
   test('virtualizes explicit snippet paths during analysis', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'
