@@ -79,10 +79,12 @@ function replaceProjectBrowserClient(
   return createProjectBrowserClient(runtime)
 }
 
-function getProjectBrowserClient(): WebSocketClient {
+function getProjectBrowserClient(
+  requestedRuntime?: ProjectServerRuntime
+): WebSocketClient {
   ensureBrowserRuntimeSubscription()
 
-  const runtime = getProjectClientBrowserRuntime()
+  const runtime = requestedRuntime ?? getProjectClientBrowserRuntime()
   const runtimeKey = getProjectServerRuntimeKey(runtime)
   if (!runtime || !runtimeKey) {
     disposeProjectBrowserClient()
@@ -105,15 +107,20 @@ async function callProjectBrowserClientMethod<
   Value,
 >(
   method: string,
-  params: Params
+  params: Params,
+  runtime?: ProjectServerRuntime
 ): Promise<Value> {
-  return getProjectBrowserClient().callMethod<Params, Value>(method, params)
+  return getProjectBrowserClient(runtime).callMethod<Params, Value>(
+    method,
+    params
+  )
 }
 
 export async function getQuickInfoAtPosition(
   filePath: string,
   position: number,
-  projectOptions?: ProjectOptions
+  projectOptions?: ProjectOptions,
+  runtime?: ProjectServerRuntime
 ): Promise<QuickInfoAtPosition | undefined> {
   return callProjectBrowserClientMethod<
     {
@@ -126,20 +133,22 @@ export async function getQuickInfoAtPosition(
     filePath,
     position,
     projectOptions,
-  })
+  }, runtime)
 }
 
 export async function getTokens(
   options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
     projectOptions?: ProjectOptions
     waitForWarmResult?: boolean
+    runtime?: ProjectServerRuntime
   }
 ): Promise<TokenizedLines> {
+  const { runtime, ...params } = options
   return callProjectBrowserClientMethod<
     Omit<GetTokensOptions, 'highlighter' | 'project'> & {
       projectOptions?: ProjectOptions
       waitForWarmResult?: boolean
     },
     TokenizedLines
-  >('getTokens', options)
+  >('getTokens', params, runtime)
 }

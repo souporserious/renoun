@@ -1,5 +1,5 @@
 import { dirname, extname, join, posix, isAbsolute } from 'node:path'
-import type { Project } from './ts-morph.ts'
+import type { Project, SourceFile } from './ts-morph.ts'
 
 import { waitForRefreshingProjects } from '../project/refresh.ts'
 import {
@@ -72,6 +72,55 @@ function toVirtualSourceTextFilePath(
   }
 
   return `${filePath.slice(0, -extension.length)}${virtualSuffix}${extension}`
+}
+
+function coerceSourceFileToModule(sourceFile: SourceFile): void {
+  // Add an empty export declaration to coerce TypeScript to treat the file as a module.
+  // This is needed due to a bug in ts-morph: https://github.com/dsherret/ts-morph/issues/1611
+  const hasImports = sourceFile.getImportDeclarations().length > 0
+  const hasExports = sourceFile.getExportDeclarations().length > 0
+
+  if (!hasImports && !hasExports) {
+    sourceFile.addExportDeclaration({})
+  }
+}
+
+function isJavaScriptLikeMetadata(options: {
+  filePath?: string
+  language?: Languages
+}): boolean {
+  let language = options.language
+
+  if (!language && options.filePath) {
+    language = options.filePath.split('.').pop() as Languages | undefined
+  }
+
+  if (!language) {
+    return false
+  }
+
+  return ['js', 'jsx', 'ts', 'tsx'].includes(getLanguage(language))
+}
+
+export function hydrateSourceTextMetadataSourceFile(
+  project: Project,
+  metadata: Pick<SourceTextMetadata, 'value' | 'language' | 'filePath'>
+): void {
+  const { filePath } = metadata
+
+  if (!filePath || !isJavaScriptLikeMetadata(metadata)) {
+    return
+  }
+
+  if (project.getSourceFile(filePath)) {
+    return
+  }
+
+  const sourceFile = project.createSourceFile(filePath, metadata.value, {
+    overwrite: true,
+  })
+
+  coerceSourceFileToModule(sourceFile)
 }
 
 function resolveSourceTextMetadataBase(options: {
@@ -288,26 +337,20 @@ export async function getSourceTextMetadata({
       }
 
       finalValue = sourceFile.getFullText().trim()
-
-      // Add an empty export declaration to coerce TypeScript to treat the file as a module
-      // This is needed due to a bug in ts-morph: https://github.com/dsherret/ts-morph/issues/1611
-      const hasImports = sourceFile.getImportDeclarations().length > 0
-      const hasExports = sourceFile.getExportDeclarations().length > 0
-
-      if (!hasImports && !hasExports) {
-        sourceFile.addExportDeclaration({})
-      }
+      coerceSourceFileToModule(sourceFile)
+      const analysisValue = sourceFile.getFullText().trim()
 
       if (shouldVirtualizeFilePath) {
         const virtualFilePath = toVirtualSourceTextFilePath(
           resolved.filePath,
-          getSourceTextValueSignature(finalValue)
+          getSourceTextValueSignature(analysisValue)
         )
 
         if (virtualFilePath !== filePath) {
-          project.createSourceFile(virtualFilePath, finalValue, {
+          project.createSourceFile(virtualFilePath, analysisValue, {
             overwrite: true,
           })
+          project.removeSourceFile(sourceFile)
           filePath = virtualFilePath
         }
       }

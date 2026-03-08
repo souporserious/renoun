@@ -253,19 +253,13 @@ export class WorkspaceChangeLookupCache {
     }
 
     if (cached?.promise) {
-      if (
-        this.#serveStaleWhileRevalidate &&
-        ttlMs > 0 &&
-        cached.expiresAt <= now &&
-        cached.paths !== null
-      ) {
-        return cached.paths
-      }
       return cached.promise
     }
 
     if (ttlMs > 0 && cached && this.#serveStaleWhileRevalidate) {
-      this.#startWorkspaceChangedPathsLookup({
+      // Changed-path freshness is used as a correctness guard for cache reuse.
+      // Once the entry expires, await the refresh instead of serving stale data.
+      return this.#startWorkspaceChangedPathsLookup({
         cacheKey,
         rootPath,
         previousToken,
@@ -273,7 +267,6 @@ export class WorkspaceChangeLookupCache {
         startedAt: now,
         ttlMs,
       })
-      return cached.paths
     }
 
     return this.#startWorkspaceChangedPathsLookup({

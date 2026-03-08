@@ -15,7 +15,7 @@ function toArray(set: ReadonlySet<string> | null): string[] | null {
   return set ? Array.from(set) : null
 }
 
-test('serves stale changed paths for the active key while refreshing in swr mode', async () => {
+test('awaits refreshed changed paths for the active key in swr mode', async () => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
 
@@ -43,23 +43,21 @@ test('serves stale changed paths for the active key while refreshing in swr mode
 
     vi.setSystemTime(Date.now() + 10)
 
-    const stalePromise = cache.getWorkspaceChangedPathsSinceToken('docs', 'prev')
-    let resolvedStale = false
-    void stalePromise.then(() => {
-      resolvedStale = true
-    })
-    await Promise.resolve()
-    expect(resolvedStale).toBe(true)
-    expect(toArray(await stalePromise)).toEqual(['prev:v1.ts'])
-
-    await Promise.resolve()
-    await Promise.resolve()
-
-    const refreshed = await cache.getWorkspaceChangedPathsSinceToken(
+    const refreshedPromise = cache.getWorkspaceChangedPathsSinceToken(
       'docs',
       'prev'
     )
-    expect(toArray(refreshed)).toEqual(['prev:v2.ts'])
+    let resolvedImmediately = false
+    void refreshedPromise.then(() => {
+      resolvedImmediately = true
+    })
+    await Promise.resolve()
+    expect(resolvedImmediately).toBe(false)
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(toArray(await refreshedPromise)).toEqual(['prev:v2.ts'])
   } finally {
     vi.useRealTimers()
   }

@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'vitest'
 
 import { getTsMorph } from './ts-morph.ts'
-import { getSourceTextMetadataFallback } from './get-source-text-metadata.ts'
+import {
+  getSourceTextMetadata,
+  getSourceTextMetadataFallback,
+} from './get-source-text-metadata.ts'
 
 const { Project } = getTsMorph()
 
@@ -77,5 +80,44 @@ describe('getSourceTextMetadataFallback', () => {
     expect(first.label).toBe('demo/example.ts')
     expect(second.label).toBe('demo/example.ts')
     expect(first.valueSignature).not.toBe(second.valueSignature)
+  })
+})
+
+describe('getSourceTextMetadata', () => {
+  test('keeps virtualized explicit snippets in module scope after normalization', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const value = 'const snippetValue = 1\n'
+
+    const first = await getSourceTextMetadata({
+      project,
+      value,
+      language: 'ts',
+      filePath: 'demo/one.ts',
+      baseDirectory: '/workspace/src',
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+    const second = await getSourceTextMetadata({
+      project,
+      value,
+      language: 'ts',
+      filePath: 'demo/two.ts',
+      baseDirectory: '/workspace/src',
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    const firstSourceFile = project.getSourceFileOrThrow(first.filePath!)
+    const secondSourceFile = project.getSourceFileOrThrow(second.filePath!)
+
+    expect(firstSourceFile.getExportDeclarations()).toHaveLength(1)
+    expect(secondSourceFile.getExportDeclarations()).toHaveLength(1)
+    expect(
+      project
+        .getPreEmitDiagnostics()
+        .filter((diagnostic) => diagnostic.getCode() === 2451)
+    ).toHaveLength(0)
   })
 })

@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { setProjectClientBrowserRuntime } from './browser-client-sync.ts'
 import {
+  retainProjectClientBrowserRuntime,
+  setProjectClientBrowserRuntime,
+} from './browser-client-sync.ts'
+import {
+  getProjectClientBrowserRuntime,
   getProjectClientBrowserRefreshVersion,
   setProjectClientBrowserRefreshVersion,
 } from './browser-runtime.ts'
@@ -136,6 +140,33 @@ describe('browser-client-sync', () => {
         fullRefresh: false,
       },
     })
+  })
+
+  it('does not discard retained runtimes when clearing the explicit runtime', async () => {
+    const releaseRuntime = retainProjectClientBrowserRuntime({
+      id: 'runtime-retained',
+      port: '43123',
+      host: '127.0.0.1',
+    })
+
+    try {
+      await waitFor(
+        () => getProjectClientBrowserRuntime()?.id === 'runtime-retained',
+        1_000
+      )
+      await waitFor(() => controller.instances.length === 1, 1_000)
+
+      setProjectClientBrowserRuntime(undefined)
+
+      await waitFor(
+        () => getProjectClientBrowserRuntime()?.id === 'runtime-retained',
+        1_000
+      )
+      expect(controller.openedUrls).toEqual(['ws://127.0.0.1:43123'])
+      expect(controller.closedUrls).toEqual([])
+    } finally {
+      releaseRuntime()
+    }
   })
 })
 

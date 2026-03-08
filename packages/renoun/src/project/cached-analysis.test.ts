@@ -171,6 +171,35 @@ describe('project cached analysis', () => {
     expect(createSourceFileSpy).toHaveBeenCalledTimes(1)
   })
 
+  test('rehydrates missing source files on cached source text metadata hits', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const source = `const cachedMetadataValue = ${Date.now()}`
+
+    const first = await getCachedSourceTextMetadata(project, {
+      value: source,
+      language: 'ts',
+      shouldFormat: false,
+    })
+    const sourceFile = project.getSourceFileOrThrow(first.filePath!)
+    project.removeSourceFile(sourceFile)
+
+    expect(project.getSourceFile(first.filePath!)).toBeUndefined()
+
+    const second = await getCachedSourceTextMetadata(project, {
+      value: source,
+      language: 'ts',
+      shouldFormat: false,
+    })
+
+    const rehydratedSourceFile = project.getSourceFile(second.filePath!)
+
+    expect(second.filePath).toBe(first.filePath)
+    expect(rehydratedSourceFile).toBeDefined()
+    expect(rehydratedSourceFile?.getExportDeclarations()).toHaveLength(1)
+  })
+
   test('serves source metadata fallback immediately on cold development reads', async () => {
     await withDevelopmentLikeRuntime(async () => {
       const project = new Project({

@@ -3042,7 +3042,7 @@ describe('session cache persistence policy', () => {
     }
   })
 
-  test('serves stale workspace token and changed paths while revalidating in development', async () => {
+  test('serves stale workspace token but awaits refreshed changed paths while revalidating in development', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'development'
 
@@ -3098,31 +3098,34 @@ describe('session cache persistence policy', () => {
       await new Promise((resolve) => setTimeout(resolve, 15))
 
       const staleTokenPromise = session.getWorkspaceChangeToken('docs')
-      const staleChangedPathsPromise =
+      const refreshedChangedPathsPromise =
         session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
 
       let staleTokenResolved = false
-      let staleChangedPathsResolved = false
+      let refreshedChangedPathsResolved = false
       void staleTokenPromise.then(() => {
         staleTokenResolved = true
       })
-      void staleChangedPathsPromise.then(() => {
-        staleChangedPathsResolved = true
+      void refreshedChangedPathsPromise.then(() => {
+        refreshedChangedPathsResolved = true
       })
 
       await new Promise((resolve) => setTimeout(resolve, 10))
       expect(staleTokenResolved).toBe(true)
-      expect(staleChangedPathsResolved).toBe(true)
+      expect(refreshedChangedPathsResolved).toBe(false)
 
       const staleToken = await staleTokenPromise
-      const staleChangedPaths = await staleChangedPathsPromise
-      expect(staleToken).toBe('token:v1:docs')
-      expect(Array.from(staleChangedPaths ?? [])).toEqual([
-        normalizePathKey('docs/v1.ts'),
-      ])
-
       tokenRefreshGate.resolve()
       changedPathsRefreshGate.resolve()
+
+      const refreshedChangedPathsAfterRevalidation =
+        await refreshedChangedPathsPromise
+      expect(staleToken).toBe('token:v1:docs')
+      expect(
+        Array.from(refreshedChangedPathsAfterRevalidation ?? [])
+      ).toEqual([
+        normalizePathKey('docs/v2.ts'),
+      ])
       await new Promise((resolve) => setTimeout(resolve, 5))
 
       const refreshedToken = await session.getWorkspaceChangeToken('docs')

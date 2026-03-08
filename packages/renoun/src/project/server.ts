@@ -1,6 +1,6 @@
 import { watch, type FSWatcher, type Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { join, relative, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import { getTsMorph } from '../utils/ts-morph.ts'
 import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.ts'
 
@@ -287,8 +287,15 @@ function toRootRelativeRefreshPath(
   filePath: string,
   rootDirectory: string
 ): string {
-  const relativePath = relative(resolve(rootDirectory), resolve(filePath))
+  const resolvedFilePath = isAbsolute(filePath)
+    ? resolve(filePath)
+    : resolve(rootDirectory, filePath)
+  const relativePath = relative(resolve(rootDirectory), resolvedFilePath)
   return relativePath.length === 0 ? '.' : relativePath
+}
+
+function isRefreshPathWithinRoot(path: string): boolean {
+  return path === '.' || (!path.startsWith('..') && path !== '..')
 }
 
 async function collectMarkdownFilesUnderDirectory(
@@ -662,7 +669,15 @@ export async function createServer(options?: CreateServerOptions) {
         continue
       }
 
-      pendingRefreshPaths.add(filePath)
+      const relativePath = toRootRelativeRefreshPath(filePath, rootDirectory)
+      if (
+        !isRefreshPathWithinRoot(relativePath) ||
+        shouldIgnoreRefreshPath(relativePath)
+      ) {
+        continue
+      }
+
+      pendingRefreshPaths.add(relativePath)
       hasPath = true
     }
 
@@ -1293,8 +1308,8 @@ export async function createServer(options?: CreateServerOptions) {
         return {
           nextCursor: refreshCursor,
           fullRefresh: true,
-          filePath: rootDirectory,
-          filePaths: [rootDirectory],
+          filePath: '.',
+          filePaths: ['.'],
         }
       }
 
@@ -1313,8 +1328,8 @@ export async function createServer(options?: CreateServerOptions) {
         return {
           nextCursor: refreshCursor,
           fullRefresh: true,
-          filePath: rootDirectory,
-          filePaths: [rootDirectory],
+          filePath: '.',
+          filePaths: ['.'],
         }
       }
 

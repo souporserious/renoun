@@ -1,12 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const mockGetQuickInfoAtPosition = vi.fn()
+const mockGetTokens = vi.fn()
 
 vi.mock('../../project/browser-client.ts', () => ({
   getQuickInfoAtPosition: (
     ...args: Parameters<typeof mockGetQuickInfoAtPosition>
   ) => mockGetQuickInfoAtPosition(...args),
-  getTokens: vi.fn(),
+  getTokens: (...args: Parameters<typeof mockGetTokens>) => mockGetTokens(...args),
 }))
 
 import { __TEST_ONLY__ } from './QuickInfoClientPopover.tsx'
@@ -30,6 +31,7 @@ describe('QuickInfoClientPopover cache behavior', () => {
   afterEach(() => {
     __TEST_ONLY__.clearQuickInfoClientPopoverCaches()
     mockGetQuickInfoAtPosition.mockReset()
+    mockGetTokens.mockReset()
   })
 
   it('reuses cached quick info when cache invalidations are available', async () => {
@@ -83,5 +85,31 @@ describe('QuickInfoClientPopover cache behavior', () => {
       documentationText: 'Updated docs',
     })
     expect(mockGetQuickInfoAtPosition).toHaveBeenCalledTimes(2)
+  })
+
+  it('routes quick info requests through the runtime carried on the request', async () => {
+    const runtime = {
+      id: 'quick-info-cache-test-secondary',
+      port: '43124',
+      host: '::1',
+    } as const
+
+    mockGetQuickInfoAtPosition.mockResolvedValueOnce({
+      displayText: 'runtime-specific',
+      documentationText: 'Runtime specific docs',
+    })
+
+    await __TEST_ONLY__.getQuickInfoForRequest({
+      ...BASE_REQUEST,
+      projectVersion: 'quick-info-cache-test:runtime',
+      runtime,
+    })
+
+    expect(mockGetQuickInfoAtPosition).toHaveBeenCalledWith(
+      '/tmp/history.ts',
+      42,
+      undefined,
+      runtime
+    )
   })
 })

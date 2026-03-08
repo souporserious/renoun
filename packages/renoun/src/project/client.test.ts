@@ -670,7 +670,7 @@ describe('project client transport guards', () => {
       type: 'refresh',
       data: {
         refreshCursor: 1,
-        filePaths: ['/project/src/dep.ts'],
+        filePaths: ['src/dep.ts'],
       },
     })
 
@@ -1002,6 +1002,84 @@ describe('project client transport guards', () => {
     ).toHaveLength(2)
   })
 
+  test('refresh notifications invalidate conservative quick-info cache without process.cwd or projectOptions', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let quickInfoCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getQuickInfoAtPosition') {
+        quickInfoCallCount += 1
+        return { text: `quick-info-${quickInfoCallCount}` }
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    vi.stubGlobal(
+      'process',
+      {
+        env: { ...process.env },
+      } as unknown as NodeJS.Process
+    )
+
+    try {
+      const module = await import('./client.ts')
+      const first = await module.getQuickInfoAtPosition('/project/src/a.ts', 0)
+      const second = await module.getQuickInfoAtPosition('/project/src/a.ts', 0)
+
+      expect(first).toMatchObject({ text: 'quick-info-1' })
+      expect(second).toMatchObject({ text: 'quick-info-1' })
+      expect(
+        callMethod.mock.calls.filter(
+          ([method]) => method === 'getQuickInfoAtPosition'
+        )
+      ).toHaveLength(1)
+
+      const notificationListener = listeners.get('notification')
+      expect(notificationListener).toBeTypeOf('function')
+      notificationListener!({
+        type: 'refresh',
+        data: {
+          refreshCursor: 1,
+          filePaths: ['/project/src/dep.ts'],
+        },
+      })
+
+      await Promise.resolve()
+      await Promise.resolve()
+
+      const third = await module.getQuickInfoAtPosition('/project/src/a.ts', 0)
+
+      expect(third).toMatchObject({ text: 'quick-info-2' })
+      expect(
+        callMethod.mock.calls.filter(
+          ([method]) => method === 'getQuickInfoAtPosition'
+        )
+      ).toHaveLength(2)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   test('refresh notifications invalidate source metadata cache conservatively', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
@@ -1205,6 +1283,92 @@ describe('project client transport guards', () => {
     expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
       '/project/src/b.ts',
     ])
+  })
+
+  test('refresh notifications invalidate token cache conservatively', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let tokenCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getTokens') {
+        tokenCallCount += 1
+        return [
+          [
+            {
+              value: `token-${tokenCallCount}`,
+              start: 0,
+              end: 7,
+              hasTextStyles: false,
+              isBaseColor: true,
+              isDeprecated: false,
+              isSymbol: false,
+              isWhiteSpace: false,
+              style: {},
+            },
+          ],
+        ]
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const options = {
+      value: 'const value = helper()',
+      language: 'ts' as const,
+      filePath: '/project/src/a.ts',
+      theme: 'github-dark',
+      projectOptions: {
+        tsConfigFilePath: '/project/tsconfig.json',
+      },
+    }
+    const first = await module.getTokens(options)
+    const second = await module.getTokens(options)
+
+    expect(first[0]?.[0]?.value).toBe('token-1')
+    expect(second[0]?.[0]?.value).toBe('token-1')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getTokens')
+    ).toHaveLength(1)
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/types.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const third = await module.getTokens(options)
+
+    expect(third[0]?.[0]?.value).toBe('token-2')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getTokens')
+    ).toHaveLength(2)
   })
 
   test('refresh notifications invalidate export RPC cache entries by response dependencies', async () => {
@@ -1638,6 +1802,192 @@ describe('project client transport guards', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  test('ignores refresh resync results from a stale client after runtime replacement', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_HOST'] = '127.0.0.1'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const firstListeners = new Map<string, (payload: unknown) => void>()
+    let resolveFirstResync!: (value: {
+      nextCursor: number
+      fullRefresh: boolean
+      filePaths: string[]
+    }) => void
+    const firstResync = new Promise<{
+      nextCursor: number
+      fullRefresh: boolean
+      filePaths: string[]
+    }>((resolve) => {
+      resolveFirstResync = resolve
+    })
+    const firstCallMethod = vi.fn(async (method: string) => {
+        if (method === 'getOutlineRanges') {
+          return ['first-client']
+        }
+
+        if (method === 'getRefreshInvalidationsSince') {
+          return firstResync
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      })
+    const secondCallMethod = vi.fn(async (method: string) => {
+        if (method === 'getOutlineRanges') {
+          return ['second-client']
+        }
+
+        if (method === 'getRefreshInvalidationsSince') {
+          return {
+            nextCursor: 2,
+            fullRefresh: false,
+            filePaths: ['src/fresh.ts'],
+          }
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      })
+    const clientInstances = [
+      {
+        callMethod: firstCallMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          firstListeners.set(eventName, listener)
+        }),
+        close: vi.fn(),
+        removeAllListeners: vi.fn(),
+      },
+      {
+        callMethod: secondCallMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn(),
+        close: vi.fn(),
+        removeAllListeners: vi.fn(),
+      },
+    ]
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      const nextClient = clientInstances.shift()
+      if (!nextClient) {
+        throw new Error('[renoun] Unexpected extra WebSocketClient creation')
+      }
+
+      return nextClient
+    })
+
+    const module = await import('./client.ts')
+    const runtimeEnvModule = await import('./runtime-env.ts')
+
+    expect(await module.getOutlineRanges('/project/src/a.ts')).toEqual([
+      'first-client',
+    ])
+
+    const firstConnectedListener = firstListeners.get('connected')
+    expect(firstConnectedListener).toBeTypeOf('function')
+    firstConnectedListener!({})
+    firstConnectedListener!({})
+
+    process.env['RENOUN_SERVER_PORT'] = '5454'
+    process.env['RENOUN_SERVER_HOST'] = 'localhost'
+    runtimeEnvModule.notifyServerRuntimeEnvChanged()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    resolveFirstResync({
+      nextCursor: 1,
+      fullRefresh: false,
+      filePaths: ['src/stale.ts'],
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(await module.getOutlineRanges('/project/src/b.ts')).toEqual([
+      'second-client',
+    ])
+
+    const invalidatedPaths = mocks.invalidateRuntimeAnalysisCachePaths.mock.calls
+      .flatMap(([paths]) => (paths as string[]) ?? [])
+
+    expect(invalidatedPaths).toContain(resolve(process.cwd(), 'src/fresh.ts'))
+    expect(invalidatedPaths).not.toContain(resolve(process.cwd(), 'src/stale.ts'))
+    expect(secondCallMethod).toHaveBeenCalledWith(
+      'getRefreshInvalidationsSince',
+      { sinceCursor: 0 }
+    )
+  })
+
+  test('does not carry ready-probe backoff across client replacement', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_HOST'] = '127.0.0.1'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+
+    let rejectFirstReady!: (error: Error) => void
+    const firstReadyPromise = new Promise<void>((_, reject) => {
+      rejectFirstReady = reject
+    })
+    const firstCallMethod = vi.fn(async (method: string) => {
+      if (method === 'getOutlineRanges') {
+        return ['first-client']
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+    const secondCallMethod = vi.fn(async (method: string) => {
+      if (method === 'getOutlineRanges') {
+        return ['second-client']
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+    const clientInstances = [
+      {
+        callMethod: firstCallMethod,
+        ready: vi.fn(() => firstReadyPromise),
+        on: vi.fn(),
+        close: vi.fn(),
+        removeAllListeners: vi.fn(),
+      },
+      {
+        callMethod: secondCallMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn(),
+        close: vi.fn(),
+        removeAllListeners: vi.fn(),
+      },
+    ]
+
+    mocks.getCachedOutlineRanges.mockResolvedValueOnce(['local-fallback'])
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      const nextClient = clientInstances.shift()
+      if (!nextClient) {
+        throw new Error('[renoun] Unexpected extra WebSocketClient creation')
+      }
+
+      return nextClient
+    })
+
+    const module = await import('./client.ts')
+    const runtimeEnvModule = await import('./runtime-env.ts')
+
+    const firstRequest = module.getOutlineRanges('/project/src/a.ts')
+
+    process.env['RENOUN_SERVER_PORT'] = '5454'
+    process.env['RENOUN_SERVER_HOST'] = 'localhost'
+    runtimeEnvModule.notifyServerRuntimeEnvChanged()
+    rejectFirstReady(new Error('server restarting'))
+
+    expect(await firstRequest).toEqual(['local-fallback'])
+    expect(await module.getOutlineRanges('/project/src/b.ts')).toEqual([
+      'second-client',
+    ])
+    expect(secondCallMethod).toHaveBeenCalledWith('getOutlineRanges', {
+      filePath: '/project/src/b.ts',
+      projectOptions: undefined,
+    })
   })
 
   test('refresh resync fallback invalidates observed project roots outside cwd', async () => {

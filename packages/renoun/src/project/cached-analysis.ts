@@ -45,6 +45,7 @@ import type {
 import {
   getSourceTextMetadata as baseGetSourceTextMetadata,
   getSourceTextMetadataFallback,
+  hydrateSourceTextMetadataSourceFile,
 } from '../utils/get-source-text-metadata.ts'
 import {
   getSourceTextFormatterStateVersion,
@@ -4011,6 +4012,13 @@ export async function getCachedSourceTextMetadata(
 
   const resolveSourceTextMetadataFromRuntimeCache =
     async (): Promise<SourceTextMetadata> => {
+      const finalizeSourceTextMetadata = (
+        metadata: SourceTextMetadata
+      ): SourceTextMetadata => {
+        hydrateSourceTextMetadataSourceFile(project, metadata)
+        return metadata
+      }
+
       const runtimeCacheStore = await getRuntimeAnalysisSession(
         scopePath
       )
@@ -4023,10 +4031,12 @@ export async function getCachedSourceTextMetadata(
             target: profileTarget,
           })
         }
-        return baseGetSourceTextMetadata({
-          ...options,
-          project,
-        })
+        return finalizeSourceTextMetadata(
+          await baseGetSourceTextMetadata({
+            ...options,
+            project,
+          })
+        )
       }
       markRuntimeAnalysisScopeBootstrapped(scopePath)
 
@@ -4160,7 +4170,7 @@ export async function getCachedSourceTextMetadata(
             refresh: refreshSourceTextMetadata,
           })
 
-          return staleValue
+          return finalizeSourceTextMetadata(staleValue)
         }
 
         queueRuntimeAnalysisImmediateRefresh({
@@ -4174,11 +4184,13 @@ export async function getCachedSourceTextMetadata(
         })
       }
 
-      return getOrComputeRuntimeAnalysisCacheValue(
-        runtimeCacheStore,
-        nodeKey,
-        cacheOptions,
-        computeSourceTextMetadata
+      return finalizeSourceTextMetadata(
+        await getOrComputeRuntimeAnalysisCacheValue(
+          runtimeCacheStore,
+          nodeKey,
+          cacheOptions,
+          computeSourceTextMetadata
+        )
       )
     }
 

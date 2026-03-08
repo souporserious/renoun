@@ -22,6 +22,7 @@ import {
   getServerIdFromProcessEnv,
   setServerIdProcessEnv,
 } from '../runtime-env.ts'
+import { isAllowedProjectServerOrigin } from './origin-policy.ts'
 
 export interface WebSocketRequest {
   method: string
@@ -473,6 +474,17 @@ export class WebSocketServer {
       host,
       backlog: 1024,
       maxPayload: MAX_PAYLOAD_BYTES,
+      allowedOrigins: (origin, request) => {
+        const allowed = isAllowedProjectServerOrigin(origin, request, this.#id)
+        if (!allowed) {
+          getDebugLogger().logWebSocketServerEvent('client_rejected', {
+            reason: 'forbidden_origin',
+            origin,
+          })
+        }
+
+        return allowed
+      },
       handleProtocols: (protocols) => {
         if (protocols.has(this.#id)) {
           return this.#id
@@ -525,28 +537,6 @@ export class WebSocketServer {
     })
 
     this.#server.on('connection', (ws: WS, req: any) => {
-      // Strict origin allowlist for browsers; node clients typically omit Origin
-      try {
-        const origin = req?.headers?.origin
-        if (origin) {
-          const hostname = new URL(origin).hostname
-          if (!['localhost', '127.0.0.1', '::1'].includes(hostname)) {
-            getDebugLogger().logWebSocketServerEvent('client_rejected', {
-              reason: 'forbidden_origin',
-              origin,
-            })
-            ws.close(1008, 'Forbidden origin')
-            return
-          }
-        }
-      } catch {
-        getDebugLogger().logWebSocketServerEvent('client_rejected', {
-          reason: 'bad_origin_url',
-          origin: req?.headers?.origin,
-        })
-        ws.close(1008, 'Bad Origin')
-        return
-      }
       const connectionId = this.#nextConnectionId++
 
       this.#sockets.add(ws)

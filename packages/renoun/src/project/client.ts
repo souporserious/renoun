@@ -81,17 +81,23 @@ import {
 import type { ProjectServerRuntime } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
-let client: WebSocketClient | undefined
-let clientRuntimeKey: string | undefined
-let hasAttachedClientRefreshSubscriptions = false
+interface ActiveClientState {
+  client: WebSocketClient
+  runtimeKey: string
+  generation: number
+  refreshSubscriptionsAttached: boolean
+  readyProbePromise: Promise<boolean> | null
+  rpcUnavailableUntil: number
+}
+
+let activeClientState: ActiveClientState | undefined
+let nextActiveClientGeneration = 0
 let hasSubscribedToServerRuntimeEnvChanges = false
 const pendingRefreshInvalidationPaths = new Set<string>()
 let isRefreshInvalidationFlushQueued = false
 let hasConnectedProjectServerClient = false
 let refreshResyncQueue: Promise<void> = Promise.resolve()
 let latestRefreshCursor = 0
-let clientReadyProbePromise: Promise<boolean> | null = null
-let clientRpcUnavailableUntil = 0
 
 type ClientCachedRpcMethod =
   | 'getQuickInfoAtPosition'
@@ -145,6 +151,7 @@ const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
   new Set<ClientCachedRpcMethod>([
     'getQuickInfoAtPosition',
     'getSourceTextMetadata',
+    'getTokens',
     'transpileSourceFile',
   ])
 
@@ -154,6 +161,7 @@ const SERVER_RPC_READY_TIMEOUT_MS = 500
 const SERVER_RPC_UNAVAILABLE_BACKOFF_MS = 5_000
 const REFRESH_RESYNC_MAX_ATTEMPTS = 3
 const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
+const CONSERVATIVE_CLIENT_RPC_INVALIDATION_PATH = '.'
 const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
 const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
 const observedProjectRootCandidates = new Set<string>()
@@ -208,6 +216,16 @@ export function onProjectClientBrowserRuntimeChange(
   return onSharedProjectClientBrowserRuntimeChange(listener)
 }
 
+function isCurrentActiveClientState(
+  state: ActiveClientState | undefined
+): state is ActiveClientState {
+  return (
+    state !== undefined &&
+    activeClientState?.generation === state.generation &&
+    activeClientState.client === state.client
+  )
+}
+
 export function setProjectClientBrowserRuntime(
   runtime?: ProjectServerRuntime
 ): void {
@@ -235,20 +253,20 @@ export function setProjectClientBrowserRuntime(
     return
   }
 
-  if (!client) {
-    const nextClient = createClientForRuntime(normalizedRuntime)
-    attachClientRefreshSubscriptions(nextClient)
+  if (!activeClientState) {
+    const nextClientState = createClientForRuntime(normalizedRuntime)
+    attachClientRefreshSubscriptions(nextClientState)
     return
   }
 
-  if (clientRuntimeKey !== nextRuntimeKey) {
+  if (activeClientState.runtimeKey !== nextRuntimeKey) {
     replaceClientForRuntime(normalizedRuntime, {
       resyncImmediately: true,
     })
     return
   }
 
-  attachClientRefreshSubscriptions(client)
+  attachClientRefreshSubscriptions(activeClientState)
 }
 
 export interface ProjectClientRuntimeOptions {
@@ -406,6 +424,26 @@ function rememberProjectRootCandidates(params: unknown): void {
   }
 }
 
+function getRefreshInvalidationRootCandidates(): readonly string[] {
+  if (observedProjectRootCandidates.size > 0) {
+    return Array.from(observedProjectRootCandidates)
+  }
+
+  const defaultRootCandidate = getDefaultProjectRootCandidate()
+  return defaultRootCandidate ? [defaultRootCandidate] : []
+}
+
+function getConservativeClientRpcDependencyPaths(
+  params: unknown
+): readonly string[] {
+  const rootCandidates = getProjectRootCandidates(params)
+  if (rootCandidates.length === 0) {
+    return [CONSERVATIVE_CLIENT_RPC_INVALIDATION_PATH]
+  }
+
+  return rootCandidates.map((rootCandidate) => toComparablePath(rootCandidate))
+}
+
 function getCandidatePaths(
   value: unknown,
   rootCandidates: readonly string[]
@@ -422,6 +460,27 @@ function getCandidatePaths(
   const resolvedCandidates = new Set<string>()
   for (const rootCandidate of rootCandidates) {
     resolvedCandidates.add(normalizePathKey(resolve(rootCandidate, normalized)))
+  }
+
+  return Array.from(resolvedCandidates)
+}
+
+function getRuntimeCandidatePaths(
+  value: unknown,
+  rootCandidates: readonly string[]
+): readonly string[] {
+  if (typeof value !== 'string' || value.length === 0) {
+    return []
+  }
+
+  const normalized = normalizeSlashes(value)
+  if (isAbsolutePath(normalized)) {
+    return [normalized]
+  }
+
+  const resolvedCandidates = new Set<string>()
+  for (const rootCandidate of rootCandidates) {
+    resolvedCandidates.add(normalizeSlashes(resolve(rootCandidate, normalized)))
   }
 
   return Array.from(resolvedCandidates)
@@ -486,8 +545,10 @@ function collectClientRpcDependencyPaths(
   const shouldAddConservativeRootDependency =
     CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY.has(method)
   if (shouldAddConservativeRootDependency) {
-    for (const rootCandidate of rootCandidates) {
-      dependencyPaths.add(toComparablePath(rootCandidate))
+    for (const dependencyPath of getConservativeClientRpcDependencyPaths(
+      params
+    )) {
+      dependencyPaths.add(dependencyPath)
     }
   }
 
@@ -658,16 +719,24 @@ interface NormalizedInvalidationPaths {
 function normalizeInvalidationPaths(
   paths: Iterable<string>
 ): NormalizedInvalidationPaths {
+  const rootCandidates = getRefreshInvalidationRootCandidates()
   const runtimePathByComparablePath = new Map<string, string>()
   for (const path of paths) {
     if (typeof path !== 'string' || path.length === 0) {
       continue
     }
 
-    const runtimePath = toRuntimeInvalidationPath(path)
-    const comparablePath = toComparablePath(runtimePath)
-    if (!runtimePathByComparablePath.has(comparablePath)) {
-      runtimePathByComparablePath.set(comparablePath, runtimePath)
+    const resolvedCandidatePaths = getRuntimeCandidatePaths(path, rootCandidates)
+    const candidatePaths =
+      resolvedCandidatePaths.length > 0
+        ? resolvedCandidatePaths
+        : [toRuntimeInvalidationPath(path)]
+
+    for (const candidatePath of candidatePaths) {
+      const comparablePath = toComparablePath(candidatePath)
+      if (!runtimePathByComparablePath.has(comparablePath)) {
+        runtimePathByComparablePath.set(comparablePath, candidatePath)
+      }
     }
   }
 
@@ -838,22 +907,29 @@ async function callClientMethod<
   return request
 }
 
-function queueRefreshResync(activeClient: WebSocketClient): void {
+function queueRefreshResync(state: ActiveClientState): void {
   refreshResyncQueue = refreshResyncQueue
     .catch(() => {})
     .then(async () => {
+      if (!isCurrentActiveClientState(state)) {
+        return
+      }
+
       for (
         let attempt = 1;
         attempt <= REFRESH_RESYNC_MAX_ATTEMPTS;
         attempt += 1
       ) {
         try {
-          const response = await activeClient.callMethod<
+          const response = await state.client.callMethod<
             RefreshInvalidationsSinceRequest,
             RefreshInvalidationsSinceResponse
           >('getRefreshInvalidationsSince', {
             sinceCursor: latestRefreshCursor,
           })
+          if (!isCurrentActiveClientState(state)) {
+            return
+          }
 
           const nextCursor = normalizeRefreshCursor(response.nextCursor)
           if (nextCursor !== undefined) {
@@ -870,6 +946,10 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
           }
           return
         } catch {
+          if (!isCurrentActiveClientState(state)) {
+            return
+          }
+
           if (attempt >= REFRESH_RESYNC_MAX_ATTEMPTS) {
             // Conservative fallback: clear client-side RPC caches and invalidate
             // runtime/project caches for all observed project roots.
@@ -893,30 +973,35 @@ function queueRefreshResync(activeClient: WebSocketClient): void {
 }
 
 function attachClientRefreshSubscriptions(
-  activeClient: WebSocketClient,
+  state: ActiveClientState,
   options: {
     resyncImmediately?: boolean
   } = {}
 ): void {
-  if (
-    hasAttachedClientRefreshSubscriptions ||
-    !shouldConsumeRefreshNotifications()
-  ) {
+  if (state.refreshSubscriptionsAttached || !shouldConsumeRefreshNotifications()) {
     return
   }
 
-  hasAttachedClientRefreshSubscriptions = true
-  activeClient.on('connected', () => {
-    clientRpcUnavailableUntil = 0
+  state.refreshSubscriptionsAttached = true
+  state.client.on('connected', () => {
+    if (!isCurrentActiveClientState(state)) {
+      return
+    }
+
+    state.rpcUnavailableUntil = 0
 
     if (!hasConnectedProjectServerClient) {
       hasConnectedProjectServerClient = true
       return
     }
 
-    queueRefreshResync(activeClient)
+    queueRefreshResync(state)
   })
-  activeClient.on('notification', (message) => {
+  state.client.on('notification', (message) => {
+    if (!isCurrentActiveClientState(state)) {
+      return
+    }
+
     if (!isRefreshNotification(message)) {
       return
     }
@@ -934,7 +1019,7 @@ function attachClientRefreshSubscriptions(
 
   if (options.resyncImmediately) {
     hasConnectedProjectServerClient = true
-    queueRefreshResync(activeClient)
+    queueRefreshResync(state)
   }
 }
 
@@ -943,31 +1028,23 @@ function toServerRuntimeKey(runtime: ProjectServerRuntime): string {
 }
 
 function disposeActiveClient(): void {
-  if (!client) {
-    clientRuntimeKey = undefined
-    hasAttachedClientRefreshSubscriptions = false
-    clientReadyProbePromise = null
-    clientRpcUnavailableUntil = 0
+  const state = activeClientState
+  if (!state) {
     invalidateAllClientRpcState()
     return
   }
 
-  const activeClient = client
-  client = undefined
-  clientRuntimeKey = undefined
-  hasAttachedClientRefreshSubscriptions = false
-  clientReadyProbePromise = null
-  clientRpcUnavailableUntil = 0
+  activeClientState = undefined
   invalidateAllClientRpcState()
 
   try {
-    activeClient.removeAllListeners?.()
+    state.client.removeAllListeners?.()
   } catch (error) {
     reportBestEffortError('project/client', error)
   }
 
   try {
-    activeClient.close?.()
+    state.client.close?.()
   } catch (error) {
     reportBestEffortError('project/client', error)
   }
@@ -975,13 +1052,17 @@ function disposeActiveClient(): void {
 
 function createClientForRuntime(
   runtime: ProjectServerRuntime
-): WebSocketClient {
-  client = new WebSocketClient(runtime.id, runtime)
-  clientRuntimeKey = toServerRuntimeKey(runtime)
-  hasAttachedClientRefreshSubscriptions = false
-  clientReadyProbePromise = null
-  clientRpcUnavailableUntil = 0
-  return client
+): ActiveClientState {
+  const state: ActiveClientState = {
+    client: new WebSocketClient(runtime.id, runtime),
+    runtimeKey: toServerRuntimeKey(runtime),
+    generation: ++nextActiveClientGeneration,
+    refreshSubscriptionsAttached: false,
+    readyProbePromise: null,
+    rpcUnavailableUntil: 0,
+  }
+  activeClientState = state
+  return state
 }
 
 function replaceClientForRuntime(
@@ -989,13 +1070,13 @@ function replaceClientForRuntime(
   options: {
     resyncImmediately?: boolean
   } = {}
-): WebSocketClient {
+): ActiveClientState {
   disposeActiveClient()
-  const nextClient = createClientForRuntime(runtime)
-  attachClientRefreshSubscriptions(nextClient, {
+  const nextClientState = createClientForRuntime(runtime)
+  attachClientRefreshSubscriptions(nextClientState, {
     resyncImmediately: options.resyncImmediately,
   })
-  return nextClient
+  return nextClientState
 }
 
 function ensureServerRuntimeEnvChangeSubscription(): void {
@@ -1005,7 +1086,7 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
 
   hasSubscribedToServerRuntimeEnvChanges = true
   onServerRuntimeEnvChange((runtime) => {
-    if (!client) {
+    if (!activeClientState) {
       return
     }
 
@@ -1015,7 +1096,7 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
     }
 
     const nextRuntimeKey = toServerRuntimeKey(runtime)
-    if (clientRuntimeKey === nextRuntimeKey) {
+    if (activeClientState.runtimeKey === nextRuntimeKey) {
       return
     }
 
@@ -1029,37 +1110,38 @@ function getClient(): WebSocketClient | undefined {
   ensureServerRuntimeEnvChangeSubscription()
 
   const serverRuntime = getActiveProjectServerRuntime()
-  const hadExistingClient = client !== undefined
+  const hadExistingClient = activeClientState !== undefined
   const nextRuntimeKey = serverRuntime
     ? toServerRuntimeKey(serverRuntime)
     : undefined
 
-  if (!client && serverRuntime) {
+  if (!activeClientState && serverRuntime) {
     createClientForRuntime(serverRuntime)
-  } else if (client && !serverRuntime) {
+  } else if (activeClientState && !serverRuntime) {
     disposeActiveClient()
   } else if (
-    client &&
+    activeClientState &&
     serverRuntime &&
-    clientRuntimeKey !== nextRuntimeKey
+    activeClientState.runtimeKey !== nextRuntimeKey
   ) {
     replaceClientForRuntime(serverRuntime, {
       resyncImmediately: true,
     })
   }
 
-  if (client) {
-    attachClientRefreshSubscriptions(client, {
+  if (activeClientState) {
+    attachClientRefreshSubscriptions(activeClientState, {
       resyncImmediately: hadExistingClient,
     })
   }
 
-  return client
+  return activeClientState?.client
 }
 
 async function getReadyClient(): Promise<WebSocketClient | undefined> {
   const activeClient = getClient()
-  if (!activeClient) {
+  const state = activeClientState
+  if (!activeClient || !state || state.client !== activeClient) {
     return undefined
   }
 
@@ -1069,28 +1151,35 @@ async function getReadyClient(): Promise<WebSocketClient | undefined> {
   }
 
   const now = Date.now()
-  if (now < clientRpcUnavailableUntil) {
+  if (now < state.rpcUnavailableUntil) {
     return undefined
   }
 
-  if (!clientReadyProbePromise) {
-    clientReadyProbePromise = activeClient
+  if (!state.readyProbePromise) {
+    state.readyProbePromise = activeClient
       .ready(SERVER_RPC_READY_TIMEOUT_MS)
       .then(() => {
-        clientRpcUnavailableUntil = 0
+        if (isCurrentActiveClientState(state)) {
+          state.rpcUnavailableUntil = 0
+        }
         return true
       })
       .catch(() => {
-        clientRpcUnavailableUntil = Date.now() + SERVER_RPC_UNAVAILABLE_BACKOFF_MS
+        if (isCurrentActiveClientState(state)) {
+          state.rpcUnavailableUntil =
+            Date.now() + SERVER_RPC_UNAVAILABLE_BACKOFF_MS
+        }
         return false
       })
       .finally(() => {
-        clientReadyProbePromise = null
+        if (isCurrentActiveClientState(state)) {
+          state.readyProbePromise = null
+        }
       })
   }
 
-  const isReady = await clientReadyProbePromise
-  return isReady ? activeClient : undefined
+  const isReady = await state.readyProbePromise
+  return isReady && isCurrentActiveClientState(state) ? state.client : undefined
 }
 
 function queueRefreshInvalidation(path: string): void {

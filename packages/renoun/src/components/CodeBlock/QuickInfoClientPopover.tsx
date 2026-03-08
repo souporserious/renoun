@@ -22,6 +22,7 @@ import {
   retainProjectClientBrowserRuntime,
 } from '../../project/browser-client-sync.ts'
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
+import { createConcurrentQueue } from '../../utils/concurrency.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { QuickInfoPopover } from './QuickInfoPopover.tsx'
@@ -145,8 +146,7 @@ const quickInfoDocumentationInFlightByKey = new Map<
   string,
   Promise<React.ReactNode | string>
 >()
-let quickInfoFetchActiveCount = 0
-const quickInfoFetchWaiters: Array<() => void> = []
+const quickInfoFetchQueue = createConcurrentQueue(QUICK_INFO_FETCH_CONCURRENCY)
 
 function getQuickInfoTestId(
   id: 'content' | 'divider' | 'display'
@@ -703,38 +703,7 @@ async function getQuickInfoDocumentationContent(
 }
 
 function runQuickInfoFetchTask<T>(task: () => Promise<T>): Promise<T> {
-  return acquireQuickInfoFetchSlot().then(async () => {
-    try {
-      return await task()
-    } finally {
-      releaseQuickInfoFetchSlot()
-    }
-  })
-}
-
-function acquireQuickInfoFetchSlot(): Promise<void> {
-  if (quickInfoFetchActiveCount < QUICK_INFO_FETCH_CONCURRENCY) {
-    quickInfoFetchActiveCount += 1
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve) => {
-    quickInfoFetchWaiters.push(() => {
-      quickInfoFetchActiveCount += 1
-      resolve()
-    })
-  })
-}
-
-function releaseQuickInfoFetchSlot(): void {
-  if (quickInfoFetchActiveCount > 0) {
-    quickInfoFetchActiveCount -= 1
-  }
-
-  const next = quickInfoFetchWaiters.shift()
-  if (next) {
-    next()
-  }
+  return quickInfoFetchQueue.run(task)
 }
 
 function hashQuickInfoDisplayText(displayText: string): string {
@@ -1098,7 +1067,9 @@ async function requestQuickInfo(
   try {
     const result = await getProjectClientQuickInfoAtPosition(
       request.filePath,
-      request.position
+      request.position,
+      undefined,
+      request.runtime
     )
     return normalizeQuickInfoResult(result)
   } catch {
@@ -1107,7 +1078,7 @@ async function requestQuickInfo(
 }
 
 async function requestDisplayTokens(
-  _request: QuickInfoRequest,
+  request: QuickInfoRequest,
   value: string,
   tokenThemeConfig: ConfigurationOptions['theme'] | undefined
 ): Promise<QuickInfoTokenizedDisplayText | null> {
@@ -1118,6 +1089,7 @@ async function requestDisplayTokens(
       theme: tokenThemeConfig,
       allowErrors: true,
       waitForWarmResult: true,
+      runtime: request.runtime,
     })
     return normalizeQuickInfoTokenizedDisplayText(result)
   } catch {
@@ -1132,8 +1104,6 @@ export function clearQuickInfoClientPopoverCaches(): void {
   quickInfoDisplayTokensInFlightByKey.clear()
   quickInfoDocumentationCacheByKey.clear()
   quickInfoDocumentationInFlightByKey.clear()
-  quickInfoFetchActiveCount = 0
-  quickInfoFetchWaiters.length = 0
 }
 
 export const __TEST_ONLY__ = {

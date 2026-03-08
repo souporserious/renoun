@@ -104,8 +104,8 @@ describe('project server refresh invalidations', () => {
 
     expect(response.fullRefresh).toBe(true)
     expect(response.nextCursor).toBe(0)
-    expect(response.filePaths?.length).toBe(1)
-    expect(response.filePath).toBe(response.filePaths?.[0])
+    expect(response.filePaths).toEqual(['.'])
+    expect(response.filePath).toBe('.')
   })
 
   test('resyncs from the cursor immediately before retained refresh history', async () => {
@@ -147,8 +147,8 @@ describe('project server refresh invalidations', () => {
     expect(response.filePaths).toHaveLength(250)
     expect(response.filePaths).toEqual(
       expect.arrayContaining([
-        expect.stringContaining('src/retained-history-2.ts'),
-        expect.stringContaining('src/retained-history-251.ts'),
+        'src/retained-history-2.ts',
+        'src/retained-history-251.ts',
       ])
     )
   })
@@ -381,9 +381,7 @@ describe('project server refresh invalidations', () => {
     const notification = await refreshNotificationPromise
 
     expect(notification.type).toBe('refresh')
-    expect(notification.data?.filePaths).toEqual(
-      expect.arrayContaining([`${rootDirectory}/src/example.ts`])
-    )
+    expect(notification.data?.filePaths).toEqual(['src/example.ts'])
   })
 
   test('falls back to disabled refresh notifications when watcher setup throws', async () => {
