@@ -24,6 +24,18 @@ interface PrewarmRequest {
   signature: string
 }
 
+type PrewarmWorkerExecArgvResolverOptions = {
+  execArgv?: readonly string[]
+}
+
+type PrewarmWorkerLaunchConfigResolverOptions =
+  PrewarmWorkerExecArgvResolverOptions & {
+    exists?: (path: string) => boolean
+    processFeatures?: {
+      typescript?: unknown
+    }
+  }
+
 export function createDefaultPrewarmOptions(rootPath = process.cwd()): {
   projectOptions: Pick<ProjectOptions, 'tsConfigFilePath'>
 } {
@@ -34,13 +46,91 @@ export function createDefaultPrewarmOptions(rootPath = process.cwd()): {
   }
 }
 
-export function resolvePrewarmWorkerEntryFilePath(): string | undefined {
+function resolvePrewarmWorkerExecArgv({
+  execArgv = process.execArgv,
+}: PrewarmWorkerExecArgvResolverOptions = {}): string[] {
+  const resolvedExecArgv: string[] = []
+
+  for (let index = 0; index < execArgv.length; ++index) {
+    const argument = execArgv[index]
+
+    if (
+      argument === '--loader' ||
+      argument === '--experimental-loader' ||
+      argument === '--import'
+    ) {
+      resolvedExecArgv.push(argument)
+
+      const nextArgument = execArgv[index + 1]
+      if (nextArgument !== undefined) {
+        resolvedExecArgv.push(nextArgument)
+        ++index
+      }
+      continue
+    }
+
+    if (
+      argument.startsWith('--loader=') ||
+      argument.startsWith('--experimental-loader=') ||
+      argument.startsWith('--import=') ||
+      argument === '--experimental-strip-types' ||
+      argument.startsWith('--experimental-strip-types=')
+    ) {
+      resolvedExecArgv.push(argument)
+    }
+  }
+
+  return resolvedExecArgv
+}
+
+export function resolvePrewarmWorkerLaunchConfig({
+  exists = existsSync,
+  processFeatures = process.features,
+  execArgv = process.execArgv,
+}: PrewarmWorkerLaunchConfigResolverOptions = {}):
+  | {
+      entryFilePath: string
+      execArgv: string[]
+    }
+  | undefined {
   const workerEntryFilePathCandidates = [
     fileURLToPath(new URL('./prewarm.worker.js', import.meta.url)),
     fileURLToPath(new URL('./prewarm.worker.ts', import.meta.url)),
   ]
 
-  return workerEntryFilePathCandidates.find((path) => existsSync(path))
+  const javaScriptWorkerEntryFilePath = workerEntryFilePathCandidates[0]
+  if (exists(javaScriptWorkerEntryFilePath)) {
+    return {
+      entryFilePath: javaScriptWorkerEntryFilePath,
+      execArgv: [],
+    }
+  }
+
+  const typeScriptWorkerEntryFilePath = workerEntryFilePathCandidates[1]
+  if (!exists(typeScriptWorkerEntryFilePath)) {
+    return undefined
+  }
+
+  const workerExecArgv = resolvePrewarmWorkerExecArgv({ execArgv })
+  const canExecuteTypeScriptEntrypoints =
+    typeof processFeatures.typescript === 'string'
+      ? processFeatures.typescript.length > 0
+      : workerExecArgv.length > 0
+
+  if (!canExecuteTypeScriptEntrypoints) {
+    return undefined
+  }
+
+  return {
+    entryFilePath: typeScriptWorkerEntryFilePath,
+    execArgv: workerExecArgv,
+  }
+}
+
+export function resolvePrewarmWorkerEntryFilePath(
+  options?: PrewarmWorkerLaunchConfigResolverOptions
+): string | undefined {
+  return resolvePrewarmWorkerLaunchConfig(options)?.entryFilePath
 }
 
 function getPrewarmRequestSignature(options?: {
@@ -171,6 +261,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
 
   let didHandleTerminalMessage = false
   let didFinalize = false
+  let didStartInlineFallback = false
   let prewarmWorkerProcess: ReturnType<typeof spawn> | undefined
 
   const finalizeRequest = () => {
@@ -181,6 +272,17 @@ function startPrewarmRequest(request: PrewarmRequest): void {
     didFinalize = true
     clearTimeout(timeoutHandle)
     finalizeActivePrewarmRequest(request.id)
+  }
+
+  const runInlineFallback = () => {
+    if (didStartInlineFallback) {
+      return
+    }
+
+    didStartInlineFallback = true
+    void runPrewarmInline(request.options, startedAt).finally(() => {
+      finalizeRequest()
+    })
   }
 
   const timeoutHandle = setTimeout(() => {
@@ -202,18 +304,16 @@ function startPrewarmRequest(request: PrewarmRequest): void {
   }, PREWARM_REQUEST_TIMEOUT_MS)
   timeoutHandle.unref()
 
-  const workerEntryFilePath = resolvePrewarmWorkerEntryFilePath()
-  if (isVitestRuntime() || !workerEntryFilePath) {
-    void runPrewarmInline(request.options, startedAt).finally(() => {
-      finalizeRequest()
-    })
+  const workerLaunchConfig = resolvePrewarmWorkerLaunchConfig()
+  if (isVitestRuntime() || !workerLaunchConfig) {
+    runInlineFallback()
     return
   }
 
   try {
     prewarmWorkerProcess = spawn(
       process.execPath,
-      [workerEntryFilePath],
+      [...workerLaunchConfig.execArgv, workerLaunchConfig.entryFilePath],
       {
         stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
         shell: false,
@@ -289,12 +389,12 @@ function startPrewarmRequest(request: PrewarmRequest): void {
           })
         )
       }
-      finalizeRequest()
+      runInlineFallback()
     })
 
     prewarmWorkerProcess.once('exit', (code, signal) => {
       if (!didHandleTerminalMessage) {
-        if ((code ?? 0) === 0) {
+        if ((code ?? 0) === 0 && signal === null) {
           getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({
             data: {
               status: 'finished',
@@ -314,6 +414,8 @@ function startPrewarmRequest(request: PrewarmRequest): void {
               },
             })
           )
+          runInlineFallback()
+          return
         }
       }
 
@@ -329,9 +431,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
         execution: 'worker',
       },
     }))
-    void runPrewarmInline(request.options, startedAt).finally(() => {
-      finalizeRequest()
-    })
+    runInlineFallback()
   }
 }
 

@@ -450,4 +450,52 @@ describe('Navigation development SWR', () => {
     expect(markup).toContain('advanced')
     expect(markup).toContain('Deep Dive')
   })
+
+  test('preserves empty directories when recursive navigation omits them', async () => {
+    const rootDirectory = createFakeDirectoryEntry('/docs', {
+      getFilterPatternKind: () => null,
+    })
+    const guidesDirectory = createFakeDirectoryEntry('/docs/guides', {
+      parent: rootDirectory,
+    })
+    const advancedDirectory = createFakeDirectoryEntry('/docs/guides/advanced', {
+      parent: guidesDirectory,
+    })
+    const draftsDirectory = createFakeDirectoryEntry('/docs/guides/drafts', {
+      parent: guidesDirectory,
+    })
+    const emptyDirectory = createFakeDirectoryEntry('/docs/empty', {
+      parent: rootDirectory,
+    })
+    const nestedEntry = createFakeFileEntry(
+      'Deep Dive',
+      '/docs/guides/advanced/deep-dive',
+      advancedDirectory
+    )
+
+    guidesDirectory.getEntries = vi.fn(async () => [
+      advancedDirectory,
+      draftsDirectory,
+    ])
+    advancedDirectory.getEntries = vi.fn(async () => [nestedEntry])
+    draftsDirectory.getEntries = vi.fn(async () => [])
+    emptyDirectory.getEntries = vi.fn(async () => [])
+    rootDirectory.getEntries = vi.fn(async (options?: { recursive?: boolean }) =>
+      options?.recursive ? [nestedEntry] : [guidesDirectory, emptyDirectory]
+    )
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    const element = await Navigation({ source: rootDirectory as any })
+    const markup = renderToStaticMarkup(<>{element}</>)
+
+    expect(rootDirectory.getEntries).toHaveBeenCalledWith()
+    expect(rootDirectory.getEntries).toHaveBeenCalledWith({ recursive: true })
+    expect(guidesDirectory.getEntries).toHaveBeenCalledWith()
+    expect(markup).toContain('guides')
+    expect(markup).toContain('advanced')
+    expect(markup).toContain('drafts')
+    expect(markup).toContain('empty')
+    expect(markup).toContain('Deep Dive')
+  })
 })

@@ -1053,10 +1053,10 @@ export async function createServer(options?: CreateServerOptions) {
     queueStartupRuntimePrewarm([rootDirectory])
   }
 
-  const emitRefreshNotifications = shouldEmitRefreshNotifications(
+  let emitRefreshNotifications = shouldEmitRefreshNotifications(
     options?.emitRefreshNotifications
   )
-  const unsubscribeRuntimeAnalysisBackgroundRefresh =
+  let unsubscribeRuntimeAnalysisBackgroundRefresh =
     onRuntimeAnalysisBackgroundRefresh((paths) => {
       if (!emitRefreshNotifications) {
         return
@@ -1075,14 +1075,21 @@ export async function createServer(options?: CreateServerOptions) {
         return
       }
 
-      queueRefreshNotification(refreshPaths, 'runtime-analysis-background-refresh', {
-        priority: 'background',
-      })
+      queueRefreshNotification(
+        refreshPaths,
+        'runtime-analysis-background-refresh',
+        {
+          priority: 'background',
+        }
+      )
     })
   let rootWatcher: FSWatcher | undefined
-  try {
-    rootWatcher = emitRefreshNotifications
-      ? watch(rootDirectory, { recursive: true }, (eventType, fileName) => {
+  if (emitRefreshNotifications) {
+    try {
+      rootWatcher = watch(
+        rootDirectory,
+        { recursive: true },
+        (eventType, fileName) => {
           if (!fileName) return
 
           const watchedFileName = String(fileName)
@@ -1107,13 +1114,15 @@ export async function createServer(options?: CreateServerOptions) {
           queueRefreshNotification([filePath], eventType, {
             priority: 'immediate',
           })
-        })
-      : undefined
-  } catch (error) {
-    unsubscribeRuntimeAnalysisBackgroundRefresh()
-    reportBestEffortError('project/server', error)
-    server.cleanup()
-    throw error
+        }
+      )
+    } catch (error) {
+      // Recursive file watching is optional and unavailable on some platforms.
+      emitRefreshNotifications = false
+      unsubscribeRuntimeAnalysisBackgroundRefresh()
+      unsubscribeRuntimeAnalysisBackgroundRefresh = () => {}
+      reportBestEffortError('project/server', error)
+    }
   }
 
   activeProjectServers += 1

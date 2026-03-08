@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test, vi } from 'vitest'
@@ -22,6 +23,8 @@ function createDeferred<Value>(): Deferred<Value> {
 afterEach(() => {
   vi.useRealTimers()
   vi.doUnmock('./prewarm.ts')
+  vi.doUnmock('../utils/env.ts')
+  vi.doUnmock('node:child_process')
   vi.resetModules()
   vi.clearAllMocks()
 })
@@ -46,9 +49,89 @@ describe('resolvePrewarmWorkerEntryFilePath', () => {
       expect(resolvedWorkerPath).toBe(tsWorkerPath)
     }
   })
+
+  test('skips the TypeScript worker when the current runtime cannot execute it', async () => {
+    const { resolvePrewarmWorkerLaunchConfig } = await import(
+      './prewarm-runner.ts'
+    )
+
+    const resolvedWorker = resolvePrewarmWorkerLaunchConfig({
+      exists: (path) => path.endsWith('.ts'),
+      processFeatures: {},
+      execArgv: [],
+    })
+
+    expect(resolvedWorker).toBeUndefined()
+  })
+
+  test('reuses the current loader flags for a TypeScript worker when needed', async () => {
+    const { resolvePrewarmWorkerLaunchConfig } = await import(
+      './prewarm-runner.ts'
+    )
+    const tsWorkerPath = fileURLToPath(
+      new URL('./prewarm.worker.ts', import.meta.url)
+    )
+
+    const resolvedWorker = resolvePrewarmWorkerLaunchConfig({
+      exists: (path) => path.endsWith('.ts'),
+      processFeatures: {},
+      execArgv: ['--loader', 'tsx'],
+    })
+
+    expect(resolvedWorker).toEqual({
+      entryFilePath: tsWorkerPath,
+      execArgv: ['--loader', 'tsx'],
+    })
+  })
 })
 
 describe('runPrewarmSafely', () => {
+  test('falls back to inline prewarm when the worker exits before completing', async () => {
+    const spawnMock = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        killed: boolean
+        kill: ReturnType<typeof vi.fn>
+        unref: ReturnType<typeof vi.fn>
+      }
+
+      child.killed = false
+      child.kill = vi.fn(() => {
+        child.killed = true
+      })
+      child.unref = vi.fn()
+
+      setTimeout(() => {
+        child.emit('exit', 1, null)
+      }, 0)
+
+      return child
+    })
+    const prewarmMock = vi.fn(async () => undefined)
+
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnMock,
+    }))
+    vi.doMock('../utils/env.ts', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../utils/env.ts')>()
+      return {
+        ...actual,
+        isVitestRuntime: () => false,
+      }
+    })
+    vi.doMock('./prewarm.ts', () => ({
+      prewarmRenounRpcServerCache: prewarmMock,
+    }))
+
+    const { runPrewarmSafely } = await import('./prewarm-runner.ts')
+
+    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'node20.json' } })
+
+    await vi.waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(prewarmMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
   test('processes queued distinct requests in FIFO order', async () => {
     const calls: string[] = []
     const pendingCalls: Array<Deferred<void>> = []

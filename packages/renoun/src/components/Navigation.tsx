@@ -328,7 +328,7 @@ async function NavigationAsync({
   let childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]> | undefined
 
   if (isDirectory(source)) {
-    const canUseRecursiveTree = source.getFilterPatternKind() !== 'shallow'
+    const canUseRecursiveTree = source.getFilterPatternKind() === null
 
     if (!canUseRecursiveTree) {
       entries = await getNavigationEntriesWithDevSWR({
@@ -337,21 +337,32 @@ async function NavigationAsync({
         readEntries: () => source.getEntries(),
       })
     } else {
+      const directEntriesPromise = getNavigationEntriesWithDevSWR({
+        source,
+        cacheKey: 'entries:direct',
+        readEntries: () => source.getEntries(),
+      })
+
       try {
-        const recursiveEntries = await getNavigationEntriesWithDevSWR({
-          source,
-          cacheKey: 'entries:recursive',
-          readEntries: () => source.getEntries({ recursive: true }),
-        })
+        const [directEntries, recursiveEntries] = await Promise.all([
+          directEntriesPromise,
+          getNavigationEntriesWithDevSWR({
+            source,
+            cacheKey: 'entries:recursive',
+            readEntries: () => source.getEntries({ recursive: true }),
+          }),
+        ])
         const tree = buildNavigationTree(source.getPathname(), recursiveEntries)
-        entries = tree.rootEntries
+        entries = mergeNavigationEntries(directEntries, tree.rootEntries)
         childrenByPath = tree.childrenByPath
       } catch (error) {
-        entries = await getNavigationEntriesWithDevSWR({
-          source,
-          cacheKey: 'entries:direct',
-          readEntries: () => source.getEntries(),
-        })
+        entries = await directEntriesPromise.catch(() =>
+          getNavigationEntriesWithDevSWR({
+            source,
+            cacheKey: 'entries:direct',
+            readEntries: () => source.getEntries(),
+          })
+        )
         reportBestEffortError('components/navigation', error)
       }
     }
@@ -366,31 +377,33 @@ async function NavigationAsync({
     ...defaultComponents,
     ...componentsProp,
   }
+  const renderedEntries = childrenByPath
+    ? await Promise.all(
+        entries.map((entry) =>
+          renderTreeItem({
+            entry,
+            components,
+            childrenByPath,
+          })
+        )
+      )
+    : await Promise.all(
+        entries.map((entry) =>
+          renderItem({
+            entry,
+            components,
+          })
+        )
+      )
 
   return (
     <components.Root source={source}>
-      <components.List entry={source} depth={0}>
-        {childrenByPath
-          ? entries.map((entry) =>
-              renderTreeItem({
-                entry,
-                components,
-                childrenByPath,
-              })
-            )
-          : entries.map((entry) => (
-              <Item
-                key={entry.getPathname()}
-                entry={entry}
-                components={components}
-              />
-            ))}
-      </components.List>
+      <components.List entry={source} depth={0}>{renderedEntries}</components.List>
     </components.Root>
   )
 }
 
-function renderTreeItem({
+async function renderTreeItem({
   entry,
   components,
   childrenByPath,
@@ -398,7 +411,7 @@ function renderTreeItem({
   entry: FileSystemEntry<any>
   components: NavigationComponents
   childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]>
-}): React.ReactNode {
+}): Promise<React.ReactNode> {
   const pathname = entry.getPathname()
   const depth = entry.depth + 1
 
@@ -410,7 +423,10 @@ function renderTreeItem({
     )
   }
 
-  const entries = childrenByPath.get(pathname) ?? []
+  const entries = mergeNavigationEntries(
+    await entry.getEntries(),
+    childrenByPath.get(pathname) ?? []
+  )
 
   if (entries.length === 0) {
     return (
@@ -424,12 +440,14 @@ function renderTreeItem({
     <components.Item key={pathname} entry={entry} depth={depth}>
       <components.Link entry={entry} depth={depth} pathname={pathname} />
       <components.List entry={entry} depth={depth}>
-        {entries.map((childEntry) =>
-          renderTreeItem({
-            entry: childEntry,
-            components,
-            childrenByPath,
-          })
+        {await Promise.all(
+          entries.map((childEntry) =>
+            renderTreeItem({
+              entry: childEntry,
+              components,
+              childrenByPath,
+            })
+          )
         )}
       </components.List>
     </components.Item>
@@ -437,19 +455,19 @@ function renderTreeItem({
 }
 
 /** A navigation item that displays a link to an entry. */
-async function Item({
+async function renderItem({
   entry,
   components,
 }: {
   entry: FileSystemEntry<any>
   components: NavigationComponents
-}) {
+}): Promise<React.ReactNode> {
   const pathname = entry.getPathname()
   const depth = entry.depth + 1
 
   if (isFile(entry)) {
     return (
-      <components.Item entry={entry} depth={depth}>
+      <components.Item key={pathname} entry={entry} depth={depth}>
         <components.Link entry={entry} depth={depth} pathname={pathname} />
       </components.Item>
     )
@@ -459,23 +477,24 @@ async function Item({
 
   if (entries.length === 0) {
     return (
-      <components.Item entry={entry} depth={depth}>
+      <components.Item key={pathname} entry={entry} depth={depth}>
         <components.Link entry={entry} depth={depth} pathname={pathname} />
       </components.Item>
     )
   }
 
   return (
-    <components.Item entry={entry} depth={depth}>
+    <components.Item key={pathname} entry={entry} depth={depth}>
       <components.Link entry={entry} depth={depth} pathname={pathname} />
       <components.List entry={entry} depth={depth}>
-        {entries.map((childEntry) => (
-          <Item
-            key={childEntry.getPathname()}
-            entry={childEntry}
-            components={components}
-          />
-        ))}
+        {await Promise.all(
+          entries.map((childEntry) =>
+            renderItem({
+              entry: childEntry,
+              components,
+            })
+          )
+        )}
       </components.List>
     </components.Item>
   )
@@ -562,4 +581,34 @@ function buildNavigationTree(
     rootEntries: childrenByPath.get(rootPathname) ?? [],
     childrenByPath,
   }
+}
+
+function mergeNavigationEntries(
+  directEntries: readonly FileSystemEntry<any>[],
+  recursiveEntries: readonly FileSystemEntry<any>[]
+): readonly FileSystemEntry<any>[] {
+  if (directEntries.length === 0) {
+    return recursiveEntries
+  }
+
+  if (recursiveEntries.length === 0) {
+    return directEntries
+  }
+
+  const mergedEntries = [...directEntries]
+  const seenPathnames = new Set(
+    directEntries.map((entry) => entry.getPathname())
+  )
+
+  for (const entry of recursiveEntries) {
+    const pathname = entry.getPathname()
+    if (seenPathnames.has(pathname)) {
+      continue
+    }
+
+    seenPathnames.add(pathname)
+    mergedEntries.push(entry)
+  }
+
+  return mergedEntries
 }

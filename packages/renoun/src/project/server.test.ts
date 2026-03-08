@@ -2,6 +2,7 @@ import { mkdirSync, watch } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import * as bestEffortModule from '../utils/best-effort.ts'
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 import * as rootDirectoryModule from '../utils/get-root-directory.ts'
 import * as cachedAnalysis from './cached-analysis.ts'
@@ -330,11 +331,14 @@ describe('project server refresh invalidations', () => {
     )
   })
 
-  test('unsubscribes runtime analysis refresh listener when watcher setup throws', async () => {
+  test('falls back to disabled refresh notifications when watcher setup throws', async () => {
     process.env['NODE_ENV'] = 'development'
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
 
     const unsubscribe = vi.fn()
+    const reportBestEffortErrorSpy = vi
+      .spyOn(bestEffortModule, 'reportBestEffortError')
+      .mockImplementation(() => {})
     const onRuntimeAnalysisBackgroundRefreshSpy = vi
       .spyOn(cachedAnalysis, 'onRuntimeAnalysisBackgroundRefresh')
       .mockReturnValue(unsubscribe)
@@ -342,11 +346,18 @@ describe('project server refresh invalidations', () => {
       throw new Error('watch unavailable')
     })
 
-    await expect(createServer({ host: '127.0.0.1' })).rejects.toThrow(
-      'watch unavailable'
-    )
+    server = await createServer({ host: '127.0.0.1' })
 
     expect(onRuntimeAnalysisBackgroundRefreshSpy).toHaveBeenCalledTimes(1)
+    expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
+      '0'
+    )
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+    expect(reportBestEffortErrorSpy).toHaveBeenCalledWith(
+      'project/server',
+      expect.objectContaining({
+        message: 'watch unavailable',
+      })
+    )
   })
 })

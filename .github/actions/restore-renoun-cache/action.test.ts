@@ -72,7 +72,7 @@ describe('restore-renoun-cache action', () => {
     )
   })
 
-  test('uses a commit-scoped cache key (incremental, no per-run identifiers)', () => {
+  test('uses a job-scoped save key built from a commit-scoped prefix', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
@@ -82,11 +82,13 @@ describe('restore-renoun-cache action', () => {
     expect(key).toContain("${{ steps.renoun-cache-token.outputs.token }}")
     expect(key).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
     expect(key).toContain('${{ github.sha }}')
+    expect(key).toContain('${{ github.workflow }}')
+    expect(key).toContain('${{ github.job }}')
     expect(key).not.toContain('github.run_id')
     expect(key).not.toContain('github.run_attempt')
   })
 
-  test('keeps restore keys scoped to the lockfile hash and key prefix', () => {
+  test('keeps restore keys scoped to the lockfile hash and commit prefix', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
@@ -101,5 +103,7 @@ describe('restore-renoun-cache action', () => {
       expect(restoreKey.endsWith('-')).toBe(true)
       expect(key.startsWith(restoreKey)).toBe(true)
     }
+
+    expect(restoreKeys[0]).toContain('${{ github.sha }}')
   })
 })
