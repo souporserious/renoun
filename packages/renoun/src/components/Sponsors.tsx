@@ -46,23 +46,6 @@ const SPONSORS_CACHE_TOKEN_DEP = 'component-sponsors-token'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
 let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
 
-export interface SponsorsRuntimeOptions {
-  cacheTtlMs?: number
-}
-
-const sponsorsRuntimeOptions: SponsorsRuntimeOptions = {}
-
-export function configureSponsorsRuntime(options: SponsorsRuntimeOptions): void {
-  if ('cacheTtlMs' in options) {
-    sponsorsRuntimeOptions.cacheTtlMs = options.cacheTtlMs
-  }
-}
-
-export function resetSponsorsRuntimeConfiguration(): void {
-  sponsorsRuntimeOptions.cacheTtlMs = undefined
-  sponsorsCacheSessionPromise = undefined
-}
-
 function getTokenCacheKey(token: string): string {
   return hashString(token)
 }
@@ -88,11 +71,6 @@ function resolveSponsorsCacheTtlMs(cacheTtlMs?: number): number {
   const configuredTtl = normalizeCacheTtlMs(cacheTtlMs)
   if (configuredTtl !== undefined) {
     return configuredTtl
-  }
-
-  const runtimeTtl = normalizeCacheTtlMs(sponsorsRuntimeOptions.cacheTtlMs)
-  if (runtimeTtl !== undefined) {
-    return runtimeTtl
   }
 
   return DEFAULT_SPONSORS_CACHE_TTL_MS

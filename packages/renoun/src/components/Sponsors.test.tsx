@@ -1,18 +1,15 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  Sponsors,
-  resetSponsorsRuntimeConfiguration,
-} from './Sponsors.tsx'
-import { NodeFileSystem } from '../file-system/NodeFileSystem.ts'
-import { Session } from '../file-system/Session.ts'
-
 const originalFetch = globalThis.fetch
 const originalSponsorsToken = process.env['GITHUB_SPONSORS_TOKEN']
 const SPONSORS_CACHE_PREFIX = 'component-sponsors:2:github-sponsors:'
 
 async function clearSponsorsCache(): Promise<void> {
+  const [{ NodeFileSystem }, { Session }] = await Promise.all([
+    import('../file-system/NodeFileSystem.ts'),
+    import('../file-system/Session.ts'),
+  ])
   const session = Session.for(new NodeFileSystem())
   const nodeKeys = await session.cache.listNodeKeysByPrefix(SPONSORS_CACHE_PREFIX)
   if (nodeKeys.length > 0) {
@@ -93,12 +90,12 @@ function createSponsorsPageResponse(viewerLogin = 'renoun') {
 
 describe('Sponsors cache', () => {
   beforeEach(async () => {
+    vi.resetModules()
     await clearSponsorsCache()
   })
 
   afterEach(() => {
     globalThis.fetch = originalFetch
-    resetSponsorsRuntimeConfiguration()
 
     if (originalSponsorsToken === undefined) {
       delete process.env['GITHUB_SPONSORS_TOKEN']
@@ -108,6 +105,7 @@ describe('Sponsors cache', () => {
   })
 
   it('reuses cached GitHub responses for repeated identical renders', async () => {
+    const { Sponsors } = await import('./Sponsors.tsx')
     process.env['GITHUB_SPONSORS_TOKEN'] = `token-${Date.now()}`
 
     const fetchMock = vi.fn(
@@ -165,6 +163,7 @@ describe('Sponsors cache', () => {
   })
 
   it('separates persistent cache entries across different sponsor tokens', async () => {
+    const { Sponsors } = await import('./Sponsors.tsx')
     process.env['GITHUB_SPONSORS_TOKEN'] = 'token-one'
 
     const fetchMock = vi.fn(
@@ -256,6 +255,7 @@ describe('Sponsors cache', () => {
   })
 
   it('uses cacheTtlMs prop override', async () => {
+    const { Sponsors } = await import('./Sponsors.tsx')
     process.env['GITHUB_SPONSORS_TOKEN'] = `token-${Date.now()}`
 
     const fetchMock = vi.fn(
@@ -292,6 +292,10 @@ describe('Sponsors cache', () => {
   })
 
   it('recovers cache session setup after a transient failure', async () => {
+    const [{ Sponsors }, { Session }] = await Promise.all([
+      import('./Sponsors.tsx'),
+      import('../file-system/Session.ts'),
+    ])
     process.env['GITHUB_SPONSORS_TOKEN'] = `token-${Date.now()}`
 
     const sessionForSpy = vi.spyOn(Session, 'for')

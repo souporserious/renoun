@@ -53,8 +53,5 @@ export {
 export { Script } from './Script.ts'
 export {
   Sponsors,
-  configureSponsorsRuntime,
-  resetSponsorsRuntimeConfiguration,
   type SponsorsProps,
-  type SponsorsRuntimeOptions,
 } from './Sponsors.ts'
