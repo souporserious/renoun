@@ -9,6 +9,7 @@ import { Fragment as JsxRuntimeFragment, jsx, jsxs } from 'react/jsx-runtime'
 import {
   getProjectClientBrowserRefreshVersion,
   getProjectClientBrowserRuntime,
+  getProjectServerRuntimeKey,
   onProjectClientBrowserRefreshVersionChange,
   onProjectClientBrowserRuntimeChange,
 } from '../../project/browser-runtime.ts'
@@ -16,7 +17,10 @@ import {
   getQuickInfoAtPosition as getProjectClientQuickInfoAtPosition,
   getTokens as getProjectClientTokens,
 } from '../../project/browser-client.ts'
-import { retainProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
+import {
+  hasRetainedProjectClientBrowserRuntime,
+  retainProjectClientBrowserRuntime,
+} from '../../project/browser-client-sync.ts'
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
@@ -165,17 +169,53 @@ function getQuickInfoTestId(
 function useActiveProjectServerRuntime(
   initialRuntime: ProjectServerRuntime | undefined
 ): ProjectServerRuntime | undefined {
-  React.useEffect(() => {
-    return retainProjectClientBrowserRuntime(initialRuntime, {
-      preferCurrentRuntime: true,
-    })
-  }, [initialRuntime?.host, initialRuntime?.id, initialRuntime?.port])
+  const mountStrategyRef = React.useRef<{
+    runtimeKey: string | undefined
+    shouldHonorInitialRuntimeOnMount: boolean
+  } | null>(null)
+  const initialRuntimeKey = getProjectServerRuntimeKey(initialRuntime)
+  if (
+    mountStrategyRef.current === null ||
+    mountStrategyRef.current.runtimeKey !== initialRuntimeKey
+  ) {
+    mountStrategyRef.current = {
+      runtimeKey: initialRuntimeKey,
+      shouldHonorInitialRuntimeOnMount: hasRetainedProjectClientBrowserRuntime(),
+    }
+  }
+  const shouldHonorInitialRuntimeOnMount =
+    mountStrategyRef.current.shouldHonorInitialRuntimeOnMount
+  const [retainedRuntimeKey, setRetainedRuntimeKey] = React.useState<
+    string | undefined
+  >(undefined)
 
-  return React.useSyncExternalStore(
+  React.useLayoutEffect(() => {
+    setRetainedRuntimeKey(initialRuntimeKey)
+    return retainProjectClientBrowserRuntime(initialRuntime, {
+      preferCurrentRuntime: !shouldHonorInitialRuntimeOnMount,
+    })
+  }, [
+    initialRuntime?.host,
+    initialRuntime?.id,
+    initialRuntime?.port,
+    shouldHonorInitialRuntimeOnMount,
+  ])
+
+  const activeRuntime = React.useSyncExternalStore(
     onProjectClientBrowserRuntimeChange,
-    () => getProjectClientBrowserRuntime() ?? initialRuntime,
+    getProjectClientBrowserRuntime,
     () => initialRuntime
   )
+
+  if (
+    shouldHonorInitialRuntimeOnMount &&
+    initialRuntimeKey &&
+    retainedRuntimeKey !== initialRuntimeKey
+  ) {
+    return initialRuntime
+  }
+
+  return activeRuntime ?? initialRuntime
 }
 
 function useProjectClientRefreshVersionSnapshot(): string {

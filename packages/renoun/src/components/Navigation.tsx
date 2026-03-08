@@ -48,10 +48,12 @@ interface DevNavigationEntriesCacheEntry {
   value?: readonly FileSystemEntry<any>[]
   updatedAt: number
   invalidationEpoch: number
+  freshnessKey?: string
   refreshTask?: Promise<readonly FileSystemEntry<any>[]>
 }
 
 interface SessionLikeWithInvalidation {
+  invalidatePath?: (path: string) => void
   snapshot?: {
     onInvalidate?: (
       listener: (path: string) => void
@@ -193,6 +195,37 @@ async function readNavigationEntriesWithTracking(
   return entries
 }
 
+async function getDirectoryNavigationFreshnessKey(
+  source: Directory<any>
+): Promise<string | undefined> {
+  const fileSystem = source.getFileSystem()
+  const getWorkspaceChangeToken = fileSystem.getWorkspaceChangeToken
+
+  if (typeof getWorkspaceChangeToken !== 'function') {
+    return undefined
+  }
+
+  try {
+    const workspaceChangeToken = await getWorkspaceChangeToken.call(
+      fileSystem,
+      source.workspacePath
+    )
+
+    return JSON.stringify({
+      workspacePath: source.workspacePath,
+      supportsWorkspaceChangeToken: true,
+      workspaceChangeToken,
+    })
+  } catch {
+    return undefined
+  }
+}
+
+function invalidateNavigationDirectorySource(source: Directory<any>): void {
+  const session = source.getSession() as SessionLikeWithInvalidation
+  session.invalidatePath?.(source.workspacePath)
+}
+
 async function getNavigationEntriesWithDevSWR({
   source,
   cacheKey,
@@ -214,20 +247,35 @@ async function getNavigationEntriesWithDevSWR({
   const cacheBucket = sourceState.entriesCacheByKey
   const cacheEntry = cacheBucket.get(cacheKey)
   const now = Date.now()
+  const freshnessKey = isDirectory(source)
+    ? await getDirectoryNavigationFreshnessKey(source)
+    : undefined
 
   if (cacheEntry?.value) {
     const isWithinStaleWindow =
       now - cacheEntry.updatedAt <= DEV_NAVIGATION_SWR_MAX_STALE_AGE_MS
     const isCurrentInvalidationEpoch =
       cacheEntry.invalidationEpoch === sourceState.invalidationEpoch
-    const shouldAwaitFreshEntries = !isCurrentInvalidationEpoch
+    const isCurrentFreshnessKey =
+      freshnessKey === undefined || cacheEntry.freshnessKey === freshnessKey
+    const shouldAwaitFreshEntries =
+      !isCurrentInvalidationEpoch || !isCurrentFreshnessKey
 
-    if (isWithinStaleWindow && isCurrentInvalidationEpoch) {
+    if (!isCurrentFreshnessKey && isDirectory(source)) {
+      invalidateNavigationDirectorySource(source)
+    }
+
+    if (
+      isWithinStaleWindow &&
+      isCurrentInvalidationEpoch &&
+      isCurrentFreshnessKey
+    ) {
       return cacheEntry.value
     }
 
     if (!cacheEntry.refreshTask) {
       const refreshEpoch = sourceState.invalidationEpoch
+      const refreshFreshnessKey = freshnessKey
       cacheEntry.refreshTask = readNavigationEntriesWithTracking(
         source,
         readEntries
@@ -236,6 +284,7 @@ async function getNavigationEntriesWithDevSWR({
           cacheEntry.value = nextEntries
           cacheEntry.updatedAt = Date.now()
           cacheEntry.invalidationEpoch = refreshEpoch
+          cacheEntry.freshnessKey = refreshFreshnessKey
           return nextEntries
         })
         .catch((error) => {
@@ -264,6 +313,7 @@ async function getNavigationEntriesWithDevSWR({
   const createdEntry: DevNavigationEntriesCacheEntry = {
     updatedAt: 0,
     invalidationEpoch: refreshEpoch,
+    freshnessKey,
   }
   const refreshTask = readNavigationEntriesWithTracking(source, readEntries)
   createdEntry.refreshTask = refreshTask
@@ -274,6 +324,7 @@ async function getNavigationEntriesWithDevSWR({
     createdEntry.value = entries
     createdEntry.updatedAt = Date.now()
     createdEntry.invalidationEpoch = refreshEpoch
+    createdEntry.freshnessKey = freshnessKey
     return entries
   } catch (error) {
     if (cacheBucket.get(cacheKey) === createdEntry) {

@@ -8854,6 +8854,24 @@ type CollectionNavigationIndex = {
   indexByPathname: Map<string, number>
 }
 
+type CollectionEntriesCacheEntry<Entries extends readonly FileSystemEntry<any>[]> =
+  {
+    freshnessKey: string
+    value: Entries
+  }
+
+type CollectionEntriesInflightEntry<
+  Entries extends readonly FileSystemEntry<any>[],
+> = {
+  freshnessKey: string
+  promise: Promise<Entries>
+}
+
+type CollectionNavigationIndexCacheEntry = {
+  freshnessKey: string
+  promise: Promise<CollectionNavigationIndex>
+}
+
 type PersistedCollectionNavigationPathsV1 = {
   version: 1
   orderedPathnames: string[]
@@ -8888,16 +8906,16 @@ export class Collection<
 > {
   static #navigationIndexBySession = new WeakMap<
     Session,
-    Map<string, Promise<CollectionNavigationIndex>>
+    Map<string, CollectionNavigationIndexCacheEntry>
   >()
   static #navigationIndexInvalidationUnsubscribeBySession = new WeakMap<
     Session,
     () => void
   >()
   #entries: Entries
-  #entriesCache = new Map<string, Entries>()
+  #entriesCache = new Map<string, CollectionEntriesCacheEntry<Entries>>()
   #entriesCacheInvalidationEpoch = 0
-  #entriesInflight = new Map<string, Promise<Entries>>()
+  #entriesInflight = new Map<string, CollectionEntriesInflightEntry<Entries>>()
   #entrySessionInvalidationUnsubscribeBySession = new WeakMap<
     Session,
     () => void
@@ -8940,6 +8958,51 @@ export class Collection<
       this.#invalidateEntriesCache()
     })
     this.#entrySessionInvalidationUnsubscribeBySession.set(session, unsubscribe)
+  }
+
+  async #getRootFreshnessKey(): Promise<string> {
+    const roots = await Promise.all(
+      this.#entries.map(async (entry) => {
+        const fileSystem =
+          entry instanceof Directory
+            ? entry.getFileSystem()
+            : entry.getParent().getFileSystem()
+        const getWorkspaceChangeToken = fileSystem.getWorkspaceChangeToken
+        let workspaceChangeToken: string | null = null
+
+        if (typeof getWorkspaceChangeToken === 'function') {
+          try {
+            workspaceChangeToken = await getWorkspaceChangeToken.call(
+              fileSystem,
+              entry.workspacePath
+            )
+          } catch {
+            workspaceChangeToken = null
+          }
+        }
+
+        return {
+          kind: entry instanceof Directory ? 'directory' : 'file',
+          pathname: entry.getPathname(),
+          workspacePath: normalizePathKey(entry.workspacePath),
+          supportsWorkspaceChangeToken:
+            typeof getWorkspaceChangeToken === 'function',
+          workspaceChangeToken,
+        }
+      })
+    )
+
+    return roots.map((root) => JSON.stringify(root)).join('\u0000')
+  }
+
+  #invalidateRootEntrySessions(): void {
+    for (const entry of this.#entries) {
+      const session =
+        entry instanceof Directory
+          ? entry.getSession()
+          : entry.getParent().getSession()
+      session.invalidatePath(entry.workspacePath)
+    }
   }
 
   #toEntriesOptionsCacheKey(options?: {
@@ -9019,7 +9082,7 @@ export class Collection<
   static #getOrCreateSessionNavigationMap(session: Session) {
     let navigationMap = this.#navigationIndexBySession.get(session)
     if (!navigationMap) {
-      navigationMap = new Map<string, Promise<CollectionNavigationIndex>>()
+      navigationMap = new Map<string, CollectionNavigationIndexCacheEntry>()
       this.#navigationIndexBySession.set(session, navigationMap)
     }
     return navigationMap
@@ -9104,9 +9167,13 @@ export class Collection<
     Collection.#trackSessionNavigationInvalidation(sharedSession)
     const cacheKey = this.#toNavigationIndexCacheKey(sharedSession, options)
     const navigationMap = Collection.#getOrCreateSessionNavigationMap(sharedSession)
+    const freshnessKey = await this.#getRootFreshnessKey()
     const existingNavigation = navigationMap.get(cacheKey)
+    if (existingNavigation?.freshnessKey === freshnessKey) {
+      return existingNavigation.promise
+    }
     if (existingNavigation) {
-      return existingNavigation
+      this.#invalidateRootEntrySessions()
     }
 
     const navigationPromise = (async () => {
@@ -9166,7 +9233,10 @@ export class Collection<
       return this.#createNavigationIndex(payload.orderedPathnames)
     })()
 
-    navigationMap.set(cacheKey, navigationPromise)
+    navigationMap.set(cacheKey, {
+      freshnessKey,
+      promise: navigationPromise,
+    })
     return navigationPromise
   }
 
@@ -9226,14 +9296,21 @@ export class Collection<
     includeIndexAndReadmeFiles?: boolean
   }): Promise<Entries> {
     const cacheKey = this.#toEntriesOptionsCacheKey(options)
+    const freshnessKey = await this.#getRootFreshnessKey()
     const cached = this.#entriesCache.get(cacheKey)
-    if (cached) {
-      return cached
+    const inFlight = this.#entriesInflight.get(cacheKey)
+    if (
+      (cached && cached.freshnessKey !== freshnessKey) ||
+      (inFlight && inFlight.freshnessKey !== freshnessKey)
+    ) {
+      this.#invalidateRootEntrySessions()
+    }
+    if (cached?.freshnessKey === freshnessKey) {
+      return cached.value
     }
 
-    const inFlight = this.#entriesInflight.get(cacheKey)
-    if (inFlight) {
-      return inFlight
+    if (inFlight?.freshnessKey === freshnessKey) {
+      return inFlight.promise
     }
 
     const cacheEpoch = this.#entriesCacheInvalidationEpoch
@@ -9280,7 +9357,11 @@ export class Collection<
       return allEntries as Entries
     })()
 
-    this.#entriesInflight.set(cacheKey, computeEntriesPromise)
+    const inflightEntry: CollectionEntriesInflightEntry<Entries> = {
+      freshnessKey,
+      promise: computeEntriesPromise,
+    }
+    this.#entriesInflight.set(cacheKey, inflightEntry)
 
     try {
       for (const entry of this.#entries) {
@@ -9288,12 +9369,21 @@ export class Collection<
       }
 
       const entries = await computeEntriesPromise
-      if (cacheEpoch === this.#entriesCacheInvalidationEpoch) {
-        this.#entriesCache.set(cacheKey, entries)
+      const latestFreshnessKey = await this.#getRootFreshnessKey()
+      if (
+        cacheEpoch === this.#entriesCacheInvalidationEpoch &&
+        latestFreshnessKey === freshnessKey
+      ) {
+        this.#entriesCache.set(cacheKey, {
+          freshnessKey,
+          value: entries,
+        })
       }
       return entries
     } finally {
-      this.#entriesInflight.delete(cacheKey)
+      if (this.#entriesInflight.get(cacheKey) === inflightEntry) {
+        this.#entriesInflight.delete(cacheKey)
+      }
     }
   }
 

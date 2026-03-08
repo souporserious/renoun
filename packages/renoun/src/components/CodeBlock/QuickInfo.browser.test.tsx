@@ -54,6 +54,11 @@ const RUNTIME: ProjectServerRuntime = {
   port: '43123',
   host: '127.0.0.1',
 }
+const SECOND_RUNTIME: ProjectServerRuntime = {
+  id: 'quick-info-browser-test-secondary',
+  port: '43124',
+  host: '127.0.0.1',
+}
 const THEME_CONFIG: ConfigurationOptions['theme'] = {
   light: 'github-light',
   dark: 'github-dark',
@@ -505,6 +510,36 @@ describe('QuickInfo browser regression', () => {
         'Streams export history from a repository source.'
       )
     }, 1_000)
+  })
+
+  it('honors the popover runtime when another retained runtime is already active', async () => {
+    const releaseRuntime = retainProjectClientBrowserRuntime(SECOND_RUNTIME)
+    renderQuickInfoFixture(root, 'stale-runtime')
+
+    try {
+      await waitFor(
+        () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+        1_000
+      )
+
+      hoverSymbol(getSymbolAnchor('symbol-short'))
+
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test@ws://127.0.0.1:43123'
+          ) !== undefined,
+        1_000
+      )
+
+      expect(
+        counters.quickInfoByRuntimeKey.get(
+          'quick-info-browser-test-secondary@ws://127.0.0.1:43124'
+        )
+      ).toBeUndefined()
+    } finally {
+      releaseRuntime()
+    }
   })
 
   it('uses the updated active runtime for new hover requests without rerendering the code block', async () => {

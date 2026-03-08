@@ -10,8 +10,10 @@ import { WebSocketClient } from './rpc/client.ts'
 import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
 import { createServer } from './server.ts'
+import * as getProjectModule from './get-project.ts'
 import * as highlighterModule from '../utils/create-highlighter.ts'
 import * as quickInfoModule from '../utils/get-quick-info-at-position.ts'
+import * as fileTextPrefixCacheModule from './file-text-prefix-cache.ts'
 
 const WEBSOCKET_READY_TIMEOUT_MS = 10_000
 const REFRESH_NOTIFICATION_TIMEOUT_MS = 5_000
@@ -259,14 +261,20 @@ describe('project server refresh invalidations', () => {
     )
   })
 
-  test('does not initialize the highlighter during development startup without request config', async () => {
+  test('does not scan markdown or initialize the highlighter during development startup without request config', async () => {
     process.env['NODE_ENV'] = 'development'
+    vi.spyOn(rootDirectoryModule, 'getRootDirectory').mockReturnValue(
+      '/virtual-dev-startup-root.mdx'
+    )
     vi.spyOn(cachedAnalysis, 'prewarmRuntimeAnalysisSession').mockResolvedValue()
     vi.spyOn(cachedAnalysis, 'getCachedSourceTextMetadata').mockResolvedValue(
       null as unknown as Awaited<
         ReturnType<typeof cachedAnalysis.getCachedSourceTextMetadata>
       >
     )
+    const getSharedFileTextPrefixSpy = vi
+      .spyOn(fileTextPrefixCacheModule, 'getSharedFileTextPrefix')
+      .mockResolvedValue(undefined)
     const createHighlighterSpy = vi
       .spyOn(highlighterModule, 'createHighlighter')
       .mockResolvedValue({
@@ -277,6 +285,7 @@ describe('project server refresh invalidations', () => {
     await new Promise((resolve) => setTimeout(resolve, 50))
 
     expect(createHighlighterSpy).not.toHaveBeenCalled()
+    expect(getSharedFileTextPrefixSpy).not.toHaveBeenCalled()
   })
 
   test('does not memoize quick info RPC responses for identical params in development', async () => {
@@ -405,5 +414,82 @@ describe('project server refresh invalidations', () => {
         message: 'watch unavailable',
       })
     )
+  })
+
+  test('does not continue startup markdown warmup after cleanup', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['NODE_ENV'] = 'development'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    vi.spyOn(rootDirectoryModule, 'getRootDirectory').mockReturnValue(
+      '/virtual-dev-startup-cleanup-root.mdx'
+    )
+    vi.spyOn(cachedAnalysis, 'prewarmRuntimeAnalysisSession').mockResolvedValue()
+
+    let startedMetadataCalls = 0
+    let resolveMetadataStarted: (() => void) | undefined
+    const metadataStarted = new Promise<void>((resolve) => {
+      resolveMetadataStarted = resolve
+    })
+    const metadataWaiters: Array<() => void> = []
+
+    vi.spyOn(cachedAnalysis, 'getCachedSourceTextMetadata').mockImplementation(
+      async () => {
+        startedMetadataCalls += 1
+        if (startedMetadataCalls >= 2) {
+          resolveMetadataStarted?.()
+        }
+
+        await new Promise<void>((resolve) => {
+          metadataWaiters.push(resolve)
+        })
+
+        return null as unknown as Awaited<
+          ReturnType<typeof cachedAnalysis.getCachedSourceTextMetadata>
+        >
+      }
+    )
+
+    const tokenizeSpy = vi.fn(async () => [])
+    vi.spyOn(highlighterModule, 'createHighlighter').mockResolvedValue({
+      tokenize: tokenizeSpy,
+    } as Awaited<ReturnType<typeof highlighterModule.createHighlighter>>)
+    vi.spyOn(getProjectModule, 'getProject').mockReturnValue({} as never)
+    vi.spyOn(cachedAnalysis, 'getCachedTokens').mockResolvedValue([])
+    const getSharedFileTextPrefixSpy = vi
+      .spyOn(fileTextPrefixCacheModule, 'getSharedFileTextPrefix')
+      .mockResolvedValue(undefined)
+
+    server = await createServer({
+      host: '127.0.0.1',
+      emitRefreshNotifications: false,
+    })
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+    await metadataStarted
+
+    await client.callMethod<
+      {
+        value: string
+        language: 'ts'
+        theme: 'default'
+      },
+      unknown
+    >('getTokens', {
+      value: 'const answer = 42',
+      language: 'ts',
+      theme: 'default',
+    })
+
+    server.cleanup()
+    server = undefined
+
+    for (const resolveMetadata of metadataWaiters) {
+      resolveMetadata()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    expect(getSharedFileTextPrefixSpy).not.toHaveBeenCalled()
+    expect(tokenizeSpy).not.toHaveBeenCalled()
   })
 })

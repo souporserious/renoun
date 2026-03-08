@@ -20,6 +20,11 @@ function ensureBrowserRuntimeSubscription(): void {
 
   hasSubscribedToBrowserRuntimeChanges = true
   onProjectClientBrowserRuntimeChange((runtime) => {
+    if (!runtime) {
+      disposeProjectBrowserClient()
+      return
+    }
+
     const runtimeKey = getProjectServerRuntimeKey(runtime)
     if (!runtimeKey) {
       disposeProjectBrowserClient()
@@ -127,11 +132,13 @@ export async function getQuickInfoAtPosition(
 export async function getTokens(
   options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
     projectOptions?: ProjectOptions
+    waitForWarmResult?: boolean
   }
 ): Promise<TokenizedLines> {
   return callProjectBrowserClientMethod<
     Omit<GetTokensOptions, 'highlighter' | 'project'> & {
       projectOptions?: ProjectOptions
+      waitForWarmResult?: boolean
     },
     TokenizedLines
   >('getTokens', options)

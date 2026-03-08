@@ -572,6 +572,7 @@ export async function createServer(options?: CreateServerOptions) {
   const pendingCodeFencePrewarmPathsImmediate = new Set<string>()
   const pendingCodeFencePrewarmPathsBackground = new Set<string>()
   const deferredCodeFencePrewarmPaths = new Set<string>()
+  let cleanedUp = false
   const hasHighlighterInitializationOptions = (
     initOptions: HighlighterInitializationOptions
   ): boolean => {
@@ -589,7 +590,26 @@ export async function createServer(options?: CreateServerOptions) {
       latestHighlighterInitializationOptions.languages = initOptions.languages
     }
   }
+  const addDeferredCodeFencePrewarmPaths = (
+    filePaths: Iterable<string>
+  ): void => {
+    for (const filePath of filePaths) {
+      if (typeof filePath !== 'string' || filePath.length === 0) {
+        continue
+      }
+
+      deferredCodeFencePrewarmPaths.add(normalizeCodeFencePrewarmPath(filePath))
+    }
+  }
   const flushRefreshNotifications = () => {
+    if (cleanedUp) {
+      refreshFlushTimer = undefined
+      refreshFlushDelayMs = undefined
+      pendingRefreshPaths.clear()
+      pendingRefreshEventTypes.clear()
+      return
+    }
+
     refreshFlushTimer = undefined
     refreshFlushDelayMs = undefined
     if (pendingRefreshPaths.size === 0) {
@@ -631,6 +651,10 @@ export async function createServer(options?: CreateServerOptions) {
       priority?: RefreshNotificationPriority
     } = {}
   ) => {
+    if (cleanedUp) {
+      return
+    }
+
     let hasPath = false
 
     for (const filePath of filePaths) {
@@ -721,7 +745,6 @@ export async function createServer(options?: CreateServerOptions) {
       })
         .then((highlighter) => {
           resolvedHighlighter = highlighter
-          flushDeferredCodeFencePrewarmPaths()
           return highlighter
         })
         .catch((error) => {
@@ -734,6 +757,9 @@ export async function createServer(options?: CreateServerOptions) {
     try {
       const highlighter = await currentHighlighter
       resolvedHighlighter = highlighter
+      if (!cleanedUp) {
+        flushDeferredCodeFencePrewarmPaths()
+      }
       return highlighter
     } catch (error) {
       reportBestEffortError('project/server', error)
@@ -744,6 +770,10 @@ export async function createServer(options?: CreateServerOptions) {
   const queueHighlighterInitialization = (
     options: HighlighterInitializationOptions
   ): void => {
+    if (cleanedUp) {
+      return
+    }
+
     updateHighlighterInitializationOptions(options)
     if (
       resolvedHighlighter ||
@@ -763,29 +793,31 @@ export async function createServer(options?: CreateServerOptions) {
   const prewarmCodeFenceLanguages = async (
     paths: readonly string[]
   ): Promise<void> => {
-    if (!isDevelopmentEnvironment()) {
+    if (!isDevelopmentEnvironment() || cleanedUp) {
+      return
+    }
+
+    if (
+      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions) ||
+      !resolvedHighlighter
+    ) {
+      addDeferredCodeFencePrewarmPaths(paths)
       return
     }
 
     const markdownFilePaths = await collectMarkdownFilesForCodeFencePrewarm(paths)
-    if (markdownFilePaths.length === 0) {
+    if (cleanedUp || markdownFilePaths.length === 0) {
       return
     }
 
-    if (!currentHighlighter) {
-      for (const path of markdownFilePaths) {
-        deferredCodeFencePrewarmPaths.add(path)
-      }
-      return
-    }
-
-    const highlighter = await currentHighlighter.catch(() => null)
+    const highlighter = resolvedHighlighter
     if (!highlighter) {
+      addDeferredCodeFencePrewarmPaths(paths)
       return
     }
 
     const languages = await readMarkdownCodeFenceLanguages(markdownFilePaths)
-    if (languages.length === 0) {
+    if (cleanedUp || languages.length === 0) {
       return
     }
 
@@ -799,6 +831,10 @@ export async function createServer(options?: CreateServerOptions) {
         concurrency: CODE_FENCE_PREWARM_TOKENIZE_CONCURRENCY,
       },
       async (language) => {
+        if (cleanedUp) {
+          return
+        }
+
         try {
           await highlighter.tokenize(' ', language as any, themeNames)
         } catch {
@@ -809,6 +845,14 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   const flushCodeFenceLanguagePrewarm = () => {
+    if (cleanedUp) {
+      codeFencePrewarmFlushTimer = undefined
+      codeFencePrewarmFlushDelayMs = undefined
+      pendingCodeFencePrewarmPathsImmediate.clear()
+      pendingCodeFencePrewarmPathsBackground.clear()
+      return
+    }
+
     codeFencePrewarmFlushTimer = undefined
     codeFencePrewarmFlushDelayMs = undefined
 
@@ -830,9 +874,15 @@ export async function createServer(options?: CreateServerOptions) {
       .catch(() => {})
       .then(() => prewarmCodeFenceLanguages(paths))
       .catch((error) => {
-        reportBestEffortError('project/server', error)
+        if (!cleanedUp) {
+          reportBestEffortError('project/server', error)
+        }
       })
       .finally(() => {
+        if (cleanedUp) {
+          return
+        }
+
         if (
           pendingCodeFencePrewarmPathsImmediate.size > 0 ||
           pendingCodeFencePrewarmPathsBackground.size > 0
@@ -853,7 +903,7 @@ export async function createServer(options?: CreateServerOptions) {
       priority?: RefreshNotificationPriority
     } = {}
   ) => {
-    if (!isDevelopmentEnvironment()) {
+    if (!isDevelopmentEnvironment() || cleanedUp) {
       return
     }
 
@@ -898,6 +948,18 @@ export async function createServer(options?: CreateServerOptions) {
       return
     }
 
+    if (
+      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions) ||
+      !resolvedHighlighter
+    ) {
+      addDeferredCodeFencePrewarmPaths(
+        immediateQueue.size > 0 ? immediateQueue : backgroundQueue
+      )
+      immediateQueue.clear()
+      backgroundQueue.clear()
+      return
+    }
+
     const requestedDelayMs =
       CODE_FENCE_PREWARM_PRIORITY_DELAY_MS[priority] ?? 250
     if (
@@ -921,7 +983,11 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   const flushDeferredCodeFencePrewarmPaths = () => {
-    if (!resolvedHighlighter) {
+    if (
+      cleanedUp ||
+      !resolvedHighlighter ||
+      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions)
+    ) {
       return
     }
 
@@ -943,11 +1009,14 @@ export async function createServer(options?: CreateServerOptions) {
   const prewarmRuntimeAnalysisStartup = async (
     paths: readonly string[]
   ): Promise<void> => {
-    if (!isDevelopmentEnvironment()) {
+    if (!isDevelopmentEnvironment() || cleanedUp) {
       return
     }
 
     await prewarmRuntimeAnalysisSession(rootDirectory)
+    if (cleanedUp) {
+      return
+    }
 
     const project = getProject()
     await mapConcurrent(
@@ -956,6 +1025,10 @@ export async function createServer(options?: CreateServerOptions) {
         concurrency: STARTUP_RUNTIME_PREWARM_METADATA_CONCURRENCY,
       },
       async (sample) => {
+        if (cleanedUp) {
+          return
+        }
+
         try {
           await getCachedSourceTextMetadata(project, {
             value: sample.value,
@@ -968,17 +1041,31 @@ export async function createServer(options?: CreateServerOptions) {
         }
       }
     )
+    if (cleanedUp) {
+      return
+    }
 
-    const shouldInitializeHighlighter =
-      Boolean(resolvedHighlighter) ||
-      Boolean(currentHighlighter) ||
-      hasHighlighterInitializationOptions(latestHighlighterInitializationOptions)
-    if (shouldInitializeHighlighter) {
-      await ensureHighlighter(latestHighlighterInitializationOptions)
+    if (
+      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions)
+    ) {
+      return
+    }
+
+    const highlighter = await ensureHighlighter(latestHighlighterInitializationOptions)
+    if (cleanedUp || !highlighter) {
+      return
     }
 
     const markdownFiles = await collectMarkdownFilesForCodeFencePrewarm(paths)
+    if (cleanedUp) {
+      return
+    }
+
     const discoveredLanguages = await readMarkdownCodeFenceLanguages(markdownFiles)
+    if (cleanedUp) {
+      return
+    }
+
     const warmupLanguageSet = new Set<string>(
       STARTUP_RUNTIME_PREWARM_FALLBACK_LANGUAGES
     )
@@ -995,30 +1082,35 @@ export async function createServer(options?: CreateServerOptions) {
       STARTUP_RUNTIME_PREWARM_MAX_LANGUAGE_COUNT
     )
     if (warmupLanguages.length > 0) {
-      const highlighter = resolvedHighlighter
       const themeNames = latestCodeFencePrewarmThemeNames.length
         ? latestCodeFencePrewarmThemeNames
         : ['default']
 
-      if (highlighter) {
-        await mapConcurrent(
-          warmupLanguages,
-          {
-            concurrency: STARTUP_RUNTIME_PREWARM_TOKENIZE_CONCURRENCY,
-          },
-          async (language) => {
-            try {
-              await highlighter.tokenize(
-                getStartupRuntimeWarmupSourceText(language),
-                language as any,
-                themeNames
-              )
-            } catch {
-              // Ignore unsupported languages during best-effort warmup.
-            }
+      await mapConcurrent(
+        warmupLanguages,
+        {
+          concurrency: STARTUP_RUNTIME_PREWARM_TOKENIZE_CONCURRENCY,
+        },
+        async (language) => {
+          if (cleanedUp) {
+            return
           }
-        )
-      }
+
+          try {
+            await highlighter.tokenize(
+              getStartupRuntimeWarmupSourceText(language),
+              language as any,
+              themeNames
+            )
+          } catch {
+            // Ignore unsupported languages during best-effort warmup.
+          }
+        }
+      )
+    }
+
+    if (cleanedUp) {
+      return
     }
 
     queueCodeFenceLanguagePrewarm(paths, {
@@ -1027,19 +1119,24 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   const queueStartupRuntimePrewarm = (paths: readonly string[]): void => {
-    if (!isDevelopmentEnvironment() || startupRuntimePrewarmQueued) {
+    if (!isDevelopmentEnvironment() || startupRuntimePrewarmQueued || cleanedUp) {
       return
     }
 
     startupRuntimePrewarmQueued = true
     startupRuntimePrewarmTimer = setTimeout(() => {
       startupRuntimePrewarmTimer = undefined
+      if (cleanedUp) {
+        return
+      }
 
       startupRuntimePrewarmInFlight = startupRuntimePrewarmInFlight
         .catch(() => {})
         .then(() => prewarmRuntimeAnalysisStartup(paths))
         .catch((error) => {
-          reportBestEffortError('project/server', error)
+          if (!cleanedUp) {
+            reportBestEffortError('project/server', error)
+          }
         })
     }, 0)
     startupRuntimePrewarmTimer.unref?.()
@@ -1058,7 +1155,7 @@ export async function createServer(options?: CreateServerOptions) {
   )
   let unsubscribeRuntimeAnalysisBackgroundRefresh =
     onRuntimeAnalysisBackgroundRefresh((paths) => {
-      if (!emitRefreshNotifications) {
+      if (cleanedUp || !emitRefreshNotifications) {
         return
       }
 
@@ -1090,7 +1187,7 @@ export async function createServer(options?: CreateServerOptions) {
         rootDirectory,
         { recursive: true },
         (eventType, fileName) => {
-          if (!fileName) return
+          if (cleanedUp || !fileName) return
 
           const watchedFileName = String(fileName)
           if (!watchedFileName) {
@@ -1135,7 +1232,6 @@ export async function createServer(options?: CreateServerOptions) {
   })
 
   const originalCleanup = server.cleanup.bind(server)
-  let cleanedUp = false
   server.cleanup = () => {
     if (cleanedUp) {
       return

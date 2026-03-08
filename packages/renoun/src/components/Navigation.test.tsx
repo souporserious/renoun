@@ -75,12 +75,17 @@ interface FakeDirectoryEntry {
   kind: 'directory'
   name: string
   depth: number
+  workspacePath: string
   getPathname: () => string
   getEntries: (
     options?: { recursive?: boolean }
   ) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
+  getFileSystem: () => {
+    getWorkspaceChangeToken?: (rootPath: string) => Promise<string | null>
+  }
   getParent: () => FakeDirectoryEntry
   getSession: () => {
+    invalidatePath: (path: string) => void
     snapshot: {
       onInvalidate: (listener: (path: string) => void) => () => void
     }
@@ -115,20 +120,29 @@ function createFakeDirectoryEntry(
   pathname: string,
   options?: {
     parent?: FakeDirectoryEntry
+    invalidatePath?: (path: string) => void
     onInvalidate?: (listener: (path: string) => void) => () => void
     getEntries?: (
       options?: { recursive?: boolean }
     ) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
     getFilterPatternKind?: () => 'recursive' | 'shallow' | null
+    getWorkspaceChangeToken?: (rootPath: string) => Promise<string | null>
   }
 ): FakeDirectorySource {
+  const fileSystem = {
+    getWorkspaceChangeToken: options?.getWorkspaceChangeToken,
+  }
+
   return {
     kind: 'directory',
     name: pathname.split('/').filter(Boolean).at(-1) ?? '',
     depth: pathname.split('/').filter(Boolean).length - 1,
+    workspacePath: pathname.replace(/^\/+/, '') || '.',
     getPathname: () => pathname,
     getFilterPatternKind: options?.getFilterPatternKind ?? (() => 'recursive'),
+    getFileSystem: () => fileSystem,
     getSession: () => ({
+      invalidatePath: options?.invalidatePath ?? (() => {}),
       snapshot: {
         onInvalidate: options?.onInvalidate ?? (() => () => {}),
       },
@@ -174,6 +188,46 @@ describe('Navigation development SWR', () => {
   afterEach(() => {
     ;(globalThis as { FinalizationRegistry?: typeof FinalizationRegistry })
       .FinalizationRegistry = originalFinalizationRegistry
+  })
+
+  test('refreshes directory-backed navigation when the workspace token changes without invalidation', async () => {
+    let currentToken = 'docs:token:v1'
+    let currentEntries: readonly FakeFileEntry[] = [
+      createFakeFileEntry(
+        'Old Page',
+        '/docs/old-page',
+        createFakeDirectoryEntry('/docs')
+      ),
+    ]
+    const getWorkspaceChangeToken = vi.fn(async () => currentToken)
+
+    const source = createFakeDirectoryEntry('/docs', {
+      getEntries: vi.fn(async () => currentEntries),
+      getWorkspaceChangeToken,
+    })
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    const firstElement = await Navigation({ source: source as any })
+    const firstMarkup = renderToStaticMarkup(<>{firstElement}</>)
+    expect(firstMarkup).toContain('Old Page')
+    expect(source.getEntries).toHaveBeenCalledTimes(1)
+
+    currentEntries = [
+      createFakeFileEntry(
+        'New Page',
+        '/docs/new-page',
+        createFakeDirectoryEntry('/docs')
+      ),
+    ]
+    currentToken = 'docs:token:v2'
+
+    const secondElement = await Navigation({ source: source as any })
+    const secondMarkup = renderToStaticMarkup(<>{secondElement}</>)
+    expect(getWorkspaceChangeToken).toHaveBeenCalledWith('docs')
+    expect(source.getEntries).toHaveBeenCalledTimes(2)
+    expect(secondMarkup).toContain('New Page')
+    expect(secondMarkup).not.toContain('Old Page')
   })
 
   test('returns refreshed entries immediately after invalidation', async () => {

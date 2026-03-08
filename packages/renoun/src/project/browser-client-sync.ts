@@ -134,6 +134,10 @@ export function retainProjectClientBrowserRuntime(
   }
 }
 
+export function hasRetainedProjectClientBrowserRuntime(): boolean {
+  return browserRuntimeRegistrations.length > 0
+}
+
 function ensureRefreshNotificationSocket(
   options: {
     forceReconnect?: boolean

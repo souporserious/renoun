@@ -27,10 +27,14 @@ import type { basename } from '#fixtures/utils/path.ts'
 import type { MDXContent } from '../mdx'
 import type { ContentSection } from './index'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
-import { removeExtension } from '../utils/path.ts'
+import { normalizePathKey, removeExtension } from '../utils/path.ts'
 import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
 import { NodeFileSystem } from './NodeFileSystem'
-import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
+import { Cache } from './Cache.ts'
+import {
+  InMemoryFileSystem,
+  type InMemoryEntry,
+} from './InMemoryFileSystem.ts'
 import * as gitHostFileSystemModule from './GitVirtualFileSystem'
 import {
   type FileSystemEntry,
@@ -73,6 +77,55 @@ function createTempDirectoryHandle(prefix: string) {
     [Symbol.dispose]() {
       rmSync(path, { recursive: true, force: true })
     },
+  }
+}
+
+class TokenAwareInMemoryFileSystem extends InMemoryFileSystem {
+  override async getWorkspaceChangeToken(rootPath: string): Promise<string> {
+    const normalizedRootPath = normalizePathKey(rootPath)
+    const prefix =
+      normalizedRootPath === '.' ? '' : `${normalizedRootPath}/`
+    const scopedEntries = Array.from(this.getFiles().entries())
+      .filter(([path]) => {
+        const normalizedPath = normalizePathKey(path)
+        return (
+          normalizedRootPath === '.' ||
+          normalizedPath === normalizedRootPath ||
+          normalizedPath.startsWith(prefix)
+        )
+      })
+      .map(([path, entry]) => {
+        return `${normalizePathKey(path)}:${this.#getEntrySignature(entry)}`
+      })
+      .sort()
+
+    return `${normalizedRootPath}:${scopedEntries.join('|')}`
+  }
+
+  override async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[]> {
+    const normalizedRootPath = normalizePathKey(rootPath)
+    const currentToken = await this.getWorkspaceChangeToken(rootPath)
+
+    if (currentToken === previousToken) {
+      return []
+    }
+
+    return [normalizedRootPath]
+  }
+
+  #getEntrySignature(entry: InMemoryEntry): string {
+    if (entry.kind === 'Directory') {
+      return 'dir'
+    }
+
+    if (entry.kind === 'Text') {
+      return `text:${entry.content}`
+    }
+
+    return `binary:${typeof entry.content === 'string' ? entry.content : entry.content.byteLength}`
   }
 }
 
@@ -3091,6 +3144,65 @@ export function identity<T>(value: T) {
     expect(third).not.toBe(first)
     expect(third.some((entry) => entry.baseName === 'c')).toBe(true)
     expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(2)
+  })
+
+  test('entry group getEntries refreshes recursive results after workspace token changes', async () => {
+    const fileSystem = new TokenAwareInMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+    })
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 0,
+      workspaceChangedPathsTtlMs: 0,
+    })
+    const docs = new Directory({ path: 'docs', fileSystem, cache })
+    const group = new Collection({ entries: [docs] })
+    const directoryGetEntriesSpy = vi.spyOn(docs, 'getEntries')
+
+    const first = await group.getEntries({ recursive: true })
+    const second = await group.getEntries({ recursive: true })
+
+    expect(second).toBe(first)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(1)
+
+    await fileSystem.writeFile('docs/c.mdx', '')
+
+    const third = await group.getEntries({ recursive: true })
+
+    expect(third).not.toBe(first)
+    expect(third.some((entry) => entry.baseName === 'c')).toBe(true)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(2)
+  })
+
+  test('entry group siblings refresh after workspace token changes', async () => {
+    const fileSystem = new TokenAwareInMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+    })
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 0,
+      workspaceChangedPathsTtlMs: 0,
+    })
+    const docs = new Directory({ path: 'docs', fileSystem, cache })
+    const group = new Collection({ entries: [docs] })
+
+    const firstFile = await group.getFile('docs/a')
+    const [, firstNextEntry] = await firstFile.getSiblings({
+      collection: group,
+    })
+
+    expect(firstNextEntry).toBeDefined()
+    expect(firstNextEntry!.getPathname()).toBe('/docs/b')
+
+    await fileSystem.writeFile('docs/c.mdx', '')
+
+    const secondFile = await group.getFile('docs/b')
+    const [, secondNextEntry] = await secondFile.getSiblings({
+      collection: group,
+    })
+
+    expect(secondNextEntry).toBeDefined()
+    expect(secondNextEntry!.getPathname()).toBe('/docs/c')
   })
 
   test('multiple extensions in entry group', async () => {

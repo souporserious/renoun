@@ -43,11 +43,11 @@ function getDebugRootDirectory(): string | undefined {
     try {
       return process.cwd()
     } catch {
-      return process.env?.PWD
+      return process.env?.['PWD']
     }
   }
 
-  return process.env?.PWD
+  return process.env?.['PWD']
 }
 
 const RE_OSC = /\x1B\][^\x07\x1B]*(?:\x07|\x1B\\)/g // OSC ... BEL or ST
