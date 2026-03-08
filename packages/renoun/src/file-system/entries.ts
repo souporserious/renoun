@@ -6292,6 +6292,28 @@ export class Directory<
     return `sort:${this.#getSession().createValueSignature(this.#sort, 'sort')}`
   }
 
+  #hasDynamicEntriesBehavior() {
+    if (typeof this.#filter === 'function' && this.#filterPattern === undefined) {
+      return true
+    }
+
+    if (typeof this.#sort === 'function') {
+      return true
+    }
+
+    if (typeof this.#sort === 'object' && this.#sort !== null) {
+      const sortDescriptor = this.#sort as {
+        compare?: unknown
+      }
+
+      if (typeof sortDescriptor.compare === 'function') {
+        return true
+      }
+    }
+
+    return false
+  }
+
   #canPersistStructureCache() {
     return isSessionSnapshotPersistable({
       filter: this.#filter,
@@ -6873,12 +6895,16 @@ export class Directory<
 
   async getStructure(): Promise<Array<DirectoryStructure | FileStructure>> {
     const session = this.#getSession()
-    const nodeKey = this.getStructureCacheKey()
     const directoryPath = this.absolutePath
-    const persist = this.#canPersistStructureCache()
-
-    return session.cache.getOrCompute(nodeKey, { persist }, async (ctx) => {
-      await ctx.recordDirectoryDep(directoryPath)
+    type StructureCacheContext = {
+      recordDirectoryDep(path: string): Promise<unknown>
+      recordNodeDep(nodeKey: string): Promise<unknown>
+      recordFileDep(path: string): Promise<unknown>
+    }
+    const buildStructure = async (ctx?: StructureCacheContext) => {
+      if (ctx) {
+        await ctx.recordDirectoryDep(directoryPath)
+      }
 
       const relativePath = this.workspacePath
       const path = this.getPathname()
@@ -6910,19 +6936,33 @@ export class Directory<
           }
         }
 
-        if (typeof (entry as any).getStructureCacheKey === 'function') {
+        if (
+          ctx &&
+          typeof (entry as any).getStructureCacheKey === 'function'
+        ) {
           await ctx.recordNodeDep((entry as any).getStructureCacheKey())
         }
 
-        if (entry instanceof File) {
+        if (ctx && entry instanceof File) {
           await ctx.recordFileDep(entry.absolutePath)
-        } else if (entry instanceof Directory) {
+        } else if (ctx && entry instanceof Directory) {
           await ctx.recordDirectoryDep(entry.absolutePath)
         }
       }
 
       return structures
-    })
+    }
+
+    if (this.#hasDynamicEntriesBehavior()) {
+      return buildStructure()
+    }
+
+    const nodeKey = this.getStructureCacheKey()
+    const persist = this.#canPersistStructureCache()
+
+    return session.cache.getOrCompute(nodeKey, { persist }, async (ctx) =>
+      buildStructure(ctx)
+    )
   }
 
   /** @internal */
@@ -6984,9 +7024,10 @@ export class Directory<
   > {
     const session = directory.#getSession()
     const snapshotKey = directory.#getSessionSnapshotKey(mask)
+    const canReuseCachedSnapshot = !directory.#hasDynamicEntriesBehavior()
     session.recordDirectorySnapshotLookup(snapshotKey)
     const fileSystem = directory.getFileSystem()
-    const cachedSnapshot = registerInSession
+    const cachedSnapshot = registerInSession && canReuseCachedSnapshot
       ? session.directorySnapshots.get(snapshotKey)
       : undefined
     const strictHermetic = directory.#isStrictHermeticFileSystemMode()
@@ -7026,7 +7067,7 @@ export class Directory<
       ? session.hasInvalidatedDirectorySnapshotKeys()
       : false
 
-    const existingBuild = registerInSession
+    const existingBuild = registerInSession && canReuseCachedSnapshot
       ? session.directorySnapshotBuilds.get(snapshotKey)
       : undefined
     if (existingBuild) {
@@ -7195,24 +7236,24 @@ export class Directory<
           return directory.#buildSnapshot(directory, options, mask)
         })()
 
-    if (registerInSession) {
+    if (registerInSession && canReuseCachedSnapshot) {
       session.directorySnapshotBuilds.set(snapshotKey, build)
     }
     try {
       const { snapshot, skipPersist } = await build
       const activeSession = directory.#getSession()
-      if (registerInSession) {
+      if (registerInSession && canReuseCachedSnapshot) {
         activeSession.directorySnapshots.set(snapshotKey, snapshot)
       }
       if (registerInSession && canPersist && !skipPersist) {
         await directory.#persistDirectorySnapshot(snapshotKey, snapshot)
       }
-      if (registerInSession) {
+      if (registerInSession && canReuseCachedSnapshot) {
         activeSession.clearDirectorySnapshotKeyInvalidation(snapshotKey)
       }
       return snapshot
     } finally {
-      if (registerInSession) {
+      if (registerInSession && canReuseCachedSnapshot) {
         const activeSession = directory.#getSession()
         const activeBuild =
           activeSession.directorySnapshotBuilds.get(snapshotKey)

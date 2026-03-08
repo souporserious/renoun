@@ -489,18 +489,72 @@ function buildNavigationTree(
   childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]>
 } {
   const childrenByPath = new Map<string, FileSystemEntry<any>[]>()
+  const childPathsByParent = new Map<string, Set<string>>()
 
-  for (const entry of entries) {
+  const addChildEntry = (
+    parentPathname: string,
+    entry: FileSystemEntry<any>
+  ) => {
     const pathname = entry.getPathname()
-    const lastSeparatorIndex = pathname.lastIndexOf('/')
-    const parentPathname =
-      lastSeparatorIndex > 0 ? pathname.slice(0, lastSeparatorIndex) : '/'
-    const siblings = childrenByPath.get(parentPathname)
+    let childPaths = childPathsByParent.get(parentPathname)
+    if (!childPaths) {
+      childPaths = new Set()
+      childPathsByParent.set(parentPathname, childPaths)
+    }
 
+    if (childPaths.has(pathname)) {
+      return
+    }
+    childPaths.add(pathname)
+
+    const siblings = childrenByPath.get(parentPathname)
     if (siblings) {
       siblings.push(entry)
     } else {
       childrenByPath.set(parentPathname, [entry])
+    }
+  }
+
+  const isPathWithinRoot = (pathname: string) => {
+    if (rootPathname === '/') {
+      return pathname.startsWith('/')
+    }
+
+    return pathname === rootPathname || pathname.startsWith(`${rootPathname}/`)
+  }
+
+  for (const entry of entries) {
+    let currentEntry: FileSystemEntry<any> | undefined = entry
+
+    while (currentEntry) {
+      const pathname: string = currentEntry.getPathname()
+      let parentDirectory: Directory<any> | undefined
+
+      if (pathname !== rootPathname) {
+        try {
+          const parent: Directory<any> = currentEntry.getParent()
+          parentDirectory =
+            parent.getPathname() === pathname ? undefined : parent
+        } catch {
+          parentDirectory = undefined
+        }
+      }
+      const lastSeparatorIndex = pathname.lastIndexOf('/')
+      const parentPathname =
+        parentDirectory?.getPathname() ??
+        (lastSeparatorIndex > 0 ? pathname.slice(0, lastSeparatorIndex) : '/')
+
+      if (!isPathWithinRoot(parentPathname)) {
+        break
+      }
+
+      addChildEntry(parentPathname, currentEntry)
+
+      if (!parentDirectory || parentPathname === rootPathname) {
+        break
+      }
+
+      currentEntry = parentDirectory
     }
   }
 

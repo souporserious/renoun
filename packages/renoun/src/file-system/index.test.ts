@@ -4403,6 +4403,50 @@ date: 2024-12-24
         }
       })
 
+      test('separates cache entries for closure-based conditions callbacks by their resolved output', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': {
+                import: './dist/index.mjs',
+                require: './dist/index.cjs',
+              },
+            },
+          }),
+          'node_modules/acme/dist/index.mjs.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/import.ts'],
+          }),
+          'node_modules/acme/dist/index.cjs.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/require.ts'],
+          }),
+          'node_modules/acme/src/import.ts': 'export const mode = "import"',
+          'node_modules/acme/src/require.ts': 'export const mode = "require"',
+        })
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const createConditions = (preferred: 'import' | 'require') => {
+          return () => [preferred, 'default']
+        }
+
+        const importResult = pkg.resolveExportSource('.', {
+          conditions: createConditions('import'),
+        })
+        const requireResult = pkg.resolveExportSource('.', {
+          conditions: createConditions('require'),
+        })
+
+        expect(importResult).toMatchObject({
+          builtTarget: './dist/index.mjs',
+          sources: ['src/import.ts'],
+        })
+        expect(requireResult).toMatchObject({
+          builtTarget: './dist/index.cjs',
+          sources: ['src/require.ts'],
+        })
+      })
+
       test('invalidates resolveExportSources cache when source maps change', async () => {
         mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
         const tempDirectory = mkdtempSync(

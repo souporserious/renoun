@@ -506,7 +506,7 @@ describe('file-system cache integration', () => {
     expect(mdxEntries.map((entry) => entry.workspacePath)).toEqual(['page.mdx'])
   })
 
-  test('shares function-based filters when function references are the same', async () => {
+  test('recomputes function-based filters even when function references are the same', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': '',
       'page.mdx': '# Page',
@@ -529,7 +529,7 @@ describe('file-system cache integration', () => {
       includeIndexAndReadmeFiles: true,
     })
 
-    expect(readDirectorySpy.mock.calls.length).toBe(callsAfterFirst)
+    expect(readDirectorySpy.mock.calls.length).toBeGreaterThan(callsAfterFirst)
   })
 
   test('does not persist function-filtered directory structure across sessions', async () => {
@@ -4461,8 +4461,7 @@ describe('sqlite cache persistence', () => {
 
       const firstSession = firstWorkerDirectory.getSession()
       const snapshotKeys = Array.from(firstSession.directorySnapshots.keys())
-      expect(snapshotKeys.length).toBe(1)
-      expect(await firstSession.cache.get(snapshotKeys[0]!)).toBeUndefined()
+      expect(snapshotKeys.length).toBe(0)
 
       const secondWorkerFilesystem = createTempNodeFileSystem(tmpDirectory)
       const secondReadDirectory = vi.spyOn(
@@ -4626,6 +4625,37 @@ describe('sqlite cache persistence', () => {
 
       expect(await session.cache.get(nodeKey)).toBeUndefined()
     })
+  })
+
+  test('recomputes directory structure when a callback filter changes behavior', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/alpha.mdx': '# Alpha',
+      'docs/beta.mdx': '# Beta',
+    })
+    let visiblePrefix = 'alpha'
+    const directory = new Directory({
+      fileSystem,
+      path: 'docs',
+      filter: (entry) => entry.name.startsWith(visiblePrefix),
+    })
+    const getFileRelativePaths = (
+      structure: Awaited<ReturnType<Directory['getStructure']>>
+    ) => {
+      return structure
+        .filter((entry): entry is FileStructure => entry.kind === 'File')
+        .map((entry) => entry.relativePath)
+        .sort()
+    }
+
+    expect(getFileRelativePaths(await directory.getStructure())).toEqual([
+      'docs/alpha.mdx',
+    ])
+
+    visiblePrefix = 'beta'
+
+    expect(getFileRelativePaths(await directory.getStructure())).toEqual([
+      'docs/beta.mdx',
+    ])
   })
 
   test('invalidateSnapshots clears persisted snapshot rows', async () => {

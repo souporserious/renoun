@@ -76,7 +76,10 @@ interface FakeDirectoryEntry {
   name: string
   depth: number
   getPathname: () => string
-  getEntries: (options?: { recursive?: boolean }) => Promise<readonly FakeFileEntry[]>
+  getEntries: (
+    options?: { recursive?: boolean }
+  ) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
+  getParent: () => FakeDirectoryEntry
   getSession: () => {
     snapshot: {
       onInvalidate: (listener: (path: string) => void) => () => void
@@ -85,11 +88,11 @@ interface FakeDirectoryEntry {
 }
 
 interface FakeDirectorySource extends FakeDirectoryEntry {
-  getFilterPatternKind: () => string
+  getFilterPatternKind: () => 'recursive' | 'shallow' | null
 }
 
 interface FakeCollectionSource {
-  getEntries: () => Promise<readonly FakeFileEntry[]>
+  getEntries: () => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
   getRootEntries: () => readonly FakeDirectoryEntry[]
 }
 
@@ -111,9 +114,12 @@ function createDeferred<T>() {
 function createFakeDirectoryEntry(
   pathname: string,
   options?: {
+    parent?: FakeDirectoryEntry
     onInvalidate?: (listener: (path: string) => void) => () => void
-    getEntries?: (options?: { recursive?: boolean }) => Promise<readonly FakeFileEntry[]>
-    getFilterPatternKind?: () => string
+    getEntries?: (
+      options?: { recursive?: boolean }
+    ) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
+    getFilterPatternKind?: () => 'recursive' | 'shallow' | null
   }
 ): FakeDirectorySource {
   return {
@@ -121,13 +127,20 @@ function createFakeDirectoryEntry(
     name: pathname.split('/').filter(Boolean).at(-1) ?? '',
     depth: pathname.split('/').filter(Boolean).length - 1,
     getPathname: () => pathname,
-    getFilterPatternKind: options?.getFilterPatternKind ?? (() => 'deep'),
+    getFilterPatternKind: options?.getFilterPatternKind ?? (() => 'recursive'),
     getSession: () => ({
       snapshot: {
         onInvalidate: options?.onInvalidate ?? (() => () => {}),
       },
     }),
     getEntries: options?.getEntries ?? (async () => []),
+    getParent: () => {
+      if (options?.parent) {
+        return options.parent
+      }
+
+      throw new Error('The root directory does not have a parent directory.')
+    },
   }
 }
 
@@ -406,5 +419,35 @@ describe('Navigation development SWR', () => {
     } finally {
       process.env.NODE_ENV = originalNodeEnv
     }
+  })
+
+  test('builds ancestor directories for recursive predicate-filtered entries', async () => {
+    const rootDirectory = createFakeDirectoryEntry('/docs', {
+      getFilterPatternKind: () => null,
+    })
+    const guidesDirectory = createFakeDirectoryEntry('/docs/guides', {
+      parent: rootDirectory,
+    })
+    const advancedDirectory = createFakeDirectoryEntry('/docs/guides/advanced', {
+      parent: guidesDirectory,
+    })
+    const nestedEntry = createFakeFileEntry(
+      'Deep Dive',
+      '/docs/guides/advanced/deep-dive',
+      advancedDirectory
+    )
+    rootDirectory.getEntries = vi.fn(async (options?: { recursive?: boolean }) =>
+      options?.recursive ? [nestedEntry] : []
+    )
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    const element = await Navigation({ source: rootDirectory as any })
+    const markup = renderToStaticMarkup(<>{element}</>)
+
+    expect(rootDirectory.getEntries).toHaveBeenCalledWith({ recursive: true })
+    expect(markup).toContain('guides')
+    expect(markup).toContain('advanced')
+    expect(markup).toContain('Deep Dive')
   })
 })

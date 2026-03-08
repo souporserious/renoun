@@ -880,7 +880,46 @@ function toRewriteCacheSignature(
   }
 }
 
+function normalizeResolveExportSourceConditionsForCache(
+  pkg: PackageJson,
+  conditions: ResolveExportSourcesOptions['conditions']
+): Record<string, unknown> | string[] | undefined {
+  if (typeof conditions === 'function') {
+    const normalizedByExportKey: Record<string, string[]> = {}
+    const exportsField = pkg.exports
+
+    if (exportsField && typeof exportsField === 'object') {
+      const sortedExportKeys = Object.keys(exportsField).sort((a, b) =>
+        a.localeCompare(b)
+      )
+
+      for (const exportKey of sortedExportKeys) {
+        const target = exportsField[exportKey as keyof typeof exportsField]
+        if (!target || typeof target !== 'object') {
+          continue
+        }
+
+        normalizedByExportKey[exportKey] = conditions(exportKey).map((entry) =>
+          String(entry)
+        )
+      }
+    }
+
+    return {
+      type: 'callback',
+      byExportKey: normalizedByExportKey,
+    }
+  }
+
+  if (Array.isArray(conditions)) {
+    return [...conditions]
+  }
+
+  return undefined
+}
+
 function normalizeResolveExportSourcesOptionsForCache(
+  pkg: PackageJson,
   config: ResolveExportSourcesOptions
 ): Record<string, unknown> {
   const normalizedOverrides: Record<string, string[]> = {}
@@ -902,12 +941,10 @@ function normalizeResolveExportSourcesOptionsForCache(
   }
 
   return {
-    conditions:
-      typeof config.conditions === 'function'
-        ? `function:${String(config.conditions)}`
-        : Array.isArray(config.conditions)
-          ? [...config.conditions]
-          : undefined,
+    conditions: normalizeResolveExportSourceConditionsForCache(
+      pkg,
+      config.conditions
+    ),
     overrides: normalizedOverrides,
     rewrites: Array.isArray(config.rewrites)
       ? config.rewrites.map((rewrite) => toRewriteCacheSignature(rewrite))
@@ -1517,7 +1554,20 @@ export class Package<
   resolveExportSources(
     config: ResolveExportSourcesOptions = {}
   ): ResolvedExportSource[] {
-    const cacheKey = this.#createResolveExportSourcesCacheKey(config)
+    const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
+    const currentPackageJsonSignature =
+      this.#createResolveExportSourceDependencySignature(packageJsonPath)
+    if (
+      this.#packageJson !== undefined &&
+      this.#packageJsonDependencySignature !== undefined &&
+      this.#packageJsonDependencySignature !== currentPackageJsonSignature
+    ) {
+      this.#resetManifestState()
+    }
+
+    this.#ensurePackageJsonLoaded()
+    const pkg = this.#packageJson!
+    const cacheKey = this.#createResolveExportSourcesCacheKey(config, pkg)
     const sharedCache = getResolveExportSourcesSharedCache(this.#fileSystem)
     const sharedCacheKey = createResolveExportSourcesSharedCacheKey(
       this.#packagePath,
@@ -1544,19 +1594,6 @@ export class Package<
       return cloneResolvedExportSources(sharedCached.results)
     }
 
-    const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
-    const currentPackageJsonSignature =
-      this.#createResolveExportSourceDependencySignature(packageJsonPath)
-    if (
-      this.#packageJson !== undefined &&
-      this.#packageJsonDependencySignature !== undefined &&
-      this.#packageJsonDependencySignature !== currentPackageJsonSignature
-    ) {
-      this.#resetManifestState()
-    }
-
-    this.#ensurePackageJsonLoaded()
-    const pkg = this.#packageJson!
     const dependencyProbePaths = new Set<string>([packageJsonPath])
     const probeRecorder: ExportSourceDependencyProbeRecorder = {
       recordProbe: (path) => {
@@ -1970,10 +2007,11 @@ export class Package<
   }
 
   #createResolveExportSourcesCacheKey(
-    config: ResolveExportSourcesOptions
+    config: ResolveExportSourcesOptions,
+    pkg: PackageJson
   ): string {
     const normalizedOptions =
-      normalizeResolveExportSourcesOptionsForCache(config)
+      normalizeResolveExportSourcesOptionsForCache(pkg, config)
     return hashString(stableStringify(normalizedOptions))
   }
 

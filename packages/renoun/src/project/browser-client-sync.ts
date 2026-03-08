@@ -73,7 +73,7 @@ export function setProjectClientBrowserRuntime(
   }
 
   if (previousRuntimeKey) {
-    bumpProjectClientBrowserRefreshVersion(0)
+    replaceProjectClientBrowserRefreshVersion(0)
   }
 
   ensureRefreshNotificationSocket({
@@ -338,29 +338,28 @@ async function requestRefreshInvalidationsSince(
       finalize()
       if (response.error) {
         bumpProjectClientBrowserRefreshVersion()
+        notifyBrowserRefresh()
         return
       }
 
       const result = normalizeRefreshInvalidationsSinceResponse(response.result)
       if (!result) {
         bumpProjectClientBrowserRefreshVersion()
+        notifyBrowserRefresh()
         return
       }
 
       const refreshCursor = normalizeRefreshCursor(result.nextCursor)
       const invalidationPaths = getRefreshInvalidationPaths(result)
-      if (result.fullRefresh || invalidationPaths.length > 0) {
+      if (result.fullRefresh) {
+        replaceProjectClientBrowserRefreshVersion(refreshCursor)
+        notifyBrowserRefresh(refreshCursor, invalidationPaths)
+        return
+      }
+
+      if (invalidationPaths.length > 0) {
         bumpProjectClientBrowserRefreshVersion(refreshCursor)
-        if (invalidationPaths.length > 0) {
-          notifyBrowserRefreshListeners({
-            type: 'refresh',
-            data: {
-              refreshCursor,
-              filePath: invalidationPaths[0],
-              filePaths: invalidationPaths,
-            },
-          })
-        }
+        notifyBrowserRefresh(refreshCursor, invalidationPaths)
         return
       }
 
@@ -368,8 +367,17 @@ async function requestRefreshInvalidationsSince(
     }
 
     const timeoutId = window.setTimeout(() => {
+      if (
+        connectionVersion !== refreshNotificationConnectionVersion ||
+        socket.readyState !== WebSocket.OPEN
+      ) {
+        finalize()
+        return
+      }
+
       finalize()
       bumpProjectClientBrowserRefreshVersion()
+      notifyBrowserRefresh()
     }, BROWSER_REFRESH_RESYNC_TIMEOUT_MS)
 
     socket.addEventListener('message', handleMessage)
@@ -386,7 +394,12 @@ async function requestRefreshInvalidationsSince(
       )
     } catch {
       finalize()
+      if (connectionVersion !== refreshNotificationConnectionVersion) {
+        return
+      }
+
       bumpProjectClientBrowserRefreshVersion()
+      notifyBrowserRefresh()
     }
   })
 }
@@ -447,6 +460,24 @@ function notifyBrowserRefreshListeners(message: RefreshNotificationMessage): voi
   }
 }
 
+function notifyBrowserRefresh(
+  refreshCursor?: number,
+  invalidationPaths: string[] = []
+): void {
+  notifyBrowserRefreshListeners({
+    type: 'refresh',
+    data: {
+      ...(refreshCursor !== undefined ? { refreshCursor } : {}),
+      ...(invalidationPaths.length > 0
+        ? {
+            filePath: invalidationPaths[0],
+            filePaths: invalidationPaths,
+          }
+        : {}),
+    },
+  })
+}
+
 function bumpProjectClientBrowserRefreshVersion(
   cursor?: number
 ): void {
@@ -458,6 +489,19 @@ function bumpProjectClientBrowserRefreshVersion(
 
   setProjectClientBrowserRefreshVersion(
     `${nextCursor}:${current.epoch + 1}`
+  )
+}
+
+function replaceProjectClientBrowserRefreshVersion(
+  cursor?: number
+): void {
+  if (typeof cursor !== 'number' || !Number.isFinite(cursor) || cursor < 0) {
+    return
+  }
+
+  const current = readProjectClientBrowserRefreshVersion()
+  setProjectClientBrowserRefreshVersion(
+    `${Math.floor(cursor)}:${current.epoch + 1}`
   )
 }
 

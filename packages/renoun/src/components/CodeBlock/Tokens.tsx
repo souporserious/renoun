@@ -68,21 +68,6 @@ const SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES = new Set([
   'mdx',
 ])
 
-const DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRIES = 128
-const DEVELOPMENT_FALLBACK_SOURCE_MAX_TOTAL_CHARS = 2_000_000
-const DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRY_CHARS = 200_000
-
-interface DevelopmentFallbackSourceEntry {
-  value: string
-  chars: number
-}
-
-const developmentFallbackSourceByPath = new Map<
-  string,
-  DevelopmentFallbackSourceEntry
->()
-let developmentFallbackSourceTotalChars = 0
-
 export type AnnotationRenderer = React.ComponentType<
   Record<string, any> & { children?: React.ReactNode }
 >
@@ -247,17 +232,6 @@ function resolveFallbackSourceText(options: {
   }
 
   if (options.path !== undefined && options.path !== null) {
-    const cacheKey = getDevelopmentFallbackSourceCacheKey(
-      options.path,
-      options.baseDirectory
-    )
-    if (cacheKey) {
-      const cachedSource = getDevelopmentFallbackSource(cacheKey)
-      if (cachedSource !== undefined) {
-        return cachedSource
-      }
-    }
-
     return `// Loading ${pathLikeToString(options.path)}...`
   }
 
@@ -429,17 +403,6 @@ async function TokensAsync({
       )
     }
 
-    if (isDevelopmentRuntime && resolvedPath) {
-      const cacheKey = getDevelopmentFallbackSourceCacheKey(
-        resolvedPath,
-        resolvedBaseDirectory
-      )
-
-      if (cacheKey) {
-        setDevelopmentFallbackSource(cacheKey, metadata.value)
-      }
-    }
-
     resolveContext({
       value: metadata.value,
       language: metadata.language!,
@@ -574,77 +537,6 @@ async function TokensAsync({
   } catch (error) {
     rejectContext(error)
     throw error
-  }
-}
-
-function getDevelopmentFallbackSourceCacheKey(
-  path: PathLike | null | undefined,
-  baseDirectory: PathLike | undefined
-): string | undefined {
-  if (path === undefined || path === null) {
-    return undefined
-  }
-
-  const pathKey = pathLikeToString(path)
-  const baseDirectoryKey =
-    baseDirectory === undefined ? '' : pathLikeToString(baseDirectory)
-
-  return `${baseDirectoryKey}::${pathKey}`
-}
-
-function getDevelopmentFallbackSource(cacheKey: string): string | undefined {
-  const existing = developmentFallbackSourceByPath.get(cacheKey)
-  if (!existing) {
-    return undefined
-  }
-
-  developmentFallbackSourceByPath.delete(cacheKey)
-  developmentFallbackSourceByPath.set(cacheKey, existing)
-  return existing.value
-}
-
-function setDevelopmentFallbackSource(cacheKey: string, value: string): void {
-  if (typeof value !== 'string') {
-    return
-  }
-
-  const chars = value.length
-  if (chars === 0 || chars > DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRY_CHARS) {
-    return
-  }
-
-  const existing = developmentFallbackSourceByPath.get(cacheKey)
-  if (existing) {
-    developmentFallbackSourceTotalChars = Math.max(
-      0,
-      developmentFallbackSourceTotalChars - existing.chars
-    )
-    developmentFallbackSourceByPath.delete(cacheKey)
-  }
-
-  const nextEntry: DevelopmentFallbackSourceEntry = { value, chars }
-  developmentFallbackSourceByPath.set(cacheKey, nextEntry)
-  developmentFallbackSourceTotalChars += chars
-
-  while (
-    developmentFallbackSourceByPath.size >
-      DEVELOPMENT_FALLBACK_SOURCE_MAX_ENTRIES ||
-    developmentFallbackSourceTotalChars >
-      DEVELOPMENT_FALLBACK_SOURCE_MAX_TOTAL_CHARS
-  ) {
-    const oldestKey = developmentFallbackSourceByPath.keys().next().value
-    if (typeof oldestKey !== 'string') {
-      break
-    }
-
-    const oldestEntry = developmentFallbackSourceByPath.get(oldestKey)
-    developmentFallbackSourceByPath.delete(oldestKey)
-    if (oldestEntry) {
-      developmentFallbackSourceTotalChars = Math.max(
-        0,
-        developmentFallbackSourceTotalChars - oldestEntry.chars
-      )
-    }
   }
 }
 
