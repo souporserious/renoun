@@ -49,7 +49,7 @@ describe('resolveBrowserWebSocketUrl', () => {
     ).toBe('ws://[::1]:43123')
   })
 
-  test('prefers the browser origin for proxied https sessions when runtime only exposes loopback', () => {
+  test('keeps using the exported loopback host for proxied https sessions', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -61,10 +61,10 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('wss://preview.example.dev')
+    ).toBe('ws://127.0.0.1:43123')
   })
 
-  test('preserves the browser-visible port for proxied browser sessions', () => {
+  test('keeps using the exported runtime port for proxied browser sessions', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -77,10 +77,10 @@ describe('resolveBrowserWebSocketUrl', () => {
           port: '8443',
         }
       )
-    ).toBe('wss://preview.example.dev:8443')
+    ).toBe('ws://127.0.0.1:43123')
   })
 
-  test('falls back to the browser origin when no runtime host is exported', () => {
+  test('falls back to localhost when no runtime host is exported on non-loopback pages', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -91,7 +91,7 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('wss://preview.example.dev')
+    ).toBe('ws://localhost:43123')
   })
 
   test('defaults to localhost when hostname is missing', () => {
@@ -107,7 +107,7 @@ describe('resolveBrowserWebSocketUrl', () => {
     ).toBe('ws://localhost:43123')
   })
 
-  test('uses wss for direct non-loopback hosts on https pages', () => {
+  test('keeps using ws for direct non-loopback hosts on https pages', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -119,6 +119,6 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('wss://devbox.internal:43123')
+    ).toBe('ws://devbox.internal:43123')
   })
 })

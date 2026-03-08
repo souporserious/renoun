@@ -9,11 +9,6 @@ interface BrowserRuntimeLike {
   host?: string
 }
 
-type ResolvedWebSocketEndpoint = {
-  protocol: 'ws' | 'wss'
-  authority: string
-}
-
 function normalizeHost(host: string): string {
   return host.trim().replace(/^\[/, '').replace(/\]$/, '')
 }
@@ -53,10 +48,10 @@ function isLoopbackHost(host: string | undefined): boolean {
   )
 }
 
-function resolveWebSocketEndpoint(
+function resolveWebSocketAuthority(
   runtime: BrowserRuntimeLike,
   location?: BrowserLocationLike
-): ResolvedWebSocketEndpoint {
+): string {
   const runtimeHost =
     typeof runtime.host === 'string' && runtime.host.trim().length > 0
       ? runtime.host.trim()
@@ -65,44 +60,19 @@ function resolveWebSocketEndpoint(
     typeof location?.hostname === 'string' && location.hostname.trim().length > 0
       ? location.hostname.trim()
       : undefined
-  const browserPort = normalizePort(location?.port)
-
-  // When the page is served through a proxy or tunnel, prefer the browser's
-  // same-origin authority if the exported runtime only exposes a loopback
-  // address. The proxy typically terminates on the browser-visible port, not
-  // the server's internal websocket port.
-  if (
-    browserHost &&
-    !isLoopbackHost(browserHost) &&
-    (!runtimeHost || isLoopbackHost(runtimeHost))
-  ) {
-    return {
-      protocol: location?.protocol === 'https:' ? 'wss' : 'ws',
-      authority: formatWebSocketAuthority(browserHost, browserPort),
-    }
-  }
 
   if (runtimeHost) {
-    return {
-      protocol:
-        location?.protocol === 'https:' && !isLoopbackHost(runtimeHost)
-          ? 'wss'
-          : 'ws',
-      authority: formatWebSocketAuthority(runtimeHost, runtime.port),
-    }
+    return formatWebSocketAuthority(runtimeHost, runtime.port)
   }
 
-  if (browserHost) {
-    return {
-      protocol: 'ws',
-      authority: formatWebSocketAuthority(browserHost, runtime.port),
-    }
+  // The current RPC server only exposes a plain `ws://` endpoint and only binds
+  // loopback hosts. Avoid proxy-visible hostnames here because the browser would
+  // target an endpoint the server does not actually serve.
+  if (browserHost && isLoopbackHost(browserHost)) {
+    return formatWebSocketAuthority(browserHost, runtime.port)
   }
 
-  return {
-    protocol: 'ws',
-    authority: formatWebSocketAuthority('localhost', runtime.port),
-  }
+  return formatWebSocketAuthority('localhost', runtime.port)
 }
 
 export function resolveBrowserWebSocketUrl(
@@ -110,6 +80,5 @@ export function resolveBrowserWebSocketUrl(
   location: BrowserLocationLike | undefined =
     typeof window === 'undefined' ? undefined : window.location
 ): string {
-  const endpoint = resolveWebSocketEndpoint(runtime, location)
-  return `${endpoint.protocol}://${endpoint.authority}`
+  return `ws://${resolveWebSocketAuthority(runtime, location)}`
 }
