@@ -266,6 +266,20 @@ export async function getSourceTextMetadata({
   const isJavaScriptLikeLanguage = resolved.isJavaScriptLikeLanguage
   const jsxOnly = resolved.jsxOnly
 
+  if (isJavaScriptLikeLanguage && filePathProp) {
+    // Register explicit snippet paths before any async work so sibling code
+    // blocks importing the stable path can resolve it deterministically.
+    const stableSourceFile = project.createSourceFile(
+      resolved.filePath,
+      resolved.value,
+      {
+        overwrite: true,
+      }
+    )
+
+    coerceSourceFileToModule(stableSourceFile)
+  }
+
   if (isJavaScriptLikeLanguage) {
     await waitForRefreshingProjects()
   }
@@ -350,7 +364,6 @@ export async function getSourceTextMetadata({
           project.createSourceFile(virtualFilePath, analysisValue, {
             overwrite: true,
           })
-          project.removeSourceFile(sourceFile)
           filePath = virtualFilePath
         }
       }

@@ -120,4 +120,37 @@ describe('getSourceTextMetadata', () => {
         .filter((diagnostic) => diagnostic.getCode() === 2451)
     ).toHaveLength(0)
   })
+
+  test('keeps stable explicit snippet paths available for relative imports', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+
+    const sourceModule = await getSourceTextMetadata({
+      project,
+      value: 'export const posts = 1\n',
+      language: 'ts',
+      filePath: 'posts.ts',
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(sourceModule.filePath).toContain(
+      '_renoun/posts.__renoun_snippet_'
+    )
+    expect(project.getSourceFile('_renoun/posts.ts')).toBeDefined()
+
+    await getSourceTextMetadata({
+      project,
+      value: "import { posts } from './posts.ts'\nposts\n",
+      language: 'ts',
+      shouldFormat: false,
+    })
+
+    expect(
+      project
+        .getPreEmitDiagnostics()
+        .filter((diagnostic) => diagnostic.getCode() === 2307)
+    ).toHaveLength(0)
+  })
 })
