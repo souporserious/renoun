@@ -16,7 +16,7 @@ const watcherState = vi.hoisted(() => {
 
 const mockedInvalidationFns = vi.hoisted(() => {
   return {
-    invalidateProjectFileCachePaths: vi.fn(),
+    invalidateProgramFileCachePaths: vi.fn(),
     invalidateRuntimeAnalysisCachePaths: vi.fn(),
   }
 })
@@ -33,8 +33,8 @@ vi.mock('./cache.ts', async () => {
 
   return {
     ...actual,
-    invalidateProjectFileCachePaths:
-      mockedInvalidationFns.invalidateProjectFileCachePaths,
+    invalidateProgramFileCachePaths:
+      mockedInvalidationFns.invalidateProgramFileCachePaths,
   }
 })
 
@@ -82,15 +82,15 @@ vi.mock('node:fs', async () => {
 })
 
 import {
-  disposeProjectWatchers,
-  getProject,
-  invalidateProjectCachesByPath,
-} from './get-project.ts'
+  disposeAnalysisWatchers,
+  getProgram,
+  invalidateProgramCachesByPath,
+} from './get-program.ts'
 
-describe('project watcher invalidation batching', () => {
+describe('analysis watcher invalidation batching', () => {
   const originalEnvironment = captureProcessEnv([
     'RENOUN_SERVER_PORT',
-    'RENOUN_PROJECT_WATCHERS',
+    'RENOUN_ANALYSIS_WATCHERS',
     'NODE_ENV',
     'VITEST',
     'VITEST_WORKER_ID',
@@ -98,26 +98,26 @@ describe('project watcher invalidation batching', () => {
 
   beforeEach(() => {
     process.env['RENOUN_SERVER_PORT'] = '3000'
-    process.env['RENOUN_PROJECT_WATCHERS'] = 'true'
-    mockedInvalidationFns.invalidateProjectFileCachePaths.mockClear()
+    process.env['RENOUN_ANALYSIS_WATCHERS'] = 'true'
+    mockedInvalidationFns.invalidateProgramFileCachePaths.mockClear()
     mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths.mockClear()
     mockedGitIgnoreFns.isFilePathGitIgnored.mockClear()
     watcherState.callback = undefined
   })
 
   afterEach(() => {
-    disposeProjectWatchers()
+    disposeAnalysisWatchers()
     restoreProcessEnv(originalEnvironment)
   })
 
   test('coalesces watcher storms into a single flush batch', async () => {
     const uniqueId = Date.now()
-    const projectDirectory = `/virtual-project-${uniqueId}`
+    const workspaceDirectory = `/virtual-project-${uniqueId}`
 
-    getProject({
+    getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-storm-${uniqueId}`,
-      tsConfigFilePath: `${projectDirectory}/tsconfig.json`,
+      analysisScopeId: `watcher-storm-${uniqueId}`,
+      tsConfigFilePath: `${workspaceDirectory}/tsconfig.json`,
     })
 
     const callback = watcherState.callback
@@ -139,27 +139,27 @@ describe('project watcher invalidation batching', () => {
       mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths
     ).toHaveBeenCalledTimes(1)
     expect(
-      mockedInvalidationFns.invalidateProjectFileCachePaths
+      mockedInvalidationFns.invalidateProgramFileCachePaths
     ).toHaveBeenCalledTimes(1)
 
     const [runtimePaths] =
       mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths.mock.calls[0] ??
       []
-    expect(runtimePaths).toEqual([`${projectDirectory}/src`])
+    expect(runtimePaths).toEqual([`${workspaceDirectory}/src`])
 
     const [, projectPaths] =
-      mockedInvalidationFns.invalidateProjectFileCachePaths.mock.calls[0] ?? []
-    expect(projectPaths).toEqual([`${projectDirectory}/src`])
+      mockedInvalidationFns.invalidateProgramFileCachePaths.mock.calls[0] ?? []
+    expect(projectPaths).toEqual([`${workspaceDirectory}/src`])
   })
 
   test('does not drop watcher invalidations when project root ancestors include ignored segment names', async () => {
     const uniqueId = Date.now()
-    const projectDirectory = `/virtual-project-roots/build/project-${uniqueId}`
+    const workspaceDirectory = `/virtual-project-roots/build/project-${uniqueId}`
 
-    getProject({
+    getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-build-root-${uniqueId}`,
-      tsConfigFilePath: `${projectDirectory}/tsconfig.json`,
+      analysisScopeId: `watcher-build-root-${uniqueId}`,
+      tsConfigFilePath: `${workspaceDirectory}/tsconfig.json`,
     })
 
     const callback = watcherState.callback
@@ -179,33 +179,33 @@ describe('project watcher invalidation batching', () => {
       mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths
     ).toHaveBeenCalledTimes(1)
     expect(
-      mockedInvalidationFns.invalidateProjectFileCachePaths
+      mockedInvalidationFns.invalidateProgramFileCachePaths
     ).toHaveBeenCalledTimes(1)
 
     const [runtimePaths] =
       mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths.mock.calls[0] ??
       []
-    expect(runtimePaths).toEqual([`${projectDirectory}/src`])
+    expect(runtimePaths).toEqual([`${workspaceDirectory}/src`])
 
     const [, projectPaths] =
-      mockedInvalidationFns.invalidateProjectFileCachePaths.mock.calls[0] ?? []
-    expect(projectPaths).toEqual([`${projectDirectory}/src`])
+      mockedInvalidationFns.invalidateProgramFileCachePaths.mock.calls[0] ?? []
+    expect(projectPaths).toEqual([`${workspaceDirectory}/src`])
   })
 
-  test('treats dot invalidation as global across tracked projects', () => {
+  test('treats dot invalidation as global across tracked programs', () => {
     const uniqueId = Date.now()
-    const projectDirectory = `/virtual-project-dot-${uniqueId}`
-    const project = getProject({
+    const workspaceDirectory = `/virtual-project-dot-${uniqueId}`
+    const project = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-dot-${uniqueId}`,
-      tsConfigFilePath: `${projectDirectory}/tsconfig.json`,
+      analysisScopeId: `watcher-dot-${uniqueId}`,
+      tsConfigFilePath: `${workspaceDirectory}/tsconfig.json`,
     })
 
-    const affectedProjects = invalidateProjectCachesByPath('.')
+    const affectedProjects = invalidateProgramCachesByPath('.')
 
     expect(affectedProjects).toBeGreaterThan(0)
     expect(
-      mockedInvalidationFns.invalidateProjectFileCachePaths
+      mockedInvalidationFns.invalidateProgramFileCachePaths
     ).toHaveBeenCalledWith(project, ['.'])
   })
 
@@ -213,45 +213,45 @@ describe('project watcher invalidation batching', () => {
     const uniqueId = Date.now()
     const firstProjectDirectory = `/virtual-project-deps-a-${uniqueId}`
     const secondProjectDirectory = `/virtual-project-deps-b-${uniqueId}`
-    const firstProject = getProject({
+    const firstProject = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-deps-a-${uniqueId}`,
+      analysisScopeId: `watcher-deps-a-${uniqueId}`,
       tsConfigFilePath: `${firstProjectDirectory}/tsconfig.json`,
     })
-    const secondProject = getProject({
+    const secondProject = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-deps-b-${uniqueId}`,
+      analysisScopeId: `watcher-deps-b-${uniqueId}`,
       tsConfigFilePath: `${secondProjectDirectory}/tsconfig.json`,
     })
     const externalDependencyPath = `/virtual-shared-deps-${uniqueId}/src/shared.ts`
 
-    const affectedProjects = invalidateProjectCachesByPath(externalDependencyPath)
+    const affectedProjects = invalidateProgramCachesByPath(externalDependencyPath)
 
     expect(affectedProjects).toBe(2)
     expect(
-      mockedInvalidationFns.invalidateProjectFileCachePaths
+      mockedInvalidationFns.invalidateProgramFileCachePaths
     ).toHaveBeenCalledTimes(2)
     expect(
-      mockedInvalidationFns.invalidateProjectFileCachePaths
+      mockedInvalidationFns.invalidateProgramFileCachePaths
     ).toHaveBeenCalledWith(firstProject, [externalDependencyPath])
     expect(
-      mockedInvalidationFns.invalidateProjectFileCachePaths
+      mockedInvalidationFns.invalidateProgramFileCachePaths
     ).toHaveBeenCalledWith(secondProject, [externalDependencyPath])
   })
 
   test('does not enable watchers in vitest worker mode without explicit override', () => {
-    delete process.env['RENOUN_PROJECT_WATCHERS']
+    delete process.env['RENOUN_ANALYSIS_WATCHERS']
     process.env['NODE_ENV'] = 'development'
     delete process.env['VITEST']
     process.env['VITEST_WORKER_ID'] = '1'
 
     const uniqueId = Date.now()
-    const projectDirectory = `/virtual-project-no-watch-${uniqueId}`
+    const workspaceDirectory = `/virtual-project-no-watch-${uniqueId}`
 
-    getProject({
+    getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-disabled-${uniqueId}`,
-      tsConfigFilePath: `${projectDirectory}/tsconfig.json`,
+      analysisScopeId: `watcher-disabled-${uniqueId}`,
+      tsConfigFilePath: `${workspaceDirectory}/tsconfig.json`,
     })
 
     expect(watcherState.callback).toBeUndefined()

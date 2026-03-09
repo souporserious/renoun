@@ -1,5 +1,5 @@
 import React from 'react'
-import { getServerRuntimeFromProcessEnv } from '../../project/runtime-env.ts'
+import { getServerRuntimeFromProcessEnv } from '../../analysis/runtime-env.ts'
 
 /**
  * Refreshes the development server when a source file changes.

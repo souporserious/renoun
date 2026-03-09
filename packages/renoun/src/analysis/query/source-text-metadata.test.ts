@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest'
 
-import { getTsMorph } from './ts-morph.ts'
+import { getTsMorph } from '../../utils/ts-morph.ts'
 import {
   getSourceTextMetadata,
   getSourceTextMetadataFallback,
-} from './get-source-text-metadata.ts'
+} from './source-text-metadata.ts'
 
 const { Project } = getTsMorph()
 
@@ -81,6 +81,22 @@ describe('getSourceTextMetadataFallback', () => {
     expect(second.label).toBe('demo/example.ts')
     expect(first.valueSignature).not.toBe(second.valueSignature)
   })
+
+  test('preserves absolute explicit file paths when baseDirectory is undefined', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+
+    const result = getSourceTextMetadataFallback({
+      project,
+      value: 'export const x = 1',
+      language: 'ts',
+      filePath: '/workspace/src/demo/example.ts',
+    })
+
+    expect(result.filePath).toBe('/workspace/src/demo/example.ts')
+    expect(result.filePath?.startsWith('_renoun/')).toBe(false)
+  })
 })
 
 describe('getSourceTextMetadata', () => {
@@ -152,5 +168,63 @@ describe('getSourceTextMetadata', () => {
         .getPreEmitDiagnostics()
         .filter((diagnostic) => diagnostic.getCode() === 2307)
     ).toHaveLength(0)
+  })
+
+  test('rewrites the stable alias with the final normalized snippet content', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const value = 'export const answer={value:1}\n'
+
+    const result = await getSourceTextMetadata({
+      project,
+      value,
+      language: 'ts',
+      filePath: 'answers.ts',
+      virtualizeFilePath: true,
+    })
+
+    expect(result.value).not.toBe(value)
+    expect(project.getSourceFile('_renoun/answers.ts')?.getFullText()).toBe(
+      result.value
+    )
+    const virtualSnippetPaths = project
+      .getSourceFiles()
+      .map((sourceFile) => sourceFile.getFilePath())
+      .filter((filePath) => filePath.includes('.__renoun_snippet_'))
+
+    expect(virtualSnippetPaths).toHaveLength(1)
+    expect(virtualSnippetPaths[0]?.endsWith(result.filePath!)).toBe(true)
+  })
+
+  test('evicts the previous virtual snippet source file when content changes', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+
+    const first = await getSourceTextMetadata({
+      project,
+      value: 'export const first = 1\n',
+      language: 'ts',
+      filePath: 'posts.ts',
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    const second = await getSourceTextMetadata({
+      project,
+      value: 'export const second = 2\n',
+      language: 'ts',
+      filePath: 'posts.ts',
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(second.filePath).not.toBe(first.filePath)
+    expect(project.getSourceFile(first.filePath!)).toBeUndefined()
+    expect(project.getSourceFile(second.filePath!)).toBeDefined()
+    expect(project.getSourceFile('_renoun/posts.ts')?.getFullText()).toBe(
+      second.value
+    )
   })
 })

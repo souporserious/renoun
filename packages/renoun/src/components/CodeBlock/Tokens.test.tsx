@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test, vi } from 'vitest'
 
 import { parseAnnotations } from '../../utils/annotations.ts'
-import { getSourceTextMetadata } from '../../project/client.ts'
+import { getSourceTextMetadata } from '../../analysis/client.ts'
 
 const mockTokens = vi.fn()
 const symbolMock = vi.fn(
@@ -14,7 +14,7 @@ const symbolMock = vi.fn(
   }) => <>{children}</>
 )
 
-vi.mock('../../project/client.ts', () => ({
+vi.mock('../../analysis/client.ts', () => ({
   getSourceTextMetadata: vi.fn(),
   getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
 }))

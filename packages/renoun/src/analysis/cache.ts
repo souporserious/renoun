@@ -16,16 +16,16 @@ import {
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { Project } from '../utils/ts-morph.ts'
 
-import { waitForRefreshingProjects } from './refresh.ts'
+import { waitForRefreshingPrograms } from './refresh.ts'
 
-export type ProjectCacheDependency =
+export type ProgramCacheDependency =
   | { kind: 'file'; path: string }
   | { kind: 'directory'; path: string }
   | { kind: 'const'; name: string; version: string }
   | { kind: 'cache'; filePath: string; cacheName: string }
 
-interface ProjectCacheRuntime {
-  snapshot: ProjectCacheSnapshot
+interface ProgramCacheRuntime {
+  snapshot: ProgramCacheSnapshot
   store: CacheStore
   lruNodeKeys: Map<string, true>
   nodeKeysByFilePath: Map<string, Set<string>>
@@ -35,35 +35,35 @@ interface ProjectCacheRuntime {
   maxEntries: number
 }
 
-const projectCacheRuntimeByProject = new WeakMap<Project, ProjectCacheRuntime>()
-const PROJECT_CACHE_NODE_PREFIX = 'project-cache:'
-const PROJECT_CACHE_VERSION = 'project-cache-v1'
-const PROJECT_CACHE_VERSION_DEP = 'project-cache-version'
-const PROJECT_CACHE_DEPENDENCY_SPEC_PREFIX = 'project-cache:dependency-spec:'
-const DEFAULT_PROJECT_CACHE_MAX_ENTRIES = 8_000
+const programCacheRuntimeByProgram = new WeakMap<Project, ProgramCacheRuntime>()
+const PROGRAM_CACHE_NODE_PREFIX = 'program-cache:'
+const PROGRAM_CACHE_VERSION = 'program-cache-v1'
+const PROGRAM_CACHE_VERSION_DEP = 'program-cache-version'
+const PROGRAM_CACHE_DEPENDENCY_SPEC_PREFIX = 'program-cache:dependency-spec:'
+const DEFAULT_PROGRAM_CACHE_MAX_ENTRIES = 8_000
 
-export interface ProjectCacheRuntimeOptions {
+export interface ProgramCacheRuntimeOptions {
   maxEntries?: number
 }
 
-const projectCacheRuntimeOptions: ProjectCacheRuntimeOptions = {}
+const programCacheRuntimeOptions: ProgramCacheRuntimeOptions = {}
 
-export function configureProjectCacheRuntime(
-  options: ProjectCacheRuntimeOptions
+export function configureAnalysisCacheRuntime(
+  options: ProgramCacheRuntimeOptions
 ): void {
   if ('maxEntries' in options) {
-    projectCacheRuntimeOptions.maxEntries = options.maxEntries
+    programCacheRuntimeOptions.maxEntries = options.maxEntries
   }
 }
 
-export function resetProjectCacheRuntimeConfiguration(): void {
-  projectCacheRuntimeOptions.maxEntries = undefined
+export function resetAnalysisCacheRuntimeConfiguration(): void {
+  programCacheRuntimeOptions.maxEntries = undefined
 }
 
-let nextProjectCacheSnapshotId = 0
+let nextProgramCacheSnapshotId = 0
 
-class ProjectCacheSnapshot implements Snapshot {
-  readonly id = `project-cache:${(nextProjectCacheSnapshotId += 1)}`
+class ProgramCacheSnapshot implements Snapshot {
+  readonly id = `program-cache:${(nextProgramCacheSnapshotId += 1)}`
 
   readonly #revisionByPath = new Map<string, number>()
   readonly #knownContentPaths = new Set<string>()
@@ -71,41 +71,41 @@ class ProjectCacheSnapshot implements Snapshot {
 
   readDirectory(_path?: string): Promise<DirectoryEntry[]> {
     throw new Error(
-      '[renoun] Project cache snapshots do not support readDirectory'
+      '[renoun] Program cache snapshots do not support readDirectory'
     )
   }
 
   readFile(_path: string): Promise<string> {
-    throw new Error('[renoun] Project cache snapshots do not support readFile')
+    throw new Error('[renoun] Program cache snapshots do not support readFile')
   }
 
   readFileBinary(_path: string): Promise<Uint8Array> {
     throw new Error(
-      '[renoun] Project cache snapshots do not support readFileBinary'
+      '[renoun] Program cache snapshots do not support readFileBinary'
     )
   }
 
   readFileStream(_path: string): FileReadableStream {
     throw new Error(
-      '[renoun] Project cache snapshots do not support readFileStream'
+      '[renoun] Program cache snapshots do not support readFileStream'
     )
   }
 
   fileExists(_path: string): Promise<boolean> {
     throw new Error(
-      '[renoun] Project cache snapshots do not support fileExists'
+      '[renoun] Program cache snapshots do not support fileExists'
     )
   }
 
   getFileLastModifiedMs(_path: string): Promise<number | undefined> {
     throw new Error(
-      '[renoun] Project cache snapshots do not support getFileLastModifiedMs'
+      '[renoun] Program cache snapshots do not support getFileLastModifiedMs'
     )
   }
 
   getFileByteLength(_path: string): Promise<number | undefined> {
     throw new Error(
-      '[renoun] Project cache snapshots do not support getFileByteLength'
+      '[renoun] Program cache snapshots do not support getFileByteLength'
     )
   }
 
@@ -121,11 +121,11 @@ class ProjectCacheSnapshot implements Snapshot {
   }
 
   getRelativePathToWorkspace(path: string): string {
-    return normalizeProjectPath(path)
+    return normalizeProgramPath(path)
   }
 
   async contentId(path: string): Promise<string> {
-    const normalizedPath = normalizeProjectPath(path)
+    const normalizedPath = normalizeProgramPath(path)
     this.#knownContentPaths.add(normalizedPath)
     return `r${this.#revisionByPath.get(normalizedPath) ?? 0}`
   }
@@ -141,7 +141,7 @@ class ProjectCacheSnapshot implements Snapshot {
         continue
       }
 
-      const normalizedPath = normalizeProjectPath(path)
+      const normalizedPath = normalizeProgramPath(path)
       if (!inputPathByNormalizedPath.has(normalizedPath)) {
         inputPathByNormalizedPath.set(normalizedPath, path)
       }
@@ -223,27 +223,27 @@ class ProjectCacheSnapshot implements Snapshot {
   }
 }
 
-function getProjectCacheMaxEntries(): number {
+function getProgramCacheMaxEntries(): number {
   if (
-    typeof projectCacheRuntimeOptions.maxEntries === 'number' &&
-    Number.isFinite(projectCacheRuntimeOptions.maxEntries) &&
-    projectCacheRuntimeOptions.maxEntries > 0
+    typeof programCacheRuntimeOptions.maxEntries === 'number' &&
+    Number.isFinite(programCacheRuntimeOptions.maxEntries) &&
+    programCacheRuntimeOptions.maxEntries > 0
   ) {
-    return Math.floor(projectCacheRuntimeOptions.maxEntries)
+    return Math.floor(programCacheRuntimeOptions.maxEntries)
   }
 
-  return DEFAULT_PROJECT_CACHE_MAX_ENTRIES
+  return DEFAULT_PROGRAM_CACHE_MAX_ENTRIES
 }
 
-function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {
-  const existing = projectCacheRuntimeByProject.get(project)
+function getProgramCacheRuntime(project: Project): ProgramCacheRuntime {
+  const existing = programCacheRuntimeByProgram.get(project)
   if (existing) {
-    existing.maxEntries = getProjectCacheMaxEntries()
+    existing.maxEntries = getProgramCacheMaxEntries()
     return existing
   }
 
-  const snapshot = new ProjectCacheSnapshot()
-  const created: ProjectCacheRuntime = {
+  const snapshot = new ProgramCacheSnapshot()
+  const created: ProgramCacheRuntime = {
     snapshot,
     store: new CacheStore({
       snapshot,
@@ -253,14 +253,14 @@ function getProjectCacheRuntime(project: Project): ProjectCacheRuntime {
     nodeKeysByPathPrefix: new Map(),
     nodeKeysByCacheName: new Map(),
     nodeIdentityByNodeKey: new Map(),
-    maxEntries: getProjectCacheMaxEntries(),
+    maxEntries: getProgramCacheMaxEntries(),
   }
 
-  projectCacheRuntimeByProject.set(project, created)
+  programCacheRuntimeByProgram.set(project, created)
   return created
 }
 
-function normalizeProjectPath(path: string): string {
+function normalizeProgramPath(path: string): string {
   const normalizedPath = normalizeSlashes(path)
   const normalizedPathKey = normalizePathKey(normalizedPath)
 
@@ -275,30 +275,30 @@ function normalizeProjectPath(path: string): string {
   return normalizePathKey(normalizeSlashes(comparablePath))
 }
 
-function toProjectCacheNodeKey(filePath: string, cacheName: string): string {
-  return `${PROJECT_CACHE_NODE_PREFIX}${normalizeProjectPath(filePath)}:${cacheName}`
+function toProgramCacheNodeKey(filePath: string, cacheName: string): string {
+  return `${PROGRAM_CACHE_NODE_PREFIX}${normalizeProgramPath(filePath)}:${cacheName}`
 }
 
-function toDefaultDependency(filePath: string): ProjectCacheDependency {
+function toDefaultDependency(filePath: string): ProgramCacheDependency {
   return {
     kind: 'file',
     path: filePath,
   }
 }
 
-function normalizeProjectDependency(
-  dependency: ProjectCacheDependency
-): ProjectCacheDependency {
+function normalizeProgramDependency(
+  dependency: ProgramCacheDependency
+): ProgramCacheDependency {
   switch (dependency.kind) {
     case 'file':
       return {
         kind: 'file',
-        path: normalizeProjectPath(dependency.path),
+        path: normalizeProgramPath(dependency.path),
       }
     case 'directory':
       return {
         kind: 'directory',
-        path: normalizeProjectPath(dependency.path),
+        path: normalizeProgramPath(dependency.path),
       }
     case 'const':
       return {
@@ -309,22 +309,22 @@ function normalizeProjectDependency(
     case 'cache':
       return {
         kind: 'cache',
-        filePath: normalizeProjectPath(dependency.filePath),
+        filePath: normalizeProgramPath(dependency.filePath),
         cacheName: dependency.cacheName,
       }
   }
 }
 
-function normalizeProjectDependencies(
-  dependencies: ProjectCacheDependency[]
-): ProjectCacheDependency[] {
-  return dependencies.map(normalizeProjectDependency)
+function normalizeProgramDependencies(
+  dependencies: ProgramCacheDependency[]
+): ProgramCacheDependency[] {
+  return dependencies.map(normalizeProgramDependency)
 }
 
-function toProjectDependencySignature(
-  dependencies: ProjectCacheDependency[]
+function toProgramDependencySignature(
+  dependencies: ProgramCacheDependency[]
 ): string {
-  const normalizedDependencies = normalizeProjectDependencies(dependencies)
+  const normalizedDependencies = normalizeProgramDependencies(dependencies)
   const sortable = normalizedDependencies.map((dependency) => {
     switch (dependency.kind) {
       case 'file':
@@ -373,7 +373,7 @@ function deleteFromSetMap(
   }
 }
 
-function getProjectPathPrefixes(path: string): string[] {
+function getProgramPathPrefixes(path: string): string[] {
   if (path === '.') {
     return ['.']
   }
@@ -393,8 +393,8 @@ function getProjectPathPrefixes(path: string): string[] {
   return prefixes
 }
 
-function touchProjectCacheEntry(
-  runtime: ProjectCacheRuntime,
+function touchProgramCacheEntry(
+  runtime: ProgramCacheRuntime,
   nodeKey: string,
   identity: {
     filePath: string
@@ -412,7 +412,7 @@ function touchProjectCacheEntry(
       existingIdentity.filePath,
       nodeKey
     )
-    for (const prefix of getProjectPathPrefixes(existingIdentity.filePath)) {
+    for (const prefix of getProgramPathPrefixes(existingIdentity.filePath)) {
       deleteFromSetMap(runtime.nodeKeysByPathPrefix, prefix, nodeKey)
     }
     deleteFromSetMap(
@@ -424,7 +424,7 @@ function touchProjectCacheEntry(
 
   runtime.nodeIdentityByNodeKey.set(nodeKey, identity)
   addToSetMap(runtime.nodeKeysByFilePath, identity.filePath, nodeKey)
-  for (const prefix of getProjectPathPrefixes(identity.filePath)) {
+  for (const prefix of getProgramPathPrefixes(identity.filePath)) {
     addToSetMap(runtime.nodeKeysByPathPrefix, prefix, nodeKey)
   }
   addToSetMap(runtime.nodeKeysByCacheName, identity.cacheName, nodeKey)
@@ -435,8 +435,8 @@ function touchProjectCacheEntry(
   runtime.lruNodeKeys.set(nodeKey, true)
 }
 
-function removeProjectCacheEntry(
-  runtime: ProjectCacheRuntime,
+function removeProgramCacheEntry(
+  runtime: ProgramCacheRuntime,
   nodeKey: string
 ): void {
   runtime.lruNodeKeys.delete(nodeKey)
@@ -448,14 +448,14 @@ function removeProjectCacheEntry(
 
   runtime.nodeIdentityByNodeKey.delete(nodeKey)
   deleteFromSetMap(runtime.nodeKeysByFilePath, identity.filePath, nodeKey)
-  for (const prefix of getProjectPathPrefixes(identity.filePath)) {
+  for (const prefix of getProgramPathPrefixes(identity.filePath)) {
     deleteFromSetMap(runtime.nodeKeysByPathPrefix, prefix, nodeKey)
   }
   deleteFromSetMap(runtime.nodeKeysByCacheName, identity.cacheName, nodeKey)
 }
 
-async function enforceProjectCacheCapacity(
-  runtime: ProjectCacheRuntime
+async function enforceProgramCacheCapacity(
+  runtime: ProgramCacheRuntime
 ): Promise<void> {
   while (runtime.lruNodeKeys.size > runtime.maxEntries) {
     const lruNodeKey = runtime.lruNodeKeys.keys().next().value as
@@ -465,14 +465,14 @@ async function enforceProjectCacheCapacity(
       return
     }
 
-    removeProjectCacheEntry(runtime, lruNodeKey)
+    removeProgramCacheEntry(runtime, lruNodeKey)
     await runtime.store.delete(lruNodeKey)
   }
 }
 
-async function recordProjectDependencies(
+async function recordProgramDependencies(
   context: CacheStoreComputeContext,
-  dependencies: readonly ProjectCacheDependency[]
+  dependencies: readonly ProgramCacheDependency[]
 ): Promise<void> {
   for (const dependency of dependencies) {
     switch (dependency.kind) {
@@ -487,20 +487,20 @@ async function recordProjectDependencies(
         break
       case 'cache':
         await context.recordNodeDep(
-          toProjectCacheNodeKey(dependency.filePath, dependency.cacheName)
+          toProgramCacheNodeKey(dependency.filePath, dependency.cacheName)
         )
         break
     }
   }
 }
 
-function toProjectConstDeps(
-  dependencies: readonly ProjectCacheDependency[]
+function toProgramConstDeps(
+  dependencies: readonly ProgramCacheDependency[]
 ): Array<{ name: string; version: string }> {
   const constDeps: Array<{ name: string; version: string }> = [
     {
-      name: PROJECT_CACHE_VERSION_DEP,
-      version: PROJECT_CACHE_VERSION,
+      name: PROGRAM_CACHE_VERSION_DEP,
+      version: PROGRAM_CACHE_VERSION,
     },
   ]
 
@@ -518,18 +518,18 @@ function toProjectConstDeps(
   return constDeps
 }
 
-function toProjectDependencySpecConstDep(
+function toProgramDependencySpecConstDep(
   nodeKey: string,
   dependencySpecVersion: string
 ): { name: string; version: string } {
   return {
-    name: `${PROJECT_CACHE_DEPENDENCY_SPEC_PREFIX}${nodeKey}`,
+    name: `${PROGRAM_CACHE_DEPENDENCY_SPEC_PREFIX}${nodeKey}`,
     version: dependencySpecVersion,
   }
 }
 
-function removeProjectCacheEntriesByFilePath(
-  runtime: ProjectCacheRuntime,
+function removeProgramCacheEntriesByFilePath(
+  runtime: ProgramCacheRuntime,
   filePath: string
 ): void {
   const nodeKeys = runtime.nodeKeysByPathPrefix.get(filePath)
@@ -539,7 +539,7 @@ function removeProjectCacheEntriesByFilePath(
 
   const nodeKeysToDelete = Array.from(nodeKeys)
   for (const nodeKey of nodeKeysToDelete) {
-    removeProjectCacheEntry(runtime, nodeKey)
+    removeProgramCacheEntry(runtime, nodeKey)
   }
 
   if (nodeKeysToDelete.length > 0) {
@@ -547,8 +547,8 @@ function removeProjectCacheEntriesByFilePath(
   }
 }
 
-function removeProjectCacheEntriesByCacheName(
-  runtime: ProjectCacheRuntime,
+function removeProgramCacheEntriesByCacheName(
+  runtime: ProgramCacheRuntime,
   cacheName: string
 ): void {
   const nodeKeys = runtime.nodeKeysByCacheName.get(cacheName)
@@ -558,7 +558,7 @@ function removeProjectCacheEntriesByCacheName(
 
   const nodeKeysToDelete = Array.from(nodeKeys)
   for (const nodeKey of nodeKeysToDelete) {
-    removeProjectCacheEntry(runtime, nodeKey)
+    removeProgramCacheEntry(runtime, nodeKey)
   }
 
   if (nodeKeysToDelete.length > 0) {
@@ -567,47 +567,47 @@ function removeProjectCacheEntriesByCacheName(
 }
 
 /**
- * Create (or reuse) a lazily-filled, per-file cache for the given project. This is useful
+ * Create (or reuse) a lazily-filled, per-file cache for the given program. This is useful
  * for caching expensive computations that are specific to a file in a project.
  */
-export async function createProjectFileCache<Type>(
+export async function createProgramFileCache<Type>(
   project: Project,
   fileName: string,
   cacheName: string,
   compute: () => Type | Promise<Type>,
   options?: {
     deps?:
-      | ProjectCacheDependency[]
-      | ((value: Type) => ProjectCacheDependency[])
+      | ProgramCacheDependency[]
+      | ((value: Type) => ProgramCacheDependency[])
   }
 ): Promise<Type> {
-  await waitForRefreshingProjects()
+  await waitForRefreshingPrograms()
 
-  const runtime = getProjectCacheRuntime(project)
-  runtime.maxEntries = getProjectCacheMaxEntries()
-  const filePath = normalizeProjectPath(fileName)
-  const nodeKey = toProjectCacheNodeKey(filePath, cacheName)
+  const runtime = getProgramCacheRuntime(project)
+  runtime.maxEntries = getProgramCacheMaxEntries()
+  const filePath = normalizeProgramPath(fileName)
+  const nodeKey = toProgramCacheNodeKey(filePath, cacheName)
 
   const dependencySpec = options?.deps
   const staticDependencies =
     typeof dependencySpec === 'function'
       ? undefined
-      : normalizeProjectDependencies(
+      : normalizeProgramDependencies(
           dependencySpec ?? [toDefaultDependency(filePath)]
         )
   const dependencySpecVersion = staticDependencies
-    ? `static:${toProjectDependencySignature(staticDependencies)}`
+    ? `static:${toProgramDependencySignature(staticDependencies)}`
     : 'dynamic'
-  const dependencySpecConstDep = toProjectDependencySpecConstDep(
+  const dependencySpecConstDep = toProgramDependencySpecConstDep(
     nodeKey,
     dependencySpecVersion
   )
   const constDeps = staticDependencies
-    ? toProjectConstDeps(staticDependencies)
+    ? toProgramConstDeps(staticDependencies)
     : [
         {
-          name: PROJECT_CACHE_VERSION_DEP,
-          version: PROJECT_CACHE_VERSION,
+          name: PROGRAM_CACHE_VERSION_DEP,
+          version: PROGRAM_CACHE_VERSION,
         },
       ]
   constDeps.push(dependencySpecConstDep)
@@ -619,7 +619,7 @@ export async function createProjectFileCache<Type>(
       constDeps,
     },
     async (context) => {
-      context.recordConstDep(PROJECT_CACHE_VERSION_DEP, PROJECT_CACHE_VERSION)
+      context.recordConstDep(PROGRAM_CACHE_VERSION_DEP, PROGRAM_CACHE_VERSION)
       context.recordConstDep(
         dependencySpecConstDep.name,
         dependencySpecConstDep.version
@@ -628,97 +628,97 @@ export async function createProjectFileCache<Type>(
       const computedValue = await compute()
       const dependencies =
         staticDependencies ??
-        normalizeProjectDependencies(
+        normalizeProgramDependencies(
           typeof dependencySpec === 'function'
             ? dependencySpec(computedValue)
             : [toDefaultDependency(filePath)]
         )
 
-      await recordProjectDependencies(context, dependencies)
+      await recordProgramDependencies(context, dependencies)
       return computedValue
     }
   )
 
-  touchProjectCacheEntry(runtime, nodeKey, {
+  touchProgramCacheEntry(runtime, nodeKey, {
     filePath,
     cacheName,
   })
-  await enforceProjectCacheCapacity(runtime)
+  await enforceProgramCacheCapacity(runtime)
 
   return value
 }
 
-/** Invalidates cached project analysis results. */
-export function invalidateProjectFileCache(
+/** Invalidates cached analysis results. */
+export function invalidateProgramFileCache(
   project: Project,
   filePath?: string
 ): void
-export function invalidateProjectFileCache(
+export function invalidateProgramFileCache(
   project: Project,
   filePath?: string,
   cacheName?: string
 ): void
-export function invalidateProjectFileCache(
+export function invalidateProgramFileCache(
   project: Project,
   filePath?: string,
   cacheName?: string
 ) {
-  const runtime = projectCacheRuntimeByProject.get(project)
+  const runtime = programCacheRuntimeByProgram.get(project)
   if (!runtime) {
     return
   }
 
   const normalizedFilePath = filePath
-    ? normalizeProjectPath(filePath)
+    ? normalizeProgramPath(filePath)
     : undefined
 
   if (normalizedFilePath && !cacheName) {
-    // Preserve the caller path here, invalidateProjectCacheRuntimePaths normalizes once.
-    invalidateProjectCacheRuntimePaths(runtime, [filePath!])
+    // Preserve the caller path here, invalidateProgramCacheRuntimePaths normalizes once.
+    invalidateProgramCacheRuntimePaths(runtime, [filePath!])
     return
   }
 
   if (normalizedFilePath && cacheName) {
-    const nodeKey = toProjectCacheNodeKey(normalizedFilePath, cacheName)
-    removeProjectCacheEntry(runtime, nodeKey)
+    const nodeKey = toProgramCacheNodeKey(normalizedFilePath, cacheName)
+    removeProgramCacheEntry(runtime, nodeKey)
     void runtime.store.delete(nodeKey)
     return
   }
 
   if (!normalizedFilePath && cacheName) {
-    removeProjectCacheEntriesByCacheName(runtime, cacheName)
+    removeProgramCacheEntriesByCacheName(runtime, cacheName)
     return
   }
 
   runtime.snapshot.invalidateAll()
-  projectCacheRuntimeByProject.delete(project)
+  programCacheRuntimeByProgram.delete(project)
 }
 
-export function invalidateProjectFileCachePaths(
+export function invalidateProgramFileCachePaths(
   project: Project,
   paths: Iterable<string>
 ): void {
-  const runtime = projectCacheRuntimeByProject.get(project)
+  const runtime = programCacheRuntimeByProgram.get(project)
   if (!runtime) {
     return
   }
 
-  invalidateProjectCacheRuntimePaths(runtime, paths)
+  invalidateProgramCacheRuntimePaths(runtime, paths)
 }
 
-function invalidateProjectCacheRuntimePaths(
-  runtime: ProjectCacheRuntime,
+function invalidateProgramCacheRuntimePaths(
+  runtime: ProgramCacheRuntime,
   paths: Iterable<string>
 ): void {
   const normalizedPaths = collapseInvalidationPaths(
-    Array.from(paths).map(normalizeProjectPath)
+    Array.from(paths).map(normalizeProgramPath)
   )
   if (normalizedPaths.length === 0) {
     return
   }
 
   for (const normalizedPath of normalizedPaths) {
-    removeProjectCacheEntriesByFilePath(runtime, normalizedPath)
+    removeProgramCacheEntriesByFilePath(runtime, normalizedPath)
   }
 
   if (typeof runtime.snapshot.invalidatePaths === 'function') {

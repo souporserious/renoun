@@ -1,6 +1,6 @@
 import type { FileSystemRefreshResult } from '../utils/ts-morph.ts'
 
-let isRefreshingProjects = false
+let isRefreshingPrograms = false
 type Waiter = {
   resolve(value: boolean): void
   timeoutId: ReturnType<typeof setTimeout>
@@ -9,20 +9,20 @@ type Waiter = {
 
 const refreshWaiters = new Set<Waiter>()
 
-/** Active promises that are refreshing projects. */
-export const activeRefreshingProjects = new Set<
+/** Active promises that are refreshing analysis programs. */
+export const activeRefreshingPrograms = new Set<
   Promise<FileSystemRefreshResult>
 >()
 
 /** Mark the start of the refreshing process and emit an event. */
-export function startRefreshingProjects() {
-  isRefreshingProjects = true
+export function startRefreshingPrograms() {
+  isRefreshingPrograms = true
 }
 
 /** Mark the completion of the refreshing process and emit an event. */
-export function completeRefreshingProjects() {
-  if (isRefreshingProjects && activeRefreshingProjects.size === 0) {
-    isRefreshingProjects = false
+export function completeRefreshingPrograms() {
+  if (isRefreshingPrograms && activeRefreshingPrograms.size === 0) {
+    isRefreshingPrograms = false
     for (const waiter of refreshWaiters) {
       if (waiter.settled) {
         continue
@@ -37,9 +37,9 @@ export function completeRefreshingProjects() {
   }
 }
 
-/** Emit an event when all projects have finished refreshing. */
-export async function waitForRefreshingProjects() {
-  if (!isRefreshingProjects) return false
+/** Emit an event when all programs have finished refreshing. */
+export async function waitForRefreshingPrograms() {
+  if (!isRefreshingPrograms) return false
 
   return new Promise<boolean>((resolve) => {
     const waiter: Waiter = {

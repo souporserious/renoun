@@ -16,7 +16,7 @@ const createServerMock = vi.fn(async () => ({
   cleanup: serverCleanupMock,
 }))
 
-vi.mock('../project/server.ts', () => ({
+vi.mock('../analysis/server.ts', () => ({
   createServer: createServerMock,
 }))
 
@@ -145,7 +145,7 @@ describe('renoun CLI index integration', () => {
       expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
     })
     expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
-      projectOptions: {
+      analysisOptions: {
         tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
       },
     })

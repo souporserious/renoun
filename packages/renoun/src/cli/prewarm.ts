@@ -1,9 +1,9 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
-import { getProject } from '../project/get-project.ts'
-import { hasServerRuntimeInProcessEnv } from '../project/runtime-env.ts'
-import type { ProjectOptions } from '../project/types.ts'
+import { getProgram } from '../analysis/get-program.ts'
+import { hasServerRuntimeInProcessEnv } from '../analysis/runtime-env.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
 import {
   CacheStore,
   type CacheStoreComputeContext,
@@ -121,7 +121,7 @@ type PendingRenounCallsite = {
  */
 export async function collectRenounPrewarmTargets(
   project: Project,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ): Promise<RenounPrewarmTargets> {
   const directoryDeclarations = new Map<
     TsMorphSymbol,
@@ -142,8 +142,8 @@ export async function collectRenounPrewarmTargets(
     Omit<DirectoryEntriesRequest, 'directoryPath'>
   >()
 
-  const projectDirectory = projectOptions?.tsConfigFilePath
-    ? dirname(projectOptions.tsConfigFilePath)
+  const workspaceDirectory = analysisOptions?.tsConfigFilePath
+    ? dirname(analysisOptions.tsConfigFilePath)
     : process.cwd()
   const sourceFiles = project.getSourceFiles()
 
@@ -170,7 +170,7 @@ export async function collectRenounPrewarmTargets(
     collectRenounDeclarations(
       sourceFile,
       aliases,
-      projectDirectory,
+      workspaceDirectory,
       directoryDeclarations,
       collectionRawEntries,
       collectionAliases,
@@ -195,7 +195,7 @@ export async function collectRenounPrewarmTargets(
         resolveCollectionEntryReference(entryExpression, {
           directories: directoryDeclarations,
           collections: collectionDeclarations,
-          projectDirectory,
+          workspaceDirectory,
           aliases,
         })
       )
@@ -225,7 +225,7 @@ export async function collectRenounPrewarmTargets(
       {
         directories: directoryDeclarations,
         collections: collectionDeclarations,
-        projectDirectory,
+        workspaceDirectory,
       }
     )
 
@@ -342,7 +342,7 @@ function isRenounImportSpecifier(moduleSpecifier: string): boolean {
 function collectRenounDeclarations(
   sourceFile: SourceFile,
   aliases: RenounAliases,
-  projectDirectory: string,
+  workspaceDirectory: string,
   directoryDeclarations: Map<TsMorphSymbol, RenounDirectoryDeclaration>,
   collectionRawEntries: Map<TsMorphSymbol, Expression[]>,
   collectionAliases: Map<TsMorphSymbol, RenounAliases>,
@@ -372,7 +372,7 @@ function collectRenounDeclarations(
           const path = resolveDirectoryPathFromNewExpression(
             referenceExpression,
             aliases,
-            projectDirectory
+            workspaceDirectory
           )
 
           if (path !== undefined) {
@@ -480,7 +480,7 @@ function resolveCollectionEntryReference(
   references: {
     directories: Map<TsMorphSymbol, RenounDirectoryDeclaration>
     collections: Map<TsMorphSymbol, RenounCollectionDeclaration>
-    projectDirectory: string
+    workspaceDirectory: string
     aliases: RenounAliases
   }
 ): RenounCollectionEntryReference | undefined {
@@ -522,7 +522,7 @@ function resolveCollectionEntryReference(
     const path = resolveDirectoryPathFromNewExpression(
       resolved,
       references.aliases,
-      references.projectDirectory
+      references.workspaceDirectory
     )
 
     if (!path) {
@@ -544,7 +544,7 @@ function resolveRenounMethodTarget(
   references: {
     directories: Map<TsMorphSymbol, RenounDirectoryDeclaration>
     collections: Map<TsMorphSymbol, RenounCollectionDeclaration>
-    projectDirectory: string
+    workspaceDirectory: string
   }
 ): RenounMethodTarget | undefined {
   const resolved = resolveReferenceExpression(expression)
@@ -577,7 +577,7 @@ function resolveRenounMethodTarget(
     const directoryPath = resolveDirectoryPathFromNewExpression(
       resolved,
       aliases,
-      references.projectDirectory
+      references.workspaceDirectory
     )
 
     if (directoryPath) {
@@ -860,7 +860,7 @@ function addDirectoryEntriesRequest(
 function resolveDirectoryPathFromNewExpression(
   newExpression: Expression,
   aliases: RenounAliases,
-  projectDirectory: string
+  workspaceDirectory: string
 ): string | undefined {
   const expression = resolveReferenceExpression(newExpression)
   if (!Node.isNewExpression(expression)) {
@@ -876,12 +876,12 @@ function resolveDirectoryPathFromNewExpression(
     return undefined
   }
 
-  return resolveDirectoryPathFromLiteral(firstArgument, projectDirectory)
+  return resolveDirectoryPathFromLiteral(firstArgument, workspaceDirectory)
 }
 
 function resolveDirectoryPathFromLiteral(
   expression: Expression,
-  projectDirectory: string
+  workspaceDirectory: string
 ): string | undefined {
   const value = resolveLiteralExpression(expression)
 
@@ -895,12 +895,12 @@ function resolveDirectoryPathFromLiteral(
   ) {
     return toAbsoluteDirectoryPath(
       (value as Record<string, unknown>)['path'] as string,
-      projectDirectory
+      workspaceDirectory
     )
   }
 
   if (typeof value === 'string') {
-    return toAbsoluteDirectoryPath(value, projectDirectory)
+    return toAbsoluteDirectoryPath(value, workspaceDirectory)
   }
 
   return undefined
@@ -908,7 +908,7 @@ function resolveDirectoryPathFromLiteral(
 
 function toAbsoluteDirectoryPath(
   path: string,
-  projectDirectory: string
+  workspaceDirectory: string
 ): string {
   const resolvedPath = path.startsWith('workspace:')
     ? resolveSchemePath(path)
@@ -918,7 +918,7 @@ function toAbsoluteDirectoryPath(
     return resolvedPath
   }
 
-  return resolve(projectDirectory, resolvedPath)
+  return resolve(workspaceDirectory, resolvedPath)
 }
 
 function isDirectoryConstructorExpression(
@@ -1043,12 +1043,12 @@ function getPrewarmWorkspaceGateStore(
 }
 
 async function resolvePrewarmWorkspaceGate(
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ): Promise<PrewarmWorkspaceGate | undefined> {
   try {
     const { NodeFileSystem } = await import('../file-system/NodeFileSystem.ts')
     const fileSystem = new NodeFileSystem({
-      tsConfigPath: projectOptions?.tsConfigFilePath,
+      tsConfigPath: analysisOptions?.tsConfigFilePath,
     }) as FileSystem & PrewarmWorkspaceGateRuntimeFileSystem
     const getWorkspaceChangeToken = fileSystem.getWorkspaceChangeToken
     if (typeof getWorkspaceChangeToken !== 'function') {
@@ -1056,8 +1056,8 @@ async function resolvePrewarmWorkspaceGate(
     }
 
     const workspaceRootPath = fileSystem.getAbsolutePath(
-      projectOptions?.tsConfigFilePath
-        ? dirname(projectOptions.tsConfigFilePath)
+      analysisOptions?.tsConfigFilePath
+        ? dirname(analysisOptions.tsConfigFilePath)
         : process.cwd()
     )
     const workspaceToken =
@@ -1069,8 +1069,8 @@ async function resolvePrewarmWorkspaceGate(
 
     const normalizedWorkspaceRootPath = normalizePathKey(workspaceRootPath)
     const normalizedTsConfigPath =
-      typeof projectOptions?.tsConfigFilePath === 'string'
-        ? normalizePathKey(projectOptions.tsConfigFilePath)
+      typeof analysisOptions?.tsConfigFilePath === 'string'
+        ? normalizePathKey(analysisOptions.tsConfigFilePath)
         : null
     const gateKey = `${normalizedWorkspaceRootPath}::${normalizedTsConfigPath ?? 'none'}`
     const store = getPrewarmWorkspaceGateStore(
@@ -1111,13 +1111,13 @@ async function resolvePrewarmWorkspaceGate(
 }
 
 async function runPrewarmAnalysis(options?: {
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 }): Promise<'no-targets' | 'warmed'> {
   const logger = getDebugLogger()
-  const project = getProject(options?.projectOptions)
+  const project = getProgram(options?.analysisOptions)
   const targets = await collectRenounPrewarmTargets(
     project,
-    options?.projectOptions
+    options?.analysisOptions
   )
 
   if (
@@ -1129,7 +1129,7 @@ async function runPrewarmAnalysis(options?: {
   }
 
   await warmRenounPrewarmTargets(targets, {
-    projectOptions: options?.projectOptions,
+    analysisOptions: options?.analysisOptions,
     isFilePathGitIgnored,
   })
 
@@ -1137,7 +1137,7 @@ async function runPrewarmAnalysis(options?: {
 }
 
 export async function prewarmRenounRpcServerCache(options?: {
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 }): Promise<void> {
   const logger = getDebugLogger()
 
@@ -1146,7 +1146,7 @@ export async function prewarmRenounRpcServerCache(options?: {
   }
 
   const workspaceGate = await resolvePrewarmWorkspaceGate(
-    options?.projectOptions
+    options?.analysisOptions
   )
   if (!workspaceGate) {
     await runPrewarmAnalysis(options)

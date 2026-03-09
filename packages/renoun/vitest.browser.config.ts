@@ -7,8 +7,8 @@ export default defineConfig({
   plugins: [mdx()],
   resolve: {
     alias: {
-      '#project-client-server': fileURLToPath(
-        new URL('./src/project/client.server.browser.ts', import.meta.url)
+      '#analysis-client-server': fileURLToPath(
+        new URL('./src/analysis/client.server.browser.ts', import.meta.url)
       ),
     },
     conditions: ['source'],

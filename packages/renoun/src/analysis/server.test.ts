@@ -10,7 +10,7 @@ import { WebSocketClient } from './rpc/client.ts'
 import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
 import { createServer } from './server.ts'
-import * as getProjectModule from './get-project.ts'
+import * as getProgramModule from './get-program.ts'
 import * as highlighterModule from '../utils/create-highlighter.ts'
 import * as quickInfoModule from '../utils/get-quick-info-at-position.ts'
 import * as fileTextPrefixCacheModule from './file-text-prefix-cache.ts'
@@ -61,7 +61,7 @@ const originalEnvironment = captureProcessEnv([
   'NODE_ENV',
 ])
 
-describe('project server refresh invalidations', () => {
+describe('analysis server refresh invalidations', () => {
   const originalWebSocket = globalThis.WebSocket
   let client: WebSocketClient | undefined
   let server: Awaited<ReturnType<typeof createServer>> | undefined
@@ -309,7 +309,7 @@ describe('project server refresh invalidations', () => {
     await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
 
     const params = {
-      filePath: `${process.cwd()}/packages/renoun/src/project/server.ts`,
+      filePath: `${process.cwd()}/packages/renoun/src/analysis/server.ts`,
       position: 0,
     }
     const first = await client.callMethod<typeof params, unknown>(
@@ -407,7 +407,7 @@ describe('project server refresh invalidations', () => {
     )
     expect(unsubscribe).toHaveBeenCalledTimes(1)
     expect(reportBestEffortErrorSpy).toHaveBeenCalledWith(
-      'project/server',
+      'analysis/server',
       expect.objectContaining({
         message: 'watch unavailable',
       })
@@ -452,7 +452,7 @@ describe('project server refresh invalidations', () => {
     vi.spyOn(highlighterModule, 'createHighlighter').mockResolvedValue({
       tokenize: tokenizeSpy,
     } as Awaited<ReturnType<typeof highlighterModule.createHighlighter>>)
-    vi.spyOn(getProjectModule, 'getProject').mockReturnValue({} as never)
+    vi.spyOn(getProgramModule, 'getProgram').mockReturnValue({} as never)
     vi.spyOn(cachedAnalysis, 'getCachedTokens').mockResolvedValue([])
     const getSharedFileTextPrefixSpy = vi
       .spyOn(fileTextPrefixCacheModule, 'getSharedFileTextPrefix')

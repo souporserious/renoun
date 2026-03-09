@@ -2,8 +2,8 @@ import ignore from 'fast-ignore'
 import { randomUUID } from 'node:crypto'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
-import { createSourceFile, transpileSourceFile } from '../project/client.ts'
-import type { ProjectOptions } from '../project/types.ts'
+import { createSourceFile, transpileSourceFile } from '../analysis/client.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import {
   joinPaths,
@@ -57,7 +57,7 @@ export class InMemoryFileSystem
   extends BaseFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
-  #projectOptions: ProjectOptions
+  #analysisOptions: AnalysisOptions
   #cacheIdentity: string
   #files: Map<string, InMemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
@@ -65,12 +65,12 @@ export class InMemoryFileSystem
   #pendingSourceFileWrites: Map<string, Promise<void>>
 
   constructor(files: { [path: string]: InMemoryFileContent }) {
-    const projectId = crypto.randomUUID()
+    const analysisScopeId = randomUUID()
 
     super()
 
-    this.#projectOptions = {
-      projectId: projectId,
+    this.#analysisOptions = {
+      analysisScopeId: analysisScopeId,
       useInMemoryFileSystem: true,
       compilerOptions: {
         module: tsMorph.ts.ModuleKind.CommonJS,
@@ -176,7 +176,7 @@ export class InMemoryFileSystem
     const extension = path.split('.').at(-1)
     if (extension && isJavaScriptLikeExtension(extension)) {
       const absolutePath = this.getAbsolutePath(path)
-      createSourceFile(absolutePath, entry.content, this.#projectOptions)
+      createSourceFile(absolutePath, entry.content, this.#analysisOptions)
     }
   }
 
@@ -204,7 +204,7 @@ export class InMemoryFileSystem
     const writePromise = createSourceFile(
       absolutePath,
       entry.content,
-      this.#projectOptions
+      this.#analysisOptions
     )
       .then(() => {
         this.#syncedSourceFiles.add(absolutePath)
@@ -324,8 +324,8 @@ export class InMemoryFileSystem
     this.#maybeCreateSourceFile(normalizedPath, entry)
   }
 
-  getProjectOptions() {
-    return this.#projectOptions
+  getAnalysisOptions() {
+    return this.#analysisOptions
   }
 
   getCacheIdentity(): unknown {
@@ -334,7 +334,7 @@ export class InMemoryFileSystem
 
   transpileFile(path: string) {
     const normalized = normalizeSlashes(path)
-    return transpileSourceFile(normalized, this.#projectOptions)
+    return transpileSourceFile(normalized, this.#analysisOptions)
   }
 
   getAbsolutePath(path: string) {

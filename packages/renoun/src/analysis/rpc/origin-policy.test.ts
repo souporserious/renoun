@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest'
 import type { IncomingMessage } from 'node:http'
 
-import { isAllowedProjectServerOrigin } from './origin-policy.ts'
+import { isAllowedAnalysisServerOrigin } from './origin-policy.ts'
 
 function createRequest(options: {
   host?: string
@@ -23,7 +23,7 @@ function createRequest(options: {
   } as IncomingMessage
 }
 
-describe('isAllowedProjectServerOrigin', () => {
+describe('isAllowedAnalysisServerOrigin', () => {
   test('allows proxied preview origins when the loopback request presents the server id', () => {
     const request = createRequest({
       host: '127.0.0.1:43123',
@@ -33,7 +33,7 @@ describe('isAllowedProjectServerOrigin', () => {
     })
 
     expect(
-      isAllowedProjectServerOrigin(
+      isAllowedAnalysisServerOrigin(
         'https://preview.example.dev',
         request,
         'server-id'
@@ -50,7 +50,7 @@ describe('isAllowedProjectServerOrigin', () => {
     })
 
     expect(
-      isAllowedProjectServerOrigin(
+      isAllowedAnalysisServerOrigin(
         'https://preview.example.dev',
         request,
         'server-id'
@@ -66,7 +66,7 @@ describe('isAllowedProjectServerOrigin', () => {
     })
 
     expect(
-      isAllowedProjectServerOrigin(
+      isAllowedAnalysisServerOrigin(
         'http://localhost:3000',
         request,
         'server-id'

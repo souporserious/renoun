@@ -22,7 +22,7 @@ import {
   getServerIdFromProcessEnv,
   setServerIdProcessEnv,
 } from '../runtime-env.ts'
-import { isAllowedProjectServerOrigin } from './origin-policy.ts'
+import { isAllowedAnalysisServerOrigin } from './origin-policy.ts'
 
 export interface WebSocketRequest {
   method: string
@@ -265,12 +265,14 @@ function normalizeForKey(params: any) {
   for (const [key, value] of Object.entries(params)) {
     if (typeof value === 'string') {
       out[key] = `hash:${hashString(value)}`
-    } else if (key === 'projectOptions' && value && typeof value === 'object') {
+    } else if (key === 'analysisOptions' && value && typeof value === 'object') {
       out[key] = {
+        analysisScopeId: (value as any).analysisScopeId ?? null,
         tsConfigFilePath: (value as any).tsConfigFilePath ?? null,
         useInMemoryFileSystem: (value as any).useInMemoryFileSystem ?? false,
-        theme: (value as any).theme ?? null,
-        siteUrl: (value as any).siteUrl ?? null,
+        compilerOptions: normalizeForKey(
+          (value as any).compilerOptions ?? null
+        ),
       }
     } else if (typeof value === 'object' && value !== null) {
       out[key] = normalizeForKey(value)
@@ -475,7 +477,7 @@ export class WebSocketServer {
       backlog: 1024,
       maxPayload: MAX_PAYLOAD_BYTES,
       allowedOrigins: (origin, request) => {
-        const allowed = isAllowedProjectServerOrigin(origin, request, this.#id)
+        const allowed = isAllowedAnalysisServerOrigin(origin, request, this.#id)
         if (!allowed) {
           getDebugLogger().logWebSocketServerEvent('client_rejected', {
             reason: 'forbidden_origin',

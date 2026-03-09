@@ -65,7 +65,7 @@ function offersServerProtocol(
     .some((value) => value === serverId)
 }
 
-export function isAllowedProjectServerOrigin(
+export function isAllowedAnalysisServerOrigin(
   originHeader: string | undefined,
   request: IncomingMessage,
   serverId: string

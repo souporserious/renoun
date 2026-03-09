@@ -20,7 +20,7 @@
     "verbatimModuleSyntax": true,
     "baseUrl": ".",
     "paths": {
-      "#project-client-server": ["./src/project/client.server.ts"]
+      "#analysis-client-server": ["./src/analysis/client.server.ts"]
     },
     "stripInternal": true,
     "rootDir": "./src",

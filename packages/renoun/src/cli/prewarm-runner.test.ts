@@ -124,7 +124,7 @@ describe('runPrewarmSafely', () => {
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'node20.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'node20.json' } })
 
     await vi.waitFor(() => {
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -136,8 +136,8 @@ describe('runPrewarmSafely', () => {
     const calls: string[] = []
     const pendingCalls: Array<Deferred<void>> = []
     const prewarmMock = vi.fn(
-      (options?: { projectOptions?: { tsConfigFilePath?: string } }) => {
-        calls.push(options?.projectOptions?.tsConfigFilePath ?? 'default')
+      (options?: { analysisOptions?: { tsConfigFilePath?: string } }) => {
+        calls.push(options?.analysisOptions?.tsConfigFilePath ?? 'default')
         const deferred = createDeferred<void>()
         pendingCalls.push(deferred)
         return deferred.promise
@@ -150,9 +150,9 @@ describe('runPrewarmSafely', () => {
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'a.json' } })
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'b.json' } })
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'c.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'c.json' } })
 
     await vi.waitFor(() => {
       expect(prewarmMock).toHaveBeenCalledTimes(1)
@@ -179,8 +179,8 @@ describe('runPrewarmSafely', () => {
     const calls: string[] = []
     const pendingCalls: Array<Deferred<void>> = []
     const prewarmMock = vi.fn(
-      (options?: { projectOptions?: { tsConfigFilePath?: string } }) => {
-        calls.push(options?.projectOptions?.tsConfigFilePath ?? 'default')
+      (options?: { analysisOptions?: { tsConfigFilePath?: string } }) => {
+        calls.push(options?.analysisOptions?.tsConfigFilePath ?? 'default')
         const deferred = createDeferred<void>()
         pendingCalls.push(deferred)
         return deferred.promise
@@ -193,11 +193,11 @@ describe('runPrewarmSafely', () => {
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'a.json' } })
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'b.json' } })
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'b.json' } })
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'c.json' } })
-    runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'c.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'c.json' } })
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'c.json' } })
 
     await vi.waitFor(() => {
       expect(prewarmMock).toHaveBeenCalledTimes(1)
@@ -227,8 +227,8 @@ describe('runPrewarmSafely', () => {
       const calls: string[] = []
       const pendingCalls: Array<Deferred<void>> = []
       const prewarmMock = vi.fn(
-        (options?: { projectOptions?: { tsConfigFilePath?: string } }) => {
-          calls.push(options?.projectOptions?.tsConfigFilePath ?? 'default')
+        (options?: { analysisOptions?: { tsConfigFilePath?: string } }) => {
+          calls.push(options?.analysisOptions?.tsConfigFilePath ?? 'default')
           const deferred = createDeferred<void>()
           pendingCalls.push(deferred)
           return deferred.promise
@@ -245,8 +245,8 @@ describe('runPrewarmSafely', () => {
           import('./prewarm/constants.ts'),
         ])
 
-      runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'a.json' } })
-      runPrewarmSafely({ projectOptions: { tsConfigFilePath: 'b.json' } })
+      runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
+      runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
 
       await vi.waitFor(() => {
         expect(prewarmMock).toHaveBeenCalledTimes(1)

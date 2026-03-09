@@ -17,8 +17,8 @@ import {
 } from '../../file-system/cache-key.ts'
 import { NodeFileSystem } from '../../file-system/NodeFileSystem.ts'
 import { FileSystemSnapshot } from '../../file-system/Snapshot.ts'
-import { getFileExports, getOutlineRanges } from '../../project/client.ts'
-import type { ProjectOptions } from '../../project/types.ts'
+import { getFileExports, getOutlineRanges } from '../../analysis/client.ts'
+import type { AnalysisOptions } from '../../analysis/types.ts'
 import { getRootDirectory } from '../../utils/get-root-directory.ts'
 import { forEachConcurrent } from '../../utils/concurrency.ts'
 import { getDebugLogger } from '../../utils/debug.ts'
@@ -61,7 +61,7 @@ interface WarmFileTask {
 }
 
 interface WarmRenounPrewarmTargetsOptions {
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
   isFilePathGitIgnored: (filePath: string) => boolean
 }
 
@@ -71,7 +71,7 @@ export async function warmRenounPrewarmTargets(
 ): Promise<void> {
   const logger = getDebugLogger()
   const fileSystem = new NodeFileSystem({
-    tsConfigPath: options.projectOptions?.tsConfigFilePath,
+    tsConfigPath: options.analysisOptions?.tsConfigFilePath,
   })
   const warmFilesByPath = new Map<string, WarmFileTask>()
 
@@ -131,7 +131,7 @@ export async function warmRenounPrewarmTargets(
   }))
 
   await warmFiles(Array.from(warmFilesByPath.values()), {
-    projectOptions: options.projectOptions,
+    analysisOptions: options.analysisOptions,
     fileSystem,
     logger,
   })
@@ -492,7 +492,7 @@ function mergeWarmTask(
 async function warmFiles(
   warmFiles: WarmFileTask[],
   options: {
-    projectOptions?: ProjectOptions
+    analysisOptions?: AnalysisOptions
     fileSystem: NodeFileSystem
     logger: ReturnType<typeof getDebugLogger>
   }
@@ -509,7 +509,7 @@ async function warmFiles(
     async (warmFile) => {
       if (warmFile.methods.has('getExports')) {
         try {
-          await getFileExports(warmFile.absolutePath, options.projectOptions)
+          await getFileExports(warmFile.absolutePath, options.analysisOptions)
         } catch (error) {
           options.logger.warn(
             'Skipping renoun getFileExports prewarm target',
@@ -528,7 +528,7 @@ async function warmFiles(
           try {
             await getOutlineRanges(
               warmFile.absolutePath,
-              options.projectOptions
+              options.analysisOptions
             )
           } catch (error) {
             options.logger.warn(

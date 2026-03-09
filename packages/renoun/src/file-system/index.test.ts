@@ -476,7 +476,7 @@ describe('file system', () => {
 
   test('directory with virtual file system', async () => {
     const fileSystem = new InMemoryFileSystem({
-      'fixtures/project/server.ts': '',
+      'fixtures/analysis/server.ts': '',
       'fixtures/project/types.ts': '',
     })
     const fixturesDirectory = new Directory({
@@ -488,7 +488,7 @@ describe('file system', () => {
     expect(directory).toBeInstanceOf(Directory)
     expect(directory?.name).toBe('project')
 
-    const file = await fixturesDirectory.getFile('project/server', 'ts')
+    const file = await fixturesDirectory.getFile('analysis/server', 'ts')
 
     expect(file).toBeInstanceOf(File)
     expect(file?.name).toBe('server.ts')
@@ -579,7 +579,7 @@ describe('file system', () => {
         "/project/rpc",
         "/project/rpc/client",
         "/project/rpc/server",
-        "/project/server",
+        "/analysis/server",
         "/project/types",
       ]
     `)
@@ -591,7 +591,7 @@ describe('file system', () => {
     const file = await directory.getFile('server', 'ts')
 
     expect(file).toBeInstanceOf(File)
-    expect(file.absolutePath).toContain('/fixtures/project/server.ts')
+    expect(file.absolutePath).toContain('/fixtures/analysis/server.ts')
   })
 
   test('recursive entries does not error', async () => {
@@ -1438,7 +1438,7 @@ describe('file system', () => {
     expect(file!).toBeInstanceOf(JavaScriptFile)
     expectTypeOf(file!).toExtend<JavaScriptFile<any>>()
 
-    const jsFile = new JavaScriptFile({ path: 'fixtures/project/server.ts' })
+    const jsFile = new JavaScriptFile({ path: 'fixtures/analysis/server.ts' })
     const jsFileExports = await jsFile.getExports()
 
     expect(jsFileExports).toHaveLength(1)
@@ -2846,7 +2846,7 @@ export function identity<T>(value: T) {
         {
           "depth": 0,
           "name": "server.ts",
-          "path": "/project/server",
+          "path": "/analysis/server",
         },
         {
           "depth": 0,

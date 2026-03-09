@@ -65,7 +65,7 @@ const createServerMock = vi.fn(async () => ({
   cleanup: serverCleanupMock,
 }))
 
-vi.mock('../project/server.ts', () => ({
+vi.mock('../analysis/server.ts', () => ({
   createServer: createServerMock,
 }))
 
@@ -233,7 +233,7 @@ describe('runAppCommand integration', () => {
         expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
       })
       expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
-        projectOptions: {
+        analysisOptions: {
           tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
         },
       })

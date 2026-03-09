@@ -16,7 +16,7 @@ import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
 
-import { createServer } from '../project/server.ts'
+import { createServer } from '../analysis/server.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'

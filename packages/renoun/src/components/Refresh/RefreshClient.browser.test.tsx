@@ -2,8 +2,8 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 
-import { setProjectClientBrowserRuntime } from '../../project/client.ts'
-import { getProjectClientBrowserRuntime } from '../../project/browser-runtime.ts'
+import { setAnalysisClientBrowserRuntime } from '../../analysis/client.ts'
+import { getAnalysisClientBrowserRuntime } from '../../analysis/browser-runtime.ts'
 import { RefreshClient } from './RefreshClient.tsx'
 
 interface MockSocketCounters {
@@ -53,7 +53,7 @@ describe('RefreshClient browser lifecycle', () => {
       container = null
     }
 
-    setProjectClientBrowserRuntime(undefined)
+    setAnalysisClientBrowserRuntime(undefined)
     delete (window as any).nd
     ;(globalThis as any).WebSocket = originalWebSocket
   })
@@ -68,11 +68,11 @@ describe('RefreshClient browser lifecycle', () => {
     )
 
     await waitFor(
-      () => getProjectClientBrowserRuntime()?.id === 'refresh-browser-test',
+      () => getAnalysisClientBrowserRuntime()?.id === 'refresh-browser-test',
       1_000
     )
 
-    expect(getProjectClientBrowserRuntime()).toEqual({
+    expect(getAnalysisClientBrowserRuntime()).toEqual({
       id: 'refresh-browser-test',
       port: '43123',
       host: '127.0.0.1',
@@ -83,7 +83,7 @@ describe('RefreshClient browser lifecycle', () => {
     root?.unmount()
     root = null
 
-    await waitFor(() => getProjectClientBrowserRuntime() === undefined, 1_000)
+    await waitFor(() => getAnalysisClientBrowserRuntime() === undefined, 1_000)
     expect(counters.closedUrls).toEqual(['ws://127.0.0.1:43123'])
     expect(counters.activeSockets.size).toBe(0)
   })
@@ -105,7 +105,7 @@ describe('RefreshClient browser lifecycle', () => {
     )
 
     await waitFor(
-      () => getProjectClientBrowserRuntime()?.id === 'refresh-browser-test',
+      () => getAnalysisClientBrowserRuntime()?.id === 'refresh-browser-test',
       1_000
     )
     await waitFor(() => counters.sockets.length === 1, 1_000)

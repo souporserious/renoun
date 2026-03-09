@@ -2,15 +2,15 @@
 import React from 'react'
 
 import {
-  getProjectClientBrowserRuntime,
-  getProjectClientRefreshVersion,
-  getQuickInfoAtPosition as getProjectClientQuickInfoAtPosition,
-  getTokens as getProjectClientTokens,
-  hasRetainedProjectClientBrowserRuntime,
-  onProjectClientBrowserRuntimeChange,
-  onProjectClientRefreshVersionChange,
-} from '../../project/client.ts'
-import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
+  getAnalysisClientBrowserRuntime,
+  getAnalysisClientRefreshVersion,
+  getQuickInfoAtPosition as getAnalysisClientQuickInfoAtPosition,
+  getTokens as getAnalysisClientTokens,
+  hasRetainedAnalysisClientBrowserRuntime,
+  onAnalysisClientBrowserRuntimeChange,
+  onAnalysisClientRefreshVersionChange,
+} from '../../analysis/client.ts'
+import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 
 export interface QuickInfoData {
@@ -22,12 +22,13 @@ export interface QuickInfoRequest {
   filePath: string
   position: number
   valueSignature?: string
-  runtime: ProjectServerRuntime
+  analysisVersion?: string
+  runtime: AnalysisServerRuntime
   themeConfig?: ConfigurationOptions['theme']
 }
 
 interface ResolvedQuickInfoRequest extends QuickInfoRequest {
-  projectVersion?: string
+  analysisVersion?: string
 }
 
 interface QuickInfoTokenizedDisplayToken {
@@ -49,32 +50,32 @@ export interface ResolvedQuickInfoClientState {
   resolvedDisplayTokens: QuickInfoTokenizedDisplayText | null
 }
 
-function useProjectClientBrowserRuntimeSnapshot(
-  fallback: ProjectServerRuntime | undefined
-): ProjectServerRuntime | undefined {
+function useAnalysisClientBrowserRuntimeSnapshot(
+  fallback: AnalysisServerRuntime | undefined
+): AnalysisServerRuntime | undefined {
   return React.useSyncExternalStore(
-    onProjectClientBrowserRuntimeChange,
-    getProjectClientBrowserRuntime,
+    onAnalysisClientBrowserRuntimeChange,
+    getAnalysisClientBrowserRuntime,
     () => fallback
   )
 }
 
-function useProjectClientRefreshVersionSnapshot(): string {
+function useAnalysisClientRefreshVersionSnapshot(): string {
   return React.useSyncExternalStore(
-    onProjectClientRefreshVersionChange,
-    getProjectClientRefreshVersion,
-    getProjectClientRefreshVersion
+    onAnalysisClientRefreshVersionChange,
+    getAnalysisClientRefreshVersion,
+    getAnalysisClientRefreshVersion
   )
 }
 
 function useQuickInfoRuntimeSelection(
-  initialRuntime: ProjectServerRuntime | undefined
-): ProjectServerRuntime | undefined {
+  initialRuntime: AnalysisServerRuntime | undefined
+): AnalysisServerRuntime | undefined {
   const selectionRef = React.useRef<{
     runtimeKey: string | undefined
     hasRetainedBrowserRuntime: boolean
   } | null>(null)
-  const initialRuntimeKey = toProjectServerRuntimeKey(initialRuntime)
+  const initialRuntimeKey = toAnalysisServerRuntimeKey(initialRuntime)
 
   if (
     selectionRef.current === null ||
@@ -82,11 +83,11 @@ function useQuickInfoRuntimeSelection(
   ) {
     selectionRef.current = {
       runtimeKey: initialRuntimeKey,
-      hasRetainedBrowserRuntime: hasRetainedProjectClientBrowserRuntime(),
+      hasRetainedBrowserRuntime: hasRetainedAnalysisClientBrowserRuntime(),
     }
   }
 
-  const browserRuntime = useProjectClientBrowserRuntimeSnapshot(initialRuntime)
+  const browserRuntime = useAnalysisClientBrowserRuntimeSnapshot(initialRuntime)
 
   return resolveQuickInfoRuntime(
     initialRuntime,
@@ -96,10 +97,10 @@ function useQuickInfoRuntimeSelection(
 }
 
 export function resolveQuickInfoRuntime(
-  initialRuntime: ProjectServerRuntime | undefined,
-  browserRuntime: ProjectServerRuntime | undefined,
+  initialRuntime: AnalysisServerRuntime | undefined,
+  browserRuntime: AnalysisServerRuntime | undefined,
   hasRetainedBrowserRuntime: boolean
-): ProjectServerRuntime | undefined {
+): AnalysisServerRuntime | undefined {
   if (initialRuntime && hasRetainedBrowserRuntime) {
     return initialRuntime
   }
@@ -111,21 +112,21 @@ export function resolveQuickInfoRuntime(
   return initialRuntime
 }
 
-export function resolveQuickInfoProjectVersion(options: {
-  browserRuntime: ProjectServerRuntime | undefined
-  selectedRuntime: ProjectServerRuntime | undefined
-  requestProjectVersion: string | undefined
+export function resolveQuickInfoAnalysisVersion(options: {
+  browserRuntime: AnalysisServerRuntime | undefined
+  selectedRuntime: AnalysisServerRuntime | undefined
+  requestAnalysisVersion: string | undefined
   refreshVersion: string
 }): string | undefined {
   const {
     browserRuntime,
     selectedRuntime,
-    requestProjectVersion,
+    requestAnalysisVersion,
     refreshVersion,
   } = options
 
   if (!selectedRuntime) {
-    return requestProjectVersion
+    return requestAnalysisVersion
   }
 
   const defaultVersion = `${selectedRuntime.id}:0:0`
@@ -133,25 +134,25 @@ export function resolveQuickInfoProjectVersion(options: {
   if (!browserRuntime) {
     if (
       refreshVersion === '0:0' &&
-      typeof requestProjectVersion === 'string' &&
-      requestProjectVersion.length > 0
+      typeof requestAnalysisVersion === 'string' &&
+      requestAnalysisVersion.length > 0
     ) {
-      return requestProjectVersion
+      return requestAnalysisVersion
     }
 
     return `${selectedRuntime.id}:${refreshVersion}`
   }
 
-  if (!areProjectServerRuntimesEqual(browserRuntime, selectedRuntime)) {
-    return requestProjectVersion ?? defaultVersion
+  if (!areAnalysisServerRuntimesEqual(browserRuntime, selectedRuntime)) {
+    return requestAnalysisVersion ?? defaultVersion
   }
 
   if (
     refreshVersion === '0:0' &&
-    typeof requestProjectVersion === 'string' &&
-    requestProjectVersion.length > 0
+    typeof requestAnalysisVersion === 'string' &&
+    requestAnalysisVersion.length > 0
   ) {
-    return requestProjectVersion
+    return requestAnalysisVersion
   }
 
   return `${selectedRuntime.id}:${refreshVersion}`
@@ -171,17 +172,17 @@ export function useResolvedQuickInfoClientState({
   const [isLoading, setIsLoading] = React.useState<boolean>(
     quickInfo === undefined && request !== undefined
   )
-  const browserRuntime = useProjectClientBrowserRuntimeSnapshot(request?.runtime)
+  const browserRuntime = useAnalysisClientBrowserRuntimeSnapshot(request?.runtime)
   const selectedRuntime = useQuickInfoRuntimeSelection(request?.runtime)
-  const refreshVersion = useProjectClientRefreshVersionSnapshot()
-  const effectiveProjectVersion = React.useMemo(() => {
-    return resolveQuickInfoProjectVersion({
+  const refreshVersion = useAnalysisClientRefreshVersionSnapshot()
+  const effectiveAnalysisVersion = React.useMemo(() => {
+    return resolveQuickInfoAnalysisVersion({
       browserRuntime,
       selectedRuntime,
-      requestProjectVersion: undefined,
+      requestAnalysisVersion: request?.analysisVersion,
       refreshVersion,
     })
-  }, [browserRuntime, refreshVersion, selectedRuntime])
+  }, [browserRuntime, refreshVersion, request?.analysisVersion, selectedRuntime])
   const effectiveRequest = React.useMemo(() => {
     if (!request || !selectedRuntime) {
       return undefined
@@ -190,9 +191,9 @@ export function useResolvedQuickInfoClientState({
     return {
       ...request,
       runtime: selectedRuntime,
-      projectVersion: effectiveProjectVersion,
+      analysisVersion: effectiveAnalysisVersion,
     } satisfies ResolvedQuickInfoRequest
-  }, [effectiveProjectVersion, request, selectedRuntime])
+  }, [effectiveAnalysisVersion, request, selectedRuntime])
   const requestKey = effectiveRequest ? toQuickInfoCacheKey(effectiveRequest) : ''
   const displayText = resolvedQuickInfo?.displayText ?? ''
 
@@ -270,7 +271,7 @@ export async function getQuickInfoForRequest(
 
 async function getQuickInfoDisplayTokens(options: {
   displayText: string
-  runtime: ProjectServerRuntime
+  runtime: AnalysisServerRuntime
   tokenThemeConfig: ConfigurationOptions['theme'] | undefined
 }): Promise<QuickInfoTokenizedDisplayText | null> {
   const { displayText, runtime, tokenThemeConfig } = options
@@ -281,9 +282,9 @@ async function getQuickInfoDisplayTokens(options: {
   return requestDisplayTokens(runtime, displayText, tokenThemeConfig)
 }
 
-function areProjectServerRuntimesEqual(
-  left: ProjectServerRuntime | undefined,
-  right: ProjectServerRuntime | undefined
+function areAnalysisServerRuntimesEqual(
+  left: AnalysisServerRuntime | undefined,
+  right: AnalysisServerRuntime | undefined
 ): boolean {
   if (!left || !right) {
     return false
@@ -296,8 +297,8 @@ function areProjectServerRuntimesEqual(
   )
 }
 
-function toProjectServerRuntimeKey(
-  runtime: ProjectServerRuntime | undefined
+function toAnalysisServerRuntimeKey(
+  runtime: AnalysisServerRuntime | undefined
 ): string | undefined {
   if (!runtime) {
     return undefined
@@ -307,9 +308,9 @@ function toProjectServerRuntimeKey(
 }
 
 function toQuickInfoCacheKey(request: ResolvedQuickInfoRequest): string {
-  const projectVersion = request.projectVersion ?? `${request.runtime.id}:0:0`
+  const analysisVersion = request.analysisVersion ?? `${request.runtime.id}:0:0`
   const valueSignature = request.valueSignature ?? ''
-  return `${projectVersion}:${valueSignature}:${request.filePath}:${request.position}`
+  return `${analysisVersion}:${valueSignature}:${request.filePath}:${request.position}`
 }
 
 function normalizeQuickInfoResult(value: unknown): QuickInfoData | null {
@@ -407,7 +408,7 @@ async function requestQuickInfo(
   request: ResolvedQuickInfoRequest
 ): Promise<QuickInfoData | null> {
   try {
-    const result = await getProjectClientQuickInfoAtPosition(
+    const result = await getAnalysisClientQuickInfoAtPosition(
       request.filePath,
       request.position,
       undefined,
@@ -422,12 +423,12 @@ async function requestQuickInfo(
 }
 
 async function requestDisplayTokens(
-  runtime: ProjectServerRuntime,
+  runtime: AnalysisServerRuntime,
   value: string,
   tokenThemeConfig: ConfigurationOptions['theme'] | undefined
 ): Promise<QuickInfoTokenizedDisplayText | null> {
   try {
-    const result = await getProjectClientTokens({
+    const result = await getAnalysisClientTokens({
       value,
       language: 'typescript',
       theme: tokenThemeConfig,
@@ -444,6 +445,6 @@ async function requestDisplayTokens(
 
 export const __TEST_ONLY__ = {
   getQuickInfoForRequest,
-  resolveQuickInfoProjectVersion,
+  resolveQuickInfoAnalysisVersion,
   resolveQuickInfoRuntime,
 }

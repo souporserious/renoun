@@ -8,7 +8,7 @@ import type {
   ts,
 } from './ts-morph.ts'
 
-import { getPrinter } from '../project/get-printer.ts'
+import { getPrinter } from '../analysis/get-printer.ts'
 import { getExportPosition } from './get-export-position.ts'
 
 const tsMorph = getTsMorph()

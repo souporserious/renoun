@@ -20,7 +20,7 @@ import {
 } from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { GetTokensOptions } from '../utils/get-tokens.ts'
-import type { GetSourceTextMetadataOptions } from '../utils/get-source-text-metadata.ts'
+import type { GetSourceTextMetadataOptions } from './query/source-text-metadata.ts'
 import { prewarmSourceTextFormatterRuntime } from '../utils/format-source-text.ts'
 import { mapConcurrent } from '../utils/concurrency.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
@@ -43,8 +43,8 @@ import {
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
-import { invalidateProjectFileCache } from './cache.ts'
-import { disposeProjectWatchers, getProject } from './get-project.ts'
+import { invalidateProgramFileCache } from './cache.ts'
+import { disposeAnalysisWatchers, getProgram } from './get-program.ts'
 import {
   type RefreshInvalidationsSinceRequest,
   type RefreshInvalidationsSinceResponse,
@@ -59,7 +59,7 @@ import {
   setServerRefreshNotificationsProcessEnv,
   setServerPortProcessEnv,
 } from './runtime-env.ts'
-import type { ProjectOptions } from './types.ts'
+import type { AnalysisOptions } from './types.ts'
 import {
   extractCodeFenceLanguagesFromMarkdown,
   isMarkdownCodeFenceSourcePath,
@@ -73,9 +73,9 @@ const { SyntaxKind } = getTsMorph()
 
 let currentHighlighter: Promise<Highlighter> | null = null
 let resolvedHighlighter: Highlighter | null = null
-let activeProjectServers = 0
+let activeAnalysisServers = 0
 
-interface ActiveProjectServerRuntime {
+interface ActiveAnalysisServerRuntime {
   server: WebSocketServer
   port: string
   id: string
@@ -83,7 +83,7 @@ interface ActiveProjectServerRuntime {
   emitRefreshNotifications: boolean
 }
 
-const activeProjectServerRuntimes: ActiveProjectServerRuntime[] = []
+const activeAnalysisServerRuntimes: ActiveAnalysisServerRuntime[] = []
 
 type RefreshNotificationPriority = 'immediate' | 'background'
 const REFRESH_NOTIFICATION_PRIORITY_DELAY_MS: Record<
@@ -157,7 +157,7 @@ interface ResolveTypeAtLocationRpcRequest {
   position: number
   kind: TsMorphSyntaxKind
   filter?: TypeFilter | string
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 }
 
 export interface CreateServerOptions {
@@ -239,8 +239,8 @@ function normalizeCodeFencePrewarmPath(path: string): string {
   return resolve(path)
 }
 
-function applyActiveProjectServerRuntimeToProcessEnv(
-  runtime: ActiveProjectServerRuntime
+function applyActiveAnalysisServerRuntimeToProcessEnv(
+  runtime: ActiveAnalysisServerRuntime
 ): void {
   setServerPortProcessEnv(runtime.port)
   setServerIdProcessEnv(runtime.id)
@@ -249,33 +249,33 @@ function applyActiveProjectServerRuntimeToProcessEnv(
   notifyServerRuntimeEnvChanged()
 }
 
-function registerActiveProjectServerRuntime(
-  runtime: ActiveProjectServerRuntime
+function registerActiveAnalysisServerRuntime(
+  runtime: ActiveAnalysisServerRuntime
 ): void {
-  unregisterActiveProjectServerRuntime(runtime.server)
-  activeProjectServerRuntimes.push(runtime)
-  applyActiveProjectServerRuntimeToProcessEnv(runtime)
+  unregisterActiveAnalysisServerRuntime(runtime.server)
+  activeAnalysisServerRuntimes.push(runtime)
+  applyActiveAnalysisServerRuntimeToProcessEnv(runtime)
 }
 
-function unregisterActiveProjectServerRuntime(server: WebSocketServer): void {
-  const runtimeIndex = activeProjectServerRuntimes.findIndex((runtime) => {
+function unregisterActiveAnalysisServerRuntime(server: WebSocketServer): void {
+  const runtimeIndex = activeAnalysisServerRuntimes.findIndex((runtime) => {
     return runtime.server === server
   })
   if (runtimeIndex === -1) {
     return
   }
 
-  const wasCurrentRuntime = runtimeIndex === activeProjectServerRuntimes.length - 1
-  activeProjectServerRuntimes.splice(runtimeIndex, 1)
+  const wasCurrentRuntime = runtimeIndex === activeAnalysisServerRuntimes.length - 1
+  activeAnalysisServerRuntimes.splice(runtimeIndex, 1)
 
   if (!wasCurrentRuntime) {
     return
   }
 
   const nextCurrentRuntime =
-    activeProjectServerRuntimes[activeProjectServerRuntimes.length - 1]
+    activeAnalysisServerRuntimes[activeAnalysisServerRuntimes.length - 1]
   if (nextCurrentRuntime) {
-    applyActiveProjectServerRuntimeToProcessEnv(nextCurrentRuntime)
+    applyActiveAnalysisServerRuntimeToProcessEnv(nextCurrentRuntime)
     return
   }
 
@@ -777,7 +777,7 @@ export async function createServer(options?: CreateServerOptions) {
       }
       return highlighter
     } catch (error) {
-      reportBestEffortError('project/server', error)
+      reportBestEffortError('analysis/server', error)
       return null
     }
   }
@@ -890,7 +890,7 @@ export async function createServer(options?: CreateServerOptions) {
       .then(() => prewarmCodeFenceLanguages(paths))
       .catch((error) => {
         if (!cleanedUp) {
-          reportBestEffortError('project/server', error)
+          reportBestEffortError('analysis/server', error)
         }
       })
       .finally(() => {
@@ -1033,7 +1033,7 @@ export async function createServer(options?: CreateServerOptions) {
       return
     }
 
-    const project = getProject()
+    const project = getProgram()
     await mapConcurrent(
       STARTUP_RUNTIME_METADATA_WARMUP_SAMPLES,
       {
@@ -1150,7 +1150,7 @@ export async function createServer(options?: CreateServerOptions) {
         .then(() => prewarmRuntimeAnalysisStartup(paths))
         .catch((error) => {
           if (!cleanedUp) {
-            reportBestEffortError('project/server', error)
+            reportBestEffortError('analysis/server', error)
           }
         })
     }, 0)
@@ -1233,12 +1233,12 @@ export async function createServer(options?: CreateServerOptions) {
       emitRefreshNotifications = false
       unsubscribeRuntimeAnalysisBackgroundRefresh()
       unsubscribeRuntimeAnalysisBackgroundRefresh = () => {}
-      reportBestEffortError('project/server', error)
+      reportBestEffortError('analysis/server', error)
     }
   }
 
-  activeProjectServers += 1
-  registerActiveProjectServerRuntime({
+  activeAnalysisServers += 1
+  registerActiveAnalysisServerRuntime({
     server,
     port: String(port),
     id: server.getId(),
@@ -1281,10 +1281,10 @@ export async function createServer(options?: CreateServerOptions) {
     startupRuntimePrewarmQueued = false
     startupRuntimePrewarmInFlight = Promise.resolve()
     unsubscribeRuntimeAnalysisBackgroundRefresh()
-    unregisterActiveProjectServerRuntime(server)
-    activeProjectServers = Math.max(0, activeProjectServers - 1)
-    if (activeProjectServers === 0) {
-      disposeProjectWatchers()
+    unregisterActiveAnalysisServerRuntime(server)
+    activeAnalysisServers = Math.max(0, activeAnalysisServers - 1)
+    if (activeAnalysisServers === 0) {
+      disposeAnalysisWatchers()
     }
 
     originalCleanup()
@@ -1363,13 +1363,13 @@ export async function createServer(options?: CreateServerOptions) {
     async function getQuickInfoAtPositionRpc({
       filePath,
       position,
-      projectOptions,
+      analysisOptions,
     }: {
       filePath: string
       position: number
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       return getQuickInfoAtPosition({
         project,
         filePath,
@@ -1386,12 +1386,12 @@ export async function createServer(options?: CreateServerOptions) {
   server.registerMethod(
     'getSourceTextMetadata',
     async function getSourceTextMetadata({
-      projectOptions,
+      analysisOptions,
       ...options
     }: GetSourceTextMetadataOptions & {
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
 
       return getCachedSourceTextMetadata(project, options)
     },
@@ -1404,14 +1404,14 @@ export async function createServer(options?: CreateServerOptions) {
   server.registerMethod(
     'getTokens',
     async function getTokens({
-      projectOptions,
+      analysisOptions,
       ...options
     }: GetTokensOptions & {
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
       languages?: ConfigurationOptions['languages']
       waitForWarmResult?: boolean
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       latestCodeFencePrewarmThemeNames = getThemeNamesForCodeFencePrewarm(
         options.theme
       )
@@ -1442,17 +1442,17 @@ export async function createServer(options?: CreateServerOptions) {
   server.registerMethod(
     'resolveTypeAtLocation',
     async function resolveTypeAtLocation({
-      projectOptions,
+      analysisOptions,
       filter,
       ...options
     }: ResolveTypeAtLocationRpcRequest) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       const result = await resolveCachedTypeAtLocationWithDependencies(project, {
         filePath: options.filePath,
         position: options.position,
         kind: options.kind,
         filter: parseTypeFilter(filter),
-        isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+        isInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
       })
 
       return result.resolvedType
@@ -1466,21 +1466,21 @@ export async function createServer(options?: CreateServerOptions) {
   server.registerMethod(
     'resolveTypeAtLocationWithDependencies',
     async function resolveTypeAtLocationWithDependencies({
-      projectOptions,
+      analysisOptions,
       filter,
       ...options
     }: ResolveTypeAtLocationRpcRequest) {
       return getDebugLogger().trackOperation(
         'server.resolveTypeAtLocationWithDependencies',
         async () => {
-          const project = getProject(projectOptions)
+          const project = getProgram(analysisOptions)
 
           getDebugLogger().info('Processing type resolution request', () => ({
             data: {
               filePath: options.filePath,
               position: options.position,
               kind: SyntaxKind[options.kind],
-              useInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+              useInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
             },
           }))
 
@@ -1489,7 +1489,7 @@ export async function createServer(options?: CreateServerOptions) {
             position: options.position,
             kind: options.kind,
             filter: parseTypeFilter(filter),
-            isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+            isInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
           })
         },
         {
@@ -1511,14 +1511,14 @@ export async function createServer(options?: CreateServerOptions) {
     'getFileExports',
     async function getFileExports({
       filePath,
-      projectOptions,
+      analysisOptions,
       includeClientRpcDependencies,
     }: {
       filePath: string
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
       includeClientRpcDependencies?: boolean
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       const fileExports = await getCachedFileExports(project, filePath)
 
       if (includeClientRpcDependencies) {
@@ -1540,12 +1540,12 @@ export async function createServer(options?: CreateServerOptions) {
     'getOutlineRanges',
     async function getOutlineRanges({
       filePath,
-      projectOptions,
+      analysisOptions,
     }: {
       filePath: string
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       return getCachedOutlineRanges(project, filePath)
     },
     {
@@ -1561,17 +1561,17 @@ export async function createServer(options?: CreateServerOptions) {
       filePath,
       position,
       kind,
-      projectOptions,
+      analysisOptions,
       includeClientRpcDependencies,
     }: {
       name: string
       filePath: string
       position: number
       kind: TsMorphSyntaxKind
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
       includeClientRpcDependencies?: boolean
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       const metadata = await getCachedFileExportMetadata(project, {
         name,
         filePath,
@@ -1602,15 +1602,15 @@ export async function createServer(options?: CreateServerOptions) {
       position,
       kind,
       includeDependencies,
-      projectOptions,
+      analysisOptions,
     }: {
       filePath: string
       position: number
       kind: TsMorphSyntaxKind
       includeDependencies?: boolean
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       if (includeDependencies) {
         return getFileExportTextResult({
           filePath,
@@ -1640,16 +1640,16 @@ export async function createServer(options?: CreateServerOptions) {
       filePath,
       position,
       kind,
-      projectOptions,
+      analysisOptions,
       includeClientRpcDependencies,
     }: {
       filePath: string
       position: number
       kind: TsMorphSyntaxKind
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
       includeClientRpcDependencies?: boolean
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       const staticValue = await getCachedFileExportStaticValue(project, {
         filePath,
         position,
@@ -1680,17 +1680,17 @@ export async function createServer(options?: CreateServerOptions) {
     async function createSourceFile({
       filePath,
       sourceText,
-      projectOptions,
+      analysisOptions,
     }: {
       filePath: string
       sourceText: string
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       project.createSourceFile(filePath, sourceText, {
         overwrite: true,
       })
-      invalidateProjectFileCache(project, filePath)
+      invalidateProgramFileCache(project, filePath)
       invalidateRuntimeAnalysisCachePath(filePath)
       invalidateSharedFileTextPrefixCachePath(filePath)
       queueCodeFenceLanguagePrewarm([filePath], {
@@ -1707,12 +1707,12 @@ export async function createServer(options?: CreateServerOptions) {
     'transpileSourceFile',
     async function transpileSourceFile({
       filePath,
-      projectOptions,
+      analysisOptions,
     }: {
       filePath: string
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
     }) {
-      const project = getProject(projectOptions)
+      const project = getProgram(analysisOptions)
       return transpileCachedSourceFile(project, filePath)
     },
     {
@@ -1728,7 +1728,7 @@ function closeWatcher(watcher: FSWatcher): void {
   try {
     watcher.close()
   } catch (error) {
-    reportBestEffortError('project/server', error)
+    reportBestEffortError('analysis/server', error)
   }
 }
 

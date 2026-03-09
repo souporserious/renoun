@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from 'vitest'
 
 import {
-  activeRefreshingProjects,
-  completeRefreshingProjects,
-  startRefreshingProjects,
-  waitForRefreshingProjects,
+  activeRefreshingPrograms,
+  completeRefreshingPrograms,
+  startRefreshingPrograms,
+  waitForRefreshingPrograms,
 } from './refresh.ts'
 
 describe('refresh waiter', () => {
@@ -12,17 +12,17 @@ describe('refresh waiter', () => {
     const emitWarningSpy = vi
       .spyOn(process, 'emitWarning')
       .mockImplementation(() => {})
-    const previousActiveProjects = [...activeRefreshingProjects]
+    const previousActiveProjects = [...activeRefreshingPrograms]
 
-    activeRefreshingProjects.clear()
-    startRefreshingProjects()
+    activeRefreshingPrograms.clear()
+    startRefreshingPrograms()
 
     try {
       const waits = Array.from({ length: 50 }, () =>
-        waitForRefreshingProjects()
+        waitForRefreshingPrograms()
       )
 
-      completeRefreshingProjects()
+      completeRefreshingPrograms()
 
       expect(await Promise.all(waits)).toEqual(Array(50).fill(true))
       const hasMaxListenersWarning = emitWarningSpy.mock.calls.some(
@@ -34,10 +34,10 @@ describe('refresh waiter', () => {
               : String(warning).includes('MaxListenersExceededWarning')
       )
       expect(hasMaxListenersWarning).toBe(false)
-      expect(await waitForRefreshingProjects()).toBe(false)
+      expect(await waitForRefreshingPrograms()).toBe(false)
     } finally {
       for (const activeProject of previousActiveProjects) {
-        activeRefreshingProjects.add(activeProject)
+        activeRefreshingPrograms.add(activeProject)
       }
 
       emitWarningSpy.mockRestore()

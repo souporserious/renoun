@@ -1,7 +1,7 @@
 import { getTsMorph } from './ts-morph.ts'
 import type { Project, SyntaxKind } from './ts-morph.ts'
 
-import { createProjectFileCache } from '../project/cache.ts'
+import { createProgramFileCache } from '../analysis/cache.ts'
 import { getFileExportDeclaration } from './get-file-exports.ts'
 import { getFileExportsTextWithDependencies } from './get-file-exports-text.ts'
 import { getRootDirectory } from './get-root-directory.ts'
@@ -13,7 +13,7 @@ export interface FileExportTextResult {
   dependencies: string[]
 }
 
-function toProjectFileDependencies(paths: Iterable<string>) {
+function toProgramFileDependencies(paths: Iterable<string>) {
   const dependencyPaths = new Set<string>()
   for (const path of paths) {
     if (typeof path !== 'string' || path.length === 0) {
@@ -79,14 +79,14 @@ export async function getFileExportTextResult({
   includeDependencies?: boolean
 }): Promise<FileExportTextResult> {
   if (includeDependencies) {
-    const fileExportsText = await createProjectFileCache(
+    const fileExportsText = await createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
       () => getFileExportsTextWithDependencies(filePath, project),
       {
         deps: (result) => {
-          return toProjectFileDependencies(
+          return toProgramFileDependencies(
             result.flatMap((fileExport) => fileExport.dependencyPaths)
           )
         },

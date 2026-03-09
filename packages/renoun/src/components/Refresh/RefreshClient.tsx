@@ -2,9 +2,9 @@
 import { useEffect } from 'react'
 
 import {
-  onProjectClientBrowserRefreshNotification,
-  retainProjectClientBrowserRuntime,
-} from '../../project/client.ts'
+  onAnalysisClientBrowserRefreshNotification,
+  retainAnalysisClientBrowserRuntime,
+} from '../../analysis/client.ts'
 
 declare global {
   var __WAKU_RSC_RELOAD_LISTENERS__: (() => void)[] | undefined
@@ -28,12 +28,12 @@ export function RefreshClient({
       return
     }
 
-    const releaseRuntime = retainProjectClientBrowserRuntime({
+    const releaseRuntime = retainAnalysisClientBrowserRuntime({
       port,
       id,
       host,
     })
-    const unsubscribe = onProjectClientBrowserRefreshNotification((message) => {
+    const unsubscribe = onAnalysisClientBrowserRefreshNotification((message) => {
       if (message.type === 'refresh' && 'nd' in window) {
         // @ts-ignore - private Next.js API
         const router = window.nd.router

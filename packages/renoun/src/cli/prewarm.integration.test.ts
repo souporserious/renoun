@@ -2,7 +2,7 @@ import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
-import { getProject } from '../project/get-project.ts'
+import { getProgram } from '../analysis/get-program.ts'
 import { collectRenounPrewarmTargets } from './prewarm.ts'
 
 const PREWARM_APP_COVERAGE_TIMEOUT_MS = 120_000
@@ -66,7 +66,7 @@ describe('collectRenounPrewarmTargets app coverage', () => {
     }> = []
 
     for (const app of appSites) {
-      const project = getProject({
+      const project = getProgram({
         tsConfigFilePath: join(app.rootPath, 'tsconfig.json'),
       })
       const target = await collectRenounPrewarmTargets(project, {

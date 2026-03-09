@@ -41,12 +41,12 @@ import {
 import type {
   GetSourceTextMetadataOptions,
   SourceTextMetadata,
-} from '../utils/get-source-text-metadata.ts'
+} from './query/source-text-metadata.ts'
 import {
   getSourceTextMetadata as baseGetSourceTextMetadata,
   getSourceTextMetadataFallback,
   hydrateSourceTextMetadataSourceFile,
-} from '../utils/get-source-text-metadata.ts'
+} from './query/source-text-metadata.ts'
 import {
   getSourceTextFormatterStateVersion,
   prewarmSourceTextFormatterRuntime,
@@ -71,11 +71,11 @@ import type { TypeFilter } from '../utils/resolve-type.ts'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import { mapConcurrent } from '../utils/concurrency.ts'
-import type { ProjectCacheDependency } from './cache.ts'
+import type { ProgramCacheDependency } from './cache.ts'
 import {
-  createProjectFileCache as createProjectFileCacheBase,
-  invalidateProjectFileCache,
-  invalidateProjectFileCachePaths,
+  createProgramFileCache as createProgramFileCacheBase,
+  invalidateProgramFileCache,
+  invalidateProgramFileCachePaths,
 } from './cache.ts'
 import {
   isRpcBuildProfileEnabled,
@@ -106,10 +106,10 @@ const RUNTIME_ANALYSIS_CACHE_NAMES = {
 } as const
 
 const RUNTIME_ANALYSIS_CACHE_CONFIG = {
-  scope: 'project-analysis-runtime',
+  scope: 'program-analysis-runtime',
   version: '3',
   versionDependency: 'runtime-analysis-cache-version',
-  projectCompilerOptionsDependency: 'project:compiler-options',
+  programCompilerOptionsDependency: 'program:compiler-options',
   defaultSwrMaxStaleAgeMs: 120_000,
   sourceTextMetadataSwrMaxStaleAgeMs: 15 * 60_000,
   tokensSwrMaxStaleAgeMs: 15 * 60_000,
@@ -161,15 +161,15 @@ const compilerOptionsVersionByProject = new WeakMap<
 const compilerOptionsVersionEpochByConfigPath = new Map<string, number>()
 let compilerOptionsVersionGlobalEpoch = 0
 let runtimeAnalysisInvalidationQueue: Promise<void> = Promise.resolve()
-const fallbackAnalysisProjectCacheRefs = new Map<number, WeakRef<Project>>()
-const fallbackAnalysisProjectIdByProject = new WeakMap<Project, number>()
-const fallbackAnalysisProjectFinalizationRegistry =
+const fallbackAnalysisProgramCacheRefs = new Map<number, WeakRef<Project>>()
+const fallbackAnalysisProgramIdByProject = new WeakMap<Project, number>()
+const fallbackAnalysisProgramFinalizationRegistry =
   typeof FinalizationRegistry === 'function'
-    ? new FinalizationRegistry<number>((projectId) => {
-        fallbackAnalysisProjectCacheRefs.delete(projectId)
+    ? new FinalizationRegistry<number>((analysisScopeId) => {
+        fallbackAnalysisProgramCacheRefs.delete(analysisScopeId)
       })
     : undefined
-let fallbackAnalysisProjectIdCounter = 0
+let fallbackAnalysisProgramIdCounter = 0
 const runtimeTypeScriptDependencyAnalysisInFlightByKey = new Map<
   string,
   Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined>
@@ -209,7 +209,7 @@ let runtimeAnalysisSWRPrewarmFlushTimer: NodeJS.Timeout | undefined
 let runtimeAnalysisSWRPrewarmFlushDelayMs: number | undefined
 const pendingRuntimeAnalysisBackgroundRefreshPaths = new Set<string>()
 let runtimeAnalysisBackgroundRefreshFlushQueued = false
-const projectConfigDependencyVersionByKey = new Map<
+const programConfigDependencyVersionByKey = new Map<
   string,
   {
     contentId: string
@@ -432,7 +432,7 @@ async function runRuntimeAnalysisSWRPrewarm(
     runPromise = task
       .run()
       .catch((error) => {
-        reportBestEffortError('project/cached-analysis', error)
+        reportBestEffortError('analysis/cached-analysis', error)
       })
       .finally(() => {
         if (task.inFlight === runPromise) {
@@ -588,7 +588,7 @@ function queueRuntimeAnalysisBackgroundRefresh(
       try {
         listener(refreshPaths)
       } catch (error) {
-        reportBestEffortError('project/cached-analysis', error)
+        reportBestEffortError('analysis/cached-analysis', error)
       }
     }
   })
@@ -667,7 +667,7 @@ function queueRuntimeAnalysisImmediateRefresh(options: {
 
   if (options.dependencyPaths.length === 0) {
     void options.refresh().catch((error) => {
-      reportBestEffortError('project/cached-analysis', error)
+      reportBestEffortError('analysis/cached-analysis', error)
     })
     return
   }
@@ -684,7 +684,7 @@ function queueRuntimeAnalysisImmediateRefresh(options: {
 
   if (normalizedPaths.length === 0) {
     void options.refresh().catch((error) => {
-      reportBestEffortError('project/cached-analysis', error)
+      reportBestEffortError('analysis/cached-analysis', error)
     })
     return
   }
@@ -727,7 +727,7 @@ async function resolveWithinRuntimeAnalysisColdResponseBudget<Value>(options: {
 
   if (resolved.timedOut) {
     void options.promise.catch((error) => {
-      reportBestEffortError('project/cached-analysis', error)
+      reportBestEffortError('analysis/cached-analysis', error)
     })
     return options.fallback()
   }
@@ -761,7 +761,7 @@ function queueRuntimeAnalysisColdStartTask(options: {
 }): void {
   if (!isRuntimeAnalysisDevelopmentLikeEnvironment()) {
     void options.run().catch((error) => {
-      reportBestEffortError('project/cached-analysis', error)
+      reportBestEffortError('analysis/cached-analysis', error)
     })
     return
   }
@@ -778,7 +778,7 @@ function queueRuntimeAnalysisColdStartTask(options: {
   const timer = setTimeout(() => {
     pendingRuntimeAnalysisColdStartTaskKeys.delete(options.taskKey)
     void options.run().catch((error) => {
-      reportBestEffortError('project/cached-analysis', error)
+      reportBestEffortError('analysis/cached-analysis', error)
     })
   }, 0)
   timer.unref?.()
@@ -911,31 +911,31 @@ export async function prewarmRuntimeAnalysisSession(
 }
 
 function trackFallbackAnalysisProject(project: Project): void {
-  if (fallbackAnalysisProjectIdByProject.has(project)) {
+  if (fallbackAnalysisProgramIdByProject.has(project)) {
     return
   }
 
-  fallbackAnalysisProjectIdCounter += 1
-  const projectId = fallbackAnalysisProjectIdCounter
+  fallbackAnalysisProgramIdCounter += 1
+  const analysisScopeId = fallbackAnalysisProgramIdCounter
 
-  fallbackAnalysisProjectIdByProject.set(project, projectId)
-  fallbackAnalysisProjectCacheRefs.set(projectId, new WeakRef(project))
-  fallbackAnalysisProjectFinalizationRegistry?.register(project, projectId)
+  fallbackAnalysisProgramIdByProject.set(project, analysisScopeId)
+  fallbackAnalysisProgramCacheRefs.set(analysisScopeId, new WeakRef(project))
+  fallbackAnalysisProgramFinalizationRegistry?.register(project, analysisScopeId)
 }
 
-function createFallbackProjectFileCache<Type>(
+function createFallbackProgramFileCache<Type>(
   project: Project,
   fileName: string,
   cacheName: string,
   compute: () => Type | Promise<Type>,
   options?: {
     deps?:
-      | ProjectCacheDependency[]
-      | ((value: Type) => ProjectCacheDependency[])
+      | ProgramCacheDependency[]
+      | ((value: Type) => ProgramCacheDependency[])
   }
 ): Promise<Type> {
   trackFallbackAnalysisProject(project)
-  return createProjectFileCacheBase(
+  return createProgramFileCacheBase(
     project,
     fileName,
     cacheName,
@@ -947,10 +947,10 @@ function createFallbackProjectFileCache<Type>(
 function forEachFallbackAnalysisProject(
   callback: (project: Project) => void
 ): void {
-  for (const [projectId, projectRef] of fallbackAnalysisProjectCacheRefs) {
+  for (const [analysisScopeId, projectRef] of fallbackAnalysisProgramCacheRefs) {
     const project = projectRef.deref()
     if (!project) {
-      fallbackAnalysisProjectCacheRefs.delete(projectId)
+      fallbackAnalysisProgramCacheRefs.delete(analysisScopeId)
       continue
     }
 
@@ -960,13 +960,13 @@ function forEachFallbackAnalysisProject(
 
 function invalidateFallbackAnalysisCachePaths(paths: Iterable<string>): void {
   forEachFallbackAnalysisProject((project) => {
-    invalidateProjectFileCachePaths(project, paths)
+    invalidateProgramFileCachePaths(project, paths)
   })
 }
 
 function invalidateFallbackAnalysisCacheAll(): void {
   forEachFallbackAnalysisProject((project) => {
-    invalidateProjectFileCache(project)
+    invalidateProgramFileCache(project)
   })
 }
 
@@ -1325,7 +1325,7 @@ function resolveModuleSpecifierSourceFilePathUncached(
       return resolvedSourceFile?.getFilePath() ?? resolvedFileName
     }
   } catch (error) {
-    reportBestEffortError('project/cached-analysis', error)
+    reportBestEffortError('analysis/cached-analysis', error)
   }
 
   return undefined
@@ -1391,7 +1391,7 @@ async function resolveModuleSpecifierSourceFilePath(
       persist: true,
     },
     async (context) => {
-      await recordProjectConfigDependency(context, runtimeCacheStore, project)
+      await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
       await recordFileDependencyIfPossible(
         context,
         runtimeCacheStore,
@@ -1544,7 +1544,7 @@ function getOrAddProjectSourceFile(
       return addedSourceFile
     }
   } catch (error) {
-    reportBestEffortError('project/cached-analysis', error)
+    reportBestEffortError('analysis/cached-analysis', error)
   }
 
   return project.getSourceFile(filePath)
@@ -2347,7 +2347,7 @@ async function getCachedRuntimeTypeScriptDependencyAnalysis(
       persist: true,
     },
     async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -2574,7 +2574,7 @@ async function recordFileDependencyIfPossible(
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
     await context.recordFileDep(absolutePath)
   } catch (error) {
-    reportBestEffortError('project/cached-analysis', error)
+    reportBestEffortError('analysis/cached-analysis', error)
   }
 }
 
@@ -2591,11 +2591,11 @@ async function recordDirectoryDependencyIfPossible(
     const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(path)
     await context.recordDirectoryDep(absolutePath)
   } catch (error) {
-    reportBestEffortError('project/cached-analysis', error)
+    reportBestEffortError('analysis/cached-analysis', error)
   }
 }
 
-async function resolveProjectConfigDependencyVersion(options: {
+async function resolveProgramConfigDependencyVersion(options: {
   runtimeCacheStore: RuntimeAnalysisCacheStore
   configFilePath: string
 }): Promise<{ name: string; version: string } | undefined> {
@@ -2609,7 +2609,7 @@ async function resolveProjectConfigDependencyVersion(options: {
       normalizedConfigPath
     )
     const dependencyKey = `${runtimeCacheStore.snapshot.id}:${normalizedConfigPath}`
-    const cached = projectConfigDependencyVersionByKey.get(dependencyKey)
+    const cached = programConfigDependencyVersionByKey.get(dependencyKey)
     if (cached && cached.contentId === contentId) {
       return {
         name: `project-config:${normalizedConfigPath}`,
@@ -2623,10 +2623,10 @@ async function resolveProjectConfigDependencyVersion(options: {
         await runtimeCacheStore.snapshot.readFile(normalizedConfigPath)
       version = `${HASH_STRING_ALGORITHM}:${hashString(fileContents)}:${fileContents.length}`
     } catch (error) {
-      reportBestEffortError('project/cached-analysis', error)
+      reportBestEffortError('analysis/cached-analysis', error)
     }
 
-    projectConfigDependencyVersionByKey.set(dependencyKey, {
+    programConfigDependencyVersionByKey.set(dependencyKey, {
       contentId,
       version,
     })
@@ -2640,7 +2640,7 @@ async function resolveProjectConfigDependencyVersion(options: {
   }
 }
 
-async function recordProjectConfigDependency(
+async function recordProgramCompilerOptionsDependency(
   context: CacheStoreComputeContext,
   runtimeCacheStore: RuntimeAnalysisCacheStore,
   project: Project
@@ -2653,17 +2653,17 @@ async function recordProjectConfigDependency(
     return
   }
 
-  const projectConfigDependency = await resolveProjectConfigDependencyVersion({
+  const programConfigDependency = await resolveProgramConfigDependencyVersion({
     runtimeCacheStore,
     configFilePath: compilerOptions.configFilePath,
   })
-  if (!projectConfigDependency) {
+  if (!programConfigDependency) {
     return
   }
 
   context.recordConstDep(
-    projectConfigDependency.name,
-    projectConfigDependency.version
+    programConfigDependency.name,
+    programConfigDependency.version
   )
 }
 
@@ -2758,14 +2758,14 @@ function getCacheDepKeyKindForProfile(depKey: string): string {
     try {
       constName = decodeURIComponent(encodedConstName)
     } catch (error) {
-      reportBestEffortError('project/cached-analysis', error)
+      reportBestEffortError('analysis/cached-analysis', error)
     }
 
     if (
-      constName === RUNTIME_ANALYSIS_CACHE_CONFIG.projectCompilerOptionsDependency ||
-      constName.startsWith(`${RUNTIME_ANALYSIS_CACHE_CONFIG.projectCompilerOptionsDependency}:`)
+      constName === RUNTIME_ANALYSIS_CACHE_CONFIG.programCompilerOptionsDependency ||
+      constName.startsWith(`${RUNTIME_ANALYSIS_CACHE_CONFIG.programCompilerOptionsDependency}:`)
     ) {
-      return 'const:project:compiler-options'
+      return 'const:program:compiler-options'
     }
     if (constName === RUNTIME_ANALYSIS_CACHE_CONFIG.versionDependency) {
       return 'const:runtime-analysis-cache-version'
@@ -3099,7 +3099,7 @@ async function getCachedRuntimeTypeScriptDependencyFingerprint(
       persist: true,
     },
     async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -3276,7 +3276,7 @@ function createRuntimeFileExportsCacheNodeKey(
 function toFileExportsDependencies(
   filePath: string,
   fileExports: ModuleExport[]
-): ProjectCacheDependency[] {
+): ProgramCacheDependency[] {
   const dependencyPaths = new Set<string>([filePath])
 
   for (const fileExport of fileExports) {
@@ -3297,7 +3297,7 @@ function createFallbackProjectTypeScriptDependencies(
   project: Project,
   filePath: string,
   compilerOptionsVersion: string
-): ProjectCacheDependency[] {
+): ProgramCacheDependency[] {
   const dependencyPaths = new Set<string>([filePath])
 
   for (const dependencyPath of collectFallbackProjectTypeScriptDependencyFilePaths(
@@ -3314,7 +3314,7 @@ function createFallbackProjectTypeScriptDependencies(
     })),
     {
       kind: 'const' as const,
-      name: 'project:compiler-options',
+      name: 'program:compiler-options',
       version: compilerOptionsVersion,
     },
   ]
@@ -3388,7 +3388,7 @@ export async function getCachedFileExports(
         ...swrReadConfig,
       },
       async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -3429,7 +3429,7 @@ export async function getCachedFileExports(
     )
   }
 
-  return createFallbackProjectFileCache(
+  return createFallbackProgramFileCache(
     project,
     filePath,
     RUNTIME_ANALYSIS_CACHE_NAMES.fileExports,
@@ -3470,7 +3470,7 @@ export async function getCachedOutlineRanges(
         ...swrReadConfig,
       },
       async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -3482,7 +3482,7 @@ export async function getCachedOutlineRanges(
     )
   }
 
-  return createFallbackProjectFileCache(
+  return createFallbackProgramFileCache(
     project,
     filePath,
     RUNTIME_ANALYSIS_CACHE_NAMES.outlineRanges,
@@ -3537,7 +3537,7 @@ export async function getCachedFileExportMetadata(
         ...swrReadConfig,
       },
       async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -3557,7 +3557,7 @@ export async function getCachedFileExportMetadata(
     )
   }
 
-  return createFallbackProjectFileCache(
+  return createFallbackProgramFileCache(
     project,
     options.filePath,
     toFileExportMetadataCacheName(options.name, options.position, options.kind),
@@ -3625,7 +3625,7 @@ export async function getCachedFileExportStaticValue(
         ...swrReadConfig,
       },
       async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -3653,7 +3653,7 @@ export async function getCachedFileExportStaticValue(
     )
   }
 
-  return createFallbackProjectFileCache(
+  return createFallbackProgramFileCache(
     project,
     options.filePath,
     toFileExportStaticValueCacheName(options.position, options.kind),
@@ -3719,9 +3719,9 @@ export async function getCachedFileExportText(
         ...swrReadConfig,
       },
       async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         if (options.includeDependencies) {
-          invalidateProjectFileCache(
+          invalidateProgramFileCache(
             project,
             options.filePath,
             RUNTIME_ANALYSIS_CACHE_NAMES.fileExportsText
@@ -3768,7 +3768,7 @@ export async function getCachedFileExportText(
     return result.text
   }
 
-  return createFallbackProjectFileCache(
+  return createFallbackProgramFileCache(
     project,
     options.filePath,
     toFileExportTextCacheName(options.position, options.kind),
@@ -3833,7 +3833,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
           ...swrReadConfig,
         },
         async (context) => {
-          await recordProjectConfigDependency(
+          await recordProgramCompilerOptionsDependency(
             context,
             runtimeCacheStore,
             project
@@ -3878,7 +3878,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
     }
   }
 
-  return createFallbackProjectFileCache(
+  return createFallbackProgramFileCache(
     project,
     options.filePath,
     toResolvedTypeAtLocationWithDependenciesCacheName(
@@ -3908,7 +3908,7 @@ export async function resolveCachedTypeAtLocationWithDependencies(
           })),
           {
             kind: 'const' as const,
-            name: 'project:compiler-options',
+            name: 'program:compiler-options',
             version: compilerOptionsVersion,
           },
         ]
@@ -3947,7 +3947,7 @@ export async function transpileCachedSourceFile(
         ...swrReadConfig,
       },
       async (context) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -3967,7 +3967,7 @@ export async function transpileCachedSourceFile(
     )
   }
 
-  return createFallbackProjectFileCache(
+  return createFallbackProgramFileCache(
     project,
     filePath,
     RUNTIME_ANALYSIS_CACHE_NAMES.transpileSourceFile,
@@ -4060,7 +4060,7 @@ export async function getCachedSourceTextMetadata(
       const computeSourceTextMetadata = async (
         context: CacheStoreComputeContext
       ) => {
-        await recordProjectConfigDependency(context, runtimeCacheStore, project)
+        await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
         await recordFileDependencyIfPossible(
           context,
           runtimeCacheStore,
@@ -4342,7 +4342,7 @@ export async function getCachedTokens(
         }
       }
 
-      await recordProjectConfigDependency(context, runtimeCacheStore, project)
+      await recordProgramCompilerOptionsDependency(context, runtimeCacheStore, project)
       await recordFileDependencyIfPossible(
         context,
         runtimeCacheStore,

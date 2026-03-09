@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import { Buffer } from 'node:buffer'
 
 import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
-import { resetRuntimeAnalysisSessionsForTests } from '../project/runtime-analysis-session.ts'
+import { resetRuntimeAnalysisSessionsForTests } from '../analysis/runtime-analysis-session.ts'
 import { disposeDefaultCacheStorePersistence } from './CacheSqlite.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem'
 

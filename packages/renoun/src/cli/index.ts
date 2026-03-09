@@ -95,7 +95,7 @@ if (firstArgument === 'validate') {
 ) {
   const [{ createServer }, { getDebugLogger }, { createDefaultPrewarmOptions, runPrewarmSafely }] =
     await Promise.all([
-      import('../project/server.ts'),
+      import('../analysis/server.ts'),
       import('../utils/debug.ts'),
       import('./prewarm-runner.ts'),
     ])
@@ -320,7 +320,7 @@ if (firstArgument === 'validate') {
 } else if (firstArgument === 'watch') {
   const [{ createServer }, { getDebugLogger }, { createDefaultPrewarmOptions, runPrewarmSafely }] =
     await Promise.all([
-      import('../project/server.ts'),
+      import('../analysis/server.ts'),
       import('../utils/debug.ts'),
       import('./prewarm-runner.ts'),
     ])

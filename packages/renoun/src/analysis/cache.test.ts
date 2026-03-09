@@ -3,22 +3,22 @@ import { resolve } from 'node:path'
 import { afterEach, describe, expect, test } from 'vitest'
 
 import {
-  configureProjectCacheRuntime,
-  createProjectFileCache,
-  invalidateProjectFileCache,
-  invalidateProjectFileCachePaths,
-  resetProjectCacheRuntimeConfiguration,
+  configureAnalysisCacheRuntime,
+  createProgramFileCache,
+  invalidateProgramFileCache,
+  invalidateProgramFileCachePaths,
+  resetAnalysisCacheRuntimeConfiguration,
 } from './cache.ts'
 import {
-  disposeProjectWatchers,
-  getProject,
-  invalidateProjectCachesByPath,
-} from './get-project.ts'
+  disposeAnalysisWatchers,
+  getProgram,
+  invalidateProgramCachesByPath,
+} from './get-program.ts'
 import type { Project } from '../utils/ts-morph.ts'
 
 describe('project file cache', () => {
   afterEach(() => {
-    resetProjectCacheRuntimeConfiguration()
+    resetAnalysisCacheRuntimeConfiguration()
   })
 
   test('invalidates all file cache entries when a file path is invalidated', async () => {
@@ -26,7 +26,7 @@ describe('project file cache', () => {
     const filePath = '/project/src/index.ts'
     let calls = 0
 
-    const valueA = await createProjectFileCache(
+    const valueA = await createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
@@ -35,7 +35,7 @@ describe('project file cache', () => {
         return `value-${calls}`
       }
     )
-    const valueB = await createProjectFileCache(
+    const valueB = await createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
@@ -46,9 +46,9 @@ describe('project file cache', () => {
     expect(valueB).toBe('value-1')
     expect(calls).toBe(1)
 
-    invalidateProjectFileCache(project, filePath)
+    invalidateProgramFileCache(project, filePath)
 
-    const valueAfter = await createProjectFileCache(
+    const valueAfter = await createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
@@ -67,7 +67,7 @@ describe('project file cache', () => {
     const filePath = '/project/src/index.ts'
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       filePath,
       'constOnly',
@@ -86,9 +86,9 @@ describe('project file cache', () => {
       }
     )
 
-    invalidateProjectFileCache(project, filePath)
+    invalidateProgramFileCache(project, filePath)
 
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       filePath,
       'constOnly',
@@ -119,18 +119,18 @@ describe('project file cache', () => {
     let firstCalls = 0
     let secondCalls = 0
 
-    await createProjectFileCache(project, firstPath, 'fileExportsText', () => {
+    await createProgramFileCache(project, firstPath, 'fileExportsText', () => {
       firstCalls += 1
       return `first-${firstCalls}`
     })
-    await createProjectFileCache(project, secondPath, 'fileExportsText', () => {
+    await createProgramFileCache(project, secondPath, 'fileExportsText', () => {
       secondCalls += 1
       return `second-${secondCalls}`
     })
 
-    invalidateProjectFileCachePaths(project, [firstPath, secondPath])
+    invalidateProgramFileCachePaths(project, [firstPath, secondPath])
 
-    const firstValue = await createProjectFileCache(
+    const firstValue = await createProgramFileCache(
       project,
       firstPath,
       'fileExportsText',
@@ -139,7 +139,7 @@ describe('project file cache', () => {
         return `first-${firstCalls}`
       }
     )
-    const secondValue = await createProjectFileCache(
+    const secondValue = await createProgramFileCache(
       project,
       secondPath,
       'fileExportsText',
@@ -160,18 +160,18 @@ describe('project file cache', () => {
     let firstCalls = 0
     let secondCalls = 0
 
-    await createProjectFileCache(project, firstPath, 'summary', () => {
+    await createProgramFileCache(project, firstPath, 'summary', () => {
       firstCalls += 1
       return `first-${firstCalls}`
     })
-    await createProjectFileCache(project, secondPath, 'summary', () => {
+    await createProgramFileCache(project, secondPath, 'summary', () => {
       secondCalls += 1
       return `second-${secondCalls}`
     })
 
-    invalidateProjectFileCache(project, '/project/src/components')
+    invalidateProgramFileCache(project, '/project/src/components')
 
-    const firstValue = await createProjectFileCache(
+    const firstValue = await createProgramFileCache(
       project,
       firstPath,
       'summary',
@@ -180,7 +180,7 @@ describe('project file cache', () => {
         return `first-${firstCalls}`
       }
     )
-    const secondValue = await createProjectFileCache(
+    const secondValue = await createProgramFileCache(
       project,
       secondPath,
       'summary',
@@ -201,7 +201,7 @@ describe('project file cache', () => {
     let fileExportsCalls = 0
     let fileMetadataCalls = 0
 
-    const fileExportsText = await createProjectFileCache(
+    const fileExportsText = await createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
@@ -211,7 +211,7 @@ describe('project file cache', () => {
       }
     )
 
-    const fileMetadata = await createProjectFileCache(
+    const fileMetadata = await createProgramFileCache(
       project,
       filePath,
       'fileMetadata',
@@ -226,9 +226,9 @@ describe('project file cache', () => {
     expect(fileExportsCalls).toBe(1)
     expect(fileMetadataCalls).toBe(1)
 
-    invalidateProjectFileCache(project, filePath, 'fileExportsText')
+    invalidateProgramFileCache(project, filePath, 'fileExportsText')
 
-    const cachedMetadata = await createProjectFileCache(
+    const cachedMetadata = await createProgramFileCache(
       project,
       filePath,
       'fileMetadata',
@@ -237,7 +237,7 @@ describe('project file cache', () => {
         return `metadata-${fileMetadataCalls}`
       }
     )
-    const refreshedFileExportsText = await createProjectFileCache(
+    const refreshedFileExportsText = await createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
@@ -254,31 +254,31 @@ describe('project file cache', () => {
   })
 
   test('uses runtime cache capacity override', async () => {
-    configureProjectCacheRuntime({ maxEntries: 2 })
+    configureAnalysisCacheRuntime({ maxEntries: 2 })
 
     const project = {} as unknown as Project
     let alphaCalls = 0
     let betaCalls = 0
     let gammaCalls = 0
 
-    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+    await createProgramFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
       alphaCalls += 1
       return `alpha-${alphaCalls}`
     })
-    await createProjectFileCache(project, '/project/src/beta.ts', 'beta', () => {
+    await createProgramFileCache(project, '/project/src/beta.ts', 'beta', () => {
       betaCalls += 1
       return `beta-${betaCalls}`
     })
-    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+    await createProgramFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
       alphaCalls += 1
       return `alpha-${alphaCalls}`
     })
-    await createProjectFileCache(project, '/project/src/gamma.ts', 'gamma', () => {
+    await createProgramFileCache(project, '/project/src/gamma.ts', 'gamma', () => {
       gammaCalls += 1
       return `gamma-${gammaCalls}`
     })
 
-    const alphaAfter = await createProjectFileCache(
+    const alphaAfter = await createProgramFileCache(
       project,
       '/project/src/alpha.ts',
       'alpha',
@@ -287,7 +287,7 @@ describe('project file cache', () => {
         return `alpha-${alphaCalls}`
       }
     )
-    const betaAfter = await createProjectFileCache(
+    const betaAfter = await createProgramFileCache(
       project,
       '/project/src/beta.ts',
       'beta',
@@ -305,32 +305,32 @@ describe('project file cache', () => {
   })
 
   test('evicts least-recently-used entries when cache capacity is exceeded', async () => {
-    configureProjectCacheRuntime({ maxEntries: 2 })
+    configureAnalysisCacheRuntime({ maxEntries: 2 })
     const project = {} as unknown as Project
     let alphaCalls = 0
     let betaCalls = 0
     let gammaCalls = 0
 
-    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+    await createProgramFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
       alphaCalls += 1
       return `alpha-${alphaCalls}`
     })
-    await createProjectFileCache(project, '/project/src/beta.ts', 'beta', () => {
+    await createProgramFileCache(project, '/project/src/beta.ts', 'beta', () => {
       betaCalls += 1
       return `beta-${betaCalls}`
     })
 
-    await createProjectFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
+    await createProgramFileCache(project, '/project/src/alpha.ts', 'alpha', () => {
       alphaCalls += 1
       return `alpha-${alphaCalls}`
     })
 
-    await createProjectFileCache(project, '/project/src/gamma.ts', 'gamma', () => {
+    await createProgramFileCache(project, '/project/src/gamma.ts', 'gamma', () => {
       gammaCalls += 1
       return `gamma-${gammaCalls}`
     })
 
-    const alphaAfter = await createProjectFileCache(
+    const alphaAfter = await createProgramFileCache(
       project,
       '/project/src/alpha.ts',
       'alpha',
@@ -339,7 +339,7 @@ describe('project file cache', () => {
         return `alpha-${alphaCalls}`
       }
     )
-    const betaAfter = await createProjectFileCache(
+    const betaAfter = await createProgramFileCache(
       project,
       '/project/src/beta.ts',
       'beta',
@@ -363,7 +363,7 @@ describe('project file cache', () => {
     let secondCalls = 0
     let metadataCalls = 0
 
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       '/project/src/index.ts',
       'fileExportsText',
@@ -372,7 +372,7 @@ describe('project file cache', () => {
         return `exports-${firstCalls}`
       }
     )
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       '/project/src/index.ts',
       'fileMetadata',
@@ -381,7 +381,7 @@ describe('project file cache', () => {
         return `metadata-${metadataCalls}`
       }
     )
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       '/project/src/other.ts',
       'fileExportsText',
@@ -395,9 +395,9 @@ describe('project file cache', () => {
     expect(metadataCalls).toBe(1)
     expect(secondCalls).toBe(1)
 
-    invalidateProjectFileCache(project, undefined, 'fileExportsText')
+    invalidateProgramFileCache(project, undefined, 'fileExportsText')
 
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       '/project/src/index.ts',
       'fileMetadata',
@@ -406,7 +406,7 @@ describe('project file cache', () => {
         return `metadata-${metadataCalls}`
       }
     )
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       '/project/src/index.ts',
       'fileExportsText',
@@ -415,7 +415,7 @@ describe('project file cache', () => {
         return `exports-${firstCalls}`
       }
     )
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       '/project/src/other.ts',
       'fileExportsText',
@@ -434,7 +434,7 @@ describe('project file cache', () => {
     const project = {} as unknown as Project
 
     let calls = 0
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       '/project/src/index.ts',
       'fileExportsText',
@@ -444,9 +444,9 @@ describe('project file cache', () => {
       }
     )
 
-    invalidateProjectFileCache(project, 'fileExportsText')
+    invalidateProgramFileCache(project, 'fileExportsText')
 
-    const value = await createProjectFileCache(
+    const value = await createProgramFileCache(
       project,
       '/project/src/index.ts',
       'fileExportsText',
@@ -466,7 +466,7 @@ describe('project file cache', () => {
     const dependencyPath = 'LICENSE'
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -483,7 +483,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -502,9 +502,9 @@ describe('project file cache', () => {
     expect(second).toBe('value-1')
     expect(calls).toBe(1)
 
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
 
-    const third = await createProjectFileCache(
+    const third = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -532,7 +532,7 @@ describe('project file cache', () => {
     const dependencyPath = '/project/src/shared.ts'
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -549,7 +549,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -568,9 +568,9 @@ describe('project file cache', () => {
     expect(second).toBe('value-1')
     expect(calls).toBe(1)
 
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
 
-    const third = await createProjectFileCache(
+    const third = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -599,7 +599,7 @@ describe('project file cache', () => {
     const changedFilePath = '/project/src/components/button.tsx'
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       cacheFilePath,
       'component-index',
@@ -616,7 +616,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       cacheFilePath,
       'component-index',
@@ -635,9 +635,9 @@ describe('project file cache', () => {
     expect(second).toBe('value-1')
     expect(calls).toBe(1)
 
-    invalidateProjectFileCache(project, changedFilePath)
+    invalidateProgramFileCache(project, changedFilePath)
 
-    const third = await createProjectFileCache(
+    const third = await createProgramFileCache(
       project,
       cacheFilePath,
       'component-index',
@@ -666,7 +666,7 @@ describe('project file cache', () => {
     const unrelatedPath = '/project/src/other.ts'
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -684,9 +684,9 @@ describe('project file cache', () => {
       }
     )
 
-    invalidateProjectFileCache(project, unrelatedPath)
+    invalidateProgramFileCache(project, unrelatedPath)
 
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       cacheFilePath,
       'fileExportsText',
@@ -714,7 +714,7 @@ describe('project file cache', () => {
     const cacheFilePath = '/project/src/index.ts'
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       cacheFilePath,
       'schema',
@@ -732,7 +732,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       cacheFilePath,
       'schema',
@@ -747,7 +747,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const third = await createProjectFileCache(
+    const third = await createProgramFileCache(
       project,
       cacheFilePath,
       'schema',
@@ -778,7 +778,7 @@ describe('project file cache', () => {
     const dependencyPath = '/project/src/shared.ts'
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       cacheFilePath,
       'dynamic-deps',
@@ -802,7 +802,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       cacheFilePath,
       'dynamic-deps',
@@ -828,9 +828,9 @@ describe('project file cache', () => {
     expect(second.value).toBe('value-1')
     expect(calls).toBe(1)
 
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
 
-    const third = await createProjectFileCache(
+    const third = await createProgramFileCache(
       project,
       cacheFilePath,
       'dynamic-deps',
@@ -866,12 +866,12 @@ describe('project file cache', () => {
     let sourceCalls = 0
     let dependentCalls = 0
 
-    await createProjectFileCache(project, sourcePath, 'metadata', () => {
+    await createProgramFileCache(project, sourcePath, 'metadata', () => {
       sourceCalls += 1
       return `source-${sourceCalls}`
     })
 
-    const firstDependent = await createProjectFileCache(
+    const firstDependent = await createProgramFileCache(
       project,
       dependentPath,
       'summary',
@@ -889,7 +889,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const secondDependent = await createProjectFileCache(
+    const secondDependent = await createProgramFileCache(
       project,
       dependentPath,
       'summary',
@@ -910,9 +910,9 @@ describe('project file cache', () => {
     expect(sourceCalls).toBe(1)
     expect(dependentCalls).toBe(1)
 
-    invalidateProjectFileCache(project, sourcePath, 'metadata')
+    invalidateProgramFileCache(project, sourcePath, 'metadata')
 
-    const thirdDependent = await createProjectFileCache(
+    const thirdDependent = await createProgramFileCache(
       project,
       dependentPath,
       'summary',
@@ -942,7 +942,7 @@ describe('project file cache', () => {
     let sourceCalls = 0
     let dependentCalls = 0
 
-    await createProjectFileCache(
+    await createProgramFileCache(
       project,
       sourcePath,
       'metadata',
@@ -960,7 +960,7 @@ describe('project file cache', () => {
       }
     )
 
-    const firstDependent = await createProjectFileCache(
+    const firstDependent = await createProgramFileCache(
       project,
       dependentPath,
       'summary',
@@ -979,9 +979,9 @@ describe('project file cache', () => {
       }
     )
 
-    invalidateProjectFileCache(project, sourcePath)
+    invalidateProgramFileCache(project, sourcePath)
 
-    const secondDependent = await createProjectFileCache(
+    const secondDependent = await createProgramFileCache(
       project,
       dependentPath,
       'summary',
@@ -1014,7 +1014,7 @@ describe('project file cache', () => {
       releaseCompute = resolve
     })
 
-    const first = createProjectFileCache(
+    const first = createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
@@ -1024,7 +1024,7 @@ describe('project file cache', () => {
         return `value-${calls}`
       }
     )
-    const second = createProjectFileCache(
+    const second = createProgramFileCache(
       project,
       filePath,
       'fileExportsText',
@@ -1043,16 +1043,16 @@ describe('project file cache', () => {
   })
 
   test('invalidates descendant dependencies when parent paths are invalidated', async () => {
-    const project = getProject({
+    const project = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `rename-parent-${Date.now()}`,
+      analysisScopeId: `rename-parent-${Date.now()}`,
     })
     const cacheFilePath = `${process.cwd()}/src/consumer.ts`
     const oldDependencyPath = `${process.cwd()}/src/features/legacy.ts`
     const cacheName = `rename-summary-${Date.now()}`
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       cacheFilePath,
       cacheName,
@@ -1069,7 +1069,7 @@ describe('project file cache', () => {
         ],
       }
     )
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       cacheFilePath,
       cacheName,
@@ -1088,12 +1088,12 @@ describe('project file cache', () => {
     expect(second).toBe('value-1')
     expect(calls).toBe(1)
 
-    const affectedProjects = invalidateProjectCachesByPath(
+    const affectedProjects = invalidateProgramCachesByPath(
       `${process.cwd()}/src/features`
     )
     expect(affectedProjects).toBeGreaterThan(0)
 
-    const third = await createProjectFileCache(
+    const third = await createProgramFileCache(
       project,
       cacheFilePath,
       cacheName,
@@ -1121,7 +1121,7 @@ describe('project file cache', () => {
     const cacheName = `relative-path-invalidation-${Date.now()}`
     let calls = 0
 
-    const first = await createProjectFileCache(
+    const first = await createProgramFileCache(
       project,
       relativeFilePath,
       cacheName,
@@ -1130,7 +1130,7 @@ describe('project file cache', () => {
         return `value-${calls}`
       }
     )
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       relativeFilePath,
       cacheName,
@@ -1141,9 +1141,9 @@ describe('project file cache', () => {
     expect(second).toBe('value-1')
     expect(calls).toBe(1)
 
-    invalidateProjectFileCachePaths(project, [resolve(process.cwd())])
+    invalidateProgramFileCachePaths(project, [resolve(process.cwd())])
 
-    const third = await createProjectFileCache(
+    const third = await createProgramFileCache(
       project,
       relativeFilePath,
       cacheName,
@@ -1157,21 +1157,21 @@ describe('project file cache', () => {
     expect(calls).toBe(2)
   })
 
-  test('treats dot invalidation as a global project cache invalidation', async () => {
+  test('treats dot invalidation as a global program cache invalidation', async () => {
     const uniqueId = Date.now()
     const projectPath = `${process.cwd()}/src/dot-invalidation-${uniqueId}.ts`
     const cacheName = `dot-invalidation-${uniqueId}`
-    const project = getProject({
+    const project = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `dot-invalidation-${uniqueId}`,
+      analysisScopeId: `dot-invalidation-${uniqueId}`,
     })
     let calls = 0
 
-    const first = await createProjectFileCache(project, projectPath, cacheName, () => {
+    const first = await createProgramFileCache(project, projectPath, cacheName, () => {
       calls += 1
       return `value-${calls}`
     })
-    const second = await createProjectFileCache(
+    const second = await createProgramFileCache(
       project,
       projectPath,
       cacheName,
@@ -1182,10 +1182,10 @@ describe('project file cache', () => {
     expect(second).toBe('value-1')
     expect(calls).toBe(1)
 
-    const affectedProjects = invalidateProjectCachesByPath('.')
+    const affectedProjects = invalidateProgramCachesByPath('.')
     expect(affectedProjects).toBeGreaterThan(0)
 
-    const third = await createProjectFileCache(project, projectPath, cacheName, () => {
+    const third = await createProgramFileCache(project, projectPath, cacheName, () => {
       calls += 1
       return `value-${calls}`
     })
@@ -1194,20 +1194,20 @@ describe('project file cache', () => {
     expect(calls).toBe(2)
   })
 
-  test('does not reuse in-memory project cache values across projectId changes', async () => {
+  test('does not reuse in-memory project cache values across analysisScopeId changes', async () => {
     const uniqueId = Date.now()
     const filePath = `/virtual-project-id-${uniqueId}.ts`
     const cacheName = `project-id-isolation-${uniqueId}`
-    const projectA = getProject({
+    const projectA = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `project-a-${uniqueId}`,
+      analysisScopeId: `project-a-${uniqueId}`,
     })
 
     projectA.createSourceFile(filePath, 'export const value = 1', {
       overwrite: true,
     })
 
-    const firstValue = await createProjectFileCache(
+    const firstValue = await createProgramFileCache(
       projectA,
       filePath,
       cacheName,
@@ -1216,9 +1216,9 @@ describe('project file cache', () => {
 
     expect(firstValue).toBe('value-from-project-a')
 
-    const projectB = getProject({
+    const projectB = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `project-b-${uniqueId}`,
+      analysisScopeId: `project-b-${uniqueId}`,
     })
 
     expect(projectB).not.toBe(projectA)
@@ -1227,7 +1227,7 @@ describe('project file cache', () => {
       overwrite: true,
     })
 
-    const secondValue = await createProjectFileCache(
+    const secondValue = await createProgramFileCache(
       projectB,
       filePath,
       cacheName,
@@ -1236,7 +1236,7 @@ describe('project file cache', () => {
 
     expect(secondValue).toBe('value-from-project-b')
 
-    const firstValueAgain = await createProjectFileCache(
+    const firstValueAgain = await createProgramFileCache(
       projectA,
       filePath,
       cacheName,
@@ -1246,30 +1246,30 @@ describe('project file cache', () => {
     expect(firstValueAgain).toBe('value-from-project-a')
   })
 
-  test('clears tracked projects when disposing project watchers', async () => {
+  test('clears tracked programs when disposing analysis watchers', async () => {
     const uniqueId = Date.now()
     const projectRoot = `/virtual-project-registry-${uniqueId}`
     const tsConfigPath = `${projectRoot}/tsconfig.json`
     const projectPath = `${projectRoot}/src/example.ts`
-    const project = getProject({
+    const project = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-dispose-${uniqueId}`,
+      analysisScopeId: `watcher-dispose-${uniqueId}`,
       tsConfigFilePath: tsConfigPath,
     })
 
-    await createProjectFileCache(project, projectPath, `entry-${uniqueId}`, () => {
+    await createProgramFileCache(project, projectPath, `entry-${uniqueId}`, () => {
       return 'value'
     })
 
-    expect(invalidateProjectCachesByPath(projectPath)).toBeGreaterThan(0)
+    expect(invalidateProgramCachesByPath(projectPath)).toBeGreaterThan(0)
 
-    disposeProjectWatchers()
+    disposeAnalysisWatchers()
 
-    expect(invalidateProjectCachesByPath(projectPath)).toBe(0)
+    expect(invalidateProgramCachesByPath(projectPath)).toBe(0)
 
-    const recreatedProject = getProject({
+    const recreatedProject = getProgram({
       useInMemoryFileSystem: true,
-      projectId: `watcher-dispose-${uniqueId}`,
+      analysisScopeId: `watcher-dispose-${uniqueId}`,
       tsConfigFilePath: tsConfigPath,
     })
 

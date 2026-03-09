@@ -13,7 +13,7 @@ import {
   type FrontmatterParseResult,
 } from '@renoun/mdx/utils'
 
-import { getFileExportMetadata } from '../project/client.ts'
+import { getFileExportMetadata } from '../analysis/client.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {
@@ -6145,12 +6145,12 @@ export class Directory<
    * await new Directory({ path: 'components' }).getEntry('card') // JavaScriptFile
    *
    * // Nested lookup within an existing directory
-   * // src/project/server.ts
+   * // src/analysis/server.ts
    * const project = await new Directory({ path: 'src' }).getDirectory('project')
    * await project.getEntry('server') // JavaScriptFile
    *
    * // Finally, if no file is found, the directory is returned
-   * // src/project/index.tsx
+   * // src/analysis/index.tsx
    * await new Directory({ path: 'src' }).getEntry('project') // Directory
    * ```
    */

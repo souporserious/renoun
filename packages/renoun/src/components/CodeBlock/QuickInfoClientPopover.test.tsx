@@ -3,12 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 const mockGetQuickInfoAtPosition = vi.fn()
 const mockGetTokens = vi.fn()
 
-vi.mock('../../project/client.ts', () => ({
+vi.mock('../../analysis/client.ts', () => ({
   getQuickInfoAtPosition: (
     ...args: Parameters<typeof mockGetQuickInfoAtPosition>
   ) => mockGetQuickInfoAtPosition(...args),
   getTokens: (...args: Parameters<typeof mockGetTokens>) => mockGetTokens(...args),
-  hasRetainedProjectClientBrowserRuntime: () => false,
+  hasRetainedAnalysisClientBrowserRuntime: () => false,
 }))
 
 import { __TEST_ONLY__ } from './QuickInfoClientState.tsx'
@@ -20,7 +20,7 @@ type QuickInfoRequest = Parameters<
 const BASE_REQUEST: QuickInfoRequest = {
   filePath: '/tmp/history.ts',
   position: 42,
-  projectVersion: 'quick-info-cache-test:0:0',
+  analysisVersion: 'quick-info-cache-test:0:0',
   runtime: {
     id: 'quick-info-cache-test',
     port: '43123',
@@ -44,7 +44,7 @@ describe('QuickInfoClientPopover cache behavior', () => {
 
     await __TEST_ONLY__.getQuickInfoForRequest({
       ...BASE_REQUEST,
-      projectVersion: 'quick-info-cache-test:runtime',
+      analysisVersion: 'quick-info-cache-test:runtime',
       runtime,
     })
 
@@ -109,14 +109,14 @@ describe('QuickInfoClientPopover runtime selection', () => {
     }
 
     expect(
-      __TEST_ONLY__.resolveQuickInfoProjectVersion({
+      __TEST_ONLY__.resolveQuickInfoAnalysisVersion({
         browserRuntime: {
           id: 'quick-info-page-runtime',
           port: '43124',
           host: '127.0.0.1',
         },
         selectedRuntime: requestRuntime,
-        requestProjectVersion: 'quick-info-request-runtime:0:0',
+        requestAnalysisVersion: 'quick-info-request-runtime:0:0',
         refreshVersion: '8:3',
       })
     ).toBe('quick-info-request-runtime:0:0')
@@ -130,10 +130,10 @@ describe('QuickInfoClientPopover runtime selection', () => {
     }
 
     expect(
-      __TEST_ONLY__.resolveQuickInfoProjectVersion({
+      __TEST_ONLY__.resolveQuickInfoAnalysisVersion({
         browserRuntime: requestRuntime,
         selectedRuntime: requestRuntime,
-        requestProjectVersion: 'quick-info-request-runtime:0:0',
+        requestAnalysisVersion: 'quick-info-request-runtime:0:0',
         refreshVersion: '8:3',
       })
     ).toBe('quick-info-request-runtime:8:3')
@@ -147,10 +147,10 @@ describe('QuickInfoClientPopover runtime selection', () => {
     }
 
     expect(
-      __TEST_ONLY__.resolveQuickInfoProjectVersion({
+      __TEST_ONLY__.resolveQuickInfoAnalysisVersion({
         browserRuntime: undefined,
         selectedRuntime: requestRuntime,
-        requestProjectVersion: undefined,
+        requestAnalysisVersion: undefined,
         refreshVersion: '0:0',
       })
     ).toBe('quick-info-request-runtime:0:0')

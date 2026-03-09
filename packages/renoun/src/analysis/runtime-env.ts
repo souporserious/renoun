@@ -5,14 +5,14 @@ import {
   readNonEmptyProcessEnv,
 } from '../utils/env.ts'
 
-export interface ProjectServerRuntime {
+export interface AnalysisServerRuntime {
   port: string
   id: string
   host?: string
 }
 
 const serverRuntimeEnvListeners = new Set<
-  (runtime: ProjectServerRuntime | undefined) => void
+  (runtime: AnalysisServerRuntime | undefined) => void
 >()
 
 export function getServerPortFromProcessEnv(): string | undefined {
@@ -50,7 +50,7 @@ export function setServerIdProcessEnv(id: string): void {
 }
 
 export function getServerRuntimeFromProcessEnv():
-  | ProjectServerRuntime
+  | AnalysisServerRuntime
   | undefined {
   const port = getServerPortFromProcessEnv()
   const id = getServerIdFromProcessEnv()
@@ -68,7 +68,7 @@ export function getServerRuntimeFromProcessEnv():
 }
 
 export function onServerRuntimeEnvChange(
-  listener: (runtime: ProjectServerRuntime | undefined) => void
+  listener: (runtime: AnalysisServerRuntime | undefined) => void
 ): () => void {
   serverRuntimeEnvListeners.add(listener)
   return () => {
@@ -91,32 +91,32 @@ export function getServerPortForLogging(): string {
   return getServerPortFromProcessEnv() ?? 'unknown'
 }
 
-export function resolveProjectWatchersEnvOverride(): boolean | undefined {
-  return parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounProjectWatchers)
+export function resolveAnalysisWatchersEnvOverride(): boolean | undefined {
+  return parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounAnalysisWatchers)
 }
 
-export function resolveProjectClientRpcCacheEnabledFromEnv():
+export function resolveAnalysisClientRpcCacheEnabledFromEnv():
   | boolean
   | undefined {
   return parseBooleanProcessEnv(
-    PROCESS_ENV_KEYS.renounProjectClientRpcCache
+    PROCESS_ENV_KEYS.renounAnalysisClientRpcCache
   )
 }
 
-export function resolveProjectClientRpcCacheTtlMsFromEnv(
+export function resolveAnalysisClientRpcCacheTtlMsFromEnv(
   fallbackWhenMissing: number
 ): number {
   const parsed = parseNonNegativeIntegerProcessEnv(
-    PROCESS_ENV_KEYS.renounProjectClientRpcCacheTtlMs
+    PROCESS_ENV_KEYS.renounAnalysisClientRpcCacheTtlMs
   )
   return parsed ?? fallbackWhenMissing
 }
 
-export function resolveProjectRefreshNotificationsEnvOverride():
+export function resolveAnalysisRefreshNotificationsEnvOverride():
   | boolean
   | undefined {
   return parseBooleanProcessEnv(
-    PROCESS_ENV_KEYS.renounProjectRefreshNotifications
+    PROCESS_ENV_KEYS.renounAnalysisRefreshNotifications
   )
 }
 

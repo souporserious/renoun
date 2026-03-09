@@ -16,9 +16,9 @@ export {
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 export {
-  configureProjectCacheRuntime,
-  invalidateProjectFileCache,
-  resetProjectCacheRuntimeConfiguration,
+  configureAnalysisCacheRuntime,
+  invalidateProgramFileCache,
+  resetAnalysisCacheRuntimeConfiguration,
 } from './cache.ts'
 export { invalidateSharedFileTextPrefixCachePath } from './file-text-prefix-cache.ts'
-export { getProject, invalidateProjectCachesByPaths } from './get-project.ts'
+export { getProgram, invalidateProgramCachesByPaths } from './get-program.ts'

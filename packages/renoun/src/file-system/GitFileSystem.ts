@@ -704,7 +704,7 @@ export class GitFileSystem
     return false
   }
 
-  getProjectOptions() {
+  getAnalysisOptions() {
     this.#ensureRepoReadySync()
     return {
       tsConfigFilePath: this.getAbsolutePath(this.#tsConfigPath),

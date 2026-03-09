@@ -100,7 +100,7 @@ export class NodeFileSystem
     return true
   }
 
-  getProjectOptions() {
+  getAnalysisOptions() {
     return {
       tsConfigFilePath: this.#tsConfigPath,
     }

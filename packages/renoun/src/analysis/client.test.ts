@@ -6,8 +6,8 @@ import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 const mocks = vi.hoisted(() => {
   return {
     WebSocketClient: vi.fn(),
-    getProject: vi.fn(() => ({ mockedProject: true })),
-    invalidateProjectCachesByPaths: vi.fn(() => 0),
+    getProgram: vi.fn(() => ({ mockedProject: true })),
+    invalidateProgramCachesByPaths: vi.fn(() => 0),
     getCachedSourceTextMetadata: vi.fn(async () => ({
       value: 'local-result',
       language: 'txt',
@@ -22,10 +22,10 @@ const mocks = vi.hoisted(() => {
     invalidateRuntimeAnalysisCachePaths: vi.fn(),
     resolveCachedTypeAtLocationWithDependencies: vi.fn(),
     transpileCachedSourceFile: vi.fn(),
-    invalidateProjectFileCache: vi.fn(),
+    invalidateProgramFileCache: vi.fn(),
     invalidateSharedFileTextPrefixCachePath: vi.fn(),
-    configureProjectCacheRuntime: vi.fn(),
-    resetProjectCacheRuntimeConfiguration: vi.fn(),
+    configureAnalysisCacheRuntime: vi.fn(),
+    resetAnalysisCacheRuntimeConfiguration: vi.fn(),
   }
 })
 
@@ -33,9 +33,9 @@ vi.mock('./rpc/client.ts', () => ({
   WebSocketClient: mocks.WebSocketClient,
 }))
 
-vi.mock('./get-project.ts', () => ({
-  getProject: mocks.getProject,
-  invalidateProjectCachesByPaths: mocks.invalidateProjectCachesByPaths,
+vi.mock('./get-program.ts', () => ({
+  getProgram: mocks.getProgram,
+  invalidateProgramCachesByPaths: mocks.invalidateProgramCachesByPaths,
 }))
 
 vi.mock('./cached-analysis.ts', () => ({
@@ -55,10 +55,10 @@ vi.mock('./cached-analysis.ts', () => ({
 }))
 
 vi.mock('./cache.ts', () => ({
-  configureProjectCacheRuntime: mocks.configureProjectCacheRuntime,
-  invalidateProjectFileCache: mocks.invalidateProjectFileCache,
-  resetProjectCacheRuntimeConfiguration:
-    mocks.resetProjectCacheRuntimeConfiguration,
+  configureAnalysisCacheRuntime: mocks.configureAnalysisCacheRuntime,
+  invalidateProgramFileCache: mocks.invalidateProgramFileCache,
+  resetAnalysisCacheRuntimeConfiguration:
+    mocks.resetAnalysisCacheRuntimeConfiguration,
 }))
 
 vi.mock('./file-text-prefix-cache.ts', () => ({
@@ -66,29 +66,29 @@ vi.mock('./file-text-prefix-cache.ts', () => ({
     mocks.invalidateSharedFileTextPrefixCachePath,
 }))
 
-describe('project client transport guards', () => {
+describe('analysis client transport guards', () => {
   const originalEnvironment = captureProcessEnv([
     'RENOUN_SERVER_PORT',
     'RENOUN_SERVER_HOST',
     'RENOUN_SERVER_ID',
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',
-    'RENOUN_PROJECT_CLIENT_RPC_CACHE',
-    'RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS',
-    'RENOUN_PROJECT_REFRESH_NOTIFICATIONS',
+    'RENOUN_ANALYSIS_CLIENT_RPC_CACHE',
+    'RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS',
+    'RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS',
   ])
 
   beforeEach(() => {
     vi.resetModules()
     mocks.WebSocketClient.mockClear()
-    mocks.getProject.mockClear()
+    mocks.getProgram.mockClear()
     mocks.getCachedSourceTextMetadata.mockClear()
     mocks.invalidateRuntimeAnalysisCachePaths.mockClear()
     mocks.invalidateRuntimeAnalysisCachePath.mockClear()
-    mocks.invalidateProjectCachesByPaths.mockClear()
+    mocks.invalidateProgramCachesByPaths.mockClear()
     mocks.invalidateSharedFileTextPrefixCachePath.mockClear()
-    mocks.configureProjectCacheRuntime.mockClear()
-    mocks.resetProjectCacheRuntimeConfiguration.mockClear()
+    mocks.configureAnalysisCacheRuntime.mockClear()
+    mocks.resetAnalysisCacheRuntimeConfiguration.mockClear()
   })
 
   afterEach(() => {
@@ -106,7 +106,7 @@ describe('project client transport guards', () => {
     })
 
     expect(mocks.WebSocketClient).not.toHaveBeenCalled()
-    expect(mocks.getProject).toHaveBeenCalledTimes(1)
+    expect(mocks.getProgram).toHaveBeenCalledTimes(1)
     expect(mocks.getCachedSourceTextMetadata).toHaveBeenCalledTimes(1)
     expect(result).toEqual({
       value: 'local-result',
@@ -118,8 +118,8 @@ describe('project client transport guards', () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
-    delete process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
-    delete process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS']
+    delete process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE']
+    delete process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS']
 
     let resolveTypeCallCount = 0
     const callMethod = vi.fn(async (method: string) => {
@@ -159,8 +159,8 @@ describe('project client transport guards', () => {
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     delete process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
-    delete process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE']
-    delete process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS']
+    delete process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE']
+    delete process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS']
 
     let resolveTypeCallCount = 0
     const callMethod = vi.fn(async (method: string) => {
@@ -498,9 +498,9 @@ describe('project client transport guards', () => {
   test('invalidates dependency-aware RPC cache entries after source updates', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'false'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'false'
 
     let resolveTypeCallCount = 0
     const callMethod = vi.fn(async (method: string) => {
@@ -538,7 +538,7 @@ describe('project client transport guards', () => {
 
     expect(first).toMatchObject({ resolveTypeCallCount: 1 })
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
-    expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
+    expect(mocks.invalidateProgramCachesByPaths).toHaveBeenCalledWith([
       '/project/src/b.ts',
     ])
     expect(mocks.invalidateRuntimeAnalysisCachePath).toHaveBeenCalledWith(
@@ -552,9 +552,9 @@ describe('project client transport guards', () => {
   test('does not cache getFileExportText results when includeDependencies is enabled', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'false'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'false'
 
     let getFileExportTextCallCount = 0
     const callMethod = vi.fn(async (method: string) => {
@@ -574,7 +574,7 @@ describe('project client transport guards', () => {
     })
 
     const module = await import('./client.ts')
-    const projectOptions = {
+    const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
     const first = await module.getFileExportText(
@@ -582,14 +582,14 @@ describe('project client transport guards', () => {
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
     const second = await module.getFileExportText(
       '/project/src/a.ts',
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
 
     expect(first).toBe('export-text-1')
@@ -602,9 +602,9 @@ describe('project client transport guards', () => {
   test('caches getFileExportText with includeDependencies when refresh notifications are enabled', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let getFileExportTextCallCount = 0
@@ -640,7 +640,7 @@ describe('project client transport guards', () => {
     })
 
     const module = await import('./client.ts')
-    const projectOptions = {
+    const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
     const first = await module.getFileExportText(
@@ -648,14 +648,14 @@ describe('project client transport guards', () => {
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
     const second = await module.getFileExportText(
       '/project/src/a.ts',
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
 
     expect(first).toBe('export-text-1')
@@ -682,7 +682,7 @@ describe('project client transport guards', () => {
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
 
     expect(third).toBe('export-text-2')
@@ -694,9 +694,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate only matching includeDependencies export text cache entries', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     const getFileExportTextCallCountByFilePath = new Map<string, number>()
@@ -732,7 +732,7 @@ describe('project client transport guards', () => {
     })
 
     const module = await import('./client.ts')
-    const projectOptions = {
+    const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
     const firstA = await module.getFileExportText(
@@ -740,21 +740,21 @@ describe('project client transport guards', () => {
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
     const secondA = await module.getFileExportText(
       '/project/src/a.ts',
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
     const firstB = await module.getFileExportText(
       '/project/src/b.ts',
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
 
     expect(firstA).toBe('/project/src/a.ts::export-text-1')
@@ -782,14 +782,14 @@ describe('project client transport guards', () => {
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
     const secondB = await module.getFileExportText(
       '/project/src/b.ts',
       0,
       0 as never,
       true,
-      projectOptions
+      analysisOptions
     )
 
     expect(thirdA).toBe('/project/src/a.ts::export-text-2')
@@ -802,9 +802,9 @@ describe('project client transport guards', () => {
   test('caches getFileExportText results when includeDependencies is disabled', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'false'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'false'
 
     let getFileExportTextCallCount = 0
     const callMethod = vi.fn(async (method: string) => {
@@ -824,7 +824,7 @@ describe('project client transport guards', () => {
     })
 
     const module = await import('./client.ts')
-    const projectOptions = {
+    const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
     const first = await module.getFileExportText(
@@ -832,14 +832,14 @@ describe('project client transport guards', () => {
       0,
       0 as never,
       false,
-      projectOptions
+      analysisOptions
     )
     const second = await module.getFileExportText(
       '/project/src/a.ts',
       0,
       0 as never,
       false,
-      projectOptions
+      analysisOptions
     )
 
     expect(first).toBe('export-text-1')
@@ -852,9 +852,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate transpileSourceFile cache conservatively', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let transpileCallCount = 0
@@ -882,16 +882,16 @@ describe('project client transport guards', () => {
     })
 
     const module = await import('./client.ts')
-    const projectOptions = {
+    const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
     const first = await module.transpileSourceFile(
       '/project/src/a.ts',
-      projectOptions
+      analysisOptions
     )
     const second = await module.transpileSourceFile(
       '/project/src/a.ts',
-      projectOptions
+      analysisOptions
     )
 
     expect(first).toBe('transpiled-1')
@@ -915,7 +915,7 @@ describe('project client transport guards', () => {
 
     const third = await module.transpileSourceFile(
       '/project/src/a.ts',
-      projectOptions
+      analysisOptions
     )
 
     expect(third).toBe('transpiled-2')
@@ -927,9 +927,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate quick-info cache conservatively', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let quickInfoCallCount = 0
@@ -957,18 +957,18 @@ describe('project client transport guards', () => {
     })
 
     const module = await import('./client.ts')
-    const projectOptions = {
+    const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
     const first = await module.getQuickInfoAtPosition(
       '/project/src/a.ts',
       0,
-      projectOptions
+      analysisOptions
     )
     const second = await module.getQuickInfoAtPosition(
       '/project/src/a.ts',
       0,
-      projectOptions
+      analysisOptions
     )
 
     expect(first).toMatchObject({ text: 'quick-info-1' })
@@ -993,7 +993,7 @@ describe('project client transport guards', () => {
     const third = await module.getQuickInfoAtPosition(
       '/project/src/a.ts',
       0,
-      projectOptions
+      analysisOptions
     )
 
     expect(third).toMatchObject({ text: 'quick-info-2' })
@@ -1002,12 +1002,12 @@ describe('project client transport guards', () => {
     ).toHaveLength(2)
   })
 
-  test('refresh notifications invalidate conservative quick-info cache without process.cwd or projectOptions', async () => {
+  test('refresh notifications invalidate conservative quick-info cache without process.cwd or analysisOptions', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let quickInfoCallCount = 0
@@ -1083,9 +1083,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate source metadata cache conservatively', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let sourceMetadataCallCount = 0
@@ -1119,7 +1119,7 @@ describe('project client transport guards', () => {
     const request = {
       value: '<Button />',
       language: 'tsx' as const,
-      projectOptions: {
+      analysisOptions: {
         tsConfigFilePath: '/project/tsconfig.json',
       },
     }
@@ -1165,9 +1165,9 @@ describe('project client transport guards', () => {
   test('falls back to default RPC cache TTL when env value is invalid', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = 'invalid'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'false'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = 'invalid'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'false'
 
     let resolveTypeCallCount = 0
     const callMethod = vi.fn(async (method: string) => {
@@ -1205,9 +1205,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate dependency-aware RPC cache entries by response dependencies', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let resolveTypeCallCount = 0
@@ -1280,7 +1280,7 @@ describe('project client transport guards', () => {
     expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledWith([
       '/project/src/b.ts',
     ])
-    expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
+    expect(mocks.invalidateProgramCachesByPaths).toHaveBeenCalledWith([
       '/project/src/b.ts',
     ])
   })
@@ -1288,9 +1288,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate token cache conservatively', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let tokenCallCount = 0
@@ -1337,7 +1337,7 @@ describe('project client transport guards', () => {
       language: 'ts' as const,
       filePath: '/project/src/a.ts',
       theme: 'github-dark',
-      projectOptions: {
+      analysisOptions: {
         tsConfigFilePath: '/project/tsconfig.json',
       },
     }
@@ -1374,9 +1374,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate export RPC cache entries by response dependencies', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     const callCountByMethod = new Map<string, number>()
@@ -1535,9 +1535,9 @@ describe('project client transport guards', () => {
   test('refresh notifications prevent stale in-flight dependency-aware RPC results from being cached', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     let resolveTypeCallCount = 0
@@ -1636,9 +1636,9 @@ describe('project client transport guards', () => {
   test('refresh notifications invalidate only matching dependency-aware RPC cache entries', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-    process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const listeners = new Map<string, (payload: unknown) => void>()
     const resolveTypeCallCountByFilePath = new Map<string, number>()
@@ -1722,7 +1722,7 @@ describe('project client transport guards', () => {
     expect(mocks.invalidateRuntimeAnalysisCachePaths).toHaveBeenCalledWith([
       '/project/src/a.ts',
     ])
-    expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledWith([
+    expect(mocks.invalidateProgramCachesByPaths).toHaveBeenCalledWith([
       '/project/src/a.ts',
     ])
   })
@@ -1732,9 +1732,9 @@ describe('project client transport guards', () => {
     try {
       process.env['RENOUN_SERVER_PORT'] = '4545'
       process.env['RENOUN_SERVER_ID'] = 'server-id'
-      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-      process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+      process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+      process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+      process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
       const listeners = new Map<string, (payload: unknown) => void>()
       const callMethod = vi.fn(
@@ -1795,8 +1795,8 @@ describe('project client transport guards', () => {
       expect(
         mocks.invalidateRuntimeAnalysisCachePaths.mock.calls[0]?.[0]
       ).toEqual([resolve(process.cwd())])
-      expect(mocks.invalidateProjectCachesByPaths).toHaveBeenCalledTimes(1)
-      expect(mocks.invalidateProjectCachesByPaths.mock.calls[0]?.[0]).toEqual([
+      expect(mocks.invalidateProgramCachesByPaths).toHaveBeenCalledTimes(1)
+      expect(mocks.invalidateProgramCachesByPaths.mock.calls[0]?.[0]).toEqual([
         resolve(process.cwd()),
       ])
     } finally {
@@ -1808,7 +1808,7 @@ describe('project client transport guards', () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_HOST'] = '127.0.0.1'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
-    process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
     const firstListeners = new Map<string, (payload: unknown) => void>()
     let resolveFirstResync!: (value: {
@@ -1986,7 +1986,7 @@ describe('project client transport guards', () => {
     ])
     expect(secondCallMethod).toHaveBeenCalledWith('getOutlineRanges', {
       filePath: '/project/src/b.ts',
-      projectOptions: undefined,
+      analysisOptions: undefined,
     })
   })
 
@@ -1995,9 +1995,9 @@ describe('project client transport guards', () => {
     try {
       process.env['RENOUN_SERVER_PORT'] = '4545'
       process.env['RENOUN_SERVER_ID'] = 'server-id'
-      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE'] = 'true'
-      process.env['RENOUN_PROJECT_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
-      process.env['RENOUN_PROJECT_REFRESH_NOTIFICATIONS'] = 'true'
+      process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+      process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+      process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
 
       const listeners = new Map<string, (payload: unknown) => void>()
       const callMethod = vi.fn(

@@ -26,7 +26,7 @@ async function waitForQueuedColdStartTask(): Promise<void> {
   })
 }
 
-describe('project cached analysis runtime defaults', () => {
+describe('analysis cached analysis runtime defaults', () => {
   afterEach(() => {
     restoreProcessEnv(ORIGINAL_ENV)
     vi.restoreAllMocks()

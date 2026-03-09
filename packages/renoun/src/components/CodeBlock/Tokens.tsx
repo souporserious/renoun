@@ -2,7 +2,7 @@ import React, { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getSourceTextMetadata, getTokens } from '../../project/client.ts'
+import { getSourceTextMetadata, getTokens } from '../../analysis/client.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
@@ -13,7 +13,7 @@ import type { Languages } from '../../utils/get-language.ts'
 import {
   getSourceTextValueSignature,
   type SourceTextMetadata,
-} from '../../utils/get-source-text-metadata.ts'
+} from '../../analysis/query/source-text-metadata.ts'
 import type {
   Token,
   TokenDiagnostic,
@@ -40,8 +40,8 @@ import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 import {
   getServerRuntimeFromProcessEnv,
-  type ProjectServerRuntime,
-} from '../../project/runtime-env.ts'
+  type AnalysisServerRuntime,
+} from '../../analysis/runtime-env.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
 import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
@@ -539,7 +539,7 @@ interface RenderTokenOptions {
   lineIndex: number
   baseTokenClassName?: string
   filePath?: string
-  quickInfoRuntime?: ProjectServerRuntime
+  quickInfoRuntime?: AnalysisServerRuntime
   quickInfoValueSignature?: string
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
@@ -566,7 +566,7 @@ interface RenderWithAnnotationsOptions {
   value: string
   baseTokenClassName?: string
   filePath?: string
-  quickInfoRuntime?: ProjectServerRuntime
+  quickInfoRuntime?: AnalysisServerRuntime
   quickInfoValueSignature?: string
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors

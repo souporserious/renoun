@@ -295,11 +295,11 @@ function getProjectRootCandidates(params: unknown): readonly string[] {
   }
 
   const candidate = params as {
-    projectOptions?: {
+    analysisOptions?: {
       tsConfigFilePath?: unknown
     }
   }
-  const tsConfigFilePath = candidate.projectOptions?.tsConfigFilePath
+  const tsConfigFilePath = candidate.analysisOptions?.tsConfigFilePath
   if (typeof tsConfigFilePath === 'string' && tsConfigFilePath.length > 0) {
     roots.add(resolveClientPath(dirnameClientPath(tsConfigFilePath)))
   }
@@ -307,7 +307,7 @@ function getProjectRootCandidates(params: unknown): readonly string[] {
   return Array.from(roots)
 }
 
-export function rememberProjectRootCandidates(params: unknown): void {
+export function rememberWorkspaceRootCandidates(params: unknown): void {
   for (const rootCandidate of getProjectRootCandidates(params)) {
     observedProjectRootCandidates.add(rootCandidate)
   }
@@ -407,7 +407,7 @@ export function collectClientRpcDependencyPaths(
   const candidate = params as {
     filePath?: unknown
     sourcePath?: unknown
-    projectOptions?: {
+    analysisOptions?: {
       tsConfigFilePath?: unknown
     }
   }
@@ -428,7 +428,7 @@ export function collectClientRpcDependencyPaths(
   }
 
   for (const tsConfigFilePath of getCandidatePaths(
-    candidate.projectOptions?.tsConfigFilePath,
+    candidate.analysisOptions?.tsConfigFilePath,
     rootCandidates
   )) {
     dependencyPaths.add(tsConfigFilePath)

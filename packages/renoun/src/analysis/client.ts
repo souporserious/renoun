@@ -11,22 +11,22 @@ import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.ts'
 import type {
   GetSourceTextMetadataOptions,
   SourceTextMetadata,
-} from '../utils/get-source-text-metadata.ts'
+} from './query/source-text-metadata.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { QuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
-  getProjectClientBrowserRefreshVersion as getSharedProjectClientBrowserRefreshVersion,
-  getProjectClientBrowserRuntime as getSharedProjectClientBrowserRuntime,
-  getProjectServerRuntimeKey,
-  normalizeProjectServerRuntime,
-  parseProjectClientRefreshVersion,
-  onProjectClientBrowserRefreshVersionChange as onSharedProjectClientBrowserRefreshVersionChange,
-  onProjectClientBrowserRuntimeChange as onSharedProjectClientBrowserRuntimeChange,
-  setProjectClientBrowserRefreshVersion as setSharedProjectClientBrowserRefreshVersion,
-  setProjectClientBrowserRuntime as setSharedProjectClientBrowserRuntime,
+  getAnalysisClientBrowserRefreshVersion as getSharedAnalysisClientBrowserRefreshVersion,
+  getAnalysisClientBrowserRuntime as getSharedAnalysisClientBrowserRuntime,
+  getAnalysisServerRuntimeKey,
+  normalizeAnalysisServerRuntime,
+  parseAnalysisClientRefreshVersion,
+  onAnalysisClientBrowserRefreshVersionChange as onSharedAnalysisClientBrowserRefreshVersionChange,
+  onAnalysisClientBrowserRuntimeChange as onSharedAnalysisClientBrowserRuntimeChange,
+  setAnalysisClientBrowserRefreshVersion as setSharedAnalysisClientBrowserRefreshVersion,
+  setAnalysisClientBrowserRuntime as setSharedAnalysisClientBrowserRuntime,
 } from './browser-runtime.ts'
 import {
   CLIENT_CACHED_RPC_METHODS,
@@ -46,7 +46,7 @@ import {
   normalizeInvalidationPaths,
   pruneExpiredClientRpcCacheEntries,
   readClientRpcCacheEntry,
-  rememberProjectRootCandidates,
+  rememberWorkspaceRootCandidates,
   resetClientRpcCacheForRuntimeChange,
   setClientRpcCacheEntry,
   setClientRpcInFlightEntry,
@@ -69,16 +69,16 @@ import {
 import {
   getServerRuntimeFromProcessEnv,
   onServerRuntimeEnvChange,
-  resolveProjectClientRpcCacheEnabledFromEnv,
-  resolveProjectClientRpcCacheTtlMsFromEnv,
-  resolveProjectRefreshNotificationsEnvOverride,
+  resolveAnalysisClientRpcCacheEnabledFromEnv,
+  resolveAnalysisClientRpcCacheTtlMsFromEnv,
+  resolveAnalysisRefreshNotificationsEnvOverride,
   resolveServerRefreshNotificationsEffectiveFromEnv,
   resolveServerRefreshNotificationsEnvOverride,
 } from './runtime-env.ts'
-import type { ProjectServerRuntime } from './runtime-env.ts'
-import type { ProjectOptions } from './types.ts'
+import type { AnalysisServerRuntime } from './runtime-env.ts'
+import type { AnalysisOptions } from './types.ts'
 
-type ProjectClientServerModules = typeof import('#project-client-server')
+type AnalysisClientServerModules = typeof import('#analysis-client-server')
 
 interface ActiveClientState {
   client: WebSocketClient
@@ -102,20 +102,20 @@ let nextActiveClientGeneration = 0
 let hasSubscribedToServerRuntimeEnvChanges = false
 const pendingRefreshInvalidationPaths = new Set<string>()
 let isRefreshInvalidationFlushQueued = false
-let hasConnectedProjectServerClient = false
+let hasConnectedAnalysisServerClient = false
 let refreshResyncQueue: Promise<void> = Promise.resolve()
 let latestRefreshCursor = 0
-let explicitBrowserRuntime: ProjectServerRuntime | undefined
+let explicitBrowserRuntime: AnalysisServerRuntime | undefined
 const browserRuntimeRegistrations: Array<{
   token: symbol
-  runtime: ProjectServerRuntime
+  runtime: AnalysisServerRuntime
 }> = []
 const browserRefreshNotificationListeners = new Set<
   (message: RefreshNotificationMessage) => void
 >()
-let loadedProjectClientServerModules: ProjectClientServerModules | undefined
-let projectClientServerModulesPromise:
-  | Promise<ProjectClientServerModules>
+let loadedAnalysisClientServerModules: AnalysisClientServerModules | undefined
+let analysisClientServerModulesPromise:
+  | Promise<AnalysisClientServerModules>
   | undefined
 
 const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 30_000
@@ -128,17 +128,17 @@ const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
  * A monotonic version that advances as refresh notifications invalidate client
  * runtime state. UI caches can include this to avoid stale data after edits.
  */
-export function getProjectClientRefreshVersion(): string {
+export function getAnalysisClientRefreshVersion(): string {
   return `${latestRefreshCursor}:${getClientRpcInvalidationEpoch()}`
 }
 
-function notifyProjectClientRefreshVersionChanged(): void {
-  setSharedProjectClientBrowserRefreshVersion(getProjectClientRefreshVersion())
+function notifyAnalysisClientRefreshVersionChanged(): void {
+  setSharedAnalysisClientBrowserRefreshVersion(getAnalysisClientRefreshVersion())
 }
 
-function hydrateRefreshStateFromSharedBrowserVersion(): void {
-  const sharedVersion = parseProjectClientRefreshVersion(
-    getSharedProjectClientBrowserRefreshVersion()
+function hydrateRefreshStateFromSharedAnalysisBrowserVersion(): void {
+  const sharedVersion = parseAnalysisClientRefreshVersion(
+    getSharedAnalysisClientBrowserRefreshVersion()
   )
   const currentInvalidationEpoch = getClientRpcInvalidationEpoch()
   if (
@@ -159,7 +159,7 @@ function setLatestRefreshCursor(value: number): void {
   }
 
   latestRefreshCursor = normalizedValue
-  notifyProjectClientRefreshVersionChanged()
+  notifyAnalysisClientRefreshVersionChanged()
 }
 
 function bumpLatestRefreshCursor(value: number): void {
@@ -170,25 +170,25 @@ function bumpLatestRefreshCursor(value: number): void {
   setLatestRefreshCursor(Math.max(latestRefreshCursor, Math.floor(value)))
 }
 
-export function onProjectClientRefreshVersionChange(
+export function onAnalysisClientRefreshVersionChange(
   listener: (version: string) => void
 ): () => void {
-  return onSharedProjectClientBrowserRefreshVersionChange(listener)
+  return onSharedAnalysisClientBrowserRefreshVersionChange(listener)
 }
 
-export function getProjectClientBrowserRuntime():
-  | ProjectServerRuntime
+export function getAnalysisClientBrowserRuntime():
+  | AnalysisServerRuntime
   | undefined {
-  return getSharedProjectClientBrowserRuntime()
+  return getSharedAnalysisClientBrowserRuntime()
 }
 
-export function onProjectClientBrowserRuntimeChange(
-  listener: (runtime: ProjectServerRuntime | undefined) => void
+export function onAnalysisClientBrowserRuntimeChange(
+  listener: (runtime: AnalysisServerRuntime | undefined) => void
 ): () => void {
-  return onSharedProjectClientBrowserRuntimeChange(listener)
+  return onSharedAnalysisClientBrowserRuntimeChange(listener)
 }
 
-export function onProjectClientBrowserRefreshNotification(
+export function onAnalysisClientBrowserRefreshNotification(
   listener: (message: RefreshNotificationMessage) => void
 ): () => void {
   browserRefreshNotificationListeners.add(listener)
@@ -197,7 +197,7 @@ export function onProjectClientBrowserRefreshNotification(
   }
 }
 
-function notifyProjectClientBrowserRefreshNotification(
+function notifyAnalysisClientBrowserRefreshNotification(
   message: RefreshNotificationMessage
 ): void {
   for (const listener of browserRefreshNotificationListeners) {
@@ -205,11 +205,11 @@ function notifyProjectClientBrowserRefreshNotification(
   }
 }
 
-function emitProjectClientBrowserRefreshNotification(
+function emitAnalysisClientBrowserRefreshNotification(
   refreshCursor?: number,
   invalidationPaths: readonly string[] = []
 ): void {
-  notifyProjectClientBrowserRefreshNotification({
+  notifyAnalysisClientBrowserRefreshNotification({
     type: 'refresh',
     data: {
       ...(refreshCursor !== undefined ? { refreshCursor } : {}),
@@ -223,8 +223,8 @@ function emitProjectClientBrowserRefreshNotification(
   })
 }
 
-function getResolvedProjectClientBrowserRuntime():
-  | ProjectServerRuntime
+function getResolvedAnalysisClientBrowserRuntime():
+  | AnalysisServerRuntime
   | undefined {
   return (
     browserRuntimeRegistrations[browserRuntimeRegistrations.length - 1]?.runtime ??
@@ -242,23 +242,23 @@ function isCurrentActiveClientState(
   )
 }
 
-function applyProjectClientBrowserRuntime(
-  runtime?: ProjectServerRuntime
+function applyAnalysisClientBrowserRuntime(
+  runtime?: AnalysisServerRuntime
 ): void {
-  const normalizedRuntime = normalizeProjectServerRuntime(runtime)
-  const currentRuntime = getSharedProjectClientBrowserRuntime()
+  const normalizedRuntime = normalizeAnalysisServerRuntime(runtime)
+  const currentRuntime = getSharedAnalysisClientBrowserRuntime()
   const currentRuntimeKey = currentRuntime
-    ? getProjectServerRuntimeKey(currentRuntime)
+    ? getAnalysisServerRuntimeKey(currentRuntime)
     : undefined
   const nextRuntimeKey = normalizedRuntime
-    ? getProjectServerRuntimeKey(normalizedRuntime)
+    ? getAnalysisServerRuntimeKey(normalizedRuntime)
     : undefined
   const didRuntimeChange = currentRuntimeKey !== nextRuntimeKey
   const didSwitchFromExistingRuntime =
     didRuntimeChange && currentRuntimeKey !== undefined
 
   if (didRuntimeChange) {
-    setSharedProjectClientBrowserRuntime(normalizedRuntime)
+    setSharedAnalysisClientBrowserRuntime(normalizedRuntime)
   }
 
   if (typeof WebSocket === 'undefined') {
@@ -295,34 +295,34 @@ function applyProjectClientBrowserRuntime(
   attachClientRefreshSubscriptions(activeClientState)
 }
 
-export function setProjectClientBrowserRuntime(
-  runtime?: ProjectServerRuntime
+export function setAnalysisClientBrowserRuntime(
+  runtime?: AnalysisServerRuntime
 ): void {
-  explicitBrowserRuntime = normalizeProjectServerRuntime(runtime)
-  applyProjectClientBrowserRuntime(getResolvedProjectClientBrowserRuntime())
+  explicitBrowserRuntime = normalizeAnalysisServerRuntime(runtime)
+  applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
 }
 
-export function retainProjectClientBrowserRuntime(
-  runtime?: ProjectServerRuntime,
+export function retainAnalysisClientBrowserRuntime(
+  runtime?: AnalysisServerRuntime,
   options: {
     preferCurrentRuntime?: boolean
   } = {}
 ): () => void {
-  const normalizedRuntime = normalizeProjectServerRuntime(
+  const normalizedRuntime = normalizeAnalysisServerRuntime(
     options.preferCurrentRuntime === true
-      ? getSharedProjectClientBrowserRuntime() ?? runtime
+      ? getSharedAnalysisClientBrowserRuntime() ?? runtime
       : runtime
   )
   if (!normalizedRuntime) {
     return () => {}
   }
 
-  const token = Symbol('project-client-browser-runtime')
+  const token = Symbol('analysis-client-browser-runtime')
   browserRuntimeRegistrations.push({
     token,
     runtime: normalizedRuntime,
   })
-  applyProjectClientBrowserRuntime(getResolvedProjectClientBrowserRuntime())
+  applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
 
   return () => {
     const registrationIndex = browserRuntimeRegistrations.findIndex(
@@ -333,93 +333,93 @@ export function retainProjectClientBrowserRuntime(
     }
 
     browserRuntimeRegistrations.splice(registrationIndex, 1)
-    applyProjectClientBrowserRuntime(getResolvedProjectClientBrowserRuntime())
+    applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
   }
 }
 
-export function hasRetainedProjectClientBrowserRuntime(): boolean {
+export function hasRetainedAnalysisClientBrowserRuntime(): boolean {
   return browserRuntimeRegistrations.length > 0
 }
 
-export interface ProjectClientRuntimeOptions {
+export interface AnalysisClientRuntimeOptions {
   useRpcCache?: boolean
   rpcCacheTtlMs?: number
   consumeRefreshNotifications?: boolean
-  projectCacheMaxEntries?: number
+  analysisCacheMaxEntries?: number
 }
 
-const projectClientRuntimeOptions: ProjectClientRuntimeOptions = {}
+const analysisClientRuntimeOptions: AnalysisClientRuntimeOptions = {}
 
-function applyProjectCacheRuntimeOptions(
-  modules: ProjectClientServerModules
+function applyAnalysisCacheRuntimeOptions(
+  modules: AnalysisClientServerModules
 ): void {
-  if (projectClientRuntimeOptions.projectCacheMaxEntries !== undefined) {
-    modules.configureProjectCacheRuntime({
-      maxEntries: projectClientRuntimeOptions.projectCacheMaxEntries,
+  if (analysisClientRuntimeOptions.analysisCacheMaxEntries !== undefined) {
+    modules.configureAnalysisCacheRuntime({
+      maxEntries: analysisClientRuntimeOptions.analysisCacheMaxEntries,
     })
   }
 }
 
-async function loadProjectClientServerModules(): Promise<ProjectClientServerModules> {
-  if (loadedProjectClientServerModules) {
-    return loadedProjectClientServerModules
+async function loadAnalysisClientServerModules(): Promise<AnalysisClientServerModules> {
+  if (loadedAnalysisClientServerModules) {
+    return loadedAnalysisClientServerModules
   }
 
-  if (!projectClientServerModulesPromise) {
-    projectClientServerModulesPromise = import('#project-client-server').then(
+  if (!analysisClientServerModulesPromise) {
+    analysisClientServerModulesPromise = import('#analysis-client-server').then(
       (modules) => {
-        applyProjectCacheRuntimeOptions(modules)
-        loadedProjectClientServerModules = modules
+        applyAnalysisCacheRuntimeOptions(modules)
+        loadedAnalysisClientServerModules = modules
         return modules
       }
     )
   }
 
-  return projectClientServerModulesPromise
+  return analysisClientServerModulesPromise
 }
 
-function getLoadedProjectClientServerModules():
-  | ProjectClientServerModules
+function getLoadedAnalysisClientServerModules():
+  | AnalysisClientServerModules
   | undefined {
-  return loadedProjectClientServerModules
+  return loadedAnalysisClientServerModules
 }
 
-export function configureProjectClientRuntime(
-  options: ProjectClientRuntimeOptions
+export function configureAnalysisClientRuntime(
+  options: AnalysisClientRuntimeOptions
 ): void {
   if ('useRpcCache' in options) {
-    projectClientRuntimeOptions.useRpcCache = options.useRpcCache
+    analysisClientRuntimeOptions.useRpcCache = options.useRpcCache
   }
 
   if ('rpcCacheTtlMs' in options) {
-    projectClientRuntimeOptions.rpcCacheTtlMs = options.rpcCacheTtlMs
+    analysisClientRuntimeOptions.rpcCacheTtlMs = options.rpcCacheTtlMs
   }
 
   if ('consumeRefreshNotifications' in options) {
-    projectClientRuntimeOptions.consumeRefreshNotifications =
+    analysisClientRuntimeOptions.consumeRefreshNotifications =
       options.consumeRefreshNotifications
   }
 
-  if ('projectCacheMaxEntries' in options) {
-    projectClientRuntimeOptions.projectCacheMaxEntries =
-      options.projectCacheMaxEntries
-    const loadedServerModules = getLoadedProjectClientServerModules()
+  if ('analysisCacheMaxEntries' in options) {
+    analysisClientRuntimeOptions.analysisCacheMaxEntries =
+      options.analysisCacheMaxEntries
+    const loadedServerModules = getLoadedAnalysisClientServerModules()
     if (loadedServerModules) {
-      applyProjectCacheRuntimeOptions(loadedServerModules)
+      applyAnalysisCacheRuntimeOptions(loadedServerModules)
     }
   }
 }
 
-export function resetProjectClientRuntimeConfiguration(): void {
-  projectClientRuntimeOptions.useRpcCache = undefined
-  projectClientRuntimeOptions.rpcCacheTtlMs = undefined
-  projectClientRuntimeOptions.consumeRefreshNotifications = undefined
-  projectClientRuntimeOptions.projectCacheMaxEntries = undefined
-  getLoadedProjectClientServerModules()?.resetProjectCacheRuntimeConfiguration()
+export function resetAnalysisClientRuntimeConfiguration(): void {
+  analysisClientRuntimeOptions.useRpcCache = undefined
+  analysisClientRuntimeOptions.rpcCacheTtlMs = undefined
+  analysisClientRuntimeOptions.consumeRefreshNotifications = undefined
+  analysisClientRuntimeOptions.analysisCacheMaxEntries = undefined
+  getLoadedAnalysisClientServerModules()?.resetAnalysisCacheRuntimeConfiguration()
 }
 
-function getActiveProjectServerRuntime(): ProjectServerRuntime | undefined {
-  const browserRuntime = getSharedProjectClientBrowserRuntime()
+function getActiveAnalysisServerRuntime(): AnalysisServerRuntime | undefined {
+  const browserRuntime = getSharedAnalysisClientBrowserRuntime()
   if (browserRuntime) {
     return browserRuntime
   }
@@ -428,11 +428,11 @@ function getActiveProjectServerRuntime(): ProjectServerRuntime | undefined {
 }
 
 function shouldUseClientRpcCache(): boolean {
-  if (typeof projectClientRuntimeOptions.useRpcCache === 'boolean') {
-    return projectClientRuntimeOptions.useRpcCache
+  if (typeof analysisClientRuntimeOptions.useRpcCache === 'boolean') {
+    return analysisClientRuntimeOptions.useRpcCache
   }
 
-  const override = resolveProjectClientRpcCacheEnabledFromEnv()
+  const override = resolveAnalysisClientRpcCacheEnabledFromEnv()
   if (override !== undefined) {
     return override
   }
@@ -445,14 +445,14 @@ function shouldUseClientRpcCache(): boolean {
 }
 
 function getClientRpcCacheTtlMs(): number {
-  if (typeof projectClientRuntimeOptions.rpcCacheTtlMs === 'number') {
-    const normalizedTtl = Math.floor(projectClientRuntimeOptions.rpcCacheTtlMs)
+  if (typeof analysisClientRuntimeOptions.rpcCacheTtlMs === 'number') {
+    const normalizedTtl = Math.floor(analysisClientRuntimeOptions.rpcCacheTtlMs)
     return Number.isFinite(normalizedTtl) && normalizedTtl > 0
       ? normalizedTtl
       : 0
   }
 
-  return resolveProjectClientRpcCacheTtlMsFromEnv(DEFAULT_CLIENT_RPC_CACHE_TTL_MS)
+  return resolveAnalysisClientRpcCacheTtlMsFromEnv(DEFAULT_CLIENT_RPC_CACHE_TTL_MS)
 }
 
 function getActiveClientRuntimeScopeKey(): string | undefined {
@@ -468,20 +468,20 @@ function invalidateClientRpcStateByNormalizedPaths(
   invalidationScopeKey?: string
 ): void {
   invalidateClientRpcCacheByNormalizedPaths(normalizedPaths, invalidationScopeKey)
-  notifyProjectClientRefreshVersionChanged()
+  notifyAnalysisClientRefreshVersionChanged()
 }
 
 function invalidateAllClientRpcState(invalidationScopeKey?: string): void {
   invalidateAllClientRpcCache(invalidationScopeKey)
-  notifyProjectClientRefreshVersionChanged()
+  notifyAnalysisClientRefreshVersionChanged()
 }
 
 function resetClientRefreshStateForRuntimeChange(): void {
-  hydrateRefreshStateFromSharedBrowserVersion()
+  hydrateRefreshStateFromSharedAnalysisBrowserVersion()
   resetClientRpcCacheForRuntimeChange()
   pendingRefreshInvalidationPaths.clear()
   latestRefreshCursor = 0
-  notifyProjectClientRefreshVersionChanged()
+  notifyAnalysisClientRefreshVersionChanged()
 }
 
 function applyLoadedRuntimeRefreshInvalidations(runtimePaths: string[]): void {
@@ -489,10 +489,10 @@ function applyLoadedRuntimeRefreshInvalidations(runtimePaths: string[]): void {
     return
   }
 
-  const loadedServerModules = getLoadedProjectClientServerModules()
+  const loadedServerModules = getLoadedAnalysisClientServerModules()
   if (loadedServerModules) {
     loadedServerModules.invalidateRuntimeAnalysisCachePaths(runtimePaths)
-    loadedServerModules.invalidateProjectCachesByPaths(runtimePaths)
+    loadedServerModules.invalidateProgramCachesByPaths(runtimePaths)
     return
   }
 
@@ -500,9 +500,9 @@ function applyLoadedRuntimeRefreshInvalidations(runtimePaths: string[]): void {
     return
   }
 
-  void loadProjectClientServerModules().then((serverModules) => {
+  void loadAnalysisClientServerModules().then((serverModules) => {
     serverModules.invalidateRuntimeAnalysisCachePaths(runtimePaths)
-    serverModules.invalidateProjectCachesByPaths(runtimePaths)
+    serverModules.invalidateProgramCachesByPaths(runtimePaths)
   })
 }
 
@@ -539,13 +539,13 @@ async function callClientMethod<
   if (
     options.skipServerModulePreload !== true &&
     typeof window === 'undefined' &&
-    !loadedProjectClientServerModules
+    !loadedAnalysisClientServerModules
   ) {
-    await loadProjectClientServerModules().catch(() => undefined)
+    await loadAnalysisClientServerModules().catch(() => undefined)
   }
 
   const cacheParams = options.cacheParams ?? params
-  rememberProjectRootCandidates(params)
+  rememberWorkspaceRootCandidates(params)
 
   if (
     options.disableRpcCache === true ||
@@ -646,7 +646,7 @@ function queueRefreshResync(state: ActiveClientState): void {
         return
       }
 
-      hydrateRefreshStateFromSharedBrowserVersion()
+      hydrateRefreshStateFromSharedAnalysisBrowserVersion()
 
       for (
         let attempt = 1;
@@ -675,7 +675,7 @@ function queueRefreshResync(state: ActiveClientState): void {
               )
             }
             setLatestRefreshCursor(nextCursor ?? 0)
-            emitProjectClientBrowserRefreshNotification(nextCursor, paths)
+            emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
             return
           }
 
@@ -687,7 +687,7 @@ function queueRefreshResync(state: ActiveClientState): void {
             queueRefreshInvalidation(path)
           }
           if (paths.length > 0) {
-            emitProjectClientBrowserRefreshNotification(nextCursor, paths)
+            emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
           }
           return
         } catch {
@@ -699,7 +699,7 @@ function queueRefreshResync(state: ActiveClientState): void {
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
             applyRefreshInvalidations(fallbackPaths)
             setLatestRefreshCursor(0)
-            emitProjectClientBrowserRefreshNotification()
+            emitAnalysisClientBrowserRefreshNotification()
             return
           }
 
@@ -709,7 +709,7 @@ function queueRefreshResync(state: ActiveClientState): void {
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
             applyRefreshInvalidations(fallbackPaths)
             setLatestRefreshCursor(0)
-            emitProjectClientBrowserRefreshNotification(undefined, fallbackPaths)
+            emitAnalysisClientBrowserRefreshNotification(undefined, fallbackPaths)
             return
           }
 
@@ -743,8 +743,8 @@ function attachClientRefreshSubscriptions(
 
     state.rpcUnavailableUntil = 0
 
-    if (!hasConnectedProjectServerClient) {
-      hasConnectedProjectServerClient = true
+    if (!hasConnectedAnalysisServerClient) {
+      hasConnectedAnalysisServerClient = true
       return
     }
 
@@ -768,25 +768,25 @@ function attachClientRefreshSubscriptions(
     for (const path of paths) {
       queueRefreshInvalidation(path)
     }
-    notifyProjectClientBrowserRefreshNotification(message)
+    notifyAnalysisClientBrowserRefreshNotification(message)
   })
 
   if (options.resyncImmediately) {
-    hasConnectedProjectServerClient = true
+    hasConnectedAnalysisServerClient = true
     queueRefreshResync(state)
   }
 }
 
-function toServerRuntimeKey(runtime: ProjectServerRuntime): string {
-  return getProjectServerRuntimeKey(runtime) ?? `${runtime.id}:${runtime.port}`
+function toServerRuntimeKey(runtime: AnalysisServerRuntime): string {
+  return getAnalysisServerRuntimeKey(runtime) ?? `${runtime.id}:${runtime.port}`
 }
 
 function toRuntimeCacheScopeKey(runtimeKey: string): string {
   return `runtime:${runtimeKey}`
 }
 
-function createProjectBrowserClient(
-  runtime: ProjectServerRuntime,
+function createAnalysisBrowserClient(
+  runtime: AnalysisServerRuntime,
   runtimeKey: string,
   isCached: boolean
 ): BrowserRuntimeClientState {
@@ -814,17 +814,17 @@ function disposeBrowserClientState(
   try {
     state.client.removeAllListeners?.()
   } catch (error) {
-    reportBestEffortError('project/client', error)
+    reportBestEffortError('analysis/client', error)
   }
 
   try {
     state.client.close?.()
   } catch (error) {
-    reportBestEffortError('project/client', error)
+    reportBestEffortError('analysis/client', error)
   }
 }
 
-function disposeProjectBrowserClient(): void {
+function disposeAnalysisBrowserClient(): void {
   if (!cachedBrowserClientState) {
     return
   }
@@ -834,20 +834,20 @@ function disposeProjectBrowserClient(): void {
   disposeBrowserClientState(activeState)
 }
 
-function getProjectBrowserClientState(
-  requestedRuntime?: ProjectServerRuntime
+function getAnalysisBrowserClientState(
+  requestedRuntime?: AnalysisServerRuntime
 ): BrowserRuntimeClientState {
-  const runtime = normalizeProjectServerRuntime(
-    requestedRuntime ?? getSharedProjectClientBrowserRuntime()
+  const runtime = normalizeAnalysisServerRuntime(
+    requestedRuntime ?? getSharedAnalysisClientBrowserRuntime()
   )
-  const runtimeKey = getProjectServerRuntimeKey(runtime)
+  const runtimeKey = getAnalysisServerRuntimeKey(runtime)
   if (!runtime || !runtimeKey) {
-    disposeProjectBrowserClient()
-    throw new Error('[renoun] Missing active browser project runtime.')
+    disposeAnalysisBrowserClient()
+    throw new Error('[renoun] Missing active browser analysis runtime.')
   }
 
   if (!cachedBrowserClientState) {
-    return createProjectBrowserClient(runtime, runtimeKey, true)
+    return createAnalysisBrowserClient(runtime, runtimeKey, true)
   }
 
   if (cachedBrowserClientState.runtimeKey === runtimeKey) {
@@ -857,10 +857,10 @@ function getProjectBrowserClientState(
   if (cachedBrowserClientState.inFlightRequestCount === 0) {
     disposeBrowserClientState(cachedBrowserClientState)
     cachedBrowserClientState = undefined
-    return createProjectBrowserClient(runtime, runtimeKey, true)
+    return createAnalysisBrowserClient(runtime, runtimeKey, true)
   }
 
-  return createProjectBrowserClient(runtime, runtimeKey, false)
+  return createAnalysisBrowserClient(runtime, runtimeKey, false)
 }
 
 function disposeActiveClient(
@@ -885,18 +885,18 @@ function disposeActiveClient(
   try {
     state.client.removeAllListeners?.()
   } catch (error) {
-    reportBestEffortError('project/client', error)
+    reportBestEffortError('analysis/client', error)
   }
 
   try {
     state.client.close?.()
   } catch (error) {
-    reportBestEffortError('project/client', error)
+    reportBestEffortError('analysis/client', error)
   }
 }
 
 function createClientForRuntime(
-  runtime: ProjectServerRuntime
+  runtime: AnalysisServerRuntime
 ): ActiveClientState {
   const state: ActiveClientState = {
     client: new WebSocketClient(runtime.id, runtime),
@@ -911,7 +911,7 @@ function createClientForRuntime(
 }
 
 function replaceClientForRuntime(
-  runtime: ProjectServerRuntime,
+  runtime: AnalysisServerRuntime,
   options: {
     resyncImmediately?: boolean
     invalidateClientRpcState?: boolean
@@ -957,7 +957,7 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
 function getClient(): WebSocketClient | undefined {
   ensureServerRuntimeEnvChangeSubscription()
 
-  const serverRuntime = getActiveProjectServerRuntime()
+  const serverRuntime = getActiveAnalysisServerRuntime()
   const hadExistingClient = activeClientState !== undefined
   const nextRuntimeKey = serverRuntime
     ? toServerRuntimeKey(serverRuntime)
@@ -993,7 +993,7 @@ async function getReadyClient(): Promise<WebSocketClient | undefined> {
     return undefined
   }
 
-  // Browser callers cannot fall back to local project analysis.
+  // Browser callers cannot fall back to local in-process analysis.
   if (typeof window !== 'undefined') {
     return activeClient
   }
@@ -1036,7 +1036,7 @@ async function callBrowserRuntimeClientMethod<
 >(
   method: string,
   params: Params,
-  runtime: ProjectServerRuntime,
+  runtime: AnalysisServerRuntime,
   options: {
     cacheParams?: unknown
     disableRpcCache?: boolean
@@ -1071,7 +1071,7 @@ async function callBrowserRuntimeClientMethod<
     })
   }
 
-  const clientState = getProjectBrowserClientState(runtime)
+  const clientState = getAnalysisBrowserClientState(runtime)
   clientState.inFlightRequestCount += 1
 
   try {
@@ -1125,12 +1125,12 @@ function shouldConsumeRefreshNotifications(): boolean {
   }
 
   if (
-    typeof projectClientRuntimeOptions.consumeRefreshNotifications === 'boolean'
+    typeof analysisClientRuntimeOptions.consumeRefreshNotifications === 'boolean'
   ) {
-    return projectClientRuntimeOptions.consumeRefreshNotifications
+    return analysisClientRuntimeOptions.consumeRefreshNotifications
   }
 
-  const override = resolveProjectRefreshNotificationsEnvOverride()
+  const override = resolveAnalysisRefreshNotificationsEnvOverride()
   if (override !== undefined) {
     return override
   }
@@ -1153,23 +1153,23 @@ function shouldConsumeRefreshNotifications(): boolean {
  */
 export async function getSourceTextMetadata(
   options: DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
-    projectOptions?: ProjectOptions
+    analysisOptions?: AnalysisOptions
   }
 ): Promise<SourceTextMetadata> {
   const client = await getReadyClient()
   if (client) {
     return callClientMethod<
       DistributiveOmit<GetSourceTextMetadataOptions, 'project'> & {
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
       },
       SourceTextMetadata
     >(client, 'getSourceTextMetadata', options)
   }
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
-  const { projectOptions, ...getSourceTextMetadataOptions } = options
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const { analysisOptions, ...getSourceTextMetadataOptions } = options
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
 
   return serverModules.getCachedSourceTextMetadata(
     project,
@@ -1184,14 +1184,14 @@ export async function getSourceTextMetadata(
 export async function getQuickInfoAtPosition(
   filePath: string,
   position: number,
-  projectOptions?: ProjectOptions,
-  runtime?: ProjectServerRuntime,
+  analysisOptions?: AnalysisOptions,
+  runtime?: AnalysisServerRuntime,
   cacheKey?: string
 ): Promise<QuickInfoAtPosition | undefined> {
   const params = {
     filePath,
     position,
-    projectOptions,
+    analysisOptions,
   }
   const cacheParams =
     typeof cacheKey === 'string' && cacheKey.length > 0
@@ -1206,7 +1206,7 @@ export async function getQuickInfoAtPosition(
       {
         filePath: string
         position: number
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
       },
       QuickInfoAtPosition | undefined
     >('getQuickInfoAtPosition', params, runtime, {
@@ -1220,7 +1220,7 @@ export async function getQuickInfoAtPosition(
       {
         filePath: string
         position: number
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
       },
       QuickInfoAtPosition | undefined
     >(client, 'getQuickInfoAtPosition', params, {
@@ -1228,8 +1228,8 @@ export async function getQuickInfoAtPosition(
     })
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
   return serverModules.getQuickInfoAtPositionBase({
     project,
     filePath,
@@ -1253,7 +1253,7 @@ function ensureHighlighterLoaded(
     return highlighterPromise
   }
 
-  highlighterPromise = loadProjectClientServerModules()
+  highlighterPromise = loadAnalysisClientServerModules()
     .then((serverModules) =>
       serverModules.createHighlighter({
         theme: options.theme,
@@ -1266,7 +1266,7 @@ function ensureHighlighterLoaded(
     })
     .catch((error) => {
       highlighterPromise = null
-      reportBestEffortError('project/client', error)
+      reportBestEffortError('analysis/client', error)
       return null
     })
 
@@ -1296,14 +1296,14 @@ export async function resolveTypeAtLocation(
   position: number,
   kind: SyntaxKind,
   filter?: TypeFilter,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ): Promise<ResolvedTypeAtLocationResult['resolvedType']> {
   const result = await resolveTypeAtLocationWithDependencies(
     filePath,
     position,
     kind,
     filter,
-    projectOptions
+    analysisOptions
   )
 
   return result.resolvedType
@@ -1319,7 +1319,7 @@ export async function resolveTypeAtLocationWithDependencies(
   position: number,
   kind: SyntaxKind,
   filter?: TypeFilter,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ): Promise<ResolvedTypeAtLocationResult> {
   const client = await getReadyClient()
 
@@ -1330,7 +1330,7 @@ export async function resolveTypeAtLocationWithDependencies(
         position: number
         kind: SyntaxKind
         filter?: TypeFilter
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
       },
       ResolvedTypeAtLocationResult
     >(client, 'resolveTypeAtLocationWithDependencies', {
@@ -1338,19 +1338,19 @@ export async function resolveTypeAtLocationWithDependencies(
       position,
       kind,
       filter,
-      projectOptions,
+      analysisOptions,
     })
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
 
   return serverModules.resolveCachedTypeAtLocationWithDependencies(project, {
     filePath,
     position,
     kind,
     filter,
-    isInMemoryFileSystem: projectOptions?.useInMemoryFileSystem,
+    isInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
   })
 }
 
@@ -1361,16 +1361,16 @@ export async function resolveTypeAtLocationWithDependencies(
 export async function getTokens(
   options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
     languages?: ConfigurationOptions['languages']
-    projectOptions?: ProjectOptions
+    analysisOptions?: AnalysisOptions
     waitForWarmResult?: boolean
-    runtime?: ProjectServerRuntime
+    runtime?: AnalysisServerRuntime
   }
 ): Promise<TokenizedLines> {
   const { runtime, ...params } = options
   if (runtime) {
     return callBrowserRuntimeClientMethod<
       Omit<GetTokensOptions, 'highlighter' | 'project'> & {
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
         waitForWarmResult?: boolean
       },
       TokenizedLines
@@ -1381,16 +1381,16 @@ export async function getTokens(
   if (client) {
     return callClientMethod<
       Omit<GetTokensOptions, 'highlighter' | 'project'> & {
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
         waitForWarmResult?: boolean
       },
       TokenizedLines
     >(client, 'getTokens', params)
   }
 
-  const { projectOptions, languages, ...getTokensOptions } = params
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const { analysisOptions, languages, ...getTokensOptions } = params
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
   queueHighlighterLoad({
     theme: getTokensOptions.theme,
     languages,
@@ -1414,28 +1414,28 @@ export async function getTokens(
  */
 export async function getFileExports(
   filePath: string,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ) {
   const client = await getReadyClient()
   if (client) {
     const response = await callClientMethod<
       {
         filePath: string
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
         includeClientRpcDependencies?: boolean
       },
       ModuleExport[] | ClientRpcValueWithDependenciesResponse<ModuleExport[]>
     >(client, 'getFileExports', {
       filePath,
-      projectOptions,
+      analysisOptions,
       includeClientRpcDependencies: true,
     })
 
     return toClientRpcResponseValue(response)
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
   return serverModules.getCachedFileExports(project, filePath)
 }
 
@@ -1445,18 +1445,18 @@ export async function getFileExports(
  */
 export async function getOutlineRanges(
   filePath: string,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ): Promise<OutlineRange[]> {
   const client = await getReadyClient()
   if (client) {
     return callClientMethod<
-      { filePath: string; projectOptions?: ProjectOptions },
+      { filePath: string; analysisOptions?: AnalysisOptions },
       OutlineRange[]
-    >(client, 'getOutlineRanges', { filePath, projectOptions })
+    >(client, 'getOutlineRanges', { filePath, analysisOptions })
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
   return serverModules.getCachedOutlineRanges(project, filePath)
 }
 
@@ -1469,7 +1469,7 @@ export async function getFileExportMetadata(
   filePath: string,
   position: number,
   kind: SyntaxKind,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ) {
   const client = await getReadyClient()
   if (client) {
@@ -1479,7 +1479,7 @@ export async function getFileExportMetadata(
         filePath: string
         position: number
         kind: SyntaxKind
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
         includeClientRpcDependencies?: boolean
       },
       | Awaited<ReturnType<typeof baseGetFileExportMetadata>>
@@ -1491,15 +1491,15 @@ export async function getFileExportMetadata(
       filePath,
       position,
       kind,
-      projectOptions,
+      analysisOptions,
       includeClientRpcDependencies: true,
     })
 
     return toClientRpcResponseValue(response)
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
   return serverModules.getCachedFileExportMetadata(project, {
     name,
     filePath,
@@ -1516,7 +1516,7 @@ export async function getFileExportStaticValue(
   filePath: string,
   position: number,
   kind: SyntaxKind,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ) {
   const client = await getReadyClient()
   if (client) {
@@ -1525,7 +1525,7 @@ export async function getFileExportStaticValue(
         filePath: string
         position: number
         kind: SyntaxKind
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
         includeClientRpcDependencies?: boolean
       },
       unknown
@@ -1533,15 +1533,15 @@ export async function getFileExportStaticValue(
       filePath,
       position,
       kind,
-      projectOptions,
+      analysisOptions,
       includeClientRpcDependencies: true,
     })
 
     return toClientRpcResponseValue(response)
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
   return serverModules.getCachedFileExportStaticValue(project, {
     filePath,
     position,
@@ -1558,7 +1558,7 @@ export async function getFileExportText(
   position: number,
   kind: SyntaxKind,
   includeDependencies?: boolean,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ) {
   const client = await getReadyClient()
   if (client) {
@@ -1568,7 +1568,7 @@ export async function getFileExportText(
         position: number
         kind: SyntaxKind
         includeDependencies?: boolean
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
       },
       string | GetFileExportTextRpcResponse
     >(client, 'getFileExportText', {
@@ -1576,14 +1576,14 @@ export async function getFileExportText(
       position,
       kind,
       includeDependencies,
-      projectOptions,
+      analysisOptions,
     })
 
     return toGetFileExportTextRpcValueText(response)
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
   return serverModules.getCachedFileExportText(project, {
     filePath,
     position,
@@ -1599,7 +1599,7 @@ export async function getFileExportText(
 export async function createSourceFile(
   filePath: string,
   sourceText: string,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ) {
   const client = await getReadyClient()
   if (client) {
@@ -1607,32 +1607,32 @@ export async function createSourceFile(
       {
         filePath: string
         sourceText: string
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
       },
       void
     >('createSourceFile', {
       filePath,
       sourceText,
-      projectOptions,
+      analysisOptions,
     })
     // Source updates can affect dependency-aware RPC results for many files.
     // Clear client-side RPC state so stale dependent entries are not reused.
     invalidateAllClientRpcState()
     const loadedServerModules =
-      getLoadedProjectClientServerModules() ??
+      getLoadedAnalysisClientServerModules() ??
       (typeof window === 'undefined'
-        ? await loadProjectClientServerModules().catch(() => undefined)
+        ? await loadAnalysisClientServerModules().catch(() => undefined)
         : undefined)
-    loadedServerModules?.invalidateProjectCachesByPaths([filePath])
+    loadedServerModules?.invalidateProgramCachesByPaths([filePath])
     loadedServerModules?.invalidateRuntimeAnalysisCachePath(filePath)
     loadedServerModules?.invalidateSharedFileTextPrefixCachePath(filePath)
     return
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions) as TsMorphProject
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions) as TsMorphProject
   project.createSourceFile(filePath, sourceText, { overwrite: true })
-  serverModules.invalidateProjectFileCache(project, filePath)
+  serverModules.invalidateProgramFileCache(project, filePath)
   serverModules.invalidateRuntimeAnalysisCachePath(filePath)
   serverModules.invalidateSharedFileTextPrefixCachePath(filePath)
 }
@@ -1643,91 +1643,45 @@ export async function createSourceFile(
  */
 export async function transpileSourceFile(
   filePath: string,
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 ) {
   const client = await getReadyClient()
   if (client) {
     return callClientMethod<
       {
         filePath: string
-        projectOptions?: ProjectOptions
+        analysisOptions?: AnalysisOptions
       },
       string
     >(client, 'transpileSourceFile', {
       filePath,
-      projectOptions,
+      analysisOptions,
     })
   }
 
-  const serverModules = await loadProjectClientServerModules()
-  const project = serverModules.getProject(projectOptions)
+  const serverModules = await loadAnalysisClientServerModules()
+  const program = serverModules.getProgram(analysisOptions)
 
-  return serverModules.transpileCachedSourceFile(project, filePath)
+  return serverModules.transpileCachedSourceFile(program, filePath)
 }
 
-/**
- * Generate a cache key for a project's options.
- * @internal
- */
-export function getProjectOptionsCacheKey(options?: ProjectOptions): string {
-  if (!options) {
-    return ''
-  }
-
-  let key = ''
-
-  if (options.theme) {
-    key += `t:${options.theme};`
-  }
-  if (options.siteUrl) {
-    key += `u:${options.siteUrl};`
-  }
-  if (options.gitSource) {
-    key += `s:${options.gitSource};`
-  }
-  if (options.gitBranch) {
-    key += `b:${options.gitBranch};`
-  }
-  if (options.gitHost) {
-    key += `h:${options.gitHost};`
-  }
-  if (options.projectId) {
-    key += `i:${options.projectId};`
-  }
-  if (options.tsConfigFilePath) {
-    key += `f:${options.tsConfigFilePath};`
-  }
-
-  key += `m:${options.useInMemoryFileSystem ? 1 : 0};`
-
-  if (options.compilerOptions) {
-    key += 'c:'
-    for (const k in options.compilerOptions) {
-      const value = options.compilerOptions[k]
-      key += `${k}=${value};`
-    }
-  }
-
-  return key
-}
-
-function setProjectClientRefreshVersionForTests(version: string): void {
-  const parsedVersion = parseProjectClientRefreshVersion(version)
+function setAnalysisClientRefreshVersionForTests(version: string): void {
+  const parsedVersion = parseAnalysisClientRefreshVersion(version)
   latestRefreshCursor = parsedVersion.cursor
   setClientRpcInvalidationEpoch(parsedVersion.epoch)
   pendingRefreshInvalidationPaths.clear()
-  setSharedProjectClientBrowserRefreshVersion(
+  setSharedAnalysisClientBrowserRefreshVersion(
     `${parsedVersion.cursor}:${parsedVersion.epoch}`
   )
 }
 
-function clearProjectClientStateForTests(): void {
+function clearAnalysisClientStateForTests(): void {
   clearClientRpcCacheStateForTests()
   pendingRefreshInvalidationPaths.clear()
 }
 
 export const __TEST_ONLY__ = {
-  clearProjectClientRpcState: clearProjectClientStateForTests,
-  disposeProjectBrowserClient,
-  setProjectClientRefreshVersion: setProjectClientRefreshVersionForTests,
+  clearAnalysisClientRpcState: clearAnalysisClientStateForTests,
+  disposeAnalysisBrowserClient,
+  setAnalysisClientRefreshVersion: setAnalysisClientRefreshVersionForTests,
 }

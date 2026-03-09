@@ -4,7 +4,7 @@ import { safeAssign } from '../../utils/safe-assign.ts'
 import {
   getServerHostFromProcessEnv,
   getServerPortFromProcessEnv,
-  type ProjectServerRuntime,
+  type AnalysisServerRuntime,
 } from '../runtime-env.ts'
 import { resolveBrowserWebSocketUrl } from './browser-websocket-url.ts'
 import type { WebSocketResponse } from './server.ts'
@@ -213,7 +213,7 @@ class WebSocketClientError extends Error {
 export class WebSocketClient extends EventEmitter {
   #ws!: WebSocket
   #serverId: string
-  #runtime?: ProjectServerRuntime
+  #runtime?: AnalysisServerRuntime
   #shouldRetry = true
   #retryTimeout?: ReturnType<typeof setTimeout>
   #isConnected = false
@@ -260,7 +260,7 @@ export class WebSocketClient extends EventEmitter {
   #handleCloseEvent = (event: CloseEvent) =>
     this.#handleClose(event.code, event.reason)
 
-  constructor(serverId: string, runtime?: ProjectServerRuntime) {
+  constructor(serverId: string, runtime?: AnalysisServerRuntime) {
     super()
     this.#serverId = serverId
     this.#runtime = runtime

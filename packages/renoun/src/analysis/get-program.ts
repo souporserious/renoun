@@ -20,21 +20,22 @@ import {
   normalizePathKey,
   normalizeSlashes,
 } from '../utils/path.ts'
-import { invalidateProjectFileCachePaths } from './cache.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
+import { invalidateProgramFileCachePaths } from './cache.ts'
 import {
   invalidateRuntimeAnalysisCachePaths,
 } from './cached-analysis.ts'
 import { invalidateSharedFileTextPrefixCachePaths } from './file-text-prefix-cache.ts'
 import {
-  activeRefreshingProjects,
-  completeRefreshingProjects,
-  startRefreshingProjects,
+  activeRefreshingPrograms,
+  completeRefreshingPrograms,
+  startRefreshingPrograms,
 } from './refresh.ts'
 import {
   getServerPortFromProcessEnv,
-  resolveProjectWatchersEnvOverride,
+  resolveAnalysisWatchersEnvOverride,
 } from './runtime-env.ts'
-import type { ProjectOptions } from './types.ts'
+import type { AnalysisOptions } from './types.ts'
 
 const { Project, ts } = getTsMorph()
 
@@ -43,17 +44,17 @@ const directoryWatchers = new Map<string, FSWatcher>()
 const directoryToProjects = new Map<string, Set<TsMorphProject>>()
 const directoryInvalidationPathQueue = new Map<string, Map<string, string>>()
 const directoryInvalidationTimers = new Map<string, NodeJS.Timeout>()
-const directoryInvalidationScheduledDelayByProject = new Map<string, number>()
-type ProjectWatcherInvalidationPriority = 'immediate' | 'background'
-const PROJECT_WATCHER_INVALIDATION_PRIORITY_DELAY_MS: Record<
-  ProjectWatcherInvalidationPriority,
+const directoryInvalidationScheduledDelayByWorkspace = new Map<string, number>()
+type AnalysisWatcherInvalidationPriority = 'immediate' | 'background'
+const ANALYSIS_WATCHER_INVALIDATION_PRIORITY_DELAY_MS: Record<
+  AnalysisWatcherInvalidationPriority,
   number
 > = {
   immediate: 0,
   background: 25,
 }
-const PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS = 25
-const IGNORED_PROJECT_WATCH_PATH_SEGMENTS = new Set([
+const ANALYSIS_WATCHER_INVALIDATION_BATCH_WINDOW_MS = 25
+const IGNORED_ANALYSIS_WATCH_PATH_SEGMENTS = new Set([
   '.next',
   '.renoun',
   '.git',
@@ -64,22 +65,22 @@ const IGNORED_PROJECT_WATCH_PATH_SEGMENTS = new Set([
   'coverage',
 ])
 
-export interface ProjectWatcherRuntimeOptions {
+export interface AnalysisWatcherRuntimeOptions {
   enabled?: boolean
 }
 
-const projectWatcherRuntimeOptions: ProjectWatcherRuntimeOptions = {}
+const analysisWatcherRuntimeOptions: AnalysisWatcherRuntimeOptions = {}
 
-export function configureProjectWatcherRuntime(
-  options: ProjectWatcherRuntimeOptions
+export function configureAnalysisWatcherRuntime(
+  options: AnalysisWatcherRuntimeOptions
 ): void {
   if ('enabled' in options) {
-    projectWatcherRuntimeOptions.enabled = options.enabled
+    analysisWatcherRuntimeOptions.enabled = options.enabled
   }
 }
 
-export function resetProjectWatcherRuntimeConfiguration(): void {
-  projectWatcherRuntimeOptions.enabled = undefined
+export function resetAnalysisWatcherRuntimeConfiguration(): void {
+  analysisWatcherRuntimeOptions.enabled = undefined
 }
 
 const defaultCompilerOptions = {
@@ -97,29 +98,29 @@ const defaultCompilerOptions = {
   target: ts.ScriptTarget.ESNext,
 } satisfies TsMorphTS.CompilerOptions
 
-/** Get the project associated with the provided options. */
-export function getProject(options?: ProjectOptions) {
-  const projectId = getSerializedProjectOptions(options)
-  const projectDirectory = options?.tsConfigFilePath
+/** Get the ts-morph program associated with the provided analysis options. */
+export function getProgram(options?: AnalysisOptions) {
+  const programKey = getProgramKeyForAnalysisOptions(options)
+  const workspaceDirectory = options?.tsConfigFilePath
     ? resolve(dirname(options.tsConfigFilePath))
     : process.cwd()
 
-  if (projects.has(projectId)) {
-    const existingProject = projects.get(projectId)!
-    let associatedProjects = directoryToProjects.get(projectDirectory)
+  if (projects.has(programKey)) {
+    const existingProject = projects.get(programKey)!
+    let associatedProjects = directoryToProjects.get(workspaceDirectory)
     if (!associatedProjects) {
       associatedProjects = new Set()
-      directoryToProjects.set(projectDirectory, associatedProjects)
+      directoryToProjects.set(workspaceDirectory, associatedProjects)
     }
     associatedProjects.add(existingProject)
-    ensureProjectDirectoryWatcher(projectDirectory)
+    ensureProgramDirectoryWatcher(workspaceDirectory)
 
-    getDebugLogger().debug('Reusing cached project instance', () =>
-      createProjectDebugContext({
-        project: existingProject,
-        projectId,
-        projectDirectory,
-        projectOptions: options,
+    getDebugLogger().debug('Reusing cached program instance', () =>
+      createProgramDebugContext({
+        program: existingProject,
+        programKey,
+        workspaceDirectory,
+        analysisOptions: options,
         cacheStatus: 'hit',
       })
     )
@@ -145,25 +146,25 @@ export function getProject(options?: ProjectOptions) {
           tsConfigFilePath,
         }
   )
-  let associatedProjects = directoryToProjects.get(projectDirectory)
+  let associatedProjects = directoryToProjects.get(workspaceDirectory)
 
   if (!associatedProjects) {
     associatedProjects = new Set()
-    directoryToProjects.set(projectDirectory, associatedProjects)
+    directoryToProjects.set(workspaceDirectory, associatedProjects)
   }
 
   associatedProjects.add(project)
 
-  ensureProjectDirectoryWatcher(projectDirectory)
+  ensureProgramDirectoryWatcher(workspaceDirectory)
 
-  projects.set(projectId, project)
+  projects.set(programKey, project)
 
-  getDebugLogger().info('Created new project instance', () =>
-    createProjectDebugContext({
-      project,
-      projectId,
-      projectDirectory,
-      projectOptions: options,
+  getDebugLogger().info('Created new program instance', () =>
+    createProgramDebugContext({
+      program: project,
+      programKey,
+      workspaceDirectory,
+      analysisOptions: options,
       cacheStatus: 'miss',
     })
   )
@@ -171,14 +172,14 @@ export function getProject(options?: ProjectOptions) {
   return project
 }
 
-function shouldIgnoreProjectWatchPath(filePath: string): boolean {
+function shouldIgnoreAnalysisWatchPath(filePath: string): boolean {
   if (typeof filePath !== 'string' || filePath.length === 0) {
     return true
   }
 
   const pathSegments = filePath.split(/[/\\]+/)
   for (const pathSegment of pathSegments) {
-    if (IGNORED_PROJECT_WATCH_PATH_SEGMENTS.has(pathSegment)) {
+    if (IGNORED_ANALYSIS_WATCH_PATH_SEGMENTS.has(pathSegment)) {
       return true
     }
   }
@@ -186,16 +187,16 @@ function shouldIgnoreProjectWatchPath(filePath: string): boolean {
   return false
 }
 
-function ensureProjectDirectoryWatcher(projectDirectory: string): void {
+function ensureProgramDirectoryWatcher(workspaceDirectory: string): void {
   if (
-    !shouldEnableProjectWatchers() ||
-    directoryWatchers.has(projectDirectory)
+    !shouldEnableAnalysisWatchers() ||
+    directoryWatchers.has(workspaceDirectory)
   ) {
     return
   }
 
   const watcher = watch(
-    projectDirectory,
+    workspaceDirectory,
     { recursive: true },
     async (eventType, fileName) => {
       if (!fileName) return
@@ -205,11 +206,11 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
         return
       }
 
-      if (shouldIgnoreProjectWatchPath(watchedFileName)) {
+      if (shouldIgnoreAnalysisWatchPath(watchedFileName)) {
         return
       }
 
-      const filePath = join(projectDirectory, watchedFileName)
+      const filePath = join(workspaceDirectory, watchedFileName)
 
       if (isFilePathGitIgnored(filePath)) {
         return
@@ -220,7 +221,7 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
         : extname(watchedFileName) === ''
 
       try {
-        const projectsToUpdate = directoryToProjects.get(projectDirectory)
+        const projectsToUpdate = directoryToProjects.get(workspaceDirectory)
 
         if (!projectsToUpdate) return
 
@@ -232,10 +233,10 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
           }
 
           if (isDirectory) {
-            invalidationPaths.add(projectDirectory)
+            invalidationPaths.add(workspaceDirectory)
           }
         }
-        queueProjectWatcherInvalidation(projectDirectory, invalidationPaths, {
+        queueAnalysisWatcherInvalidation(workspaceDirectory, invalidationPaths, {
           priority: 'immediate',
         })
 
@@ -274,18 +275,18 @@ function ensureProjectDirectoryWatcher(projectDirectory: string): void {
     }
   )
 
-  directoryWatchers.set(projectDirectory, watcher)
+  directoryWatchers.set(workspaceDirectory, watcher)
 }
 
-function queueProjectWatcherInvalidation(
-  projectDirectory: string,
+function queueAnalysisWatcherInvalidation(
+  workspaceDirectory: string,
   paths: Iterable<string>,
   options: {
-    priority?: ProjectWatcherInvalidationPriority
+    priority?: AnalysisWatcherInvalidationPriority
   } = {}
 ): void {
   const pendingPaths =
-    directoryInvalidationPathQueue.get(projectDirectory) ??
+    directoryInvalidationPathQueue.get(workspaceDirectory) ??
     new Map<string, string>()
   for (const path of paths) {
     const normalizedPath = normalizeComparablePath(path)
@@ -299,15 +300,15 @@ function queueProjectWatcherInvalidation(
   if (pendingPaths.size === 0) {
     return
   }
-  directoryInvalidationPathQueue.set(projectDirectory, pendingPaths)
+  directoryInvalidationPathQueue.set(workspaceDirectory, pendingPaths)
 
   const priority = options.priority ?? 'immediate'
   const requestedDelayMs =
-    PROJECT_WATCHER_INVALIDATION_PRIORITY_DELAY_MS[priority] ??
-    PROJECT_WATCHER_INVALIDATION_BATCH_WINDOW_MS
-  const existingTimer = directoryInvalidationTimers.get(projectDirectory)
+    ANALYSIS_WATCHER_INVALIDATION_PRIORITY_DELAY_MS[priority] ??
+    ANALYSIS_WATCHER_INVALIDATION_BATCH_WINDOW_MS
+  const existingTimer = directoryInvalidationTimers.get(workspaceDirectory)
   const existingDelayMs =
-    directoryInvalidationScheduledDelayByProject.get(projectDirectory)
+    directoryInvalidationScheduledDelayByWorkspace.get(workspaceDirectory)
 
   if (
     existingTimer &&
@@ -322,21 +323,21 @@ function queueProjectWatcherInvalidation(
   }
 
   const flushTimer = setTimeout(() => {
-    directoryInvalidationTimers.delete(projectDirectory)
-    directoryInvalidationScheduledDelayByProject.delete(projectDirectory)
-    flushProjectWatcherInvalidation(projectDirectory)
+    directoryInvalidationTimers.delete(workspaceDirectory)
+    directoryInvalidationScheduledDelayByWorkspace.delete(workspaceDirectory)
+    flushAnalysisWatcherInvalidation(workspaceDirectory)
   }, requestedDelayMs)
   flushTimer.unref?.()
-  directoryInvalidationTimers.set(projectDirectory, flushTimer)
-  directoryInvalidationScheduledDelayByProject.set(
-    projectDirectory,
+  directoryInvalidationTimers.set(workspaceDirectory, flushTimer)
+  directoryInvalidationScheduledDelayByWorkspace.set(
+    workspaceDirectory,
     requestedDelayMs
   )
 }
 
-function flushProjectWatcherInvalidation(projectDirectory: string): void {
-  const pendingPaths = directoryInvalidationPathQueue.get(projectDirectory)
-  directoryInvalidationPathQueue.delete(projectDirectory)
+function flushAnalysisWatcherInvalidation(workspaceDirectory: string): void {
+  const pendingPaths = directoryInvalidationPathQueue.get(workspaceDirectory)
+  directoryInvalidationPathQueue.delete(workspaceDirectory)
   if (!pendingPaths || pendingPaths.size === 0) {
     return
   }
@@ -353,21 +354,21 @@ function flushProjectWatcherInvalidation(projectDirectory: string): void {
   invalidateRuntimeAnalysisCachePaths(pathsToInvalidate)
   invalidateSharedFileTextPrefixCachePaths(pathsToInvalidate)
 
-  const projectsToUpdate = directoryToProjects.get(projectDirectory)
+  const projectsToUpdate = directoryToProjects.get(workspaceDirectory)
   if (!projectsToUpdate) {
     return
   }
 
   for (const project of projectsToUpdate) {
-    invalidateProjectFileCachePaths(project, pathsToInvalidate)
+    invalidateProgramFileCachePaths(project, pathsToInvalidate)
   }
 }
 
-export function invalidateProjectCachesByPath(path: string): number {
-  return invalidateProjectCachesByPaths([path])
+export function invalidateProgramCachesByPath(path: string): number {
+  return invalidateProgramCachesByPaths([path])
 }
 
-export function invalidateProjectCachesByPaths(
+export function invalidateProgramCachesByPaths(
   paths: Iterable<string>
 ): number {
   const originalPathByNormalizedPath = new Map<string, string>()
@@ -394,10 +395,10 @@ export function invalidateProjectCachesByPaths(
   })
   invalidateSharedFileTextPrefixCachePaths(pathsToInvalidate)
 
-  let affectedProjects = 0
+  let affectedPrograms = 0
 
-  // Project cache dependencies may include paths outside each project's root.
-  // Invalidate every tracked project so dependency-driven cache entries refresh.
+  // Program cache dependencies may include paths outside each workspace root.
+  // Invalidate every tracked program so dependency-driven cache entries refresh.
   const projectsToInvalidate = new Set<TsMorphProject>()
   for (const projectsByDirectory of directoryToProjects.values()) {
     for (const project of projectsByDirectory) {
@@ -406,14 +407,14 @@ export function invalidateProjectCachesByPaths(
   }
 
   for (const project of projectsToInvalidate) {
-    invalidateProjectFileCachePaths(project, pathsToInvalidate)
-    affectedProjects += 1
+    invalidateProgramFileCachePaths(project, pathsToInvalidate)
+    affectedPrograms += 1
   }
 
-  return affectedProjects
+  return affectedPrograms
 }
 
-export function disposeProjectWatchers(): void {
+export function disposeAnalysisWatchers(): void {
   for (const watcher of directoryWatchers.values()) {
     watcher.close()
   }
@@ -423,31 +424,41 @@ export function disposeProjectWatchers(): void {
   }
 
   directoryInvalidationTimers.clear()
-  directoryInvalidationScheduledDelayByProject.clear()
+  directoryInvalidationScheduledDelayByWorkspace.clear()
   directoryInvalidationPathQueue.clear()
   directoryWatchers.clear()
   directoryToProjects.clear()
   projects.clear()
 }
 
-function getSerializedProjectOptions(options?: ProjectOptions) {
+function getProgramKeyForAnalysisOptions(options?: AnalysisOptions) {
   if (!options) {
     return ''
   }
 
-  return JSON.stringify(options)
+  return hashString(
+    stableStringify({
+      analysisScopeId: options.analysisScopeId ?? null,
+      tsConfigFilePath:
+        typeof options.tsConfigFilePath === 'string'
+          ? resolve(options.tsConfigFilePath)
+          : null,
+      useInMemoryFileSystem: options.useInMemoryFileSystem === true,
+      compilerOptions: options.compilerOptions ?? null,
+    })
+  )
 }
 
-function shouldEnableProjectWatchers(): boolean {
-  if (typeof projectWatcherRuntimeOptions.enabled === 'boolean') {
-    return projectWatcherRuntimeOptions.enabled
+function shouldEnableAnalysisWatchers(): boolean {
+  if (typeof analysisWatcherRuntimeOptions.enabled === 'boolean') {
+    return analysisWatcherRuntimeOptions.enabled
   }
 
   if (getServerPortFromProcessEnv() === undefined) {
     return false
   }
 
-  const override = resolveProjectWatchersEnvOverride()
+  const override = resolveAnalysisWatchersEnvOverride()
   if (override !== undefined) {
     return override
   }
@@ -485,14 +496,14 @@ function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {
 
     const promise = existingSourceFile.refreshFromFileSystem()
 
-    startRefreshingProjects()
+    startRefreshingPrograms()
 
-    activeRefreshingProjects.add(promise)
+    activeRefreshingPrograms.add(promise)
 
     promise.finally(() => {
-      activeRefreshingProjects.delete(promise)
-      if (activeRefreshingProjects.size === 0) {
-        completeRefreshingProjects()
+      activeRefreshingPrograms.delete(promise)
+      if (activeRefreshingPrograms.size === 0) {
+        completeRefreshingPrograms()
       }
     })
   } catch (error) {
@@ -513,35 +524,36 @@ function refreshOrAddSourceFile(project: TsMorphProject, filePath: string) {
   }
 }
 
-function createProjectDebugContext({
-  project,
-  projectId,
-  projectDirectory,
-  projectOptions,
+function createProgramDebugContext({
+  program,
+  programKey,
+  workspaceDirectory,
+  analysisOptions,
   cacheStatus,
 }: {
-  project: TsMorphProject
-  projectId: string
-  projectDirectory: string
-  projectOptions?: ProjectOptions
+  program: TsMorphProject
+  programKey: string
+  workspaceDirectory: string
+  analysisOptions?: AnalysisOptions
   cacheStatus: 'hit' | 'miss'
 }): DebugContext {
-  const compilerOptions = project.getCompilerOptions()
+  const compilerOptions = program.getCompilerOptions()
   const tsConfigFilePath =
     compilerOptions['configFilePath'] ??
-    projectOptions?.tsConfigFilePath ??
+    analysisOptions?.tsConfigFilePath ??
     'tsconfig.json'
 
   return {
-    operation: 'project.getProject',
+    operation: 'analysis.getProgram',
     data: {
       cacheStatus,
-      projectId,
-      projectDirectory,
-      rootDirectories: project
+      programKey,
+      analysisScopeId: analysisOptions?.analysisScopeId,
+      workspaceDirectory,
+      rootDirectories: program
         .getRootDirectories()
         .map((directory) => directory.getPath()),
-      useInMemoryFileSystem: Boolean(projectOptions?.useInMemoryFileSystem),
+      useInMemoryFileSystem: Boolean(analysisOptions?.useInMemoryFileSystem),
       compilerOptions,
       tsConfigFilePath,
     },

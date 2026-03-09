@@ -68,12 +68,12 @@ vi.mock('../../utils/concurrency.ts', () => ({
 }))
 
 import {
-  __TEST_ONLY__ as PROJECT_BROWSER_CLIENT_TEST_ONLY__,
-  getProjectClientBrowserRuntime,
-  retainProjectClientBrowserRuntime,
-  setProjectClientBrowserRuntime,
-} from '../../project/client.ts'
-import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
+  __TEST_ONLY__ as ANALYSIS_BROWSER_CLIENT_TEST_ONLY__,
+  getAnalysisClientBrowserRuntime,
+  retainAnalysisClientBrowserRuntime,
+  setAnalysisClientBrowserRuntime,
+} from '../../analysis/client.ts'
+import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
@@ -115,12 +115,12 @@ interface MockWebSocketInstance {
 
 const SHORT_SYMBOL_POSITION = 100
 const LONG_SYMBOL_POSITION = 200
-const RUNTIME: ProjectServerRuntime = {
+const RUNTIME: AnalysisServerRuntime = {
   id: 'quick-info-browser-test',
   port: '43123',
   host: '127.0.0.1',
 }
-const SECOND_RUNTIME: ProjectServerRuntime = {
+const SECOND_RUNTIME: AnalysisServerRuntime = {
   id: 'quick-info-browser-test-secondary',
   port: '43124',
   host: '127.0.0.1',
@@ -187,9 +187,9 @@ describe('QuickInfo browser regression', () => {
 
     originalWebSocket = globalThis.WebSocket
     ;(globalThis as any).WebSocket = createMockWebSocket(counters)
-    PROJECT_BROWSER_CLIENT_TEST_ONLY__.clearProjectClientRpcState()
-    PROJECT_BROWSER_CLIENT_TEST_ONLY__.disposeProjectBrowserClient()
-    PROJECT_BROWSER_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
+    ANALYSIS_BROWSER_CLIENT_TEST_ONLY__.clearAnalysisClientRpcState()
+    ANALYSIS_BROWSER_CLIENT_TEST_ONLY__.disposeAnalysisBrowserClient()
+    ANALYSIS_BROWSER_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('0:0')
   })
 
   afterEach(async () => {
@@ -207,10 +207,10 @@ describe('QuickInfo browser regression', () => {
       node.remove()
     })
     document.documentElement.removeAttribute('data-theme')
-    PROJECT_BROWSER_CLIENT_TEST_ONLY__.clearProjectClientRpcState()
-    PROJECT_BROWSER_CLIENT_TEST_ONLY__.disposeProjectBrowserClient()
-    setProjectClientBrowserRuntime(undefined)
-    PROJECT_BROWSER_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
+    ANALYSIS_BROWSER_CLIENT_TEST_ONLY__.clearAnalysisClientRpcState()
+    ANALYSIS_BROWSER_CLIENT_TEST_ONLY__.disposeAnalysisBrowserClient()
+    setAnalysisClientBrowserRuntime(undefined)
+    ANALYSIS_BROWSER_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('0:0')
 
     if (originalWebSocket) {
       ;(globalThis as any).WebSocket = originalWebSocket
@@ -288,7 +288,7 @@ describe('QuickInfo browser regression', () => {
     expect(counters.tokensByValue.get(shortDisplayText)).toBe(1)
   })
 
-  it('reuses the shared project client socket for follow-up token requests', async () => {
+  it('reuses the shared analysis client socket for follow-up token requests', async () => {
     renderQuickInfoFixture(root, 'socket-reuse')
     const shortDisplayText = QUICK_INFO_BY_POSITION.get(
       SHORT_SYMBOL_POSITION
@@ -510,7 +510,7 @@ describe('QuickInfo browser regression', () => {
   })
 
   it('re-fetches quick info after refresh invalidation without rerendering the code block', async () => {
-    const releaseRuntime = retainProjectClientBrowserRuntime(RUNTIME)
+    const releaseRuntime = retainAnalysisClientBrowserRuntime(RUNTIME)
 
     renderQuickInfoFixture(root, 'refresh-version')
 
@@ -585,12 +585,12 @@ describe('QuickInfo browser regression', () => {
   })
 
   it('keeps the shared runtime on the retained page runtime while hover RPCs use the popover runtime', async () => {
-    const releaseRuntime = retainProjectClientBrowserRuntime(SECOND_RUNTIME)
+    const releaseRuntime = retainAnalysisClientBrowserRuntime(SECOND_RUNTIME)
     renderQuickInfoFixture(root, 'stale-runtime')
 
     try {
       await waitFor(() => counters.socketsOpened === 1, 1_000)
-      expect(getProjectClientBrowserRuntime()?.id).toBe(SECOND_RUNTIME.id)
+      expect(getAnalysisClientBrowserRuntime()?.id).toBe(SECOND_RUNTIME.id)
 
       await waitFor(
         () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
@@ -608,7 +608,7 @@ describe('QuickInfo browser regression', () => {
         1_000
       )
 
-      expect(getProjectClientBrowserRuntime()?.id).toBe(SECOND_RUNTIME.id)
+      expect(getAnalysisClientBrowserRuntime()?.id).toBe(SECOND_RUNTIME.id)
       expect(counters.socketsOpened).toBe(2)
       expect(
         counters.quickInfoByRuntimeKey.get(
@@ -644,7 +644,7 @@ describe('QuickInfo browser regression', () => {
       1_000
     )
 
-    setProjectClientBrowserRuntime({
+    setAnalysisClientBrowserRuntime({
       id: 'quick-info-browser-test-updated',
       port: '43124',
       host: '::1',

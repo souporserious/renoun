@@ -13,7 +13,7 @@ import {
 } from './get-quick-info-at-position.ts'
 import { getLanguage, type Languages } from './get-language.ts'
 import { isJsxOnly } from './is-jsx-only.ts'
-import { generatedFilenames } from './get-source-text-metadata.ts'
+import { generatedFilenames } from '../analysis/query/source-text-metadata.ts'
 import { splitTokenByRanges } from './split-tokens-by-ranges.ts'
 import {
   emitTelemetryCounter,

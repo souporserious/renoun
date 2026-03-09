@@ -46,24 +46,24 @@ interface CachedContentId {
   updatedAt: number
 }
 
-function sanitizeProjectOptions(projectOptions: unknown): unknown {
+function sanitizeAnalysisOptions(analysisOptions: unknown): unknown {
   if (
-    !projectOptions ||
-    typeof projectOptions !== 'object' ||
-    Array.isArray(projectOptions)
+    !analysisOptions ||
+    typeof analysisOptions !== 'object' ||
+    Array.isArray(analysisOptions)
   ) {
-    return projectOptions
+    return analysisOptions
   }
 
-  const options = projectOptions as Record<string, unknown>
+  const options = analysisOptions as Record<string, unknown>
   if (
     options['useInMemoryFileSystem'] !== true ||
-    typeof options['projectId'] !== 'string'
+    typeof options['analysisScopeId'] !== 'string'
   ) {
-    return projectOptions
+    return analysisOptions
   }
 
-  const { projectId: _projectId, ...stableOptions } = options
+  const { analysisScopeId: _analysisScopeId, ...stableOptions } = options
   return stableOptions
 }
 
@@ -158,7 +158,7 @@ export class FileSystemSnapshot implements Snapshot {
     const descriptor = {
       version: SNAPSHOT_VERSION,
       fileSystem: fileSystem.constructor?.name ?? 'UnknownFileSystem',
-      projectOptions: safeGetProjectOptions(fileSystem),
+      analysisOptions: safeGetAnalysisOptions(fileSystem),
       cacheIdentity: safeGetCacheIdentity(fileSystem),
       ref: safeGetStringField(fileSystem, 'ref'),
       repository: safeGetStringField(fileSystem, 'repository'),
@@ -664,9 +664,9 @@ function resolveWorkspaceChangedPathsLookupCacheTtlMs(): number {
   return WORKSPACE_CHANGED_PATHS_LOOKUP_CACHE_TTL_MS
 }
 
-function safeGetProjectOptions(fileSystem: FileSystem): unknown {
+function safeGetAnalysisOptions(fileSystem: FileSystem): unknown {
   try {
-    return sanitizeProjectOptions(fileSystem.getProjectOptions())
+    return sanitizeAnalysisOptions(fileSystem.getAnalysisOptions())
   } catch {
     return undefined
   }

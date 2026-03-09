@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type { ProjectOptions } from '../project/types.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isVitestRuntime } from '../utils/env.ts'
 import {
@@ -20,7 +20,7 @@ interface PrewarmWorkerMessage {
 
 interface PrewarmRequest {
   id: number
-  options?: { projectOptions?: ProjectOptions }
+  options?: { analysisOptions?: AnalysisOptions }
   signature: string
 }
 
@@ -37,10 +37,10 @@ type PrewarmWorkerLaunchConfigResolverOptions =
   }
 
 export function createDefaultPrewarmOptions(rootPath = process.cwd()): {
-  projectOptions: Pick<ProjectOptions, 'tsConfigFilePath'>
+  analysisOptions: Pick<AnalysisOptions, 'tsConfigFilePath'>
 } {
   return {
-    projectOptions: {
+    analysisOptions: {
       tsConfigFilePath: join(rootPath, 'tsconfig.json'),
     },
   }
@@ -134,17 +134,17 @@ export function resolvePrewarmWorkerEntryFilePath(
 }
 
 function getPrewarmRequestSignature(options?: {
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 }): string {
   try {
     return JSON.stringify(options ?? null) ?? 'null'
   } catch {
-    return options?.projectOptions?.tsConfigFilePath ?? 'unknown'
+    return options?.analysisOptions?.tsConfigFilePath ?? 'unknown'
   }
 }
 
 async function runPrewarmInline(
-  options?: { projectOptions?: ProjectOptions },
+  options?: { analysisOptions?: AnalysisOptions },
   startedAt = Date.now()
 ): Promise<void> {
   try {
@@ -320,7 +320,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
         env: {
           ...process.env,
           [PREWARM_WORKER_PAYLOAD_ENV_KEY]: JSON.stringify({
-            projectOptions: request.options?.projectOptions,
+            analysisOptions: request.options?.analysisOptions,
           }),
         },
       }
@@ -436,7 +436,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
 }
 
 export function runPrewarmSafely(options?: {
-  projectOptions?: ProjectOptions
+  analysisOptions?: AnalysisOptions
 }): void {
   const request: PrewarmRequest = {
     id: ++nextPrewarmRequestId,

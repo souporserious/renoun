@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { ProjectServerRuntime } from './runtime-env.ts'
+import type { AnalysisServerRuntime } from './runtime-env.ts'
 
 interface PendingCall {
   method: string
@@ -10,7 +10,7 @@ interface PendingCall {
 }
 
 interface MockBrowserClientInstance {
-  runtime: ProjectServerRuntime | undefined
+  runtime: AnalysisServerRuntime | undefined
   callMethod: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
   removeAllListeners: ReturnType<typeof vi.fn>
@@ -36,7 +36,7 @@ describe('browser-client runtime transport', () => {
     mocks.WebSocketClient.mockImplementation(
       function MockWebSocketClient(
         _serverId: string,
-        runtime?: ProjectServerRuntime
+        runtime?: AnalysisServerRuntime
       ) {
         const pendingCalls: PendingCall[] = []
         const instance: MockBrowserClientInstance = {
@@ -70,16 +70,16 @@ describe('browser-client runtime transport', () => {
 
   afterEach(async () => {
     const runtimeModule = await import('./browser-runtime.ts')
-    runtimeModule.setProjectClientBrowserRuntime(undefined)
+    runtimeModule.setAnalysisClientBrowserRuntime(undefined)
 
     const module = await import('./client.ts')
-    module.__TEST_ONLY__.clearProjectClientRpcState()
-    module.__TEST_ONLY__.disposeProjectBrowserClient()
+    module.__TEST_ONLY__.clearAnalysisClientRpcState()
+    module.__TEST_ONLY__.disposeAnalysisBrowserClient()
   })
 
   it('reuses the same client for repeated requests to the same runtime', async () => {
     const module = await import('./client.ts')
-    const runtime: ProjectServerRuntime = {
+    const runtime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
       host: '127.0.0.1',
@@ -114,12 +114,12 @@ describe('browser-client runtime transport', () => {
 
   it('replaces an idle client when a later request targets a different runtime', async () => {
     const module = await import('./client.ts')
-    const primaryRuntime: ProjectServerRuntime = {
+    const primaryRuntime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
       host: '127.0.0.1',
     }
-    const secondaryRuntime: ProjectServerRuntime = {
+    const secondaryRuntime: AnalysisServerRuntime = {
       id: 'runtime-b',
       port: '43124',
       host: '127.0.0.1',

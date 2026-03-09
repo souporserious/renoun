@@ -9,7 +9,7 @@ import {
   test,
   vi,
 } from 'vitest'
-import type { ProjectOptions } from '../project/types.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
 import type { RenounPrewarmTargets } from './prewarm.ts'
 
 import { resolveSchemePath } from '../utils/path.ts'
@@ -18,9 +18,9 @@ import { getTsMorph } from '../utils/ts-morph.ts'
 const moduleSpecifierExtension =
   extname(fileURLToPath(import.meta.url)) === '.js' ? '.js' : '.ts'
 
-const getProjectModuleSpecifier = `../project/get-project${moduleSpecifierExtension}`
+const getProgramModuleSpecifier = `../analysis/get-program${moduleSpecifierExtension}`
 const nodeFileSystemModuleSpecifier = `../file-system/NodeFileSystem${moduleSpecifierExtension}`
-const projectClientModuleSpecifier = `../project/client${moduleSpecifierExtension}`
+const projectClientModuleSpecifier = `../analysis/client${moduleSpecifierExtension}`
 const gitIgnoredModuleSpecifier = `../utils/is-file-path-git-ignored${moduleSpecifierExtension}`
 const prewarmModuleSpecifier = `./prewarm${moduleSpecifierExtension}`
 
@@ -48,7 +48,7 @@ const getWorkspaceChangeTokenMock =
 const { Project } = getTsMorph()
 type ProjectInstance = InstanceType<typeof Project>
 
-const projectOptions: ProjectOptions = {
+const analysisOptions: AnalysisOptions = {
   tsConfigFilePath: '/repo/tsconfig.json',
   compilerOptions: {},
   useInMemoryFileSystem: true,
@@ -100,18 +100,18 @@ vi.mock('@renoun/mdx/utils', () => ({
 }))
 
 let prewarmRenounRpcServerCache:
-  | ((options?: { projectOptions?: ProjectOptions }) => Promise<void>)
+  | ((options?: { analysisOptions?: AnalysisOptions }) => Promise<void>)
   | undefined
 let collectRenounPrewarmTargets:
   | ((
       project: ProjectInstance,
-      projectOptions?: ProjectOptions
+      analysisOptions?: AnalysisOptions
     ) => Promise<RenounPrewarmTargets>)
   | undefined
 
 beforeAll(async () => {
-  vi.doMock(getProjectModuleSpecifier, () => ({
-    getProject: getProjectMock,
+  vi.doMock(getProgramModuleSpecifier, () => ({
+    getProgram: getProjectMock,
   }))
 
   vi.doMock(nodeFileSystemModuleSpecifier, () => ({
@@ -222,7 +222,7 @@ describe('prewarmRenounRpcServerCache', () => {
       throw new Error(`Unexpected file read: ${path}`)
     })
 
-    await prewarmRenounRpcServerCache!({ projectOptions })
+    await prewarmRenounRpcServerCache!({ analysisOptions })
 
     expect(getFileExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual(
       [
@@ -250,7 +250,7 @@ describe('prewarmRenounRpcServerCache', () => {
       ['/repo/namespaced/guide.mdx', '/repo/namespaced/readme.md'].sort()
     )
 
-    expect(getProjectMock).toHaveBeenCalledWith(projectOptions)
+    expect(getProjectMock).toHaveBeenCalledWith(analysisOptions)
     expect(readDirectoryMock).toHaveBeenCalled()
   })
 
@@ -270,8 +270,8 @@ describe('prewarmRenounRpcServerCache', () => {
   })
 
   test('skips prewarm when workspace token is unchanged and reruns when token changes', async () => {
-    const tokenProjectOptions: ProjectOptions = {
-      ...projectOptions,
+    const tokenProjectOptions: AnalysisOptions = {
+      ...analysisOptions,
       tsConfigFilePath: `/repo/tsconfig.${Date.now()}.json`,
     }
 
@@ -290,16 +290,16 @@ describe('prewarmRenounRpcServerCache', () => {
     ])
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
 
-    await prewarmRenounRpcServerCache!({ projectOptions: tokenProjectOptions })
+    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(1)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
 
-    await prewarmRenounRpcServerCache!({ projectOptions: tokenProjectOptions })
+    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(1)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
 
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-b')
-    await prewarmRenounRpcServerCache!({ projectOptions: tokenProjectOptions })
+    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(2)
     expect(readDirectoryMock).toHaveBeenCalledTimes(2)
   })
@@ -330,11 +330,11 @@ describe('prewarmRenounRpcServerCache', () => {
     })
 
     await expect(
-      prewarmRenounRpcServerCache!({ projectOptions })
+      prewarmRenounRpcServerCache!({ analysisOptions })
     ).resolves.toBe(undefined)
     expect(getFileExportsMock).toHaveBeenCalledWith(
       '/repo/working/index.ts',
-      projectOptions
+      analysisOptions
     )
   })
 
@@ -370,19 +370,19 @@ describe('prewarmRenounRpcServerCache', () => {
     })
 
     await expect(
-      prewarmRenounRpcServerCache!({ projectOptions })
+      prewarmRenounRpcServerCache!({ analysisOptions })
     ).resolves.toBe(undefined)
     expect(getFileExportsMock).toHaveBeenCalledWith(
       '/repo/failing/index.ts',
-      projectOptions
+      analysisOptions
     )
     expect(getFileExportsMock).toHaveBeenCalledWith(
       '/repo/working/index.ts',
-      projectOptions
+      analysisOptions
     )
     expect(getOutlineRangesMock).toHaveBeenCalledWith(
       '/repo/working/index.ts',
-      projectOptions
+      analysisOptions
     )
   })
 
@@ -422,7 +422,7 @@ describe('prewarmRenounRpcServerCache', () => {
       return entriesByPath.get(directoryPath) ?? []
     })
 
-    await prewarmRenounRpcServerCache!({ projectOptions })
+    await prewarmRenounRpcServerCache!({ analysisOptions })
 
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
     expect(readDirectoryMock).toHaveBeenCalledWith('/repo/known')
@@ -495,7 +495,7 @@ describe('prewarmRenounRpcServerCache', () => {
       return entriesByPath.get(directoryPath) ?? []
     })
 
-    await prewarmRenounRpcServerCache!({ projectOptions })
+    await prewarmRenounRpcServerCache!({ analysisOptions })
 
     expect(readDirectoryMock).toHaveBeenCalledTimes(3)
     expect(readDirectoryMock).toHaveBeenCalledWith('/repo/src/app')
@@ -521,7 +521,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
 
     expect(targets.directoryGetEntries).toEqual([
       {
@@ -575,7 +575,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
 
     expect(targets.directoryGetEntries).toEqual(
       expect.arrayContaining([
@@ -644,7 +644,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
 
     expect(targets.directoryGetEntries).toEqual([
       {
@@ -674,7 +674,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
 
     expect(targets.directoryGetEntries).toEqual([
       {
@@ -708,7 +708,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
 
     expect(targets.directoryGetEntries).toEqual([
       {
@@ -759,7 +759,7 @@ describe('collectRenounPrewarmTargets', () => {
       { overwrite: true }
     )
 
-    const targets = await collectRenounPrewarmTargets!(project, projectOptions)
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
 
     expect(targets.directoryGetEntries).toEqual(
       expect.arrayContaining([

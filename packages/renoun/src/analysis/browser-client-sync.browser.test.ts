@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
-  __TEST_ONLY__ as PROJECT_CLIENT_TEST_ONLY__,
-  retainProjectClientBrowserRuntime,
-  setProjectClientBrowserRuntime,
+  __TEST_ONLY__ as ANALYSIS_CLIENT_TEST_ONLY__,
+  retainAnalysisClientBrowserRuntime,
+  setAnalysisClientBrowserRuntime,
 } from './client.ts'
 import {
-  getProjectClientBrowserRuntime,
-  getProjectClientBrowserRefreshVersion,
+  getAnalysisClientBrowserRuntime,
+  getAnalysisClientBrowserRefreshVersion,
 } from './browser-runtime.ts'
 
 interface JsonRpcRequest {
@@ -31,7 +31,7 @@ interface MockWebSocketInstance {
   close: () => void
 }
 
-describe('project/client browser refresh runtime', () => {
+describe('analysis/client browser refresh runtime', () => {
   let originalWebSocket: typeof WebSocket | undefined
   let controller: MockSocketController
 
@@ -44,28 +44,28 @@ describe('project/client browser refresh runtime', () => {
 
     originalWebSocket = globalThis.WebSocket
     ;(globalThis as any).WebSocket = createMockWebSocket(controller)
-    setProjectClientBrowserRuntime(undefined)
-    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
+    setAnalysisClientBrowserRuntime(undefined)
+    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('0:0')
   })
 
   afterEach(() => {
-    setProjectClientBrowserRuntime(undefined)
-    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
+    setAnalysisClientBrowserRuntime(undefined)
+    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('0:0')
     ;(globalThis as any).WebSocket = originalWebSocket
   })
 
   it('resets the cursor when switching runtimes', async () => {
-    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('7:3')
-    setProjectClientBrowserRuntime({
+    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('7:3')
+    setAnalysisClientBrowserRuntime({
       id: 'runtime-a',
       port: '43123',
       host: '127.0.0.1',
     })
 
     await waitFor(() => controller.instances.length === 1, 1_000)
-    expect(getProjectClientBrowserRefreshVersion()).toBe('7:3')
+    expect(getAnalysisClientBrowserRefreshVersion()).toBe('7:3')
 
-    setProjectClientBrowserRuntime({
+    setAnalysisClientBrowserRuntime({
       id: 'runtime-b',
       port: '43124',
       host: '127.0.0.1',
@@ -73,7 +73,7 @@ describe('project/client browser refresh runtime', () => {
 
     await waitFor(() => controller.instances.length === 2, 1_000)
 
-    expect(getProjectClientBrowserRefreshVersion()).toBe('0:4')
+    expect(getAnalysisClientBrowserRefreshVersion()).toBe('0:4')
     expect(controller.openedUrls).toEqual([
       'ws://127.0.0.1:43123',
       'ws://127.0.0.1:43124',
@@ -82,8 +82,8 @@ describe('project/client browser refresh runtime', () => {
   })
 
   it('syncs to a lower cursor after a full refresh resync', async () => {
-    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('5:2')
-    setProjectClientBrowserRuntime({
+    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('5:2')
+    setAnalysisClientBrowserRuntime({
       id: 'runtime-resync',
       port: '43123',
       host: '127.0.0.1',
@@ -113,7 +113,7 @@ describe('project/client browser refresh runtime', () => {
     })
 
     await waitFor(
-      () => getProjectClientBrowserRefreshVersion() === '0:3',
+      () => getAnalysisClientBrowserRefreshVersion() === '0:3',
       1_000
     )
 
@@ -143,7 +143,7 @@ describe('project/client browser refresh runtime', () => {
   })
 
   it('does not discard retained runtimes when clearing the explicit runtime', async () => {
-    const releaseRuntime = retainProjectClientBrowserRuntime({
+    const releaseRuntime = retainAnalysisClientBrowserRuntime({
       id: 'runtime-retained',
       port: '43123',
       host: '127.0.0.1',
@@ -151,15 +151,15 @@ describe('project/client browser refresh runtime', () => {
 
     try {
       await waitFor(
-        () => getProjectClientBrowserRuntime()?.id === 'runtime-retained',
+        () => getAnalysisClientBrowserRuntime()?.id === 'runtime-retained',
         1_000
       )
       await waitFor(() => controller.instances.length === 1, 1_000)
 
-      setProjectClientBrowserRuntime(undefined)
+      setAnalysisClientBrowserRuntime(undefined)
 
       await waitFor(
-        () => getProjectClientBrowserRuntime()?.id === 'runtime-retained',
+        () => getAnalysisClientBrowserRuntime()?.id === 'runtime-retained',
         1_000
       )
       expect(controller.openedUrls).toEqual(['ws://127.0.0.1:43123'])

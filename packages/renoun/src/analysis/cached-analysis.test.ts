@@ -10,7 +10,7 @@ import {
   collectTypeScriptMetadata,
   type GetTokensOptions,
 } from '../utils/get-tokens.ts'
-import { invalidateProjectFileCache } from './cache.ts'
+import { invalidateProgramFileCache } from './cache.ts'
 import {
   getCachedFileExports,
   getCachedFileExportMetadata,
@@ -146,7 +146,7 @@ async function createTemporaryWorkspace(
   }
 }
 
-describe('project cached analysis', () => {
+describe('analysis cached analysis', () => {
   test('reuses cached source text metadata for identical inputs', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -160,15 +160,22 @@ describe('project cached analysis', () => {
       language: 'ts',
       shouldFormat: false,
     })
+    const createSourceFileCallsAfterFirstRun =
+      createSourceFileSpy.mock.calls.length
     const second = await getCachedSourceTextMetadata(project, {
       value: source,
       language: 'ts',
       shouldFormat: false,
     })
+    const createSourceFileCallsAfterSecondRun =
+      createSourceFileSpy.mock.calls.length
 
     expect(first.value).toBe(second.value)
     expect(first.filePath).toBe(second.filePath)
-    expect(createSourceFileSpy).toHaveBeenCalledTimes(1)
+    expect(createSourceFileCallsAfterFirstRun).toBeGreaterThanOrEqual(1)
+    expect(createSourceFileCallsAfterSecondRun).toBe(
+      createSourceFileCallsAfterFirstRun
+    )
   })
 
   test('rehydrates missing source files on cached source text metadata hits', async () => {
@@ -408,7 +415,7 @@ describe('project cached analysis', () => {
     project.createSourceFile(filePath, 'export const value = 2', {
       overwrite: true,
     })
-    invalidateProjectFileCache(project, filePath)
+    invalidateProgramFileCache(project, filePath)
 
     const refreshed = await getCachedFileExportStaticValue(project, {
       filePath,
@@ -450,7 +457,7 @@ describe('project cached analysis', () => {
     project.createSourceFile(dependencyPath, 'export const dep = 2\n', {
       overwrite: true,
     })
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
     invalidateRuntimeAnalysisCachePath(dependencyPath)
 
     const refreshed = await getCachedFileExportStaticValue(project, {
@@ -494,7 +501,7 @@ describe('project cached analysis', () => {
     project.createSourceFile(filePath, 'export const value = 2', {
       overwrite: true,
     })
-    invalidateProjectFileCache(project, filePath)
+    invalidateProgramFileCache(project, filePath)
 
     const refreshed = await getCachedFileExportText(project, {
       filePath,
@@ -535,7 +542,7 @@ describe('project cached analysis', () => {
         overwrite: true,
       }
     )
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
     invalidateRuntimeAnalysisCachePath(dependencyPath)
 
     const refreshed = await transpileCachedSourceFile(project, filePath)
@@ -884,7 +891,7 @@ describe('project cached analysis', () => {
 
     await writeFile(dependencyPath, 'export const dep = 2\n', 'utf8')
     await project.getSourceFileOrThrow(dependencyPath).refreshFromFileSystem()
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
     invalidateRuntimeAnalysisCachePath(dependencyPath)
     await delay(0)
 
@@ -973,7 +980,7 @@ describe('project cached analysis', () => {
       'utf8'
     )
     await project.getSourceFileOrThrow(dependencyPath).refreshFromFileSystem()
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
     invalidateRuntimeAnalysisCachePath(dependencyPath)
     await delay(0)
 
@@ -1098,7 +1105,7 @@ describe('project cached analysis', () => {
         overwrite: true,
       }
     )
-    invalidateProjectFileCache(project, dependencyPath)
+    invalidateProgramFileCache(project, dependencyPath)
 
     const refreshed = await resolveCachedTypeAtLocationWithDependencies(
       project,

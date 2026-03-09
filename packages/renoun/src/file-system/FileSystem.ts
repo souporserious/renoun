@@ -9,8 +9,8 @@ import {
   getOutlineRanges,
   resolveTypeAtLocation,
   resolveTypeAtLocationWithDependencies,
-} from '../project/client.ts'
-import type { ProjectOptions } from '../project/types.ts'
+} from '../analysis/client.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
 import {
   directoryName,
   joinPaths,
@@ -187,7 +187,7 @@ export abstract class BaseFileSystem {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
   }
 
-  abstract getProjectOptions(): ProjectOptions
+  abstract getAnalysisOptions(): AnalysisOptions
 
   abstract getAbsolutePath(path: string): string
 
@@ -390,7 +390,7 @@ export abstract class BaseFileSystem {
   abstract isFilePathGitIgnored(filePath: string): boolean
 
   getFileExports(filePath: string) {
-    return getFileExports(filePath, this.getProjectOptions())
+    return getFileExports(filePath, this.getAnalysisOptions())
   }
 
   getFileExportMetadata(
@@ -404,7 +404,7 @@ export abstract class BaseFileSystem {
       filePath,
       position,
       kind,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 
@@ -419,12 +419,12 @@ export abstract class BaseFileSystem {
       position,
       kind,
       includeDependencies,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 
   getOutlineRanges(filePath: string) {
-    return getOutlineRanges(filePath, this.getProjectOptions())
+    return getOutlineRanges(filePath, this.getAnalysisOptions())
   }
 
   async getFoldingRanges(filePath: string) {
@@ -445,7 +445,7 @@ export abstract class BaseFileSystem {
       filePath,
       position,
       kind,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 
@@ -460,7 +460,7 @@ export abstract class BaseFileSystem {
       position,
       kind,
       filter,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 
@@ -476,7 +476,7 @@ export abstract class BaseFileSystem {
       position,
       kind,
       filter,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 }
