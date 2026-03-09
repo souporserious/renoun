@@ -4,7 +4,9 @@ import { getTsMorph } from '../../utils/ts-morph.ts'
 import {
   getSourceTextMetadata,
   getSourceTextMetadataFallback,
+  hydrateSourceTextMetadataSourceFile,
 } from './source-text-metadata.ts'
+import { MAX_VIRTUAL_SNIPPET_REGISTRATIONS_PER_PROJECT } from './snippet-registry.ts'
 
 const { Project } = getTsMorph()
 
@@ -80,6 +82,34 @@ describe('getSourceTextMetadataFallback', () => {
     expect(first.label).toBe('demo/example.ts')
     expect(second.label).toBe('demo/example.ts')
     expect(first.valueSignature).not.toBe(second.valueSignature)
+  })
+
+  test('protects explicit snippet paths when a real source file already exists', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+
+    project.createSourceFile(
+      '/workspace/src/demo/example.ts',
+      'export const real = 1\n',
+      {
+        overwrite: true,
+      }
+    )
+
+    const result = getSourceTextMetadataFallback({
+      project,
+      value: 'export const snippet = 2',
+      language: 'ts',
+      filePath: 'demo/example.ts',
+      baseDirectory: '/workspace/src',
+      virtualizeFilePath: true,
+    })
+
+    expect(result.filePath).toContain(
+      '/workspace/src/demo/example.__renoun_source.__renoun_snippet_'
+    )
+    expect(result.label).toBe('demo/example.ts')
   })
 
   test('preserves absolute explicit file paths when baseDirectory is undefined', () => {
@@ -170,6 +200,47 @@ describe('getSourceTextMetadata', () => {
     ).toHaveLength(0)
   })
 
+  test('keeps anchored snippets local without overwriting the real source file', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+
+    project.createSourceFile('/workspace/src/dep.ts', 'export const dep = 1\n', {
+      overwrite: true,
+    })
+    project.createSourceFile(
+      '/workspace/src/foo.ts',
+      'export const real = 1\n',
+      {
+        overwrite: true,
+      }
+    )
+
+    const result = await getSourceTextMetadata({
+      project,
+      value: "import { dep } from './dep.ts'\ndep\n",
+      language: 'ts',
+      filePath: '/workspace/src/foo.ts',
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(result.filePath).toContain(
+      '/workspace/src/foo.__renoun_source.__renoun_snippet_'
+    )
+    expect(project.getSourceFile('/workspace/src/foo.ts')?.getFullText()).toBe(
+      'export const real = 1\n'
+    )
+    expect(
+      project.getSourceFile('/workspace/src/foo.__renoun_source.ts')?.getFullText()
+    ).toBe(result.value)
+    expect(
+      project
+        .getPreEmitDiagnostics()
+        .filter((diagnostic) => diagnostic.getCode() === 2307)
+    ).toHaveLength(0)
+  })
+
   test('rewrites the stable alias with the final normalized snippet content', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -226,5 +297,66 @@ describe('getSourceTextMetadata', () => {
     expect(project.getSourceFile('_renoun/posts.ts')?.getFullText()).toBe(
       second.value
     )
+  })
+
+  test('rehydrates cached virtual snippets through the registry lifecycle', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const firstFilePath = '_renoun/posts.__renoun_snippet_sig_1.ts'
+    const secondFilePath = '_renoun/posts.__renoun_snippet_sig_2.ts'
+
+    hydrateSourceTextMetadataSourceFile(project, {
+      value: 'export const first = 1\n',
+      language: 'ts',
+      filePath: firstFilePath,
+      valueSignature: 'sig_1',
+    })
+    hydrateSourceTextMetadataSourceFile(project, {
+      value: 'export const second = 2\n',
+      language: 'ts',
+      filePath: secondFilePath,
+      valueSignature: 'sig_2',
+    })
+
+    expect(project.getSourceFile(firstFilePath)).toBeUndefined()
+    expect(project.getSourceFile(secondFilePath)).toBeDefined()
+    expect(project.getSourceFile('_renoun/posts.ts')?.getFullText()).toBe(
+      'export const second = 2\n'
+    )
+  })
+
+  test('prunes least recently used virtual snippets when the registry exceeds capacity', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const filePaths: string[] = []
+
+    for (
+      let index = 0;
+      index < MAX_VIRTUAL_SNIPPET_REGISTRATIONS_PER_PROJECT + 1;
+      index += 1
+    ) {
+      const filePath = `_renoun/snippet-${index}.__renoun_snippet_sig_${index}.ts`
+
+      filePaths.push(filePath)
+      hydrateSourceTextMetadataSourceFile(project, {
+        value: `export const snippet${index} = ${index}\n`,
+        language: 'ts',
+        filePath,
+        valueSignature: `sig_${index}`,
+      })
+    }
+
+    expect(project.getSourceFile(filePaths[0]!)).toBeUndefined()
+    expect(project.getSourceFile('_renoun/snippet-0.ts')).toBeUndefined()
+    expect(project.getSourceFile(filePaths.at(-1)!)).toBeDefined()
+    expect(
+      project
+        .getSourceFiles()
+        .filter((sourceFile) =>
+          sourceFile.getFilePath().includes('.__renoun_snippet_')
+        )
+    ).toHaveLength(MAX_VIRTUAL_SNIPPET_REGISTRATIONS_PER_PROJECT)
   })
 })

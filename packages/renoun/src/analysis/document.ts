@@ -5,6 +5,7 @@ import { getLanguage, type Languages } from '../utils/get-language.ts'
 import { isJsxOnly } from '../utils/is-jsx-only.ts'
 
 const GENERATED_DOCUMENT_SCOPE = '_renoun'
+const RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS = '__renoun_source'
 const VIRTUAL_ANALYSIS_DOCUMENT_FILE_PATH_PATTERN =
   /\.__renoun_snippet_[A-Za-z0-9_-]+(?=(\.[^./\\]+)?$)/
 
@@ -38,6 +39,7 @@ export interface ResolveAnalysisDocumentOptions {
   language?: Languages
   baseDirectory?: string
   tsConfigDirectory?: string
+  project?: Project
   virtualizeFilePath?: boolean
 }
 
@@ -73,11 +75,29 @@ function toVirtualAnalysisDocumentFilePath(
   return `${filePath.slice(0, -extension.length)}${virtualSuffix}${extension}`
 }
 
+function toProtectedAnalysisDocumentStableFilePath(filePath: string): string {
+  if (filePath.includes(`.${RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS}`)) {
+    return filePath
+  }
+
+  const extension = extname(filePath)
+  const protectedSuffix = `.${RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS}`
+
+  if (!extension) {
+    return `${filePath}${protectedSuffix}`
+  }
+
+  return `${filePath.slice(0, -extension.length)}${protectedSuffix}${extension}`
+}
+
 export function coerceAnalysisDocumentSourceFileToModule(
   sourceFile: SourceFile
 ): void {
   const hasImports = sourceFile.getImportDeclarations().length > 0
-  const hasExports = sourceFile.getExportDeclarations().length > 0
+  const hasExports =
+    sourceFile.getExportDeclarations().length > 0 ||
+    sourceFile.getExportAssignments().length > 0 ||
+    sourceFile.getExportedDeclarations().size > 0
 
   if (!hasImports && !hasExports) {
     sourceFile.addExportDeclaration({})
@@ -101,6 +121,14 @@ function isJavaScriptLikeAnalysisDocument(options: {
   return ['js', 'jsx', 'ts', 'tsx'].includes(getLanguage(language))
 }
 
+function isGeneratedAnalysisDocumentFilePath(filePath: string): boolean {
+  return (
+    filePath === GENERATED_DOCUMENT_SCOPE ||
+    filePath.startsWith(`${GENERATED_DOCUMENT_SCOPE}/`) ||
+    filePath.includes(`/${GENERATED_DOCUMENT_SCOPE}/`)
+  )
+}
+
 function hasProgramSourceFile(project: Project, filePath: string): boolean {
   if (project.getSourceFile(filePath)) {
     return true
@@ -113,6 +141,28 @@ function hasProgramSourceFile(project: Project, filePath: string): boolean {
   return project
     .getSourceFiles()
     .some((sourceFile) => sourceFile.getFilePath().endsWith(`/${filePath}`))
+}
+
+export function resolveVirtualizedAnalysisDocumentStableFilePath(
+  project: Project | undefined,
+  filePath: string
+): string {
+  if (
+    project === undefined ||
+    isGeneratedAnalysisDocumentFilePath(filePath) ||
+    filePath.includes(`.${RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS}`)
+  ) {
+    return filePath
+  }
+
+  if (
+    hasProgramSourceFile(project, filePath) ||
+    project.getFileSystem().fileExistsSync(filePath)
+  ) {
+    return toProtectedAnalysisDocumentStableFilePath(filePath)
+  }
+
+  return filePath
 }
 
 export function hydrateAnalysisDocumentSourceFile(
@@ -182,6 +232,7 @@ export function resolveAnalysisDocument({
   language: languageProp,
   baseDirectory,
   tsConfigDirectory,
+  project,
   virtualizeFilePath = false,
 }: ResolveAnalysisDocumentOptions): ResolvedAnalysisDocument {
   let language = languageProp
@@ -223,7 +274,11 @@ export function resolveAnalysisDocument({
     }
   }
 
-  if (baseDirectory === undefined && !isAbsolute(filePath)) {
+  if (
+    baseDirectory === undefined &&
+    !isAbsolute(filePath) &&
+    !isGeneratedAnalysisDocumentFilePath(filePath)
+  ) {
     filePath = join(GENERATED_DOCUMENT_SCOPE, filePath)
   }
 
@@ -245,14 +300,19 @@ export function resolveAnalysisDocument({
     virtualizeFilePath &&
     Boolean(filePathProp) &&
     isJavaScriptLikeLanguage
-  const stableFilePath = filePath
+  const stableFilePath = shouldVirtualizeFilePath
+    ? resolveVirtualizedAnalysisDocumentStableFilePath(project, filePath)
+    : filePath
 
   if (shouldVirtualizeFilePath) {
     return {
       kind: 'snippet',
       value,
       language,
-      filePath: toVirtualAnalysisDocumentFilePath(filePath, valueSignature),
+      filePath: toVirtualAnalysisDocumentFilePath(
+        stableFilePath,
+        valueSignature
+      ),
       basePath: stableFilePath,
       contentHash: hashInlineSourceText(value),
       label,

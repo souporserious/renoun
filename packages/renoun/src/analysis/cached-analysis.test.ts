@@ -207,6 +207,83 @@ describe('analysis cached analysis', () => {
     expect(rehydratedSourceFile?.getExportDeclarations()).toHaveLength(1)
   })
 
+  test('rehydrates cached virtual snippets without replacing the real source file', async () => {
+    const project = createInMemoryTypeScriptProject()
+    const filePath = '/workspace/src/foo.ts'
+    const stableAliasPath = '/workspace/src/foo.__renoun_source.ts'
+    const realSourceText = 'export const real = 1\n'
+    const firstValue = 'export const first = 1\n'
+    const secondValue = 'export const second = 2\n'
+
+    project.createSourceFile(filePath, realSourceText, {
+      overwrite: true,
+    })
+
+    const first = await getCachedSourceTextMetadata(project, {
+      value: firstValue,
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+    const second = await getCachedSourceTextMetadata(project, {
+      value: secondValue,
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(first.filePath).not.toBe(second.filePath)
+    expect(project.getSourceFile(filePath)?.getFullText()).toBe(realSourceText)
+    expect(project.getSourceFile(stableAliasPath)?.getFullText()).toBe(
+      second.value
+    )
+
+    const secondVirtualSourceFile = project.getSourceFileOrThrow(second.filePath!)
+    const stableAliasSourceFile = project.getSourceFileOrThrow(stableAliasPath)
+    project.removeSourceFile(secondVirtualSourceFile)
+    project.removeSourceFile(stableAliasSourceFile)
+
+    const rehydratedFirst = await getCachedSourceTextMetadata(project, {
+      value: firstValue,
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(rehydratedFirst.filePath).toBe(first.filePath)
+    expect(project.getSourceFile(filePath)?.getFullText()).toBe(realSourceText)
+    expect(project.getSourceFile(first.filePath!)).toBeDefined()
+    expect(project.getSourceFile(second.filePath!)).toBeUndefined()
+    expect(project.getSourceFile(stableAliasPath)?.getFullText()).toBe(
+      first.value
+    )
+
+    const firstVirtualSourceFile = project.getSourceFileOrThrow(first.filePath!)
+    const firstStableAliasSourceFile =
+      project.getSourceFileOrThrow(stableAliasPath)
+    project.removeSourceFile(firstVirtualSourceFile)
+    project.removeSourceFile(firstStableAliasSourceFile)
+
+    const rehydratedSecond = await getCachedSourceTextMetadata(project, {
+      value: secondValue,
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(rehydratedSecond.filePath).toBe(second.filePath)
+    expect(project.getSourceFile(filePath)?.getFullText()).toBe(realSourceText)
+    expect(project.getSourceFile(first.filePath!)).toBeUndefined()
+    expect(project.getSourceFile(second.filePath!)).toBeDefined()
+    expect(project.getSourceFile(stableAliasPath)?.getFullText()).toBe(
+      second.value
+    )
+  })
+
   test('serves source metadata fallback immediately on cold development reads', async () => {
     await withDevelopmentLikeRuntime(async () => {
       const project = new Project({

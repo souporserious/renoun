@@ -6,6 +6,7 @@ import { waitForRefreshingPrograms } from '../refresh.ts'
 import {
   coerceAnalysisDocumentSourceFileToModule,
   generatedFilenames,
+  getAnalysisDocumentStableFilePathFromVirtualFilePath,
   getSourceTextValueSignature,
   resolveAnalysisDocument,
   toSourceTextMetadata,
@@ -57,8 +58,48 @@ export {
   getSourceTextValueSignature,
 }
 
-export const hydrateSourceTextMetadataSourceFile =
-  hydrateAnalysisDocumentSourceFile
+export function hydrateSourceTextMetadataSourceFile(
+  project: Project,
+  metadata: SourceTextMetadata
+): void {
+  const { filePath } = metadata
+
+  if (!filePath) {
+    return
+  }
+
+  const stableSnippetFilePath =
+    getAnalysisDocumentStableFilePathFromVirtualFilePath(filePath)
+
+  if (!stableSnippetFilePath) {
+    hydrateAnalysisDocumentSourceFile(project, metadata)
+    return
+  }
+
+  const hydratedDocument = resolveAnalysisDocument({
+    project,
+    value: metadata.value,
+    filePath: stableSnippetFilePath,
+    language: metadata.language,
+    virtualizeFilePath: true,
+  })
+
+  if (hydratedDocument.kind !== 'snippet') {
+    hydrateAnalysisDocumentSourceFile(project, metadata)
+    return
+  }
+
+  const sourceFile = project.createSourceFile(filePath, metadata.value, {
+    overwrite: true,
+  })
+  coerceAnalysisDocumentSourceFileToModule(sourceFile)
+
+  syncVirtualSnippetSourceFiles(project, {
+    ...hydratedDocument,
+    filePath,
+    valueSignature: metadata.valueSignature ?? hydratedDocument.valueSignature,
+  })
+}
 
 function getProgramTsConfigDirectory(project: Project): string | undefined {
   const configFilePath = project.getCompilerOptions()['configFilePath']
@@ -78,6 +119,7 @@ export function getSourceTextMetadataFallback(options: Omit<
 
   return toSourceTextMetadata(
     resolveAnalysisDocument({
+      project,
       ...documentOptions,
       tsConfigDirectory: getProgramTsConfigDirectory(project),
     })
@@ -101,6 +143,7 @@ export async function getSourceTextMetadata({
   baseDirectory,
 }: GetSourceTextMetadataOptions): Promise<SourceTextMetadata> {
   let document = resolveAnalysisDocument({
+    project,
     value,
     filePath: filePathProp,
     language,
