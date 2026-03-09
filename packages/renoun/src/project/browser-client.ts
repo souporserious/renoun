@@ -1,89 +1,65 @@
 import type { QuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
 import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.ts'
-import {
-  getProjectClientBrowserRuntime,
-  getProjectServerRuntimeKey,
-  onProjectClientBrowserRuntimeChange,
-} from './browser-runtime.ts'
+import { getProjectClientBrowserRuntime, getProjectServerRuntimeKey } from './browser-runtime.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import type { ProjectServerRuntime } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
-let client: WebSocketClient | undefined
-let clientRuntimeKey: string | undefined
-let hasSubscribedToBrowserRuntimeChanges = false
-
-function ensureBrowserRuntimeSubscription(): void {
-  if (hasSubscribedToBrowserRuntimeChanges) {
-    return
-  }
-
-  hasSubscribedToBrowserRuntimeChanges = true
-  onProjectClientBrowserRuntimeChange((runtime) => {
-    if (!runtime) {
-      disposeProjectBrowserClient()
-      return
-    }
-
-    const runtimeKey = getProjectServerRuntimeKey(runtime)
-    if (!runtimeKey) {
-      disposeProjectBrowserClient()
-      return
-    }
-
-    if (!client) {
-      return
-    }
-
-    if (clientRuntimeKey !== runtimeKey) {
-      replaceProjectBrowserClient(runtime)
-    }
-  })
+interface BrowserRuntimeClientState {
+  client: WebSocketClient
 }
+
+const browserClientsByRuntimeKey = new Map<string, BrowserRuntimeClientState>()
 
 function createProjectBrowserClient(
-  runtime: ProjectServerRuntime
-): WebSocketClient {
-  client = new WebSocketClient(runtime.id, runtime)
-  clientRuntimeKey = getProjectServerRuntimeKey(runtime)
-  return client
+  runtime: ProjectServerRuntime,
+  runtimeKey: string
+): BrowserRuntimeClientState {
+  const state: BrowserRuntimeClientState = {
+    client: new WebSocketClient(runtime.id, runtime),
+  }
+  browserClientsByRuntimeKey.set(runtimeKey, state)
+  return state
 }
 
-function disposeProjectBrowserClient(): void {
-  if (!client) {
-    clientRuntimeKey = undefined
+function disposeProjectBrowserClient(runtimeKey?: string): void {
+  const states =
+    runtimeKey === undefined
+      ? Array.from(browserClientsByRuntimeKey.values())
+      : [browserClientsByRuntimeKey.get(runtimeKey)].filter(
+          (state): state is BrowserRuntimeClientState => state !== undefined
+        )
+
+  if (states.length === 0) {
     return
   }
 
-  const activeClient = client
-  client = undefined
-  clientRuntimeKey = undefined
-
-  try {
-    activeClient.removeAllListeners()
-  } catch {
-    // Ignore cleanup failures; a replacement client will still reconnect.
+  if (runtimeKey === undefined) {
+    browserClientsByRuntimeKey.clear()
+  } else {
+    browserClientsByRuntimeKey.delete(runtimeKey)
   }
 
-  try {
-    activeClient.close()
-  } catch {
-    // Ignore cleanup failures; a replacement client will still reconnect.
-  }
-}
+  for (const state of states) {
+    const activeClient = state.client
 
-function replaceProjectBrowserClient(
-  runtime: ProjectServerRuntime
-): WebSocketClient {
-  disposeProjectBrowserClient()
-  return createProjectBrowserClient(runtime)
+    try {
+      activeClient.removeAllListeners()
+    } catch {
+      // Ignore cleanup failures; a replacement client will still reconnect.
+    }
+
+    try {
+      activeClient.close()
+    } catch {
+      // Ignore cleanup failures; a replacement client will still reconnect.
+    }
+  }
 }
 
 function getProjectBrowserClient(
   requestedRuntime?: ProjectServerRuntime
 ): WebSocketClient {
-  ensureBrowserRuntimeSubscription()
-
   const runtime = requestedRuntime ?? getProjectClientBrowserRuntime()
   const runtimeKey = getProjectServerRuntimeKey(runtime)
   if (!runtime || !runtimeKey) {
@@ -91,15 +67,12 @@ function getProjectBrowserClient(
     throw new Error('[renoun] Missing active browser project runtime.')
   }
 
-  if (!client) {
-    return createProjectBrowserClient(runtime)
+  const existingClientState = browserClientsByRuntimeKey.get(runtimeKey)
+  if (existingClientState) {
+    return existingClientState.client
   }
 
-  if (clientRuntimeKey !== runtimeKey) {
-    return replaceProjectBrowserClient(runtime)
-  }
-
-  return client
+  return createProjectBrowserClient(runtime, runtimeKey).client
 }
 
 async function callProjectBrowserClientMethod<
@@ -151,4 +124,8 @@ export async function getTokens(
     },
     TokenizedLines
   >('getTokens', params, runtime)
+}
+
+export const __TEST_ONLY__ = {
+  disposeProjectBrowserClient,
 }

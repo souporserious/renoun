@@ -1,15 +1,73 @@
 import React from 'react'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 
-import { getProjectClientBrowserRuntime } from '../../project/browser-runtime.ts'
+vi.mock('@renoun/mdx', async () => {
+  const React = await import('react')
+
+  return {
+    getMarkdownContent: async ({ source }: { source: string }) => {
+      const children: React.ReactNode[] = []
+      const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g
+      let match: RegExpExecArray | null
+      let cursor = 0
+
+      while ((match = linkPattern.exec(source)) !== null) {
+        if (match.index > cursor) {
+          children.push(source.slice(cursor, match.index))
+        }
+
+        children.push(
+          React.createElement(
+            'a',
+            {
+              href: match[2],
+              key: `${match[1]}:${match[2]}:${match.index}`,
+            },
+            match[1]
+          )
+        )
+        cursor = match.index + match[0].length
+      }
+
+      if (cursor < source.length) {
+        children.push(source.slice(cursor))
+      }
+
+      return React.createElement(React.Fragment, null, ...children)
+    },
+  }
+})
+
+vi.mock('@renoun/mdx/rehype', () => ({
+  rehypePlugins: [],
+}))
+
+vi.mock('@renoun/mdx/remark', () => ({
+  remarkPlugins: [],
+}))
+
+vi.mock('../../utils/concurrency.ts', () => ({
+  createConcurrentQueue: () => ({
+    run: <T,>(task: () => Promise<T>) => task(),
+  }),
+}))
+
+import {
+  getProjectClientBrowserRuntime,
+  setProjectClientBrowserRefreshVersion,
+} from '../../project/browser-runtime.ts'
+import { __TEST_ONLY__ as PROJECT_BROWSER_CLIENT_TEST_ONLY__ } from '../../project/browser-client.ts'
 import {
   retainProjectClientBrowserRuntime,
   setProjectClientBrowserRuntime,
 } from '../../project/browser-client-sync.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
-import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
+import {
+  QuickInfoClientPopover,
+  clearQuickInfoClientPopoverCaches,
+} from './QuickInfoClientPopover.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
 import { Symbol } from './Symbol.tsx'
 
@@ -121,6 +179,9 @@ describe('QuickInfo browser regression', () => {
 
     originalWebSocket = globalThis.WebSocket
     ;(globalThis as any).WebSocket = createMockWebSocket(counters)
+    PROJECT_BROWSER_CLIENT_TEST_ONLY__.disposeProjectBrowserClient()
+    clearQuickInfoClientPopoverCaches()
+    setProjectClientBrowserRefreshVersion('0:0')
   })
 
   afterEach(async () => {
@@ -138,7 +199,10 @@ describe('QuickInfo browser regression', () => {
       node.remove()
     })
     document.documentElement.removeAttribute('data-theme')
+    PROJECT_BROWSER_CLIENT_TEST_ONLY__.disposeProjectBrowserClient()
+    clearQuickInfoClientPopoverCaches()
     setProjectClientBrowserRuntime(undefined)
+    setProjectClientBrowserRefreshVersion('0:0')
 
     if (originalWebSocket) {
       ;(globalThis as any).WebSocket = originalWebSocket
@@ -239,13 +303,13 @@ describe('QuickInfo browser regression', () => {
         ) === 1,
       1_000
     )
-    expect(counters.socketsOpened).toBe(2)
+    expect(counters.socketsOpened).toBe(1)
     document.documentElement.setAttribute('data-theme', 'light')
     await waitFor(
       () => counters.tokensByThemeKey.get(`${shortDisplayText}:light`) === 1,
       1_000
     )
-    expect(counters.socketsOpened).toBe(2)
+    expect(counters.socketsOpened).toBe(1)
   })
 
   it('invalidates cached quick info when the rendered source signature changes', async () => {
@@ -509,17 +573,21 @@ describe('QuickInfo browser regression', () => {
     }, 1_000)
   })
 
-  it('honors the popover runtime when another retained runtime is already active', async () => {
+  it('keeps the shared runtime on the retained page runtime while hover RPCs use the popover runtime', async () => {
     const releaseRuntime = retainProjectClientBrowserRuntime(SECOND_RUNTIME)
     renderQuickInfoFixture(root, 'stale-runtime')
 
     try {
+      await waitFor(() => counters.socketsOpened === 1, 1_000)
+      expect(getProjectClientBrowserRuntime()?.id).toBe(SECOND_RUNTIME.id)
+
       await waitFor(
         () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
         1_000
       )
 
-      hoverSymbol(getSymbolAnchor('symbol-short'))
+      const symbol = getSymbolAnchor('symbol-short')
+      hoverSymbol(symbol)
 
       await waitFor(
         () =>
@@ -529,11 +597,29 @@ describe('QuickInfo browser regression', () => {
         1_000
       )
 
+      expect(getProjectClientBrowserRuntime()?.id).toBe(SECOND_RUNTIME.id)
+      expect(counters.socketsOpened).toBe(2)
       expect(
         counters.quickInfoByRuntimeKey.get(
           'quick-info-browser-test-secondary@ws://127.0.0.1:43124'
         )
       ).toBeUndefined()
+
+      leaveSymbol(symbol)
+      await waitFor(() => !getPopover(), 1_000)
+
+      broadcastNotification(counters, {
+        type: 'refresh',
+        data: {
+          refreshCursor: 1,
+          filePaths: ['/tmp/retained-runtime.refresh.ts'],
+        },
+      })
+
+      hoverSymbol(symbol)
+      await waitFor(() => Boolean(getPopover()), 1_000)
+      await sleep(50)
+      expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBe(1)
     } finally {
       releaseRuntime()
     }
@@ -565,28 +651,6 @@ describe('QuickInfo browser regression', () => {
     )
   })
 
-  it('releases the active runtime when the popover unmounts', async () => {
-    renderQuickInfoFixture(root, 'runtime-cleanup')
-
-    await waitFor(
-      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
-      1_000
-    )
-
-    hoverSymbol(getSymbolAnchor('symbol-short'))
-
-    await waitFor(
-      () => getProjectClientBrowserRuntime()?.id === RUNTIME.id,
-      1_000
-    )
-    expect(counters.sockets.size).toBe(2)
-
-    root?.unmount()
-    root = null
-
-    await waitFor(() => getProjectClientBrowserRuntime() === undefined, 1_000)
-    expect(counters.sockets.size).toBe(0)
-  })
 })
 
 function renderQuickInfoFixture(root: Root | null, cacheScope: string) {

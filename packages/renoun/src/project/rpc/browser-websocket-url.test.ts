@@ -49,7 +49,7 @@ describe('resolveBrowserWebSocketUrl', () => {
     ).toBe('ws://[::1]:43123')
   })
 
-  test('keeps using the exported loopback host for proxied https sessions', () => {
+  test('uses the browser hostname for proxied https sessions when the runtime host is loopback', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -61,7 +61,7 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('ws://127.0.0.1:43123')
+    ).toBe('wss://preview.example.dev:43123')
   })
 
   test('keeps using the exported runtime port for proxied browser sessions', () => {
@@ -77,10 +77,10 @@ describe('resolveBrowserWebSocketUrl', () => {
           port: '8443',
         }
       )
-    ).toBe('ws://127.0.0.1:43123')
+    ).toBe('wss://preview.example.dev:43123')
   })
 
-  test('falls back to localhost when no runtime host is exported on non-loopback pages', () => {
+  test('uses the browser hostname when no runtime host is exported on non-loopback pages', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -91,7 +91,7 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('ws://localhost:43123')
+    ).toBe('wss://preview.example.dev:43123')
   })
 
   test('defaults to localhost when hostname is missing', () => {
@@ -107,7 +107,7 @@ describe('resolveBrowserWebSocketUrl', () => {
     ).toBe('ws://localhost:43123')
   })
 
-  test('keeps using ws for direct non-loopback hosts on https pages', () => {
+  test('uses wss for direct non-loopback hosts on https pages', () => {
     expect(
       resolveBrowserWebSocketUrl(
         {
@@ -119,6 +119,6 @@ describe('resolveBrowserWebSocketUrl', () => {
           hostname: 'preview.example.dev',
         }
       )
-    ).toBe('ws://devbox.internal:43123')
+    ).toBe('wss://devbox.internal:43123')
   })
 })

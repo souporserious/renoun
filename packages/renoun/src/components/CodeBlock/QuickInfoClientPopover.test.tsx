@@ -113,3 +113,108 @@ describe('QuickInfoClientPopover cache behavior', () => {
     )
   })
 })
+
+describe('QuickInfoClientPopover runtime selection', () => {
+  it('keeps hover requests scoped to their own runtime when a retained page runtime is active', () => {
+    const requestRuntime = {
+      id: 'quick-info-request-runtime',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const retainedBrowserRuntime = {
+      id: 'quick-info-page-runtime',
+      port: '43124',
+      host: '127.0.0.1',
+    }
+
+    expect(
+      __TEST_ONLY__.resolveQuickInfoRuntimeSelection(
+        requestRuntime,
+        retainedBrowserRuntime,
+        true
+      )
+    ).toEqual({
+      runtime: requestRuntime,
+      usesSharedBrowserRuntime: false,
+    })
+  })
+
+  it('follows the shared browser runtime when no retained page runtime is active', () => {
+    const requestRuntime = {
+      id: 'quick-info-request-runtime',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const sharedBrowserRuntime = {
+      id: 'quick-info-updated-runtime',
+      port: '43124',
+      host: '::1',
+    }
+
+    expect(
+      __TEST_ONLY__.resolveQuickInfoRuntimeSelection(
+        requestRuntime,
+        sharedBrowserRuntime,
+        false
+      )
+    ).toEqual({
+      runtime: sharedBrowserRuntime,
+      usesSharedBrowserRuntime: true,
+    })
+  })
+
+  it('does not derive a hover cache version from another runtime refresh cursor', () => {
+    const requestRuntime = {
+      id: 'quick-info-request-runtime',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+
+    expect(
+      __TEST_ONLY__.resolveQuickInfoProjectVersion({
+        browserRuntime: {
+          id: 'quick-info-page-runtime',
+          port: '43124',
+          host: '127.0.0.1',
+        },
+        selectedRuntime: requestRuntime,
+        requestProjectVersion: 'quick-info-request-runtime:0:0',
+        refreshVersion: '8:3',
+      })
+    ).toBe('quick-info-request-runtime:0:0')
+  })
+
+  it('derives a hover cache version from the retained runtime when it matches the request runtime', () => {
+    const requestRuntime = {
+      id: 'quick-info-request-runtime',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+
+    expect(
+      __TEST_ONLY__.resolveQuickInfoProjectVersion({
+        browserRuntime: requestRuntime,
+        selectedRuntime: requestRuntime,
+        requestProjectVersion: 'quick-info-request-runtime:0:0',
+        refreshVersion: '8:3',
+      })
+    ).toBe('quick-info-request-runtime:8:3')
+  })
+
+  it('stabilizes the initial hover cache version before the shared runtime is retained', () => {
+    const requestRuntime = {
+      id: 'quick-info-request-runtime',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+
+    expect(
+      __TEST_ONLY__.resolveQuickInfoProjectVersion({
+        browserRuntime: undefined,
+        selectedRuntime: requestRuntime,
+        requestProjectVersion: undefined,
+        refreshVersion: '0:0',
+      })
+    ).toBe('quick-info-request-runtime:0:0')
+  })
+})

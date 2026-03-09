@@ -51,7 +51,10 @@ function isLoopbackHost(host: string | undefined): boolean {
 function resolveWebSocketAuthority(
   runtime: BrowserRuntimeLike,
   location?: BrowserLocationLike
-): string {
+): {
+  host: string
+  authority: string
+} {
   const runtimeHost =
     typeof runtime.host === 'string' && runtime.host.trim().length > 0
       ? runtime.host.trim()
@@ -61,18 +64,31 @@ function resolveWebSocketAuthority(
       ? location.hostname.trim()
       : undefined
 
-  if (runtimeHost) {
-    return formatWebSocketAuthority(runtimeHost, runtime.port)
-  }
+  // When the browser is connected through a tunnel or preview proxy, loopback
+  // runtime hosts are not browser-reachable. Reuse the current page hostname so
+  // the proxy can forward the runtime port and secure origins can use `wss://`.
+  const resolvedHost =
+    browserHost &&
+    !isLoopbackHost(browserHost) &&
+    (!runtimeHost || isLoopbackHost(runtimeHost))
+      ? browserHost
+      : runtimeHost ?? (browserHost && isLoopbackHost(browserHost)
+          ? browserHost
+          : 'localhost')
 
-  // The current RPC server only exposes a plain `ws://` endpoint and only binds
-  // loopback hosts. Avoid proxy-visible hostnames here because the browser would
-  // target an endpoint the server does not actually serve.
-  if (browserHost && isLoopbackHost(browserHost)) {
-    return formatWebSocketAuthority(browserHost, runtime.port)
+  return {
+    host: resolvedHost,
+    authority: formatWebSocketAuthority(resolvedHost, runtime.port),
   }
+}
 
-  return formatWebSocketAuthority('localhost', runtime.port)
+function resolveWebSocketProtocol(
+  host: string,
+  location?: BrowserLocationLike
+): 'ws' | 'wss' {
+  return location?.protocol === 'https:' && !isLoopbackHost(host)
+    ? 'wss'
+    : 'ws'
 }
 
 export function resolveBrowserWebSocketUrl(
@@ -80,5 +96,6 @@ export function resolveBrowserWebSocketUrl(
   location: BrowserLocationLike | undefined =
     typeof window === 'undefined' ? undefined : window.location
 ): string {
-  return `ws://${resolveWebSocketAuthority(runtime, location)}`
+  const { host, authority } = resolveWebSocketAuthority(runtime, location)
+  return `${resolveWebSocketProtocol(host, location)}://${authority}`
 }
