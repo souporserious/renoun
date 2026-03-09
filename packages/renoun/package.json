@@ -43,7 +43,11 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "imports": {
-    "#fixtures/*": "./fixtures/*"
+    "#fixtures/*": "./fixtures/*",
+    "#project-client-server": {
+      "browser": "./dist/project/client.server.browser.js",
+      "default": "./dist/project/client.server.js"
+    }
   },
   "exports": {
     ".": {

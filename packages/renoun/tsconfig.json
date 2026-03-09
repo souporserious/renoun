@@ -18,6 +18,10 @@
     "isolatedModules": true,
     "jsx": "react",
     "verbatimModuleSyntax": true,
+    "baseUrl": ".",
+    "paths": {
+      "#project-client-server": ["./src/project/client.server.ts"]
+    },
     "stripInternal": true,
     "rootDir": "./src",
     "outDir": "./dist",

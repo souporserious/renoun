@@ -78,7 +78,7 @@ import {
 import type { ProjectServerRuntime } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
-type ProjectClientServerModules = typeof import('./client.server.ts')
+type ProjectClientServerModules = typeof import('#project-client-server')
 
 interface ActiveClientState {
   client: WebSocketClient
@@ -366,15 +366,13 @@ async function loadProjectClientServerModules(): Promise<ProjectClientServerModu
   }
 
   if (!projectClientServerModulesPromise) {
-    const clientServerModulePath = './client.' + 'server.ts'
-
-    projectClientServerModulesPromise = import(
-      /* @vite-ignore */ clientServerModulePath
-    ).then((modules) => {
-      applyProjectCacheRuntimeOptions(modules)
-      loadedProjectClientServerModules = modules
-      return modules
-    })
+    projectClientServerModulesPromise = import('#project-client-server').then(
+      (modules) => {
+        applyProjectCacheRuntimeOptions(modules)
+        loadedProjectClientServerModules = modules
+        return modules
+      }
+    )
   }
 
   return projectClientServerModulesPromise
