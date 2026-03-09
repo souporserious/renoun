@@ -9,7 +9,13 @@ import { createConcurrentQueue } from '../../utils/concurrency.ts'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import { Markdown, type MarkdownProps } from '../Markdown.tsx'
-import { QuickInfoPopover } from './QuickInfoPopover.tsx'
+import {
+  createQuickInfoTheme,
+  QuickInfoContent,
+  QuickInfoDisplayText,
+  QuickInfoDisplayToken,
+  QuickInfoMarkdown,
+} from './QuickInfoContent.tsx'
 import { CodeBlock } from './CodeBlock.tsx'
 
 const Paragraph = styled('p', {
@@ -61,6 +67,7 @@ async function renderQuickInfo({
 }) {
   const config = await getConfig()
   const theme = await getThemeColors(config.theme)
+  const quickInfoTheme = createQuickInfoTheme(theme)
   let displayTextTokens: Token[][] = []
 
   if (quickInfo?.displayText) {
@@ -75,73 +82,45 @@ async function renderQuickInfo({
   }
 
   return (
-    <QuickInfoPopover>
-      <Container
-        css={{
-          boxSizing: 'border-box',
-          border: theme.editorHoverWidget.border
-            ? `1px solid ${theme.editorHoverWidget.border}`
-            : undefined,
-          backgroundColor: theme.editorHoverWidget.background,
-          color: theme.editorHoverWidget.foreground,
-          ...css,
-        }}
-        className={className}
-        style={style}
-      >
-        <ContentContainer>
-          {diagnostics ? (
-            <DiagnosticContainer>
-              {diagnostics.map((diagnostic, index) => (
-                <Diagnostic key={index}>
-                  {diagnostic.message}
-                  <DiagnosticCode>({diagnostic.code})</DiagnosticCode>
-                </Diagnostic>
-              ))}
-            </DiagnosticContainer>
-          ) : null}
-
-          {displayTextTokens.length ? (
-            <>
-              {diagnostics ? <Divider color={theme.panel.border} /> : null}
-              <DisplayTextContainer>
-                {displayTextTokens.map((line, index) => (
-                  <Fragment key={index}>
-                    {index === 0 ? null : '\n'}
-                    {line.map((token, index) => (
-                      <TokenSpan
-                        key={index}
-                        css={token.style}
-                        className={BASE_TOKEN_CLASS_NAME}
-                      >
-                        {token.value}
-                      </TokenSpan>
-                    ))}
-                  </Fragment>
+    <QuickInfoContent
+      diagnostics={diagnostics}
+      display={
+        displayTextTokens.length ? (
+          <QuickInfoDisplayText>
+            {displayTextTokens.map((line, index) => (
+              <Fragment key={index}>
+                {index === 0 ? null : '\n'}
+                {line.map((token, tokenIndex) => (
+                  <QuickInfoDisplayToken
+                    key={tokenIndex}
+                    css={token.style}
+                    className={BASE_TOKEN_CLASS_NAME}
+                  >
+                    {token.value}
+                  </QuickInfoDisplayToken>
                 ))}
-              </DisplayTextContainer>
-            </>
-          ) : null}
-
-          {quickInfo?.documentationText.length ? (
-            <>
-              <Divider color={theme.panel.border} />
-              <MarkdownContainer
-                css={{
-                  '--border': theme.panel.border,
-                  color: theme.foreground,
-                }}
-              >
-                <Markdown
-                  children={quickInfo.documentationText}
-                  {...mdxProps}
-                />
-              </MarkdownContainer>
-            </>
-          ) : null}
-        </ContentContainer>
-      </Container>
-    </QuickInfoPopover>
+              </Fragment>
+            ))}
+          </QuickInfoDisplayText>
+        ) : null
+      }
+      documentation={
+        quickInfo?.documentationText.length ? (
+          <QuickInfoMarkdown
+            css={{
+              '--border': quickInfoTheme.panelBorder,
+              color: quickInfoTheme.foreground,
+            }}
+          >
+            <Markdown children={quickInfo.documentationText} {...mdxProps} />
+          </QuickInfoMarkdown>
+        ) : null
+      }
+      theme={quickInfoTheme}
+      css={css}
+      className={className}
+      style={style}
+    />
   )
 }
 
@@ -169,83 +148,20 @@ export function QuickInfoLoading({
   style?: React.CSSProperties
 }) {
   return (
-    <QuickInfoPopover>
-      <Container
-        css={{
-          boxSizing: 'border-box',
-          border: '1px solid var(--renoun-editor-hover-widget-border, #3c3c3c)',
-          backgroundColor:
-            'var(--renoun-editor-hover-widget-background, rgba(37, 37, 38, 0.95))',
-          color: 'var(--renoun-editor-hover-widget-foreground, #cccccc)',
-          ...css,
-        }}
-        className={className}
-        style={style}
-      >
-        <ContentContainer>
-          <LoadingText>loading…</LoadingText>
-        </ContentContainer>
-      </Container>
-    </QuickInfoPopover>
+    <QuickInfoContent
+      isLoading
+      loadingText="loading…"
+      theme={{
+        border: 'var(--renoun-editor-hover-widget-border, #3c3c3c)',
+        background:
+          'var(--renoun-editor-hover-widget-background, rgba(37, 37, 38, 0.95))',
+        foreground: 'var(--renoun-editor-hover-widget-foreground, #cccccc)',
+        panelBorder: 'var(--renoun-panel-border, currentColor)',
+        errorForeground: 'var(--renoun-editor-error-foreground, #f14c4c)',
+      }}
+      css={css}
+      className={className}
+      style={style}
+    />
   )
 }
-
-const Container = styled('div', {
-  fontSize: '1rem',
-  position: 'absolute',
-  zIndex: 1000,
-  width: 'max-content',
-  maxWidth: 540,
-  borderRadius: 3,
-  overflow: 'auto',
-  overscrollBehavior: 'contain',
-})
-
-const ContentContainer = styled('div', {
-  fontSize: '0.875em',
-  lineHeight: '1.4em',
-})
-
-const MarkdownContainer = styled('div', {
-  padding: '0.25em 0.5em 0',
-  textWrap: 'pretty',
-  '> *': {
-    marginBottom: '0.25em',
-  },
-})
-
-const DiagnosticContainer = styled('div', {
-  padding: '0.25em 0.5em',
-})
-
-const Diagnostic = styled('div', {
-  display: 'flex',
-  gap: '0.5em',
-})
-
-const DiagnosticCode = styled('span', {
-  opacity: 0.7,
-})
-
-const LoadingText = styled('div', {
-  padding: '0.5em 0.75em',
-  fontSize: '0.875em',
-  textTransform: 'uppercase',
-  letterSpacing: '0.08em',
-})
-
-const Divider = styled('hr', ({ color }: { color: string }) => ({
-  height: 1,
-  margin: 0,
-  border: 'none',
-  backgroundColor: color,
-  opacity: 0.5,
-}))
-
-const DisplayTextContainer = styled('div', {
-  fontFamily: 'monospace',
-  whiteSpace: 'pre-wrap',
-  padding: '0.25em 0.5em',
-})
-
-const TokenSpan = styled('span')

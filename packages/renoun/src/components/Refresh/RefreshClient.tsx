@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import {
   onProjectClientBrowserRefreshNotification,
   retainProjectClientBrowserRuntime,
-} from '../../project/browser-client-sync.ts'
+} from '../../project/client.ts'
 
 declare global {
   var __WAKU_RSC_RELOAD_LISTENERS__: (() => void)[] | undefined

@@ -1,5 +1,15 @@
 import { PROCESS_ENV_KEYS } from './env-keys.ts'
 
+function readProcessEnv(key: string): string | undefined {
+  const env = globalThis.process?.env
+  return typeof env === 'object' && env !== null ? env[key] : undefined
+}
+
+function readProcessArgv(): string[] {
+  const argv = globalThis.process?.argv
+  return Array.isArray(argv) ? argv : []
+}
+
 export function parseBooleanEnv(
   value: string | undefined,
   options: {
@@ -48,7 +58,7 @@ export function resolveBooleanProcessEnv(
     allowYesNo?: boolean
   } = {}
 ): boolean {
-  return resolveBooleanEnv(process.env[key], fallback, options)
+  return resolveBooleanEnv(readProcessEnv(key), fallback, options)
 }
 
 export function parseBooleanProcessEnv(
@@ -57,11 +67,11 @@ export function parseBooleanProcessEnv(
     allowYesNo?: boolean
   } = {}
 ): boolean | undefined {
-  return parseBooleanEnv(process.env[key], options)
+  return parseBooleanEnv(readProcessEnv(key), options)
 }
 
 export function readNonEmptyProcessEnv(key: string): string | undefined {
-  const value = process.env[key]
+  const value = readProcessEnv(key)
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
@@ -75,7 +85,7 @@ export function parseIntegerEnv(value: string | undefined): number | undefined {
 }
 
 export function parseIntegerProcessEnv(key: string): number | undefined {
-  return parseIntegerEnv(process.env[key])
+  return parseIntegerEnv(readProcessEnv(key))
 }
 
 export function parsePositiveIntegerEnv(
@@ -101,7 +111,7 @@ export function resolvePositiveIntegerProcessEnv(
   key: string,
   fallback: number
 ): number {
-  return resolvePositiveIntegerEnv(process.env[key], fallback)
+  return resolvePositiveIntegerEnv(readProcessEnv(key), fallback)
 }
 
 export function parseNonNegativeIntegerEnv(
@@ -118,7 +128,7 @@ export function parseNonNegativeIntegerEnv(
 export function parseNonNegativeIntegerProcessEnv(
   key: string
 ): number | undefined {
-  return parseNonNegativeIntegerEnv(process.env[key])
+  return parseNonNegativeIntegerEnv(readProcessEnv(key))
 }
 
 export function resolveNonNegativeIntegerEnv(
@@ -133,11 +143,11 @@ export function resolveNonNegativeIntegerProcessEnv(
   key: string,
   fallback: number
 ): number {
-  return resolveNonNegativeIntegerEnv(process.env[key], fallback)
+  return resolveNonNegativeIntegerEnv(readProcessEnv(key), fallback)
 }
 
 export function isNodeEnv(value: 'development' | 'production' | 'test'): boolean {
-  return process.env[PROCESS_ENV_KEYS.nodeEnv] === value
+  return readProcessEnv(PROCESS_ENV_KEYS.nodeEnv) === value
 }
 
 export function isDevelopmentEnvironment(): boolean {
@@ -154,15 +164,15 @@ export function isTestEnvironment(): boolean {
 
 export function isVitestRuntime(): boolean {
   return (
-    process.env[PROCESS_ENV_KEYS.vitest] !== undefined ||
-    process.env[PROCESS_ENV_KEYS.vitestWorkerId] !== undefined ||
+    readProcessEnv(PROCESS_ENV_KEYS.vitest) !== undefined ||
+    readProcessEnv(PROCESS_ENV_KEYS.vitestWorkerId) !== undefined ||
     isNodeEnv('test') ||
-    process.argv.some((argument) => argument.includes('vitest'))
+    readProcessArgv().some((argument) => argument.includes('vitest'))
   )
 }
 
 export function isCiEnvironment(): boolean {
-  return process.env[PROCESS_ENV_KEYS.ci] !== undefined
+  return readProcessEnv(PROCESS_ENV_KEYS.ci) !== undefined
 }
 
 export function isStrictHermeticFileSystemModeFromEnv(): boolean {
@@ -170,7 +180,7 @@ export function isStrictHermeticFileSystemModeFromEnv(): boolean {
 }
 
 export function isRenounDebugEnabled(): boolean {
-  const rawValue = process.env[PROCESS_ENV_KEYS.renounDebug]
+  const rawValue = readProcessEnv(PROCESS_ENV_KEYS.renounDebug)
   const normalized = String(rawValue ?? '').toLowerCase()
   return (
     rawValue !== undefined &&

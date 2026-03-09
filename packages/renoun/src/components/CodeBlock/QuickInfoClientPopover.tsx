@@ -1,28 +1,27 @@
 'use client'
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
+import { getMarkdownContent } from '@renoun/mdx'
+import { rehypePlugins } from '@renoun/mdx/rehype'
+import { remarkPlugins } from '@renoun/mdx/remark'
+import { Fragment as JsxRuntimeFragment, jsx, jsxs } from 'react/jsx-runtime'
 
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
-import { QuickInfoPopover } from './QuickInfoPopover.tsx'
+import {
+  QuickInfoContent,
+  QuickInfoDisplayText,
+  QuickInfoDisplayToken,
+  QuickInfoDocumentationText,
+  QuickInfoMarkdown,
+  type QuickInfoTheme,
+} from './QuickInfoContent.tsx'
 import { useQuickInfoContext } from './QuickInfoProvider.tsx'
 import {
-  clearQuickInfoClientPopoverCaches,
-  getQuickInfoForRequest,
   type QuickInfoData,
   type QuickInfoRequest,
   type QuickInfoTokenizedDisplayText,
-  resolveQuickInfoProjectVersion,
-  resolveQuickInfoRuntimeSelection,
   useResolvedQuickInfoClientState,
 } from './QuickInfoClientState.tsx'
-
-interface QuickInfoTheme {
-  border?: string
-  background: string
-  foreground: string
-  panelBorder: string
-  errorForeground: string
-}
 
 const QUICK_INFO_KEYWORDS = new Set([
   'abstract',
@@ -109,91 +108,104 @@ export function QuickInfoClientPopover({
   style?: React.CSSProperties
 }) {
   const { quickInfo: activeQuickInfo } = useQuickInfoContext()
+  const activeThemeName = useActiveThemeName(activeQuickInfo?.anchorId)
+  const tokenThemeConfig = React.useMemo(() => {
+    return resolveQuickInfoTokenThemeConfig(request?.themeConfig, activeThemeName)
+  }, [activeThemeName, request?.themeConfig])
   const {
     isLoading,
     resolvedQuickInfo,
     resolvedDisplayTokens,
-    resolvedDocumentationContent,
   } = useResolvedQuickInfoClientState({
-    anchorId: activeQuickInfo?.anchorId,
     quickInfo,
     request,
+    tokenThemeConfig,
   })
   const displayText = resolvedQuickInfo?.displayText || ''
   const documentationText = resolvedQuickInfo?.documentationText || ''
+  const resolvedDocumentationContent =
+    useResolvedQuickInfoDocumentation(documentationText)
 
   return (
-    <QuickInfoPopover>
-      <Container
-        css={{
-          boxSizing: 'border-box',
-          border: theme.border ? `1px solid ${theme.border}` : undefined,
-          backgroundColor: theme.background,
-          color: theme.foreground,
-          ...css,
-        }}
-        className={className}
-        style={style}
-      >
-        <ContentContainer data-testid={getQuickInfoTestId('content')}>
-          {diagnostics?.length ? (
-            <DiagnosticContainer>
-              {diagnostics.map((diagnostic, index) => (
-                <Diagnostic key={index} style={{ color: theme.errorForeground }}>
-                  {diagnostic.message}
-                  <DiagnosticCode>({diagnostic.code})</DiagnosticCode>
-                </Diagnostic>
-              ))}
-            </DiagnosticContainer>
-          ) : null}
-
-          {isLoading ? (
-            <>
-              {diagnostics?.length ? (
-                <Divider
-                  color={theme.panelBorder}
-                  data-testid={getQuickInfoTestId('divider')}
-                />
-              ) : null}
-              <LoadingText>Loading symbol info...</LoadingText>
-            </>
-          ) : null}
-
-          {!isLoading && displayText ? (
-            <>
-              {diagnostics?.length ? (
-                <Divider
-                  color={theme.panelBorder}
-                  data-testid={getQuickInfoTestId('divider')}
-                />
-              ) : null}
-              <DisplayTextContainer data-testid={getQuickInfoTestId('display')}>
-                {resolvedDisplayTokens
-                  ? renderTokenizedDisplayText(resolvedDisplayTokens)
-                  : renderHighlightedDisplayText(displayText)}
-              </DisplayTextContainer>
-            </>
-          ) : null}
-
-          {!isLoading &&
-          documentationText.length &&
-          resolvedDocumentationContent !== null ? (
-            <>
-              <Divider
-                color={theme.panelBorder}
-                data-testid={getQuickInfoTestId('divider')}
-              />
-              {typeof resolvedDocumentationContent === 'string' ? (
-                <DocumentationText>{resolvedDocumentationContent}</DocumentationText>
-              ) : (
-                <MarkdownContainer>{resolvedDocumentationContent}</MarkdownContainer>
-              )}
-            </>
-          ) : null}
-        </ContentContainer>
-      </Container>
-    </QuickInfoPopover>
+    <QuickInfoContent
+      diagnostics={diagnostics}
+      isLoading={isLoading}
+      display={
+        !isLoading && displayText ? (
+          <QuickInfoDisplayText data-testid={getQuickInfoTestId('display')}>
+            {resolvedDisplayTokens
+              ? renderTokenizedDisplayText(resolvedDisplayTokens)
+              : renderHighlightedDisplayText(displayText)}
+          </QuickInfoDisplayText>
+        ) : undefined
+      }
+      documentation={
+        !isLoading &&
+        documentationText.length &&
+        resolvedDocumentationContent !== null ? (
+          typeof resolvedDocumentationContent === 'string' ? (
+            <QuickInfoDocumentationText>
+              {resolvedDocumentationContent}
+            </QuickInfoDocumentationText>
+          ) : (
+            <QuickInfoMarkdown>{resolvedDocumentationContent}</QuickInfoMarkdown>
+          )
+        ) : undefined
+      }
+      theme={theme}
+      css={css}
+      className={className}
+      style={style}
+      testIds={{
+        container: 'quick-info-popover',
+        content: getQuickInfoTestId('content'),
+        divider: getQuickInfoTestId('divider'),
+      }}
+    />
   )
+}
+
+function useActiveThemeName(anchorId: string | undefined): string | undefined {
+  return React.useSyncExternalStore(
+    subscribeToQuickInfoThemeChanges,
+    () => readActiveThemeName(anchorId),
+    () => readActiveThemeName(anchorId)
+  )
+}
+
+function useResolvedQuickInfoDocumentation(
+  documentationText: string
+): React.ReactNode | string | null {
+  const [resolvedDocumentationContent, setResolvedDocumentationContent] =
+    React.useState<React.ReactNode | string | null>(null)
+
+  React.useEffect(() => {
+    let isDisposed = false
+
+    if (!documentationText) {
+      setResolvedDocumentationContent(null)
+      return
+    }
+
+    setResolvedDocumentationContent(null)
+    void renderQuickInfoDocumentationContent(documentationText)
+      .then((value) => {
+        if (!isDisposed) {
+          setResolvedDocumentationContent(value)
+        }
+      })
+      .catch(() => {
+        if (!isDisposed) {
+          setResolvedDocumentationContent(documentationText)
+        }
+      })
+
+    return () => {
+      isDisposed = true
+    }
+  }, [documentationText])
+
+  return resolvedDocumentationContent
 }
 
 function renderTokenizedDisplayText(
@@ -205,9 +217,12 @@ function renderTokenizedDisplayText(
         {lineIndex === 0 ? null : '\n'}
         {line.map((token, tokenIndex) => {
           return (
-            <DisplayToken key={tokenIndex} style={resolveDisplayTokenStyle(token.style)}>
+            <QuickInfoDisplayToken
+              key={tokenIndex}
+              style={resolveDisplayTokenStyle(token.style)}
+            >
               {token.value}
-            </DisplayToken>
+            </QuickInfoDisplayToken>
           )
         })}
       </Fragment>
@@ -294,99 +309,110 @@ function renderHighlightedDisplayText(displayText: string): React.ReactNode {
   })
 }
 
-export { clearQuickInfoClientPopoverCaches }
+function resolveQuickInfoTokenThemeConfig(
+  themeConfig: QuickInfoRequest['themeConfig'],
+  activeThemeName: string | undefined
+): QuickInfoRequest['themeConfig'] {
+  if (!themeConfig || typeof themeConfig === 'string' || Array.isArray(themeConfig)) {
+    return themeConfig
+  }
 
-export const __TEST_ONLY__ = {
-  clearQuickInfoClientPopoverCaches,
-  getQuickInfoForRequest,
-  resolveQuickInfoProjectVersion,
-  resolveQuickInfoRuntimeSelection,
+  const themeNames = Object.keys(themeConfig)
+  if (themeNames.length === 0) {
+    return themeConfig
+  }
+
+  const selectedThemeName =
+    activeThemeName &&
+    Object.prototype.hasOwnProperty.call(themeConfig, activeThemeName)
+      ? activeThemeName
+      : themeNames[0]
+
+  if (!selectedThemeName) {
+    return themeConfig
+  }
+
+  return {
+    [selectedThemeName]: themeConfig[selectedThemeName]!,
+  }
 }
 
-const Container = styled('div', {
-  fontSize: '1rem',
-  position: 'absolute',
-  zIndex: 1000,
-  maxWidth: 'min(46rem, calc(100vw - 2rem))',
-  width: 'max-content',
-  borderRadius: 5,
-  boxShadow: '0 8px 30px rgba(0, 0, 0, 0.25)',
-  overflow: 'auto',
-  overscrollBehavior: 'contain',
-})
+function readActiveThemeName(anchorId: string | undefined): string | undefined {
+  if (typeof document === 'undefined') {
+    return undefined
+  }
 
-const ContentContainer = styled('div', {
-  display: 'grid',
-  gap: 0,
-  padding: 0,
-})
+  const anchorNode =
+    typeof anchorId === 'string' && anchorId.length > 0
+      ? document.getElementById(anchorId)
+      : null
+  const themedElement = anchorNode?.closest('[data-theme]')
+  if (themedElement instanceof HTMLElement) {
+    const themedName = themedElement.getAttribute('data-theme')
+    if (typeof themedName === 'string' && themedName.length > 0) {
+      return themedName
+    }
+  }
 
-const DiagnosticContainer = styled('div', {
-  display: 'grid',
-  gap: '0.25rem',
-  padding: '0.35rem 0.5rem',
-})
+  const documentTheme = document.documentElement.getAttribute('data-theme')
+  if (typeof documentTheme === 'string' && documentTheme.length > 0) {
+    return documentTheme
+  }
 
-const Diagnostic = styled('p', {
-  margin: 0,
-  whiteSpace: 'pre-wrap',
-  fontSize: '0.825rem',
-  lineHeight: 1.35,
-})
+  const bodyTheme = document.body?.getAttribute('data-theme')
+  if (typeof bodyTheme === 'string' && bodyTheme.length > 0) {
+    return bodyTheme
+  }
 
-const DiagnosticCode = styled('span', {
-  opacity: 0.7,
-})
+  return undefined
+}
 
-const Divider = styled('div', ({ color }: { color: string }) => ({
-  height: 1,
-  opacity: 0.65,
-  backgroundColor: color,
-}))
+function subscribeToQuickInfoThemeChanges(onStoreChange: () => void): () => void {
+  if (
+    typeof document === 'undefined' ||
+    typeof MutationObserver !== 'function'
+  ) {
+    return () => {}
+  }
 
-const LoadingText = styled('div', {
-  margin: 0,
-  padding: '0.35rem 0.5rem',
-  fontSize: '0.8rem',
-  lineHeight: 1.3,
-  opacity: 0.85,
-})
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      if (
+        mutation.type === 'attributes' &&
+        mutation.attributeName === 'data-theme'
+      ) {
+        onStoreChange()
+        return
+      }
+    }
+  })
 
-const DisplayTextContainer = styled('pre', {
-  margin: 0,
-  padding: '0.35rem 0.5rem',
-  fontFamily: 'monospace',
-  fontSize: '0.8rem',
-  lineHeight: 1.35,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-  overflowWrap: 'anywhere',
-})
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+    subtree: true,
+  })
 
-const DisplayToken = styled('span')
+  return () => {
+    observer.disconnect()
+  }
+}
 
-const MarkdownContainer = styled('div', {
-  padding: '0.35rem 0.5rem',
-  fontSize: '0.825rem',
-  lineHeight: 1.4,
-  textWrap: 'pretty',
-  '> *': {
-    marginBottom: '0.25em',
-  },
-  '> *:last-child': {
-    marginBottom: 0,
-  },
-})
-
-const DocumentationText = styled('div', {
-  margin: 0,
-  padding: '0.35rem 0.5rem',
-  fontSize: '0.825rem',
-  lineHeight: 1.4,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-  overflowWrap: 'anywhere',
-})
+async function renderQuickInfoDocumentationContent(
+  documentationText: string
+): Promise<React.ReactNode> {
+  return getMarkdownContent({
+    source: documentationText,
+    components: quickInfoMarkdownComponents,
+    remarkPlugins,
+    rehypePlugins,
+    runtime: {
+      Fragment: JsxRuntimeFragment,
+      jsx,
+      jsxs,
+    },
+  })
+}
 
 const KeywordToken = styled('span', {
   color: 'var(--renoun-quick-info-keyword, #82aaff)',
@@ -399,4 +425,48 @@ const TypeToken = styled('span', {
 
 const StringToken = styled('span', {
   color: 'var(--renoun-quick-info-string, #ecc48d)',
+})
+
+const Paragraph = styled('p', {
+  margin: 0,
+  textWrap: 'pretty',
+})
+
+const Table = styled('table', {
+  borderCollapse: 'collapse',
+  'th, td': {
+    padding: '0.25em 0.75em',
+    border: '1px solid var(--renoun-quick-info-table-border, currentColor)',
+  },
+})
+
+function QuickInfoMarkdownCodeBlock({
+  children,
+}: {
+  children?: React.ReactNode
+}) {
+  return (
+    <DocumentationCodeBlock>
+      <code>{children}</code>
+    </DocumentationCodeBlock>
+  )
+}
+
+const quickInfoMarkdownComponents = {
+  CodeBlock: QuickInfoMarkdownCodeBlock,
+  p: Paragraph,
+  table: Table,
+}
+
+const DocumentationCodeBlock = styled('pre', {
+  margin: '0.25rem 0',
+  padding: '0.35rem 0.5rem',
+  fontFamily: 'monospace',
+  fontSize: '0.8rem',
+  lineHeight: 1.35,
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+  overflowWrap: 'anywhere',
+  borderRadius: 4,
+  backgroundColor: 'color-mix(in oklab, currentColor 10%, transparent)',
 })

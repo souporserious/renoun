@@ -1,5 +1,6 @@
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { page } from 'vitest/browser'
 import { createRoot, type Root } from 'react-dom/client'
 
 vi.mock('@renoun/mdx', async () => {
@@ -51,23 +52,30 @@ vi.mock('../../utils/concurrency.ts', () => ({
   createConcurrentQueue: () => ({
     run: <T,>(task: () => Promise<T>) => task(),
   }),
+  mapConcurrent: async <Type, Result>(
+    items: readonly Type[],
+    _options: unknown,
+    fn: (item: Type, index: number) => Promise<Result> | Result
+  ) => Promise.all(items.map((item, index) => fn(item, index))),
+  forEachConcurrent: async <Type,>(
+    items: readonly Type[],
+    _options: unknown,
+    fn: (item: Type, index: number) => Promise<void> | void
+  ) => {
+    await Promise.all(items.map((item, index) => fn(item, index)))
+  },
+  raceAbort: <Type,>(promise: Promise<Type>) => promise,
 }))
 
 import {
+  __TEST_ONLY__ as PROJECT_BROWSER_CLIENT_TEST_ONLY__,
   getProjectClientBrowserRuntime,
-  setProjectClientBrowserRefreshVersion,
-} from '../../project/browser-runtime.ts'
-import { __TEST_ONLY__ as PROJECT_BROWSER_CLIENT_TEST_ONLY__ } from '../../project/browser-client.ts'
-import {
   retainProjectClientBrowserRuntime,
   setProjectClientBrowserRuntime,
-} from '../../project/browser-client-sync.ts'
+} from '../../project/client.ts'
 import type { ProjectServerRuntime } from '../../project/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
-import {
-  QuickInfoClientPopover,
-  clearQuickInfoClientPopoverCaches,
-} from './QuickInfoClientPopover.tsx'
+import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
 import { Symbol } from './Symbol.tsx'
 
@@ -179,9 +187,9 @@ describe('QuickInfo browser regression', () => {
 
     originalWebSocket = globalThis.WebSocket
     ;(globalThis as any).WebSocket = createMockWebSocket(counters)
+    PROJECT_BROWSER_CLIENT_TEST_ONLY__.clearProjectClientRpcState()
     PROJECT_BROWSER_CLIENT_TEST_ONLY__.disposeProjectBrowserClient()
-    clearQuickInfoClientPopoverCaches()
-    setProjectClientBrowserRefreshVersion('0:0')
+    PROJECT_BROWSER_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
   })
 
   afterEach(async () => {
@@ -199,10 +207,10 @@ describe('QuickInfo browser regression', () => {
       node.remove()
     })
     document.documentElement.removeAttribute('data-theme')
+    PROJECT_BROWSER_CLIENT_TEST_ONLY__.clearProjectClientRpcState()
     PROJECT_BROWSER_CLIENT_TEST_ONLY__.disposeProjectBrowserClient()
-    clearQuickInfoClientPopoverCaches()
     setProjectClientBrowserRuntime(undefined)
-    setProjectClientBrowserRefreshVersion('0:0')
+    PROJECT_BROWSER_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
 
     if (originalWebSocket) {
       ;(globalThis as any).WebSocket = originalWebSocket
@@ -268,6 +276,7 @@ describe('QuickInfo browser regression', () => {
     expect(parseFloat(displayStyles.paddingLeft)).toBeLessThanOrEqual(10)
     const docsLink = getPopover()?.querySelector('a')
     expect(docsLink?.textContent).toBe('source')
+    await expectQuickInfoPopoverToMatchScreenshot()
 
     leaveSymbol(symbol)
     await waitFor(() => !getPopover(), 1_000)
@@ -375,6 +384,7 @@ describe('QuickInfo browser regression', () => {
 
       return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(255, 0, 0)'
     }, 1_000)
+    await expectQuickInfoPopoverToMatchScreenshot()
 
     expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBe(1)
     expect(counters.tokensByThemeKey.get(`${shortDisplayText}:dark`)).toBe(1)
@@ -482,6 +492,7 @@ describe('QuickInfo browser regression', () => {
         'This longer payload is used to verify popover height can grow and shrink'
       )
     }, 1_000)
+    await expectQuickInfoPopoverToMatchScreenshot()
     const longHeight = getPopoverHeight()
     const longWidth = getPopoverWidth()
     expect(longHeight).toBeGreaterThan(shortHeight + 24)
@@ -749,6 +760,12 @@ function renderSignatureCacheFixture(root: Root | null) {
 
 function getPopover(): HTMLElement | null {
   return document.body.querySelector<HTMLElement>('.quick-info-popover')
+}
+
+async function expectQuickInfoPopoverToMatchScreenshot(): Promise<void> {
+  await expect
+    .element(page.getByTestId('quick-info-popover'))
+    .toMatchScreenshot()
 }
 
 function getPopoverHeight(): number {

@@ -1,16 +1,17 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 const mockGetQuickInfoAtPosition = vi.fn()
 const mockGetTokens = vi.fn()
 
-vi.mock('../../project/browser-client.ts', () => ({
+vi.mock('../../project/client.ts', () => ({
   getQuickInfoAtPosition: (
     ...args: Parameters<typeof mockGetQuickInfoAtPosition>
   ) => mockGetQuickInfoAtPosition(...args),
   getTokens: (...args: Parameters<typeof mockGetTokens>) => mockGetTokens(...args),
+  hasRetainedProjectClientBrowserRuntime: () => false,
 }))
 
-import { __TEST_ONLY__ } from './QuickInfoClientPopover.tsx'
+import { __TEST_ONLY__ } from './QuickInfoClientState.tsx'
 
 type QuickInfoRequest = Parameters<
   (typeof __TEST_ONLY__)['getQuickInfoForRequest']
@@ -28,66 +29,8 @@ const BASE_REQUEST: QuickInfoRequest = {
 }
 
 describe('QuickInfoClientPopover cache behavior', () => {
-  afterEach(() => {
-    __TEST_ONLY__.clearQuickInfoClientPopoverCaches()
-    mockGetQuickInfoAtPosition.mockReset()
-    mockGetTokens.mockReset()
-  })
-
-  it('reuses cached quick info when cache invalidations are available', async () => {
-    mockGetQuickInfoAtPosition
-      .mockResolvedValueOnce({
-        displayText: 'first-result',
-        documentationText: 'First docs',
-      })
-      .mockResolvedValueOnce({
-        displayText: 'second-result',
-        documentationText: 'Second docs',
-      })
-
-    const first = await __TEST_ONLY__.getQuickInfoForRequest(BASE_REQUEST)
-    const second = await __TEST_ONLY__.getQuickInfoForRequest(BASE_REQUEST)
-
-    expect(first).toEqual({
-      displayText: 'first-result',
-      documentationText: 'First docs',
-    })
-    expect(second).toEqual(first)
-    expect(mockGetQuickInfoAtPosition).toHaveBeenCalledTimes(1)
-  })
-
-  it('bypasses cached quick info when refresh invalidations are unavailable', async () => {
-    mockGetQuickInfoAtPosition
-      .mockResolvedValueOnce({
-        displayText: 'first-result',
-        documentationText: 'First docs',
-      })
-      .mockResolvedValueOnce({
-        displayText: 'updated-result',
-        documentationText: 'Updated docs',
-      })
-
-    const first = await __TEST_ONLY__.getQuickInfoForRequest({
-      ...BASE_REQUEST,
-      cacheDisabled: true,
-    })
-    const second = await __TEST_ONLY__.getQuickInfoForRequest({
-      ...BASE_REQUEST,
-      cacheDisabled: true,
-    })
-
-    expect(first).toEqual({
-      displayText: 'first-result',
-      documentationText: 'First docs',
-    })
-    expect(second).toEqual({
-      displayText: 'updated-result',
-      documentationText: 'Updated docs',
-    })
-    expect(mockGetQuickInfoAtPosition).toHaveBeenCalledTimes(2)
-  })
-
   it('routes quick info requests through the runtime carried on the request', async () => {
+    mockGetQuickInfoAtPosition.mockReset()
     const runtime = {
       id: 'quick-info-cache-test-secondary',
       port: '43124',
@@ -109,7 +52,8 @@ describe('QuickInfoClientPopover cache behavior', () => {
       '/tmp/history.ts',
       42,
       undefined,
-      runtime
+      runtime,
+      'quick-info-cache-test:runtime::/tmp/history.ts:42'
     )
   })
 })
@@ -128,15 +72,12 @@ describe('QuickInfoClientPopover runtime selection', () => {
     }
 
     expect(
-      __TEST_ONLY__.resolveQuickInfoRuntimeSelection(
+      __TEST_ONLY__.resolveQuickInfoRuntime(
         requestRuntime,
         retainedBrowserRuntime,
         true
       )
-    ).toEqual({
-      runtime: requestRuntime,
-      usesSharedBrowserRuntime: false,
-    })
+    ).toEqual(requestRuntime)
   })
 
   it('follows the shared browser runtime when no retained page runtime is active', () => {
@@ -152,15 +93,12 @@ describe('QuickInfoClientPopover runtime selection', () => {
     }
 
     expect(
-      __TEST_ONLY__.resolveQuickInfoRuntimeSelection(
+      __TEST_ONLY__.resolveQuickInfoRuntime(
         requestRuntime,
         sharedBrowserRuntime,
         false
       )
-    ).toEqual({
-      runtime: sharedBrowserRuntime,
-      usesSharedBrowserRuntime: true,
-    })
+    ).toEqual(sharedBrowserRuntime)
   })
 
   it('does not derive a hover cache version from another runtime refresh cursor', () => {

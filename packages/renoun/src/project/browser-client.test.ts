@@ -71,10 +71,49 @@ describe('browser-client runtime transport', () => {
   afterEach(async () => {
     const runtimeModule = await import('./browser-runtime.ts')
     runtimeModule.setProjectClientBrowserRuntime(undefined)
+
+    const module = await import('./client.ts')
+    module.__TEST_ONLY__.clearProjectClientRpcState()
+    module.__TEST_ONLY__.disposeProjectBrowserClient()
   })
 
-  it('keeps separate runtime clients alive for overlapping requests', async () => {
-    const module = await import('./browser-client.ts')
+  it('reuses the same client for repeated requests to the same runtime', async () => {
+    const module = await import('./client.ts')
+    const runtime: ProjectServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+
+    const firstPromise = module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      10,
+      undefined,
+      runtime
+    )
+    const secondPromise = module.getQuickInfoAtPosition(
+      '/project/src/b.ts',
+      20,
+      undefined,
+      runtime
+    )
+    await flushBrowserClientCallQueue()
+
+    expect(mocks.instances).toHaveLength(1)
+    const client = getMockBrowserClient(0)
+    expect(client.runtime).toEqual(runtime)
+    expect(client.close).not.toHaveBeenCalled()
+    expect(client.callMethod).toHaveBeenCalledTimes(2)
+
+    resolveNextPendingCall(client, { text: 'quick-info-a' })
+    resolveNextPendingCall(client, { text: 'quick-info-b' })
+
+    await expect(firstPromise).resolves.toEqual({ text: 'quick-info-a' })
+    await expect(secondPromise).resolves.toEqual({ text: 'quick-info-b' })
+  })
+
+  it('replaces an idle client when a later request targets a different runtime', async () => {
+    const module = await import('./client.ts')
     const primaryRuntime: ProjectServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -92,10 +131,11 @@ describe('browser-client runtime transport', () => {
       undefined,
       primaryRuntime
     )
-    expect(mocks.instances).toHaveLength(1)
-
+    await flushBrowserClientCallQueue()
     const primaryClient = getMockBrowserClient(0)
-    expect(primaryClient.runtime).toEqual(primaryRuntime)
+    resolveNextPendingCall(primaryClient, { text: 'quick-info-a' })
+
+    await expect(firstPromise).resolves.toEqual({ text: 'quick-info-a' })
 
     const secondPromise = module.getQuickInfoAtPosition(
       '/project/src/b.ts',
@@ -103,31 +143,17 @@ describe('browser-client runtime transport', () => {
       undefined,
       secondaryRuntime
     )
+    await flushBrowserClientCallQueue()
+
     expect(mocks.instances).toHaveLength(2)
+    expect(primaryClient.close).toHaveBeenCalledTimes(1)
 
     const secondaryClient = getMockBrowserClient(1)
-    expect(primaryClient.close).not.toHaveBeenCalled()
     expect(secondaryClient.runtime).toEqual(secondaryRuntime)
-    expect(primaryClient.callMethod).toHaveBeenCalledWith(
-      'getQuickInfoAtPosition',
-      expect.objectContaining({
-        filePath: '/project/src/a.ts',
-        position: 10,
-      })
-    )
-    expect(secondaryClient.callMethod).toHaveBeenCalledWith(
-      'getQuickInfoAtPosition',
-      expect.objectContaining({
-        filePath: '/project/src/b.ts',
-        position: 20,
-      })
-    )
 
     resolveNextPendingCall(secondaryClient, { text: 'quick-info-b' })
-    resolveNextPendingCall(primaryClient, { text: 'quick-info-a' })
 
     await expect(secondPromise).resolves.toEqual({ text: 'quick-info-b' })
-    await expect(firstPromise).resolves.toEqual({ text: 'quick-info-a' })
   })
 })
 
@@ -150,4 +176,8 @@ function getMockBrowserClient(index: number): MockBrowserClientInstance {
   }
 
   return client
+}
+
+async function flushBrowserClientCallQueue(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }

@@ -6,7 +6,6 @@ import { parseAnnotations } from '../../utils/annotations.ts'
 import { getSourceTextMetadata } from '../../project/client.ts'
 
 const mockTokens = vi.fn()
-const mockGetProjectClientRefreshVersion = vi.fn(() => '0:0')
 const symbolMock = vi.fn(
   ({
     children,
@@ -18,9 +17,6 @@ const symbolMock = vi.fn(
 vi.mock('../../project/client.ts', () => ({
   getSourceTextMetadata: vi.fn(),
   getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
-  getProjectClientRefreshVersion: (
-    ...args: Parameters<typeof mockGetProjectClientRefreshVersion>
-  ) => mockGetProjectClientRefreshVersion(...args),
 }))
 
 vi.mock('../Config/ServerConfigContext.tsx', () => ({
@@ -253,71 +249,6 @@ describe('Tokens', () => {
         delete process.env.NODE_ENV
       } else {
         process.env.NODE_ENV = previousNodeEnv
-      }
-    }
-  })
-
-  test('includes refresh-aware quick-info project versions', async () => {
-    mockGetProjectClientRefreshVersion.mockReset()
-    mockGetProjectClientRefreshVersion
-      .mockReturnValueOnce('0:0')
-      .mockReturnValueOnce('1:1')
-
-    const { getQuickInfoProjectVersion } = await import('./Tokens.tsx')
-
-    expect(getQuickInfoProjectVersion(undefined)).toBeUndefined()
-    expect(
-      getQuickInfoProjectVersion({
-        id: 'tokens-dev-runtime',
-        port: '43123',
-      })
-    ).toBe('tokens-dev-runtime:0:0')
-    expect(
-      getQuickInfoProjectVersion({
-        id: 'tokens-dev-runtime',
-        port: '43123',
-      })
-    ).toBe('tokens-dev-runtime:1:1')
-
-    expect(mockGetProjectClientRefreshVersion).toHaveBeenCalledTimes(2)
-  })
-
-  test('disables client quick-info caching when refresh notifications are effectively unavailable', async () => {
-    const previousServerRefreshNotifications =
-      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS
-    const previousServerRefreshNotificationsEffective =
-      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE
-    const runtime = {
-      id: 'tokens-dev-runtime',
-      port: '43123',
-    }
-
-    try {
-      const { shouldDisableQuickInfoClientCache } = await import('./Tokens.tsx')
-
-      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE = '0'
-      expect(shouldDisableQuickInfoClientCache(runtime)).toBe(true)
-
-      delete process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE
-      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS = '0'
-      expect(shouldDisableQuickInfoClientCache(runtime)).toBe(true)
-
-      process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS = '1'
-      expect(shouldDisableQuickInfoClientCache(runtime)).toBe(false)
-      expect(shouldDisableQuickInfoClientCache(undefined)).toBe(false)
-    } finally {
-      if (previousServerRefreshNotificationsEffective === undefined) {
-        delete process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE
-      } else {
-        process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE =
-          previousServerRefreshNotificationsEffective
-      }
-
-      if (previousServerRefreshNotifications === undefined) {
-        delete process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS
-      } else {
-        process.env.RENOUN_SERVER_REFRESH_NOTIFICATIONS =
-          previousServerRefreshNotifications
       }
     }
   })

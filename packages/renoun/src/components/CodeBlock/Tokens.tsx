@@ -2,11 +2,7 @@ import React, { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import {
-  getProjectClientRefreshVersion,
-  getSourceTextMetadata,
-  getTokens,
-} from '../../project/client.ts'
+import { getSourceTextMetadata, getTokens } from '../../project/client.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
@@ -44,8 +40,6 @@ import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 import {
   getServerRuntimeFromProcessEnv,
-  resolveServerRefreshNotificationsEffectiveFromEnv,
-  resolveServerRefreshNotificationsEnvOverride,
   type ProjectServerRuntime,
 } from '../../project/runtime-env.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
@@ -439,7 +433,6 @@ async function TokensAsync({
     const quickInfoRuntime = isDevelopmentRuntime
       ? getServerRuntimeFromProcessEnv()
       : undefined
-    const quickInfoProjectVersion = getQuickInfoProjectVersion(quickInfoRuntime)
     const quickInfoValueSignature = metadata.valueSignature
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =
@@ -459,7 +452,6 @@ async function TokensAsync({
                 baseTokenClassName,
                 filePath: metadata.filePath,
                 quickInfoRuntime,
-                quickInfoProjectVersion,
                 quickInfoValueSignature,
                 quickInfoThemeConfig: themeConfiguration,
                 theme,
@@ -526,7 +518,6 @@ async function TokensAsync({
       baseTokenClassName,
       filePath: metadata.filePath,
       quickInfoRuntime,
-      quickInfoProjectVersion,
       quickInfoValueSignature,
       quickInfoThemeConfig: themeConfiguration,
       theme,
@@ -542,30 +533,6 @@ async function TokensAsync({
   }
 }
 
-export function getQuickInfoProjectVersion(
-  runtime: ProjectServerRuntime | undefined
-): string | undefined {
-  if (!runtime) {
-    return undefined
-  }
-
-  return `${runtime.id}:${getProjectClientRefreshVersion()}`
-}
-
-export function shouldDisableQuickInfoClientCache(
-  runtime: ProjectServerRuntime | undefined
-): boolean {
-  if (!runtime) {
-    return false
-  }
-
-  if (resolveServerRefreshNotificationsEffectiveFromEnv() === false) {
-    return true
-  }
-
-  return resolveServerRefreshNotificationsEnvOverride() === false
-}
-
 interface RenderTokenOptions {
   token: Token
   tokenIndex: number
@@ -573,7 +540,6 @@ interface RenderTokenOptions {
   baseTokenClassName?: string
   filePath?: string
   quickInfoRuntime?: ProjectServerRuntime
-  quickInfoProjectVersion?: string
   quickInfoValueSignature?: string
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
@@ -601,7 +567,6 @@ interface RenderWithAnnotationsOptions {
   baseTokenClassName?: string
   filePath?: string
   quickInfoRuntime?: ProjectServerRuntime
-  quickInfoProjectVersion?: string
   quickInfoValueSignature?: string
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
@@ -617,7 +582,6 @@ function renderToken({
   baseTokenClassName,
   filePath,
   quickInfoRuntime,
-  quickInfoProjectVersion,
   quickInfoValueSignature,
   quickInfoThemeConfig,
   theme,
@@ -692,11 +656,7 @@ function renderToken({
             ? {
                 filePath: filePath!,
                 position: token.start,
-                projectVersion: quickInfoProjectVersion,
                 valueSignature: quickInfoValueSignature,
-                cacheDisabled: shouldDisableQuickInfoClientCache(
-                  quickInfoRuntime
-                ),
                 runtime: quickInfoRuntime!,
                 themeConfig: quickInfoThemeConfig,
               }
@@ -826,7 +786,6 @@ function renderWithAnnotations({
   baseTokenClassName,
   filePath,
   quickInfoRuntime,
-  quickInfoProjectVersion,
   quickInfoValueSignature,
   quickInfoThemeConfig,
   theme,
@@ -1012,7 +971,6 @@ function renderWithAnnotations({
           baseTokenClassName,
           filePath,
           quickInfoRuntime,
-          quickInfoProjectVersion,
           quickInfoValueSignature,
           quickInfoThemeConfig,
           theme,

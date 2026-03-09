@@ -1,12 +1,7 @@
-import { dirname, resolve } from 'node:path'
-import type { SyntaxKind } from '../utils/ts-morph.ts'
+import type { Project as TsMorphProject, SyntaxKind } from '../utils/ts-morph.ts'
 
 import type { ConfigurationOptions } from '../components/Config/types.ts'
-import {
-  createHighlighter,
-  type Highlighter,
-} from '../utils/create-highlighter.ts'
-import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
+import type { Highlighter } from '../utils/create-highlighter.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import type {
   ModuleExport,
@@ -18,51 +13,53 @@ import type {
   SourceTextMetadata,
 } from '../utils/get-source-text-metadata.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
+import type { QuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
-import { hashString, stableStringify } from '../utils/stable-serialization.ts'
-import type { QuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
-import { getQuickInfoAtPosition as getQuickInfoAtPositionBase } from '../utils/get-quick-info-at-position.ts'
-import {
-  isAbsolutePath,
-  normalizePathKey,
-  normalizeSlashes,
-} from '../utils/path.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
-  getCachedFileExportText,
-  getCachedFileExportMetadata,
-  getCachedFileExportStaticValue,
-  getCachedFileExports,
-  getCachedOutlineRanges,
-  getCachedSourceTextMetadata,
-  getCachedTokens,
-  invalidateRuntimeAnalysisCachePath,
-  invalidateRuntimeAnalysisCachePaths,
-  resolveCachedTypeAtLocationWithDependencies,
-  transpileCachedSourceFile,
-} from './cached-analysis.ts'
-import {
-  configureProjectCacheRuntime,
-  invalidateProjectFileCache,
-  resetProjectCacheRuntimeConfiguration,
-} from './cache.ts'
-import {
+  getProjectClientBrowserRefreshVersion as getSharedProjectClientBrowserRefreshVersion,
   getProjectClientBrowserRuntime as getSharedProjectClientBrowserRuntime,
   getProjectServerRuntimeKey,
   normalizeProjectServerRuntime,
+  parseProjectClientRefreshVersion,
   onProjectClientBrowserRefreshVersionChange as onSharedProjectClientBrowserRefreshVersionChange,
   onProjectClientBrowserRuntimeChange as onSharedProjectClientBrowserRuntimeChange,
   setProjectClientBrowserRefreshVersion as setSharedProjectClientBrowserRefreshVersion,
   setProjectClientBrowserRuntime as setSharedProjectClientBrowserRuntime,
 } from './browser-runtime.ts'
-import { invalidateSharedFileTextPrefixCachePath } from './file-text-prefix-cache.ts'
+import {
+  CLIENT_CACHED_RPC_METHODS,
+  type ClientCachedRpcMethod,
+  type ClientRpcValueWithDependenciesResponse,
+  type GetFileExportTextRpcResponse,
+  clearClientRpcCacheStateForTests,
+  collectClientRpcDependencyPaths,
+  collectClientRpcResponseDependencyPaths,
+  collectConservativeRefreshFallbackPaths,
+  deleteClientRpcInFlightEntry,
+  deleteClientRpcInFlightEntryIfPromise,
+  getClientRpcInFlightEntry,
+  getClientRpcInvalidationEpoch,
+  invalidateAllClientRpcCache,
+  invalidateClientRpcCacheByNormalizedPaths,
+  normalizeInvalidationPaths,
+  pruneExpiredClientRpcCacheEntries,
+  readClientRpcCacheEntry,
+  rememberProjectRootCandidates,
+  resetClientRpcCacheForRuntimeChange,
+  setClientRpcCacheEntry,
+  setClientRpcInFlightEntry,
+  setClientRpcInvalidationEpoch,
+  shouldBypassClientRpcCache,
+  toClientRpcCacheKey,
+  toClientRpcResponseValue,
+  toGetFileExportTextRpcValueText,
+  trimClientRpcCache,
+} from './client.cache.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import {
-  getProject,
-  invalidateProjectCachesByPaths,
-} from './get-project.ts'
-import {
+  type RefreshNotificationMessage,
   type RefreshInvalidationsSinceRequest,
   type RefreshInvalidationsSinceResponse,
   getRefreshInvalidationPaths,
@@ -81,6 +78,8 @@ import {
 import type { ProjectServerRuntime } from './runtime-env.ts'
 import type { ProjectOptions } from './types.ts'
 
+type ProjectClientServerModules = typeof import('./client.server.ts')
+
 interface ActiveClientState {
   client: WebSocketClient
   runtimeKey: string
@@ -90,7 +89,15 @@ interface ActiveClientState {
   rpcUnavailableUntil: number
 }
 
+interface BrowserRuntimeClientState {
+  client: WebSocketClient
+  runtimeKey: string
+  inFlightRequestCount: number
+  isCached: boolean
+}
+
 let activeClientState: ActiveClientState | undefined
+let cachedBrowserClientState: BrowserRuntimeClientState | undefined
 let nextActiveClientGeneration = 0
 let hasSubscribedToServerRuntimeEnvChanges = false
 const pendingRefreshInvalidationPaths = new Set<string>()
@@ -98,86 +105,51 @@ let isRefreshInvalidationFlushQueued = false
 let hasConnectedProjectServerClient = false
 let refreshResyncQueue: Promise<void> = Promise.resolve()
 let latestRefreshCursor = 0
+let explicitBrowserRuntime: ProjectServerRuntime | undefined
+const browserRuntimeRegistrations: Array<{
+  token: symbol
+  runtime: ProjectServerRuntime
+}> = []
+const browserRefreshNotificationListeners = new Set<
+  (message: RefreshNotificationMessage) => void
+>()
+let loadedProjectClientServerModules: ProjectClientServerModules | undefined
+let projectClientServerModulesPromise:
+  | Promise<ProjectClientServerModules>
+  | undefined
 
-type ClientCachedRpcMethod =
-  | 'getQuickInfoAtPosition'
-  | 'getSourceTextMetadata'
-  | 'resolveTypeAtLocationWithDependencies'
-  | 'getTokens'
-  | 'getFileExports'
-  | 'getOutlineRanges'
-  | 'getFileExportMetadata'
-  | 'getFileExportStaticValue'
-  | 'getFileExportText'
-  | 'transpileSourceFile'
-
-interface ClientRpcCacheEntry {
-  value: unknown
-  expiresAt: number
-  dependencyPaths: readonly string[]
-}
-
-interface ClientRpcInFlightEntry {
-  promise: Promise<unknown>
-  dependencyPaths: readonly string[]
-  epoch: number
-}
-
-interface GetFileExportTextRpcResponse {
-  text: string
-  dependencies?: string[]
-}
-
-interface ClientRpcValueWithDependenciesResponse<Value> {
-  __renounClientRpcDependencies: true
-  value: Value
-  dependencies?: string[]
-}
-
-const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
-  'getQuickInfoAtPosition',
-  'getSourceTextMetadata',
-  'resolveTypeAtLocationWithDependencies',
-  'getTokens',
-  'getFileExports',
-  'getOutlineRanges',
-  'getFileExportMetadata',
-  'getFileExportStaticValue',
-  'getFileExportText',
-  'transpileSourceFile',
-])
-
-const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
-  new Set<ClientCachedRpcMethod>([
-    'getQuickInfoAtPosition',
-    'getSourceTextMetadata',
-    'getTokens',
-    'transpileSourceFile',
-  ])
-
-const CLIENT_RPC_CACHE_MAX_ENTRIES = 1_000
 const DEFAULT_CLIENT_RPC_CACHE_TTL_MS = 30_000
 const SERVER_RPC_READY_TIMEOUT_MS = 500
 const SERVER_RPC_UNAVAILABLE_BACKOFF_MS = 5_000
 const REFRESH_RESYNC_MAX_ATTEMPTS = 3
 const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
-const CONSERVATIVE_CLIENT_RPC_INVALIDATION_PATH = '.'
-const clientRpcCacheByKey = new Map<string, ClientRpcCacheEntry>()
-const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
-const observedProjectRootCandidates = new Set<string>()
-// Bumped on refresh invalidations so stale in-flight requests cannot repopulate cache.
-let clientRpcInvalidationEpoch = 0
 
 /**
  * A monotonic version that advances as refresh notifications invalidate client
  * runtime state. UI caches can include this to avoid stale data after edits.
  */
 export function getProjectClientRefreshVersion(): string {
-  return `${latestRefreshCursor}:${clientRpcInvalidationEpoch}`
+  return `${latestRefreshCursor}:${getClientRpcInvalidationEpoch()}`
 }
 
 function notifyProjectClientRefreshVersionChanged(): void {
   setSharedProjectClientBrowserRefreshVersion(getProjectClientRefreshVersion())
+}
+
+function hydrateRefreshStateFromSharedBrowserVersion(): void {
+  const sharedVersion = parseProjectClientRefreshVersion(
+    getSharedProjectClientBrowserRefreshVersion()
+  )
+  const currentInvalidationEpoch = getClientRpcInvalidationEpoch()
+  if (
+    sharedVersion.epoch > currentInvalidationEpoch ||
+    (currentInvalidationEpoch === 0 &&
+      latestRefreshCursor === 0 &&
+      (sharedVersion.epoch > 0 || sharedVersion.cursor > 0))
+  ) {
+    latestRefreshCursor = sharedVersion.cursor
+    setClientRpcInvalidationEpoch(sharedVersion.epoch)
+  }
 }
 
 function setLatestRefreshCursor(value: number): void {
@@ -216,6 +188,50 @@ export function onProjectClientBrowserRuntimeChange(
   return onSharedProjectClientBrowserRuntimeChange(listener)
 }
 
+export function onProjectClientBrowserRefreshNotification(
+  listener: (message: RefreshNotificationMessage) => void
+): () => void {
+  browserRefreshNotificationListeners.add(listener)
+  return () => {
+    browserRefreshNotificationListeners.delete(listener)
+  }
+}
+
+function notifyProjectClientBrowserRefreshNotification(
+  message: RefreshNotificationMessage
+): void {
+  for (const listener of browserRefreshNotificationListeners) {
+    listener(message)
+  }
+}
+
+function emitProjectClientBrowserRefreshNotification(
+  refreshCursor?: number,
+  invalidationPaths: readonly string[] = []
+): void {
+  notifyProjectClientBrowserRefreshNotification({
+    type: 'refresh',
+    data: {
+      ...(refreshCursor !== undefined ? { refreshCursor } : {}),
+      ...(invalidationPaths.length > 0
+        ? {
+            filePath: invalidationPaths[0],
+            filePaths: [...invalidationPaths],
+          }
+        : {}),
+    },
+  })
+}
+
+function getResolvedProjectClientBrowserRuntime():
+  | ProjectServerRuntime
+  | undefined {
+  return (
+    browserRuntimeRegistrations[browserRuntimeRegistrations.length - 1]?.runtime ??
+    explicitBrowserRuntime
+  )
+}
+
 function isCurrentActiveClientState(
   state: ActiveClientState | undefined
 ): state is ActiveClientState {
@@ -226,7 +242,7 @@ function isCurrentActiveClientState(
   )
 }
 
-export function setProjectClientBrowserRuntime(
+function applyProjectClientBrowserRuntime(
   runtime?: ProjectServerRuntime
 ): void {
   const normalizedRuntime = normalizeProjectServerRuntime(runtime)
@@ -237,36 +253,92 @@ export function setProjectClientBrowserRuntime(
   const nextRuntimeKey = normalizedRuntime
     ? getProjectServerRuntimeKey(normalizedRuntime)
     : undefined
+  const didRuntimeChange = currentRuntimeKey !== nextRuntimeKey
+  const didSwitchFromExistingRuntime =
+    didRuntimeChange && currentRuntimeKey !== undefined
 
-  if (currentRuntimeKey === nextRuntimeKey) {
+  if (didRuntimeChange) {
+    setSharedProjectClientBrowserRuntime(normalizedRuntime)
+  }
+
+  if (typeof WebSocket === 'undefined') {
     return
   }
 
-  setSharedProjectClientBrowserRuntime(normalizedRuntime)
-
-  if (typeof window === 'undefined') {
-    return
+  if (didSwitchFromExistingRuntime) {
+    resetClientRefreshStateForRuntimeChange()
   }
 
   if (!normalizedRuntime) {
-    disposeActiveClient()
+    disposeActiveClient({
+      invalidateClientRpcState: !didSwitchFromExistingRuntime,
+    })
     return
   }
 
   if (!activeClientState) {
     const nextClientState = createClientForRuntime(normalizedRuntime)
-    attachClientRefreshSubscriptions(nextClientState)
+    attachClientRefreshSubscriptions(nextClientState, {
+      resyncImmediately: didSwitchFromExistingRuntime,
+    })
     return
   }
 
   if (activeClientState.runtimeKey !== nextRuntimeKey) {
     replaceClientForRuntime(normalizedRuntime, {
-      resyncImmediately: true,
+      resyncImmediately: didSwitchFromExistingRuntime,
+      invalidateClientRpcState: !didSwitchFromExistingRuntime,
     })
     return
   }
 
   attachClientRefreshSubscriptions(activeClientState)
+}
+
+export function setProjectClientBrowserRuntime(
+  runtime?: ProjectServerRuntime
+): void {
+  explicitBrowserRuntime = normalizeProjectServerRuntime(runtime)
+  applyProjectClientBrowserRuntime(getResolvedProjectClientBrowserRuntime())
+}
+
+export function retainProjectClientBrowserRuntime(
+  runtime?: ProjectServerRuntime,
+  options: {
+    preferCurrentRuntime?: boolean
+  } = {}
+): () => void {
+  const normalizedRuntime = normalizeProjectServerRuntime(
+    options.preferCurrentRuntime === true
+      ? getSharedProjectClientBrowserRuntime() ?? runtime
+      : runtime
+  )
+  if (!normalizedRuntime) {
+    return () => {}
+  }
+
+  const token = Symbol('project-client-browser-runtime')
+  browserRuntimeRegistrations.push({
+    token,
+    runtime: normalizedRuntime,
+  })
+  applyProjectClientBrowserRuntime(getResolvedProjectClientBrowserRuntime())
+
+  return () => {
+    const registrationIndex = browserRuntimeRegistrations.findIndex(
+      (registration) => registration.token === token
+    )
+    if (registrationIndex === -1) {
+      return
+    }
+
+    browserRuntimeRegistrations.splice(registrationIndex, 1)
+    applyProjectClientBrowserRuntime(getResolvedProjectClientBrowserRuntime())
+  }
+}
+
+export function hasRetainedProjectClientBrowserRuntime(): boolean {
+  return browserRuntimeRegistrations.length > 0
 }
 
 export interface ProjectClientRuntimeOptions {
@@ -277,6 +349,42 @@ export interface ProjectClientRuntimeOptions {
 }
 
 const projectClientRuntimeOptions: ProjectClientRuntimeOptions = {}
+
+function applyProjectCacheRuntimeOptions(
+  modules: ProjectClientServerModules
+): void {
+  if (projectClientRuntimeOptions.projectCacheMaxEntries !== undefined) {
+    modules.configureProjectCacheRuntime({
+      maxEntries: projectClientRuntimeOptions.projectCacheMaxEntries,
+    })
+  }
+}
+
+async function loadProjectClientServerModules(): Promise<ProjectClientServerModules> {
+  if (loadedProjectClientServerModules) {
+    return loadedProjectClientServerModules
+  }
+
+  if (!projectClientServerModulesPromise) {
+    const clientServerModulePath = './client.' + 'server.ts'
+
+    projectClientServerModulesPromise = import(
+      /* @vite-ignore */ clientServerModulePath
+    ).then((modules) => {
+      applyProjectCacheRuntimeOptions(modules)
+      loadedProjectClientServerModules = modules
+      return modules
+    })
+  }
+
+  return projectClientServerModulesPromise
+}
+
+function getLoadedProjectClientServerModules():
+  | ProjectClientServerModules
+  | undefined {
+  return loadedProjectClientServerModules
+}
 
 export function configureProjectClientRuntime(
   options: ProjectClientRuntimeOptions
@@ -295,9 +403,12 @@ export function configureProjectClientRuntime(
   }
 
   if ('projectCacheMaxEntries' in options) {
-    configureProjectCacheRuntime({
-      maxEntries: options.projectCacheMaxEntries,
-    })
+    projectClientRuntimeOptions.projectCacheMaxEntries =
+      options.projectCacheMaxEntries
+    const loadedServerModules = getLoadedProjectClientServerModules()
+    if (loadedServerModules) {
+      applyProjectCacheRuntimeOptions(loadedServerModules)
+    }
   }
 }
 
@@ -305,15 +416,14 @@ export function resetProjectClientRuntimeConfiguration(): void {
   projectClientRuntimeOptions.useRpcCache = undefined
   projectClientRuntimeOptions.rpcCacheTtlMs = undefined
   projectClientRuntimeOptions.consumeRefreshNotifications = undefined
-  resetProjectCacheRuntimeConfiguration()
+  projectClientRuntimeOptions.projectCacheMaxEntries = undefined
+  getLoadedProjectClientServerModules()?.resetProjectCacheRuntimeConfiguration()
 }
 
 function getActiveProjectServerRuntime(): ProjectServerRuntime | undefined {
-  if (typeof window !== 'undefined') {
-    const browserRuntime = getSharedProjectClientBrowserRuntime()
-    if (browserRuntime) {
-      return browserRuntime
-    }
+  const browserRuntime = getSharedProjectClientBrowserRuntime()
+  if (browserRuntime) {
+    return browserRuntime
   }
 
   return getServerRuntimeFromProcessEnv()
@@ -347,476 +457,71 @@ function getClientRpcCacheTtlMs(): number {
   return resolveProjectClientRpcCacheTtlMsFromEnv(DEFAULT_CLIENT_RPC_CACHE_TTL_MS)
 }
 
-function normalizeRpcCacheKeyValue(value: unknown): unknown {
-  if (typeof value === 'string') {
-    return `hash:${hashString(value)}`
-  }
-
-  if (value === null || typeof value !== 'object') {
-    return value
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((entry) => normalizeRpcCacheKeyValue(entry))
-  }
-
-  const candidate = value as Record<string, unknown>
-  const normalized: Record<string, unknown> = {}
-  const keys = Object.keys(candidate).sort()
-  for (const key of keys) {
-    normalized[key] = normalizeRpcCacheKeyValue(candidate[key])
-  }
-  return normalized
-}
-
-function toClientRpcCacheKey(method: ClientCachedRpcMethod, params: unknown): string {
-  return hashString(
-    `${method}|${stableStringify(normalizeRpcCacheKeyValue(params))}`
-  )
-}
-
-function toComparablePath(path: string): string {
-  const normalized = normalizeSlashes(path)
-  const absolutePath = isAbsolutePath(normalized) ? normalized : resolve(normalized)
-  return normalizePathKey(absolutePath)
-}
-
-function toRuntimeInvalidationPath(path: string): string {
-  const normalized = normalizeSlashes(path)
-  return isAbsolutePath(normalized) ? normalized : resolve(normalized)
-}
-
-function getDefaultProjectRootCandidate(): string | undefined {
-  if (typeof process === 'undefined' || typeof process.cwd !== 'function') {
+function getActiveClientRuntimeScopeKey(): string | undefined {
+  if (!activeClientState) {
     return undefined
   }
 
-  return resolve(process.cwd())
-}
-
-function getProjectRootCandidates(params: unknown): readonly string[] {
-  const roots = new Set<string>()
-  const defaultRootCandidate = getDefaultProjectRootCandidate()
-  if (defaultRootCandidate) {
-    roots.add(defaultRootCandidate)
-  }
-
-  if (!params || typeof params !== 'object') {
-    return Array.from(roots)
-  }
-
-  const candidate = params as {
-    projectOptions?: {
-      tsConfigFilePath?: unknown
-    }
-  }
-  const tsConfigFilePath = candidate.projectOptions?.tsConfigFilePath
-  if (typeof tsConfigFilePath === 'string' && tsConfigFilePath.length > 0) {
-    roots.add(resolve(dirname(tsConfigFilePath)))
-  }
-
-  return Array.from(roots)
-}
-
-function rememberProjectRootCandidates(params: unknown): void {
-  for (const rootCandidate of getProjectRootCandidates(params)) {
-    observedProjectRootCandidates.add(rootCandidate)
-  }
-}
-
-function getRefreshInvalidationRootCandidates(): readonly string[] {
-  if (observedProjectRootCandidates.size > 0) {
-    return Array.from(observedProjectRootCandidates)
-  }
-
-  const defaultRootCandidate = getDefaultProjectRootCandidate()
-  return defaultRootCandidate ? [defaultRootCandidate] : []
-}
-
-function getConservativeClientRpcDependencyPaths(
-  params: unknown
-): readonly string[] {
-  const rootCandidates = getProjectRootCandidates(params)
-  if (rootCandidates.length === 0) {
-    return [CONSERVATIVE_CLIENT_RPC_INVALIDATION_PATH]
-  }
-
-  return rootCandidates.map((rootCandidate) => toComparablePath(rootCandidate))
-}
-
-function getCandidatePaths(
-  value: unknown,
-  rootCandidates: readonly string[]
-): readonly string[] {
-  if (typeof value !== 'string' || value.length === 0) {
-    return []
-  }
-
-  const normalized = normalizeSlashes(value)
-  if (isAbsolutePath(normalized)) {
-    return [normalizePathKey(normalized)]
-  }
-
-  const resolvedCandidates = new Set<string>()
-  for (const rootCandidate of rootCandidates) {
-    resolvedCandidates.add(normalizePathKey(resolve(rootCandidate, normalized)))
-  }
-
-  return Array.from(resolvedCandidates)
-}
-
-function getRuntimeCandidatePaths(
-  value: unknown,
-  rootCandidates: readonly string[]
-): readonly string[] {
-  if (typeof value !== 'string' || value.length === 0) {
-    return []
-  }
-
-  const normalized = normalizeSlashes(value)
-  if (isAbsolutePath(normalized)) {
-    return [normalized]
-  }
-
-  const resolvedCandidates = new Set<string>()
-  for (const rootCandidate of rootCandidates) {
-    resolvedCandidates.add(normalizeSlashes(resolve(rootCandidate, normalized)))
-  }
-
-  return Array.from(resolvedCandidates)
-}
-
-function pathsIntersect(firstPath: string, secondPath: string): boolean {
-  if (firstPath === '.' || secondPath === '.') {
-    return true
-  }
-
-  return (
-    firstPath === secondPath ||
-    firstPath.startsWith(`${secondPath}/`) ||
-    secondPath.startsWith(`${firstPath}/`)
-  )
-}
-
-function hasPathDependencyIntersection(
-  dependencyPaths: readonly string[],
-  normalizedPath: string
-): boolean {
-  return dependencyPaths.some((dependencyPath) =>
-    pathsIntersect(dependencyPath, normalizedPath)
-  )
-}
-
-function collectClientRpcDependencyPaths(
-  method: ClientCachedRpcMethod,
-  params: unknown
-): string[] {
-  const candidate = params as {
-    filePath?: unknown
-    sourcePath?: unknown
-    includeDependencies?: unknown
-    projectOptions?: {
-      tsConfigFilePath?: unknown
-    }
-  }
-  const dependencyPaths = new Set<string>()
-  const rootCandidates = getProjectRootCandidates(params)
-
-  for (const filePath of getCandidatePaths(candidate.filePath, rootCandidates)) {
-    dependencyPaths.add(filePath)
-  }
-
-  if (method === 'getTokens') {
-    for (const sourcePath of getCandidatePaths(
-      candidate.sourcePath,
-      rootCandidates
-    )) {
-      dependencyPaths.add(sourcePath)
-    }
-  }
-
-  for (const tsConfigFilePath of getCandidatePaths(
-    candidate.projectOptions?.tsConfigFilePath,
-    rootCandidates
-  )) {
-    dependencyPaths.add(tsConfigFilePath)
-  }
-
-  const shouldAddConservativeRootDependency =
-    CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY.has(method)
-  if (shouldAddConservativeRootDependency) {
-    for (const dependencyPath of getConservativeClientRpcDependencyPaths(
-      params
-    )) {
-      dependencyPaths.add(dependencyPath)
-    }
-  }
-
-  return Array.from(dependencyPaths)
-}
-
-function collectClientRpcResponseDependencyPaths(
-  method: ClientCachedRpcMethod,
-  params: unknown,
-  value: unknown
-): string[] {
-  const rootCandidates = getProjectRootCandidates(params)
-  const dependencyPaths = new Set<string>()
-  let responseValue = value
-
-  if (
-    method === 'getFileExportText' &&
-    (params as { includeDependencies?: unknown }).includeDependencies !== true
-  ) {
-    return []
-  }
-
-  if (isClientRpcValueWithDependenciesResponse(responseValue)) {
-    addCandidateResponseDependencyPaths(
-      responseValue.dependencies,
-      rootCandidates,
-      dependencyPaths
-    )
-    responseValue = responseValue.value
-  }
-
-  if (
-    method === 'resolveTypeAtLocationWithDependencies' ||
-    method === 'getFileExportText'
-  ) {
-    addCandidateResponseDependencyPaths(
-      (responseValue as { dependencies?: unknown }).dependencies,
-      rootCandidates,
-      dependencyPaths
-    )
-  }
-
-  if (method === 'getFileExports') {
-    const candidate = responseValue as Array<{ path?: unknown }>
-    if (Array.isArray(candidate)) {
-      for (const fileExport of candidate) {
-        for (const dependencyPath of getCandidatePaths(
-          fileExport.path,
-          rootCandidates
-        )) {
-          dependencyPaths.add(dependencyPath)
-        }
-      }
-    }
-  }
-
-  if (method === 'getFileExportMetadata') {
-    const candidate = responseValue as {
-      location?: {
-        filePath?: unknown
-      }
-    }
-    for (const dependencyPath of getCandidatePaths(
-      candidate.location?.filePath,
-      rootCandidates
-    )) {
-      dependencyPaths.add(dependencyPath)
-    }
-  }
-
-  return Array.from(dependencyPaths)
-}
-
-function addCandidateResponseDependencyPaths(
-  dependencies: unknown,
-  rootCandidates: readonly string[],
-  dependencyPaths: Set<string>
-): void {
-  if (!Array.isArray(dependencies)) {
-    return
-  }
-
-  for (const dependency of dependencies) {
-    for (const dependencyPath of getCandidatePaths(dependency, rootCandidates)) {
-      dependencyPaths.add(dependencyPath)
-    }
-  }
-}
-
-function isClientRpcValueWithDependenciesResponse<Value>(
-  value: unknown
-): value is ClientRpcValueWithDependenciesResponse<Value> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false
-  }
-
-  const candidate = value as {
-    __renounClientRpcDependencies?: unknown
-  }
-
-  return candidate.__renounClientRpcDependencies === true
-}
-
-function toClientRpcResponseValue<Value>(
-  value: Value | ClientRpcValueWithDependenciesResponse<Value>
-): Value {
-  if (isClientRpcValueWithDependenciesResponse<Value>(value)) {
-    return value.value
-  }
-
-  return value
-}
-
-function toGetFileExportTextRpcValueText(value: unknown): string {
-  if (typeof value === 'string') {
-    return value
-  }
-
-  const candidate = value as GetFileExportTextRpcResponse
-  if (typeof candidate?.text === 'string') {
-    return candidate.text
-  }
-
-  throw new Error('[renoun] Invalid getFileExportText RPC response payload.')
-}
-
-function shouldBypassClientRpcCache(
-  method: ClientCachedRpcMethod,
-  params: unknown
-): boolean {
-  if (method === 'getFileExportText') {
-    const candidate = params as { includeDependencies?: unknown }
-    return (
-      candidate.includeDependencies === true &&
-      !shouldConsumeRefreshNotifications()
-    )
-  }
-
-  return false
-}
-
-function pruneExpiredClientRpcCacheEntries(now = Date.now()): void {
-  for (const [cacheKey, entry] of clientRpcCacheByKey) {
-    if (entry.expiresAt <= now) {
-      clientRpcCacheByKey.delete(cacheKey)
-    }
-  }
-}
-
-function trimClientRpcCache(): void {
-  while (clientRpcCacheByKey.size > CLIENT_RPC_CACHE_MAX_ENTRIES) {
-    const oldestKey = clientRpcCacheByKey.keys().next().value as
-      | string
-      | undefined
-    if (!oldestKey) {
-      return
-    }
-
-    clientRpcCacheByKey.delete(oldestKey)
-  }
-}
-
-interface NormalizedInvalidationPaths {
-  comparablePaths: string[]
-  runtimePaths: string[]
-}
-
-function normalizeInvalidationPaths(
-  paths: Iterable<string>
-): NormalizedInvalidationPaths {
-  const rootCandidates = getRefreshInvalidationRootCandidates()
-  const runtimePathByComparablePath = new Map<string, string>()
-  for (const path of paths) {
-    if (typeof path !== 'string' || path.length === 0) {
-      continue
-    }
-
-    const resolvedCandidatePaths = getRuntimeCandidatePaths(path, rootCandidates)
-    const candidatePaths =
-      resolvedCandidatePaths.length > 0
-        ? resolvedCandidatePaths
-        : [toRuntimeInvalidationPath(path)]
-
-    for (const candidatePath of candidatePaths) {
-      const comparablePath = toComparablePath(candidatePath)
-      if (!runtimePathByComparablePath.has(comparablePath)) {
-        runtimePathByComparablePath.set(comparablePath, candidatePath)
-      }
-    }
-  }
-
-  const comparablePaths = collapseInvalidationPaths(
-    runtimePathByComparablePath.keys()
-  )
-  const runtimePaths = comparablePaths.map((comparablePath) => {
-    return runtimePathByComparablePath.get(comparablePath) ?? comparablePath
-  })
-
-  return { comparablePaths, runtimePaths }
-}
-
-function hasPathDependencyIntersectionWithAnyPath(
-  dependencyPaths: readonly string[],
-  normalizedPaths: readonly string[]
-): boolean {
-  return normalizedPaths.some((normalizedPath) =>
-    hasPathDependencyIntersection(dependencyPaths, normalizedPath)
-  )
+  return toRuntimeCacheScopeKey(activeClientState.runtimeKey)
 }
 
 function invalidateClientRpcStateByNormalizedPaths(
-  normalizedPaths: readonly string[]
+  normalizedPaths: readonly string[],
+  invalidationScopeKey?: string
 ): void {
-  // Refresh events can reference transitive dependencies that are only known
-  // after in-flight RPC responses resolve, so always advance the epoch.
-  clientRpcInvalidationEpoch += 1
-  notifyProjectClientRefreshVersionChanged()
-
-  for (const [cacheKey, entry] of clientRpcCacheByKey) {
-    if (
-      hasPathDependencyIntersectionWithAnyPath(
-        entry.dependencyPaths,
-        normalizedPaths
-      )
-    ) {
-      clientRpcCacheByKey.delete(cacheKey)
-    }
-  }
-
-  for (const [cacheKey, entry] of clientRpcInFlightByKey) {
-    if (
-      hasPathDependencyIntersectionWithAnyPath(
-        entry.dependencyPaths,
-        normalizedPaths
-      )
-    ) {
-      clientRpcInFlightByKey.delete(cacheKey)
-    }
-  }
-}
-
-function invalidateAllClientRpcState(): void {
-  clientRpcInvalidationEpoch += 1
-  clientRpcCacheByKey.clear()
-  clientRpcInFlightByKey.clear()
+  invalidateClientRpcCacheByNormalizedPaths(normalizedPaths, invalidationScopeKey)
   notifyProjectClientRefreshVersionChanged()
 }
 
-function collectConservativeRefreshFallbackPaths(): string[] {
-  if (observedProjectRootCandidates.size === 0) {
-    const defaultRootCandidate = getDefaultProjectRootCandidate()
-    if (defaultRootCandidate) {
-      return [defaultRootCandidate]
-    }
-  }
-
-  return Array.from(observedProjectRootCandidates)
+function invalidateAllClientRpcState(invalidationScopeKey?: string): void {
+  invalidateAllClientRpcCache(invalidationScopeKey)
+  notifyProjectClientRefreshVersionChanged()
 }
 
-function applyRefreshInvalidations(paths: string[]): void {
+function resetClientRefreshStateForRuntimeChange(): void {
+  hydrateRefreshStateFromSharedBrowserVersion()
+  resetClientRpcCacheForRuntimeChange()
+  pendingRefreshInvalidationPaths.clear()
+  latestRefreshCursor = 0
+  notifyProjectClientRefreshVersionChanged()
+}
+
+function applyLoadedRuntimeRefreshInvalidations(runtimePaths: string[]): void {
+  if (runtimePaths.length === 0) {
+    return
+  }
+
+  const loadedServerModules = getLoadedProjectClientServerModules()
+  if (loadedServerModules) {
+    loadedServerModules.invalidateRuntimeAnalysisCachePaths(runtimePaths)
+    loadedServerModules.invalidateProjectCachesByPaths(runtimePaths)
+    return
+  }
+
+  if (typeof window !== 'undefined') {
+    return
+  }
+
+  void loadProjectClientServerModules().then((serverModules) => {
+    serverModules.invalidateRuntimeAnalysisCachePaths(runtimePaths)
+    serverModules.invalidateProjectCachesByPaths(runtimePaths)
+  })
+}
+
+function applyRefreshInvalidations(
+  paths: string[],
+  invalidationScopeKey = getActiveClientRuntimeScopeKey()
+): void {
   const { comparablePaths, runtimePaths } = normalizeInvalidationPaths(paths)
   if (comparablePaths.length === 0) {
     return
   }
 
-  invalidateClientRpcStateByNormalizedPaths(comparablePaths)
-  invalidateRuntimeAnalysisCachePaths(runtimePaths)
-  invalidateProjectCachesByPaths(runtimePaths)
+  invalidateClientRpcStateByNormalizedPaths(
+    comparablePaths,
+    invalidationScopeKey
+  )
+  applyLoadedRuntimeRefreshInvalidations(runtimePaths)
 }
 
 async function callClientMethod<
@@ -825,11 +530,27 @@ async function callClientMethod<
 >(
   activeClient: WebSocketClient,
   method: string,
-  params: Params
+  params: Params,
+  options: {
+    cacheParams?: unknown
+    cacheKeyPrefix?: string
+    disableRpcCache?: boolean
+    skipServerModulePreload?: boolean
+  } = {}
 ): Promise<Value> {
+  if (
+    options.skipServerModulePreload !== true &&
+    typeof window === 'undefined' &&
+    !loadedProjectClientServerModules
+  ) {
+    await loadProjectClientServerModules().catch(() => undefined)
+  }
+
+  const cacheParams = options.cacheParams ?? params
   rememberProjectRootCandidates(params)
 
   if (
+    options.disableRpcCache === true ||
     !shouldUseClientRpcCache() ||
     !CLIENT_CACHED_RPC_METHODS.has(method as ClientCachedRpcMethod)
   ) {
@@ -842,27 +563,40 @@ async function callClientMethod<
   }
 
   const typedMethod = method as ClientCachedRpcMethod
-  if (shouldBypassClientRpcCache(typedMethod, params)) {
+  if (
+    shouldBypassClientRpcCache(
+      typedMethod,
+      params,
+      shouldConsumeRefreshNotifications()
+    )
+  ) {
     return activeClient.callMethod<Params, Value>(method, params)
   }
 
-  const cacheKey = toClientRpcCacheKey(typedMethod, params)
-  const requestEpoch = clientRpcInvalidationEpoch
+  const cacheKey = toClientRpcCacheKey(
+    typedMethod,
+    options.cacheKeyPrefix
+      ? {
+          cacheKeyPrefix: options.cacheKeyPrefix,
+          params: cacheParams,
+        }
+      : cacheParams
+  )
+  const requestEpoch = getClientRpcInvalidationEpoch()
+  const scopeKey = options.cacheKeyPrefix
   const now = Date.now()
   pruneExpiredClientRpcCacheEntries(now)
-  const cached = clientRpcCacheByKey.get(cacheKey)
+  const cached = readClientRpcCacheEntry(cacheKey)
   if (cached && cached.expiresAt > now) {
-    clientRpcCacheByKey.delete(cacheKey)
-    clientRpcCacheByKey.set(cacheKey, cached)
     return cached.value as Value
   }
 
-  const inFlight = clientRpcInFlightByKey.get(cacheKey)
+  const inFlight = getClientRpcInFlightEntry(cacheKey)
   if (inFlight) {
     if (inFlight.epoch === requestEpoch) {
       return inFlight.promise as Promise<Value>
     }
-    clientRpcInFlightByKey.delete(cacheKey)
+    deleteClientRpcInFlightEntry(cacheKey)
   }
 
   const requestDependencyPaths = collectClientRpcDependencyPaths(
@@ -882,26 +616,25 @@ async function callClientMethod<
       }
       const resolvedDependencyPaths = Array.from(dependencyPaths)
 
-      if (requestEpoch === clientRpcInvalidationEpoch) {
-        clientRpcCacheByKey.set(cacheKey, {
+      if (requestEpoch === getClientRpcInvalidationEpoch()) {
+        setClientRpcCacheEntry(cacheKey, {
           value,
           expiresAt: Date.now() + ttlMs,
           dependencyPaths: resolvedDependencyPaths,
+          scopeKey,
         })
         trimClientRpcCache()
       }
       return value
     })
     .finally(() => {
-      const latest = clientRpcInFlightByKey.get(cacheKey)
-      if (latest?.promise === request) {
-        clientRpcInFlightByKey.delete(cacheKey)
-      }
+      deleteClientRpcInFlightEntryIfPromise(cacheKey, request as Promise<unknown>)
     })
-  clientRpcInFlightByKey.set(cacheKey, {
+  setClientRpcInFlightEntry(cacheKey, {
     promise: request as Promise<unknown>,
     dependencyPaths: requestDependencyPaths,
     epoch: requestEpoch,
+    scopeKey,
   })
 
   return request
@@ -914,6 +647,8 @@ function queueRefreshResync(state: ActiveClientState): void {
       if (!isCurrentActiveClientState(state)) {
         return
       }
+
+      hydrateRefreshStateFromSharedBrowserVersion()
 
       for (
         let attempt = 1;
@@ -932,17 +667,29 @@ function queueRefreshResync(state: ActiveClientState): void {
           }
 
           const nextCursor = normalizeRefreshCursor(response.nextCursor)
-          if (nextCursor !== undefined) {
-            if (response.fullRefresh) {
-              setLatestRefreshCursor(nextCursor)
+          const paths = getRefreshInvalidationPaths(response)
+          if (response.fullRefresh) {
+            if (paths.length > 0) {
+              applyRefreshInvalidations(paths)
             } else {
-              bumpLatestRefreshCursor(nextCursor)
+              invalidateAllClientRpcState(
+                toRuntimeCacheScopeKey(state.runtimeKey)
+              )
             }
+            setLatestRefreshCursor(nextCursor ?? 0)
+            emitProjectClientBrowserRefreshNotification(nextCursor, paths)
+            return
           }
 
-          const paths = getRefreshInvalidationPaths(response)
+          if (nextCursor !== undefined) {
+            bumpLatestRefreshCursor(nextCursor)
+          }
+
           for (const path of paths) {
             queueRefreshInvalidation(path)
+          }
+          if (paths.length > 0) {
+            emitProjectClientBrowserRefreshNotification(nextCursor, paths)
           }
           return
         } catch {
@@ -950,13 +697,21 @@ function queueRefreshResync(state: ActiveClientState): void {
             return
           }
 
+          if (typeof window !== 'undefined') {
+            const fallbackPaths = collectConservativeRefreshFallbackPaths()
+            applyRefreshInvalidations(fallbackPaths)
+            setLatestRefreshCursor(0)
+            emitProjectClientBrowserRefreshNotification()
+            return
+          }
+
           if (attempt >= REFRESH_RESYNC_MAX_ATTEMPTS) {
             // Conservative fallback: clear client-side RPC caches and invalidate
             // runtime/project caches for all observed project roots.
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
-            invalidateAllClientRpcState()
             applyRefreshInvalidations(fallbackPaths)
             setLatestRefreshCursor(0)
+            emitProjectClientBrowserRefreshNotification(undefined, fallbackPaths)
             return
           }
 
@@ -1015,6 +770,7 @@ function attachClientRefreshSubscriptions(
     for (const path of paths) {
       queueRefreshInvalidation(path)
     }
+    notifyProjectClientBrowserRefreshNotification(message)
   })
 
   if (options.resyncImmediately) {
@@ -1027,15 +783,106 @@ function toServerRuntimeKey(runtime: ProjectServerRuntime): string {
   return getProjectServerRuntimeKey(runtime) ?? `${runtime.id}:${runtime.port}`
 }
 
-function disposeActiveClient(): void {
+function toRuntimeCacheScopeKey(runtimeKey: string): string {
+  return `runtime:${runtimeKey}`
+}
+
+function createProjectBrowserClient(
+  runtime: ProjectServerRuntime,
+  runtimeKey: string,
+  isCached: boolean
+): BrowserRuntimeClientState {
+  const state: BrowserRuntimeClientState = {
+    client: new WebSocketClient(runtime.id, runtime),
+    runtimeKey,
+    inFlightRequestCount: 0,
+    isCached,
+  }
+
+  if (isCached) {
+    cachedBrowserClientState = state
+  }
+
+  return state
+}
+
+function disposeBrowserClientState(
+  state: BrowserRuntimeClientState | undefined
+): void {
+  if (!state) {
+    return
+  }
+
+  try {
+    state.client.removeAllListeners?.()
+  } catch (error) {
+    reportBestEffortError('project/client', error)
+  }
+
+  try {
+    state.client.close?.()
+  } catch (error) {
+    reportBestEffortError('project/client', error)
+  }
+}
+
+function disposeProjectBrowserClient(): void {
+  if (!cachedBrowserClientState) {
+    return
+  }
+
+  const activeState = cachedBrowserClientState
+  cachedBrowserClientState = undefined
+  disposeBrowserClientState(activeState)
+}
+
+function getProjectBrowserClientState(
+  requestedRuntime?: ProjectServerRuntime
+): BrowserRuntimeClientState {
+  const runtime = normalizeProjectServerRuntime(
+    requestedRuntime ?? getSharedProjectClientBrowserRuntime()
+  )
+  const runtimeKey = getProjectServerRuntimeKey(runtime)
+  if (!runtime || !runtimeKey) {
+    disposeProjectBrowserClient()
+    throw new Error('[renoun] Missing active browser project runtime.')
+  }
+
+  if (!cachedBrowserClientState) {
+    return createProjectBrowserClient(runtime, runtimeKey, true)
+  }
+
+  if (cachedBrowserClientState.runtimeKey === runtimeKey) {
+    return cachedBrowserClientState
+  }
+
+  if (cachedBrowserClientState.inFlightRequestCount === 0) {
+    disposeBrowserClientState(cachedBrowserClientState)
+    cachedBrowserClientState = undefined
+    return createProjectBrowserClient(runtime, runtimeKey, true)
+  }
+
+  return createProjectBrowserClient(runtime, runtimeKey, false)
+}
+
+function disposeActiveClient(
+  options: {
+    invalidateClientRpcState?: boolean
+  } = {}
+): void {
+  const { invalidateClientRpcState = true } = options
   const state = activeClientState
   if (!state) {
-    invalidateAllClientRpcState()
+    if (invalidateClientRpcState) {
+      invalidateAllClientRpcState()
+    }
     return
   }
 
   activeClientState = undefined
-  invalidateAllClientRpcState()
+  if (invalidateClientRpcState) {
+    invalidateAllClientRpcState()
+  }
 
   try {
     state.client.removeAllListeners?.()
@@ -1069,9 +916,12 @@ function replaceClientForRuntime(
   runtime: ProjectServerRuntime,
   options: {
     resyncImmediately?: boolean
+    invalidateClientRpcState?: boolean
   } = {}
 ): ActiveClientState {
-  disposeActiveClient()
+  disposeActiveClient({
+    invalidateClientRpcState: options.invalidateClientRpcState,
+  })
   const nextClientState = createClientForRuntime(runtime)
   attachClientRefreshSubscriptions(nextClientState, {
     resyncImmediately: options.resyncImmediately,
@@ -1182,6 +1032,70 @@ async function getReadyClient(): Promise<WebSocketClient | undefined> {
   return isReady && isCurrentActiveClientState(state) ? state.client : undefined
 }
 
+async function callBrowserRuntimeClientMethod<
+  Params extends Record<string, unknown>,
+  Value,
+>(
+  method: string,
+  params: Params,
+  runtime: ProjectServerRuntime,
+  options: {
+    cacheParams?: unknown
+    disableRpcCache?: boolean
+  } = {}
+): Promise<Value> {
+  const runtimeKey = toServerRuntimeKey(runtime)
+  const cacheScopeKey = toRuntimeCacheScopeKey(runtimeKey)
+  if (activeClientState?.runtimeKey === runtimeKey) {
+    return callClientMethod<Params, Value>(
+      activeClientState.client,
+      method,
+      params,
+      {
+        ...options,
+        cacheKeyPrefix: cacheScopeKey,
+        skipServerModulePreload: true,
+      }
+    )
+  }
+
+  const activeClient = getClient()
+  if (
+    activeClient &&
+    activeClientState &&
+    activeClientState.client === activeClient &&
+    activeClientState.runtimeKey === runtimeKey
+  ) {
+    return callClientMethod<Params, Value>(activeClient, method, params, {
+      ...options,
+      cacheKeyPrefix: cacheScopeKey,
+      skipServerModulePreload: true,
+    })
+  }
+
+  const clientState = getProjectBrowserClientState(runtime)
+  clientState.inFlightRequestCount += 1
+
+  try {
+    return await callClientMethod<Params, Value>(
+      clientState.client,
+      method,
+      params,
+      {
+        ...options,
+        cacheKeyPrefix: cacheScopeKey,
+        skipServerModulePreload: true,
+      }
+    )
+  } finally {
+    clientState.inFlightRequestCount -= 1
+
+    if (!clientState.isCached && clientState.inFlightRequestCount === 0) {
+      disposeBrowserClientState(clientState)
+    }
+  }
+}
+
 function queueRefreshInvalidation(path: string): void {
   pendingRefreshInvalidationPaths.add(path)
   if (isRefreshInvalidationFlushQueued) {
@@ -1256,9 +1170,13 @@ export async function getSourceTextMetadata(
 
   /* Switch to synchronous analysis when building for production to prevent timeouts. */
   const { projectOptions, ...getSourceTextMetadataOptions } = options
-  const project = getProject(projectOptions)
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
 
-  return getCachedSourceTextMetadata(project, getSourceTextMetadataOptions)
+  return serverModules.getCachedSourceTextMetadata(
+    project,
+    getSourceTextMetadataOptions
+  )
 }
 
 /**
@@ -1268,8 +1186,36 @@ export async function getSourceTextMetadata(
 export async function getQuickInfoAtPosition(
   filePath: string,
   position: number,
-  projectOptions?: ProjectOptions
+  projectOptions?: ProjectOptions,
+  runtime?: ProjectServerRuntime,
+  cacheKey?: string
 ): Promise<QuickInfoAtPosition | undefined> {
+  const params = {
+    filePath,
+    position,
+    projectOptions,
+  }
+  const cacheParams =
+    typeof cacheKey === 'string' && cacheKey.length > 0
+      ? {
+          ...params,
+          __quickInfoClientCacheKey: cacheKey,
+        }
+      : params
+
+  if (runtime) {
+    return callBrowserRuntimeClientMethod<
+      {
+        filePath: string
+        position: number
+        projectOptions?: ProjectOptions
+      },
+      QuickInfoAtPosition | undefined
+    >('getQuickInfoAtPosition', params, runtime, {
+      cacheParams,
+    })
+  }
+
   const client = await getReadyClient()
   if (client) {
     return callClientMethod<
@@ -1279,15 +1225,14 @@ export async function getQuickInfoAtPosition(
         projectOptions?: ProjectOptions
       },
       QuickInfoAtPosition | undefined
-    >(client, 'getQuickInfoAtPosition', {
-      filePath,
-      position,
-      projectOptions,
+    >(client, 'getQuickInfoAtPosition', params, {
+      cacheParams,
     })
   }
 
-  const project = getProject(projectOptions)
-  return getQuickInfoAtPositionBase({
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
+  return serverModules.getQuickInfoAtPositionBase({
     project,
     filePath,
     position,
@@ -1310,10 +1255,13 @@ function ensureHighlighterLoaded(
     return highlighterPromise
   }
 
-  highlighterPromise = createHighlighter({
-    theme: options.theme,
-    languages: options.languages,
-  })
+  highlighterPromise = loadProjectClientServerModules()
+    .then((serverModules) =>
+      serverModules.createHighlighter({
+        theme: options.theme,
+        languages: options.languages,
+      })
+    )
     .then((highlighter) => {
       currentHighlighter.current = highlighter
       return highlighter
@@ -1396,9 +1344,10 @@ export async function resolveTypeAtLocationWithDependencies(
     })
   }
 
-  const project = getProject(projectOptions)
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
 
-  return resolveCachedTypeAtLocationWithDependencies(project, {
+  return serverModules.resolveCachedTypeAtLocationWithDependencies(project, {
     filePath,
     position,
     kind,
@@ -1416,8 +1365,20 @@ export async function getTokens(
     languages?: ConfigurationOptions['languages']
     projectOptions?: ProjectOptions
     waitForWarmResult?: boolean
+    runtime?: ProjectServerRuntime
   }
 ): Promise<TokenizedLines> {
+  const { runtime, ...params } = options
+  if (runtime) {
+    return callBrowserRuntimeClientMethod<
+      Omit<GetTokensOptions, 'highlighter' | 'project'> & {
+        projectOptions?: ProjectOptions
+        waitForWarmResult?: boolean
+      },
+      TokenizedLines
+    >('getTokens', params, runtime)
+  }
+
   const client = await getReadyClient()
   if (client) {
     return callClientMethod<
@@ -1426,17 +1387,18 @@ export async function getTokens(
         waitForWarmResult?: boolean
       },
       TokenizedLines
-    >(client, 'getTokens', options)
+    >(client, 'getTokens', params)
   }
 
-  const { projectOptions, languages, ...getTokensOptions } = options
-  const project = getProject(projectOptions)
+  const { projectOptions, languages, ...getTokensOptions } = params
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
   queueHighlighterLoad({
     theme: getTokensOptions.theme,
     languages,
   })
 
-  return getCachedTokens(project, {
+  return serverModules.getCachedTokens(project, {
     ...getTokensOptions,
     highlighter: currentHighlighter.current,
     highlighterLoader: async () => {
@@ -1474,8 +1436,9 @@ export async function getFileExports(
     return toClientRpcResponseValue(response)
   }
 
-  const project = getProject(projectOptions)
-  return getCachedFileExports(project, filePath)
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
+  return serverModules.getCachedFileExports(project, filePath)
 }
 
 /**
@@ -1494,8 +1457,9 @@ export async function getOutlineRanges(
     >(client, 'getOutlineRanges', { filePath, projectOptions })
   }
 
-  const project = getProject(projectOptions)
-  return getCachedOutlineRanges(project, filePath)
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
+  return serverModules.getCachedOutlineRanges(project, filePath)
 }
 
 /**
@@ -1536,8 +1500,9 @@ export async function getFileExportMetadata(
     return toClientRpcResponseValue(response)
   }
 
-  const project = getProject(projectOptions)
-  return getCachedFileExportMetadata(project, {
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
+  return serverModules.getCachedFileExportMetadata(project, {
     name,
     filePath,
     position,
@@ -1577,8 +1542,9 @@ export async function getFileExportStaticValue(
     return toClientRpcResponseValue(response)
   }
 
-  const project = getProject(projectOptions)
-  return getCachedFileExportStaticValue(project, {
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
+  return serverModules.getCachedFileExportStaticValue(project, {
     filePath,
     position,
     kind,
@@ -1618,8 +1584,9 @@ export async function getFileExportText(
     return toGetFileExportTextRpcValueText(response)
   }
 
-  const project = getProject(projectOptions)
-  return getCachedFileExportText(project, {
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
+  return serverModules.getCachedFileExportText(project, {
     filePath,
     position,
     kind,
@@ -1653,17 +1620,23 @@ export async function createSourceFile(
     // Source updates can affect dependency-aware RPC results for many files.
     // Clear client-side RPC state so stale dependent entries are not reused.
     invalidateAllClientRpcState()
-    invalidateProjectCachesByPaths([filePath])
-    invalidateRuntimeAnalysisCachePath(filePath)
-    invalidateSharedFileTextPrefixCachePath(filePath)
+    const loadedServerModules =
+      getLoadedProjectClientServerModules() ??
+      (typeof window === 'undefined'
+        ? await loadProjectClientServerModules().catch(() => undefined)
+        : undefined)
+    loadedServerModules?.invalidateProjectCachesByPaths([filePath])
+    loadedServerModules?.invalidateRuntimeAnalysisCachePath(filePath)
+    loadedServerModules?.invalidateSharedFileTextPrefixCachePath(filePath)
     return
   }
 
-  const project = getProject(projectOptions)
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions) as TsMorphProject
   project.createSourceFile(filePath, sourceText, { overwrite: true })
-  invalidateProjectFileCache(project, filePath)
-  invalidateRuntimeAnalysisCachePath(filePath)
-  invalidateSharedFileTextPrefixCachePath(filePath)
+  serverModules.invalidateProjectFileCache(project, filePath)
+  serverModules.invalidateRuntimeAnalysisCachePath(filePath)
+  serverModules.invalidateSharedFileTextPrefixCachePath(filePath)
 }
 
 /**
@@ -1688,9 +1661,10 @@ export async function transpileSourceFile(
     })
   }
 
-  const project = getProject(projectOptions)
+  const serverModules = await loadProjectClientServerModules()
+  const project = serverModules.getProject(projectOptions)
 
-  return transpileCachedSourceFile(project, filePath)
+  return serverModules.transpileCachedSourceFile(project, filePath)
 }
 
 /**
@@ -1737,4 +1711,25 @@ export function getProjectOptionsCacheKey(options?: ProjectOptions): string {
   }
 
   return key
+}
+
+function setProjectClientRefreshVersionForTests(version: string): void {
+  const parsedVersion = parseProjectClientRefreshVersion(version)
+  latestRefreshCursor = parsedVersion.cursor
+  setClientRpcInvalidationEpoch(parsedVersion.epoch)
+  pendingRefreshInvalidationPaths.clear()
+  setSharedProjectClientBrowserRefreshVersion(
+    `${parsedVersion.cursor}:${parsedVersion.epoch}`
+  )
+}
+
+function clearProjectClientStateForTests(): void {
+  clearClientRpcCacheStateForTests()
+  pendingRefreshInvalidationPaths.clear()
+}
+
+export const __TEST_ONLY__ = {
+  clearProjectClientRpcState: clearProjectClientStateForTests,
+  disposeProjectBrowserClient,
+  setProjectClientRefreshVersion: setProjectClientRefreshVersionForTests,
 }

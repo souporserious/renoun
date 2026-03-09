@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  __TEST_ONLY__ as PROJECT_CLIENT_TEST_ONLY__,
   retainProjectClientBrowserRuntime,
   setProjectClientBrowserRuntime,
-} from './browser-client-sync.ts'
+} from './client.ts'
 import {
   getProjectClientBrowserRuntime,
   getProjectClientBrowserRefreshVersion,
-  setProjectClientBrowserRefreshVersion,
 } from './browser-runtime.ts'
 
 interface JsonRpcRequest {
@@ -31,7 +31,7 @@ interface MockWebSocketInstance {
   close: () => void
 }
 
-describe('browser-client-sync', () => {
+describe('project/client browser refresh runtime', () => {
   let originalWebSocket: typeof WebSocket | undefined
   let controller: MockSocketController
 
@@ -45,17 +45,17 @@ describe('browser-client-sync', () => {
     originalWebSocket = globalThis.WebSocket
     ;(globalThis as any).WebSocket = createMockWebSocket(controller)
     setProjectClientBrowserRuntime(undefined)
-    setProjectClientBrowserRefreshVersion('0:0')
+    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
   })
 
   afterEach(() => {
     setProjectClientBrowserRuntime(undefined)
-    setProjectClientBrowserRefreshVersion('0:0')
+    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('0:0')
     ;(globalThis as any).WebSocket = originalWebSocket
   })
 
   it('resets the cursor when switching runtimes', async () => {
-    setProjectClientBrowserRefreshVersion('7:3')
+    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('7:3')
     setProjectClientBrowserRuntime({
       id: 'runtime-a',
       port: '43123',
@@ -82,7 +82,7 @@ describe('browser-client-sync', () => {
   })
 
   it('syncs to a lower cursor after a full refresh resync', async () => {
-    setProjectClientBrowserRefreshVersion('5:2')
+    PROJECT_CLIENT_TEST_ONLY__.setProjectClientRefreshVersion('5:2')
     setProjectClientBrowserRuntime({
       id: 'runtime-resync',
       port: '43123',

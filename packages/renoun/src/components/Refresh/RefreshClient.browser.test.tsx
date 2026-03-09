@@ -2,7 +2,7 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 
-import { setProjectClientBrowserRuntime } from '../../project/browser-client-sync.ts'
+import { setProjectClientBrowserRuntime } from '../../project/client.ts'
 import { getProjectClientBrowserRuntime } from '../../project/browser-runtime.ts'
 import { RefreshClient } from './RefreshClient.tsx'
 
