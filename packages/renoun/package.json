@@ -45,6 +45,10 @@
   "imports": {
     "#fixtures/*": "./fixtures/*",
     "#project-client-server": {
+      "source": {
+        "browser": "./src/project/client.server.browser.ts",
+        "default": "./src/project/client.server.ts"
+      },
       "browser": "./dist/project/client.server.browser.js",
       "default": "./dist/project/client.server.js"
     }

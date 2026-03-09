@@ -19,6 +19,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      has_renoun: ${{ steps.affected.outputs.has_renoun }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -97,10 +99,36 @@ jobs:
           TURBO_SCM_BASE: ${{ steps.affected.outputs.turbo_scm_base }}
         run: pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!//" --filter="!@renoun/screenshot"
 
+  renoun-browser:
+    needs: test
+    if: needs.test.outputs.has_renoun == 'true'
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Restore renoun cache
+        uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
       - name: Install Playwright Browsers
-        if: steps.affected.outputs.has_renoun == 'true'
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run renoun browser regression tests
-        if: steps.affected.outputs.has_renoun == 'true'
         run: pnpm --filter renoun test:browser
