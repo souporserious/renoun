@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import {
   configureAnalysisCacheRuntime,
@@ -9,6 +9,7 @@ import {
   invalidateProgramFileCachePaths,
   resetAnalysisCacheRuntimeConfiguration,
 } from './cache.ts'
+import { CacheStore } from '../file-system/Cache.ts'
 import {
   disposeAnalysisWatchers,
   getProgram,
@@ -19,6 +20,7 @@ import type { Project } from '../utils/ts-morph.ts'
 describe('project file cache', () => {
   afterEach(() => {
     resetAnalysisCacheRuntimeConfiguration()
+    vi.restoreAllMocks()
   })
 
   test('invalidates all file cache entries when a file path is invalidated', async () => {
@@ -60,6 +62,23 @@ describe('project file cache', () => {
 
     expect(valueAfter).toBe('value-2')
     expect(calls).toBe(2)
+  })
+
+  test('eagerly deletes absolute-path cache entries from the underlying store on targeted invalidation', async () => {
+    const project = {} as unknown as Project
+    const filePath = '/project/src/index.ts'
+    const cacheName = `absolute-delete-${Date.now()}`
+    const deleteManySpy = vi.spyOn(CacheStore.prototype, 'deleteMany')
+
+    await createProgramFileCache(project, filePath, cacheName, () => 'value')
+
+    invalidateProgramFileCache(project, filePath)
+    await Promise.resolve()
+
+    expect(deleteManySpy).toHaveBeenCalledTimes(1)
+    expect(deleteManySpy.mock.calls[0]?.[0]).toEqual([
+      `program-cache:project/src/index.ts:${cacheName}`,
+    ])
   })
 
   test('invalidates file cache entries with const-only dependencies', async () => {

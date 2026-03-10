@@ -276,7 +276,7 @@ function normalizeProgramPath(path: string): string {
 }
 
 function toProgramCacheNodeKey(filePath: string, cacheName: string): string {
-  return `${PROGRAM_CACHE_NODE_PREFIX}${normalizeProgramPath(filePath)}:${cacheName}`
+  return `${PROGRAM_CACHE_NODE_PREFIX}${normalizePathKey(normalizeSlashes(filePath))}:${cacheName}`
 }
 
 function toDefaultDependency(filePath: string): ProgramCacheDependency {
@@ -378,18 +378,30 @@ function getProgramPathPrefixes(path: string): string[] {
     return ['.']
   }
 
-  const segments = path.split('/').filter((segment) => segment.length > 0)
-  if (segments.length === 0) {
+  const normalizedPath = normalizePathKey(normalizeSlashes(path))
+  if (normalizedPath === '.') {
     return ['.']
   }
 
   const prefixes: string[] = []
-  let current = ''
-  for (const segment of segments) {
-    current = current.length > 0 ? `${current}/${segment}` : segment
-    prefixes.push(current)
+  let currentPath = normalizedPath
+
+  while (currentPath && currentPath !== '.' && currentPath !== '/') {
+    prefixes.push(currentPath)
+
+    const parentPath = dirname(currentPath)
+    if (parentPath === currentPath) {
+      break
+    }
+
+    currentPath = parentPath
   }
 
+  if (normalizedPath === '/' && prefixes.length === 0) {
+    prefixes.push('/')
+  }
+
+  prefixes.reverse()
   return prefixes
 }
 
@@ -532,18 +544,27 @@ function removeProgramCacheEntriesByFilePath(
   runtime: ProgramCacheRuntime,
   filePath: string
 ): void {
-  const nodeKeys = runtime.nodeKeysByPathPrefix.get(filePath)
-  if (!nodeKeys || nodeKeys.size === 0) {
+  const nodeKeysToDelete = new Set<string>()
+
+  for (const nodeKey of runtime.nodeKeysByFilePath.get(filePath) ?? []) {
+    nodeKeysToDelete.add(nodeKey)
+  }
+
+  for (const nodeKey of runtime.nodeKeysByPathPrefix.get(filePath) ?? []) {
+    nodeKeysToDelete.add(nodeKey)
+  }
+
+  if (nodeKeysToDelete.size === 0) {
     return
   }
 
-  const nodeKeysToDelete = Array.from(nodeKeys)
-  for (const nodeKey of nodeKeysToDelete) {
+  const nodeKeys = Array.from(nodeKeysToDelete)
+  for (const nodeKey of nodeKeys) {
     removeProgramCacheEntry(runtime, nodeKey)
   }
 
-  if (nodeKeysToDelete.length > 0) {
-    void runtime.store.deleteMany(nodeKeysToDelete)
+  if (nodeKeys.length > 0) {
+    void runtime.store.deleteMany(nodeKeys)
   }
 }
 

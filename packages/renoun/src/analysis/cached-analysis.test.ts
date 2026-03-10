@@ -517,6 +517,71 @@ describe('analysis cached analysis', () => {
     expect(metadataCalls).toBe(2)
   })
 
+  test('does not reuse runtime-cached tokens across separate ad hoc Project instances without analysisScopeId', async () => {
+    const uniqueId = Date.now()
+    const filePath = `/virtual-runtime-scope-${uniqueId}/src/index.ts`
+    const dependencyPath = `/virtual-runtime-scope-${uniqueId}/src/dep.ts`
+    const entrySource = "import { value } from './dep'\nvalue\n"
+    const projectA = createInMemoryTypeScriptProject()
+    const projectB = createInMemoryTypeScriptProject()
+    const highlighter = createHighlighter()
+
+    projectA.createSourceFile(filePath, entrySource, {
+      overwrite: true,
+    })
+    projectA.createSourceFile(dependencyPath, "export const value = 'a'\n", {
+      overwrite: true,
+    })
+    projectB.createSourceFile(filePath, entrySource, {
+      overwrite: true,
+    })
+    projectB.createSourceFile(dependencyPath, "export const value = 'b'\n", {
+      overwrite: true,
+    })
+
+    let metadataCalls = 0
+    const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+      ...args
+    ) => {
+      metadataCalls += 1
+      return collectTypeScriptMetadata(...args)
+    }
+
+    await getCachedTokens(projectA, {
+      value: entrySource,
+      language: 'ts',
+      filePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      waitForWarmResult: true,
+    })
+    await getCachedTokens(projectA, {
+      value: entrySource,
+      language: 'ts',
+      filePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      waitForWarmResult: true,
+    })
+    await getCachedTokens(projectB, {
+      value: entrySource,
+      language: 'ts',
+      filePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      waitForWarmResult: true,
+    })
+
+    expect(projectB).not.toBe(projectA)
+    expect(metadataCalls).toBe(2)
+  })
+
   test('separates cached tokens by quick-info deferral mode', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -1846,6 +1911,91 @@ describe('analysis cached analysis', () => {
     30_000
   )
 
+  test(
+    'invalidates cached virtualized source metadata when transitive TypeScript dependencies change on disk',
+    async () => {
+      await using workspace = await createTemporaryWorkspace({
+        'package.json': JSON.stringify({
+          name: 'cached-analysis-test',
+          private: true,
+        }),
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            target: 'ESNext',
+            strict: true,
+          },
+          include: ['src/**/*.ts'],
+        }),
+        'src/dep.ts': "export const dep = 'one'\n",
+      })
+
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const virtualSnippetPath = join(
+        workspace.workspacePath,
+        'src/snippets/example.ts'
+      )
+      const transitiveDependencyPath = join(
+        workspace.workspacePath,
+        'src/dep.ts'
+      )
+      const entrySource = "import { dep } from '../dep'\nexport const value = dep\n"
+      const project = new Project({
+        tsConfigFilePath,
+      })
+      const createSourceFileSpy = vi.spyOn(project, 'createSourceFile')
+      await delay(1_100)
+
+      const first = await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: virtualSnippetPath,
+        language: 'ts',
+        virtualizeFilePath: true,
+        shouldFormat: false,
+      })
+      const createSourceFileCallsAfterFirstRun =
+        createSourceFileSpy.mock.calls.length
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: virtualSnippetPath,
+        language: 'ts',
+        virtualizeFilePath: true,
+        shouldFormat: false,
+      })
+      const createSourceFileCallsAfterSecondRun =
+        createSourceFileSpy.mock.calls.length
+
+      expect(first.filePath).toContain('.__renoun_snippet_')
+      expect(createSourceFileCallsAfterSecondRun).toBe(
+        createSourceFileCallsAfterFirstRun
+      )
+
+      await writeFile(
+        transitiveDependencyPath,
+        "export const dep = 'two-updated'\n",
+        'utf8'
+      )
+      await project
+        .getSourceFileOrThrow(transitiveDependencyPath)
+        .refreshFromFileSystem()
+      await delay(325)
+
+      await getCachedSourceTextMetadata(project, {
+        value: entrySource,
+        filePath: virtualSnippetPath,
+        language: 'ts',
+        virtualizeFilePath: true,
+        shouldFormat: false,
+      })
+
+      expect(createSourceFileSpy.mock.calls.length).toBeGreaterThan(
+        createSourceFileCallsAfterSecondRun
+      )
+    },
+    30_000
+  )
+
   test('invalidates cached tokens when transitive TypeScript dependencies change on disk', async () => {
     await using workspace = await createTemporaryWorkspace({
       'package.json': JSON.stringify({
@@ -1924,6 +2074,97 @@ describe('analysis cached analysis', () => {
       value: entrySource,
       language: 'ts',
       filePath: entryFilePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+    })
+
+    expect(metadataCalls).toBe(2)
+  })
+
+  test('invalidates cached tokens for virtualized snippets when transitive TypeScript dependencies change on disk', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/dep.ts': "export const dep = 'one'\n",
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const virtualSnippetPath = join(
+      workspace.workspacePath,
+      'src/snippets/example.ts'
+    )
+    const transitiveDependencyPath = join(workspace.workspacePath, 'src/dep.ts')
+    const entrySource = "import { dep } from '../dep'\nexport const value = dep\n"
+    const project = new Project({
+      tsConfigFilePath,
+    })
+    const highlighter = createHighlighter()
+    await delay(1_100)
+
+    const metadata = await getCachedSourceTextMetadata(project, {
+      value: entrySource,
+      filePath: virtualSnippetPath,
+      language: 'ts',
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    let metadataCalls = 0
+    const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+      ...args
+    ) => {
+      metadataCalls += 1
+      return collectTypeScriptMetadata(...args)
+    }
+
+    await getCachedTokens(project, {
+      value: metadata.value,
+      language: 'ts',
+      filePath: metadata.filePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+    })
+    await getCachedTokens(project, {
+      value: metadata.value,
+      language: 'ts',
+      filePath: metadata.filePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+    })
+
+    expect(metadataCalls).toBe(1)
+
+    await writeFile(
+      transitiveDependencyPath,
+      "export const dep = 'two-updated'\n",
+      'utf8'
+    )
+    await project
+      .getSourceFileOrThrow(transitiveDependencyPath)
+      .refreshFromFileSystem()
+    await delay(325)
+
+    await getCachedTokens(project, {
+      value: metadata.value,
+      language: 'ts',
+      filePath: metadata.filePath,
       theme: 'default',
       allowErrors: true,
       highlighter,

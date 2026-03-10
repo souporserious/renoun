@@ -865,7 +865,7 @@ function getRuntimeAnalysisScopeOptions(
 ): RuntimeAnalysisScopeOptions {
   return {
     scopePath: getRuntimeAnalysisScopePath(project, filePath),
-    analysisScopeId: getProjectAnalysisScopeId(project),
+    analysisScopeId: getResolvedProjectAnalysisScopeId(project),
   }
 }
 
@@ -948,17 +948,22 @@ export async function prewarmRuntimeAnalysisSession(
   }
 }
 
-function trackFallbackAnalysisProject(project: Project): void {
-  if (fallbackAnalysisProgramIdByProject.has(project)) {
-    return
+function getOrCreateFallbackAnalysisProjectId(project: Project): string {
+  let analysisScopeId = fallbackAnalysisProgramIdByProject.get(project)
+  if (analysisScopeId === undefined) {
+    fallbackAnalysisProgramIdCounter += 1
+    analysisScopeId = fallbackAnalysisProgramIdCounter
+
+    fallbackAnalysisProgramIdByProject.set(project, analysisScopeId)
+    fallbackAnalysisProgramCacheRefs.set(analysisScopeId, new WeakRef(project))
+    fallbackAnalysisProgramFinalizationRegistry?.register(project, analysisScopeId)
   }
 
-  fallbackAnalysisProgramIdCounter += 1
-  const analysisScopeId = fallbackAnalysisProgramIdCounter
+  return `fallback:${analysisScopeId}`
+}
 
-  fallbackAnalysisProgramIdByProject.set(project, analysisScopeId)
-  fallbackAnalysisProgramCacheRefs.set(analysisScopeId, new WeakRef(project))
-  fallbackAnalysisProgramFinalizationRegistry?.register(project, analysisScopeId)
+function getResolvedProjectAnalysisScopeId(project: Project): string | undefined {
+  return getProjectAnalysisScopeId(project) ?? getOrCreateFallbackAnalysisProjectId(project)
 }
 
 function createFallbackProgramFileCache<Type>(
@@ -972,7 +977,7 @@ function createFallbackProgramFileCache<Type>(
       | ((value: Type) => ProgramCacheDependency[])
   }
 ): Promise<Type> {
-  trackFallbackAnalysisProject(project)
+  getOrCreateFallbackAnalysisProjectId(project)
   return createProgramFileCacheBase(
     project,
     fileName,
@@ -2512,6 +2517,7 @@ export async function getCachedTypeScriptDependencyPaths(
     runtimeCacheStore &&
     shouldTrackRuntimeTypeScriptDependenciesForPath(
       runtimeCacheStore,
+      project,
       filePath
     )
   ) {
@@ -2772,7 +2778,7 @@ function getCompilerOptionsVersion(project: Project): string {
 
   const version = hashString(
     stableStringify({
-      analysisScopeId: getProjectAnalysisScopeId(project) ?? null,
+      analysisScopeId: getResolvedProjectAnalysisScopeId(project) ?? null,
       compilerOptions,
     })
   )
@@ -2814,15 +2820,61 @@ function canUseRuntimePathCache(
   }
 }
 
+function canUseRuntimeTypeScriptDependencySourceFile(
+  project: Project,
+  filePath: string
+): boolean {
+  return project.getSourceFile(filePath) !== undefined
+}
+
 function shouldTrackRuntimeTypeScriptDependenciesForPath(
   runtimeCacheStore: RuntimeAnalysisCacheStore,
+  project: Project,
   filePath: string | undefined
 ): filePath is string {
   if (!filePath) {
     return false
   }
 
-  return canUseRuntimePathCache(runtimeCacheStore, filePath)
+  if (canUseRuntimePathCache(runtimeCacheStore, filePath)) {
+    return true
+  }
+
+  try {
+    const absolutePath = runtimeCacheStore.fileSystem.getAbsolutePath(filePath)
+    runtimeCacheStore.fileSystem.getRelativePathToWorkspace(absolutePath)
+  } catch {
+    return false
+  }
+
+  return canUseRuntimeTypeScriptDependencySourceFile(project, filePath)
+}
+
+function resolveRuntimeTypeScriptDependencyAnalysisPath(
+  runtimeCacheStore: RuntimeAnalysisCacheStore,
+  project: Project,
+  filePaths: Array<string | undefined>
+): string | undefined {
+  const seenPaths = new Set<string>()
+
+  for (const filePath of filePaths) {
+    if (!filePath || seenPaths.has(filePath)) {
+      continue
+    }
+
+    seenPaths.add(filePath)
+    if (
+      shouldTrackRuntimeTypeScriptDependenciesForPath(
+        runtimeCacheStore,
+        project,
+        filePath
+      )
+    ) {
+      return filePath
+    }
+  }
+
+  return undefined
 }
 
 function getRuntimeAnalysisConstDeps(): CacheStoreConstDependency[] {
@@ -4174,25 +4226,14 @@ export async function getCachedSourceTextMetadata(
           result.filePath
         )
         if (shouldTrackRuntimeTypeScriptDependencies()) {
-          const sourceTextDependencyAnalysisPaths = new Set<string>()
-          if (
-            shouldTrackRuntimeTypeScriptDependenciesForPath(
+          const dependencyAnalysisPath =
+            resolveRuntimeTypeScriptDependencyAnalysisPath(
               runtimeCacheStore,
-              options.filePath
+              project,
+              [result.filePath, options.filePath]
             )
-          ) {
-            sourceTextDependencyAnalysisPaths.add(options.filePath)
-          }
-          if (
-            shouldTrackRuntimeTypeScriptDependenciesForPath(
-              runtimeCacheStore,
-              result.filePath
-            )
-          ) {
-            sourceTextDependencyAnalysisPaths.add(result.filePath)
-          }
 
-          for (const dependencyAnalysisPath of sourceTextDependencyAnalysisPaths) {
+          if (dependencyAnalysisPath) {
             await recordRuntimeTypeScriptDependencySidecar(
               context,
               project,
@@ -4464,6 +4505,7 @@ export async function getCachedTokens(
         shouldTrackRuntimeTypeScriptDependencies() &&
         shouldTrackRuntimeTypeScriptDependenciesForPath(
           runtimeCacheStore,
+          project,
           options.filePath
         )
       ) {

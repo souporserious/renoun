@@ -270,7 +270,7 @@ describe('getSourceTextMetadata', () => {
     ).toHaveLength(0)
   })
 
-  test('switches anchored snippets to the protected stable alias once a real file appears on disk', async () => {
+  test('switches anchored snippets to the protected stable alias without removing a real source file already added to the program', async () => {
     await using workspace = await createTemporaryWorkspace({
       'tsconfig.json': JSON.stringify({
         compilerOptions: {
@@ -301,6 +301,11 @@ describe('getSourceTextMetadata', () => {
     expect(first.filePath).toContain('/src/foo.__renoun_snippet_')
 
     await writeFile(filePath, 'export const real = 1\n', 'utf8')
+    await project.getSourceFileOrThrow(filePath).refreshFromFileSystem()
+
+    expect(project.getSourceFile(filePath)?.getFullText()).toBe(
+      'export const real = 1\n'
+    )
 
     const second = await getSourceTextMetadata({
       project,
@@ -314,7 +319,9 @@ describe('getSourceTextMetadata', () => {
     expect(second.filePath).toContain(
       '/src/foo.__renoun_source.__renoun_snippet_'
     )
-    expect(project.getSourceFile(filePath)).toBeUndefined()
+    expect(project.getSourceFile(filePath)?.getFullText()).toBe(
+      'export const real = 1\n'
+    )
     expect(
       project.getSourceFile(join(workspace.workspacePath, 'src/foo.__renoun_source.ts'))
     ).toBeDefined()

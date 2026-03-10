@@ -75,6 +75,41 @@ export function removeProgramSourceFileIfPresent(
   }
 }
 
+function shouldRemoveStableSnippetSourceFile(
+  project: Project,
+  registration: SnippetRegistration
+): boolean {
+  const stableSourceFile = project.getSourceFile(registration.stableFilePath)
+  if (!stableSourceFile) {
+    return false
+  }
+
+  const stableSourceText = stableSourceFile.getFullText()
+  const currentVirtualSourceText = project
+    .getSourceFile(registration.currentVirtualFilePath)
+    ?.getFullText()
+
+  if (
+    currentVirtualSourceText !== undefined &&
+    stableSourceText !== currentVirtualSourceText
+  ) {
+    return false
+  }
+
+  const fileSystem = project.getFileSystem()
+  if (fileSystem.fileExistsSync(registration.stableFilePath)) {
+    try {
+      if (fileSystem.readFileSync(registration.stableFilePath) === stableSourceText) {
+        return false
+      }
+    } catch {
+      // Treat unreadable stable files as synthetic and remove them from the program.
+    }
+  }
+
+  return true
+}
+
 function pruneSnippetRegistrations(
   project: Project,
   registrations: Map<string, SnippetRegistration>,
@@ -105,10 +140,14 @@ function pruneSnippetRegistrations(
       project,
       leastRecentlyUsedRegistration.currentVirtualFilePath
     )
-    removeProgramSourceFileIfPresent(
-      project,
-      leastRecentlyUsedRegistration.stableFilePath
-    )
+    if (
+      shouldRemoveStableSnippetSourceFile(project, leastRecentlyUsedRegistration)
+    ) {
+      removeProgramSourceFileIfPresent(
+        project,
+        leastRecentlyUsedRegistration.stableFilePath
+      )
+    }
   }
 }
 
@@ -139,7 +178,9 @@ export function removeVirtualSnippetRegistration(
     project,
     existingRegistration.currentVirtualFilePath
   )
-  removeProgramSourceFileIfPresent(project, existingRegistration.stableFilePath)
+  if (shouldRemoveStableSnippetSourceFile(project, existingRegistration)) {
+    removeProgramSourceFileIfPresent(project, existingRegistration.stableFilePath)
+  }
 }
 
 export function touchVirtualSnippetRegistration(
