@@ -6,6 +6,7 @@ import { waitForRefreshingPrograms } from '../refresh.ts'
 import {
   coerceAnalysisDocumentSourceFileToModule,
   generatedFilenames,
+  getAnalysisDocumentStableFilePath,
   getAnalysisDocumentStableFilePathFromVirtualFilePath,
   getSourceTextValueSignature,
   resolveAnalysisDocument,
@@ -86,6 +87,17 @@ export function hydrateSourceTextMetadataSourceFile(
 
   if (hydratedDocument.kind !== 'snippet') {
     hydrateAnalysisDocumentSourceFile(project, metadata)
+    return
+  }
+
+  const stableFilePath = getAnalysisDocumentStableFilePath(hydratedDocument)
+  const virtualSourceFile = project.getSourceFile(filePath)
+  const stableSourceFile = project.getSourceFile(stableFilePath)
+
+  if (
+    virtualSourceFile?.getFullText() === metadata.value &&
+    stableSourceFile?.getFullText() === metadata.value
+  ) {
     return
   }
 

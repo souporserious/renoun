@@ -8,6 +8,10 @@ const GENERATED_DOCUMENT_SCOPE = '_renoun'
 const RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS = '__renoun_source'
 const VIRTUAL_ANALYSIS_DOCUMENT_FILE_PATH_PATTERN =
   /\.__renoun_snippet_[A-Za-z0-9_-]+(?=(\.[^./\\]+)?$)/
+const resolvedVirtualizedStableFilePathsByProject = new WeakMap<
+  Project,
+  Map<string, string>
+>()
 
 interface AnalysisDocumentBase {
   value: string
@@ -97,7 +101,13 @@ export function coerceAnalysisDocumentSourceFileToModule(
   const hasExports =
     sourceFile.getExportDeclarations().length > 0 ||
     sourceFile.getExportAssignments().length > 0 ||
-    sourceFile.getExportedDeclarations().size > 0
+    sourceFile.getStatements().some((statement) => {
+      const exportableStatement = statement as {
+        hasExportKeyword?: () => boolean
+      }
+
+      return exportableStatement.hasExportKeyword?.() === true
+    })
 
   if (!hasImports && !hasExports) {
     sourceFile.addExportDeclaration({})
@@ -129,6 +139,19 @@ function isGeneratedAnalysisDocumentFilePath(filePath: string): boolean {
   )
 }
 
+function getResolvedVirtualizedStableFilePaths(
+  project: Project
+): Map<string, string> {
+  let resolvedPaths = resolvedVirtualizedStableFilePathsByProject.get(project)
+
+  if (!resolvedPaths) {
+    resolvedPaths = new Map()
+    resolvedVirtualizedStableFilePathsByProject.set(project, resolvedPaths)
+  }
+
+  return resolvedPaths
+}
+
 function hasProgramSourceFile(project: Project, filePath: string): boolean {
   if (project.getSourceFile(filePath)) {
     return true
@@ -155,14 +178,22 @@ export function resolveVirtualizedAnalysisDocumentStableFilePath(
     return filePath
   }
 
-  if (
-    hasProgramSourceFile(project, filePath) ||
-    project.getFileSystem().fileExistsSync(filePath)
-  ) {
-    return toProtectedAnalysisDocumentStableFilePath(filePath)
+  const resolvedPaths = getResolvedVirtualizedStableFilePaths(project)
+  const cachedResolvedPath = resolvedPaths.get(filePath)
+
+  if (cachedResolvedPath !== undefined) {
+    return cachedResolvedPath
   }
 
-  return filePath
+  const resolvedPath =
+    project.getSourceFile(filePath) !== undefined ||
+    project.getFileSystem().fileExistsSync(filePath)
+      ? toProtectedAnalysisDocumentStableFilePath(filePath)
+      : filePath
+
+  resolvedPaths.set(filePath, resolvedPath)
+
+  return resolvedPath
 }
 
 export function hydrateAnalysisDocumentSourceFile(
