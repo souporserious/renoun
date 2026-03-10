@@ -76,10 +76,8 @@ describe('browser-client runtime transport', () => {
   })
 
   afterEach(async () => {
-    const runtimeModule = await import('./browser-runtime.ts')
-    runtimeModule.setAnalysisClientBrowserRuntime(undefined)
-
     const module = await import('./client.ts')
+    module.setAnalysisClientBrowserRuntime(undefined)
     module.__TEST_ONLY__.clearAnalysisClientRpcState()
     module.__TEST_ONLY__.disposeAnalysisBrowserClient()
   })
@@ -214,6 +212,117 @@ describe('browser-client runtime transport', () => {
     expect(client.callMethod).toHaveBeenCalledTimes(2)
     resolveNextPendingCall(client, { text: 'quick-info-b' })
     await expect(thirdPromise).resolves.toEqual({ text: 'quick-info-b' })
+  })
+
+  it('scopes refresh invalidations to the runtime that emitted them', async () => {
+    const module = await import('./client.ts')
+    const retainedRuntime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const explicitRuntime: AnalysisServerRuntime = {
+      id: 'runtime-b',
+      port: '43124',
+      host: '127.0.0.1',
+    }
+    const originalWebSocket = globalThis.WebSocket
+    if (originalWebSocket === undefined) {
+      ;(globalThis as any).WebSocket = class MockWebSocket {}
+    }
+
+    const releaseRuntime =
+      module.retainAnalysisClientBrowserRuntime(retainedRuntime)
+
+    try {
+      expect(mocks.instances).toHaveLength(1)
+      const retainedClient = getMockBrowserClient(0)
+
+      const firstRetainedPromise = module.getQuickInfoAtPosition(
+        '/project/src/runtime-a.ts',
+        10,
+        undefined,
+        retainedRuntime
+      )
+      await flushBrowserClientCallQueue()
+      resolveNextPendingCall(retainedClient, { text: 'quick-info-a' })
+      await expect(firstRetainedPromise).resolves.toEqual({
+        text: 'quick-info-a',
+      })
+
+      const cachedRetained = await module.getQuickInfoAtPosition(
+        '/project/src/runtime-a.ts',
+        10,
+        undefined,
+        retainedRuntime
+      )
+      expect(cachedRetained).toEqual({ text: 'quick-info-a' })
+      expect(retainedClient.callMethod).toHaveBeenCalledTimes(1)
+
+      const firstExplicitPromise = module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      await flushBrowserClientCallQueue()
+
+      expect(mocks.instances).toHaveLength(2)
+      const explicitClient = getMockBrowserClient(1)
+      resolveNextPendingCall(explicitClient, { text: 'quick-info-b' })
+      await expect(firstExplicitPromise).resolves.toEqual({
+        text: 'quick-info-b',
+      })
+
+      const cachedExplicit = await module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      expect(cachedExplicit).toEqual({ text: 'quick-info-b' })
+      expect(explicitClient.callMethod).toHaveBeenCalledTimes(1)
+
+      emitBrowserClientEvent(explicitClient, 'notification', {
+        type: 'refresh',
+        data: {
+          refreshCursor: 1,
+          filePaths: ['src/runtime-b.ts'],
+        },
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      const retainedAfterRefresh = await module.getQuickInfoAtPosition(
+        '/project/src/runtime-a.ts',
+        10,
+        undefined,
+        retainedRuntime
+      )
+      expect(retainedAfterRefresh).toEqual({ text: 'quick-info-a' })
+      expect(retainedClient.callMethod).toHaveBeenCalledTimes(1)
+
+      const refreshedExplicitPromise = module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      await flushBrowserClientCallQueue()
+      expect(explicitClient.callMethod).toHaveBeenCalledTimes(2)
+      resolveNextPendingCall(explicitClient, { text: 'quick-info-b-2' })
+      await expect(refreshedExplicitPromise).resolves.toEqual({
+        text: 'quick-info-b-2',
+      })
+    } finally {
+      releaseRuntime()
+      if (originalWebSocket === undefined) {
+        delete (globalThis as { WebSocket?: typeof WebSocket }).WebSocket
+      } else {
+        ;(globalThis as { WebSocket?: typeof WebSocket }).WebSocket =
+          originalWebSocket
+      }
+    }
   })
 })
 

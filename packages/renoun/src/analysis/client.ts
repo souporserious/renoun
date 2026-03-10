@@ -107,7 +107,10 @@ let activeClientState: ActiveClientState | undefined
 let cachedBrowserClientState: BrowserRuntimeClientState | undefined
 let nextActiveClientGeneration = 0
 let hasSubscribedToServerRuntimeEnvChanges = false
-const pendingRefreshInvalidationPaths = new Set<string>()
+const pendingRefreshInvalidationPathsByScope = new Map<
+  string | undefined,
+  Set<string>
+>()
 let isRefreshInvalidationFlushQueued = false
 let hasConnectedAnalysisServerClient = false
 let refreshResyncQueue: Promise<void> = Promise.resolve()
@@ -477,14 +480,6 @@ function getClientRpcCacheTtlMs(): number {
   return resolveAnalysisClientRpcCacheTtlMsFromEnv(DEFAULT_CLIENT_RPC_CACHE_TTL_MS)
 }
 
-function getActiveClientRuntimeScopeKey(): string | undefined {
-  if (!activeClientState) {
-    return undefined
-  }
-
-  return toRuntimeCacheScopeKey(activeClientState.runtimeKey)
-}
-
 function invalidateClientRpcStateByNormalizedPaths(
   normalizedPaths: readonly string[],
   invalidationScopeKey?: string
@@ -501,7 +496,7 @@ function invalidateAllClientRpcState(invalidationScopeKey?: string): void {
 function resetClientRefreshStateForRuntimeChange(): void {
   hydrateRefreshStateFromSharedAnalysisBrowserVersion()
   resetClientRpcCacheForRuntimeChange()
-  pendingRefreshInvalidationPaths.clear()
+  pendingRefreshInvalidationPathsByScope.clear()
   latestRefreshCursor = 0
   notifyAnalysisClientRefreshVersionChanged()
 }
@@ -530,7 +525,7 @@ function applyLoadedRuntimeRefreshInvalidations(runtimePaths: string[]): void {
 
 function applyRefreshInvalidations(
   paths: string[],
-  invalidationScopeKey = getActiveClientRuntimeScopeKey()
+  invalidationScopeKey?: string
 ): void {
   const { comparablePaths, runtimePaths } = normalizeInvalidationPaths(paths)
   if (comparablePaths.length === 0) {
@@ -664,6 +659,7 @@ function queueRefreshResync(
   state: RefreshSubscribedClientState,
   isCurrentState: () => boolean
 ): void {
+  const invalidationScopeKey = toRuntimeCacheScopeKey(state.runtimeKey)
   refreshResyncQueue = refreshResyncQueue
     .catch(() => {})
     .then(async () => {
@@ -693,11 +689,9 @@ function queueRefreshResync(
           const paths = getRefreshInvalidationPaths(response)
           if (response.fullRefresh) {
             if (paths.length > 0) {
-              applyRefreshInvalidations(paths)
+              applyRefreshInvalidations(paths, invalidationScopeKey)
             } else {
-              invalidateAllClientRpcState(
-                toRuntimeCacheScopeKey(state.runtimeKey)
-              )
+              invalidateAllClientRpcState(invalidationScopeKey)
             }
             setLatestRefreshCursor(nextCursor ?? 0)
             emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
@@ -709,7 +703,7 @@ function queueRefreshResync(
           }
 
           for (const path of paths) {
-            queueRefreshInvalidation(path)
+            queueRefreshInvalidation(path, invalidationScopeKey)
           }
           if (paths.length > 0) {
             emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
@@ -722,7 +716,7 @@ function queueRefreshResync(
 
           if (typeof window !== 'undefined') {
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
-            applyRefreshInvalidations(fallbackPaths)
+            applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
             setLatestRefreshCursor(0)
             emitAnalysisClientBrowserRefreshNotification()
             return
@@ -732,7 +726,7 @@ function queueRefreshResync(
             // Conservative fallback: clear client-side RPC caches and invalidate
             // runtime/project caches for all observed project roots.
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
-            applyRefreshInvalidations(fallbackPaths)
+            applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
             setLatestRefreshCursor(0)
             emitAnalysisClientBrowserRefreshNotification(undefined, fallbackPaths)
             return
@@ -796,8 +790,9 @@ function attachClientRefreshSubscriptions(
     }
 
     const paths = getRefreshInvalidationPaths(message.data)
+    const invalidationScopeKey = toRuntimeCacheScopeKey(state.runtimeKey)
     for (const path of paths) {
-      queueRefreshInvalidation(path)
+      queueRefreshInvalidation(path, invalidationScopeKey)
     }
     notifyAnalysisClientBrowserRefreshNotification(message)
   })
@@ -1140,8 +1135,22 @@ async function callBrowserRuntimeClientMethod<
   }
 }
 
-function queueRefreshInvalidation(path: string): void {
-  pendingRefreshInvalidationPaths.add(path)
+function queueRefreshInvalidation(
+  path: string,
+  invalidationScopeKey?: string
+): void {
+  let pendingPaths = pendingRefreshInvalidationPathsByScope.get(
+    invalidationScopeKey
+  )
+  if (!pendingPaths) {
+    pendingPaths = new Set<string>()
+    pendingRefreshInvalidationPathsByScope.set(
+      invalidationScopeKey,
+      pendingPaths
+    )
+  }
+
+  pendingPaths.add(path)
   if (isRefreshInvalidationFlushQueued) {
     return
   }
@@ -1149,13 +1158,25 @@ function queueRefreshInvalidation(path: string): void {
   isRefreshInvalidationFlushQueued = true
   queueMicrotask(() => {
     isRefreshInvalidationFlushQueued = false
-    const paths = Array.from(pendingRefreshInvalidationPaths)
-    pendingRefreshInvalidationPaths.clear()
-    if (paths.length === 0) {
-      return
-    }
+    const pendingInvalidations = Array.from(
+      pendingRefreshInvalidationPathsByScope,
+      ([scopeKey, scopePaths]) => ({
+        scopeKey,
+        paths: Array.from(scopePaths),
+      })
+    )
+    pendingRefreshInvalidationPathsByScope.clear()
 
-    applyRefreshInvalidations(paths)
+    for (const pendingInvalidation of pendingInvalidations) {
+      if (pendingInvalidation.paths.length === 0) {
+        continue
+      }
+
+      applyRefreshInvalidations(
+        pendingInvalidation.paths,
+        pendingInvalidation.scopeKey
+      )
+    }
   })
 }
 
@@ -1703,7 +1724,7 @@ function setAnalysisClientRefreshVersionForTests(version: string): void {
   const parsedVersion = parseAnalysisClientRefreshVersion(version)
   latestRefreshCursor = parsedVersion.cursor
   setClientRpcInvalidationEpoch(parsedVersion.epoch)
-  pendingRefreshInvalidationPaths.clear()
+  pendingRefreshInvalidationPathsByScope.clear()
   setSharedAnalysisClientBrowserRefreshVersion(
     `${parsedVersion.cursor}:${parsedVersion.epoch}`
   )
@@ -1711,7 +1732,7 @@ function setAnalysisClientRefreshVersionForTests(version: string): void {
 
 function clearAnalysisClientStateForTests(): void {
   clearClientRpcCacheStateForTests()
-  pendingRefreshInvalidationPaths.clear()
+  pendingRefreshInvalidationPathsByScope.clear()
 }
 
 export const __TEST_ONLY__ = {
