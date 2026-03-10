@@ -7,6 +7,7 @@ import {
   getQuickInfoAtPosition as getAnalysisClientQuickInfoAtPosition,
   getTokens as getAnalysisClientTokens,
   hasRetainedAnalysisClientBrowserRuntime,
+  onAnalysisClientBrowserRuntimeRetentionChange,
   onAnalysisClientBrowserRefreshNotification,
   onAnalysisClientBrowserRuntimeChange,
   onAnalysisClientRefreshVersionChange,
@@ -88,31 +89,25 @@ function useAnalysisClientRefreshVersionSnapshot(
   )
 }
 
+function useAnalysisClientBrowserRuntimeRetentionSnapshot(): boolean {
+  return React.useSyncExternalStore(
+    onAnalysisClientBrowserRuntimeRetentionChange,
+    hasRetainedAnalysisClientBrowserRuntime,
+    hasRetainedAnalysisClientBrowserRuntime
+  )
+}
+
 function useQuickInfoRuntimeSelection(
   initialRuntime: AnalysisServerRuntime | undefined
 ): AnalysisServerRuntime | undefined {
-  const selectionRef = React.useRef<{
-    runtimeKey: string | undefined
-    hasRetainedBrowserRuntime: boolean
-  } | null>(null)
-  const initialRuntimeKey = toAnalysisServerRuntimeKey(initialRuntime)
-
-  if (
-    selectionRef.current === null ||
-    selectionRef.current.runtimeKey !== initialRuntimeKey
-  ) {
-    selectionRef.current = {
-      runtimeKey: initialRuntimeKey,
-      hasRetainedBrowserRuntime: hasRetainedAnalysisClientBrowserRuntime(),
-    }
-  }
-
   const browserRuntime = useAnalysisClientBrowserRuntimeSnapshot(initialRuntime)
+  const hasRetainedBrowserRuntime =
+    useAnalysisClientBrowserRuntimeRetentionSnapshot()
 
   return resolveQuickInfoRuntime(
     initialRuntime,
     browserRuntime,
-    selectionRef.current.hasRetainedBrowserRuntime
+    hasRetainedBrowserRuntime
   )
 }
 

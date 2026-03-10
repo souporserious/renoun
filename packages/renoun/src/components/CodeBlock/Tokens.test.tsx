@@ -15,8 +15,16 @@ const symbolMock = vi.fn(
 )
 
 vi.mock('../../analysis/client.ts', () => ({
+  getAnalysisClientBrowserRuntime: () => undefined,
+  getAnalysisClientRefreshVersion: () => '0:0',
+  getQuickInfoAtPosition: vi.fn(),
   getSourceTextMetadata: vi.fn(),
   getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
+  hasRetainedAnalysisClientBrowserRuntime: () => false,
+  onAnalysisClientBrowserRuntimeRetentionChange: () => () => {},
+  onAnalysisClientBrowserRefreshNotification: () => () => {},
+  onAnalysisClientBrowserRuntimeChange: () => () => {},
+  onAnalysisClientRefreshVersionChange: () => () => {},
 }))
 
 vi.mock('../Config/ServerConfigContext.tsx', () => ({

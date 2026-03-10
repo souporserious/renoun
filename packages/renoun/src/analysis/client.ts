@@ -125,6 +125,9 @@ const browserRuntimeRegistrations: Array<{
   token: symbol
   runtime: AnalysisServerRuntime
 }> = []
+const browserRuntimeRetentionListeners = new Set<
+  (hasRetainedBrowserRuntime: boolean) => void
+>()
 const browserRefreshNotificationListeners = new Set<
   (message: RefreshNotificationMessage) => void
 >()
@@ -307,6 +310,15 @@ export function onAnalysisClientBrowserRuntimeChange(
   return onSharedAnalysisClientBrowserRuntimeChange(listener)
 }
 
+export function onAnalysisClientBrowserRuntimeRetentionChange(
+  listener: (hasRetainedBrowserRuntime: boolean) => void
+): () => void {
+  browserRuntimeRetentionListeners.add(listener)
+  return () => {
+    browserRuntimeRetentionListeners.delete(listener)
+  }
+}
+
 export function onAnalysisClientBrowserRefreshNotification(
   listener: (message: RefreshNotificationMessage) => void
 ): () => void {
@@ -441,6 +453,19 @@ function applyAnalysisClientBrowserRuntime(
   attachClientRefreshSubscriptions(activeClientState)
 }
 
+function notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
+  previousHasRetainedBrowserRuntime: boolean
+): void {
+  const nextHasRetainedBrowserRuntime = hasRetainedAnalysisClientBrowserRuntime()
+  if (nextHasRetainedBrowserRuntime === previousHasRetainedBrowserRuntime) {
+    return
+  }
+
+  for (const listener of browserRuntimeRetentionListeners) {
+    listener(nextHasRetainedBrowserRuntime)
+  }
+}
+
 export function setAnalysisClientBrowserRuntime(
   runtime?: AnalysisServerRuntime
 ): void {
@@ -454,6 +479,7 @@ export function retainAnalysisClientBrowserRuntime(
     preferCurrentRuntime?: boolean
   } = {}
 ): () => void {
+  const didHaveRetainedBrowserRuntime = hasRetainedAnalysisClientBrowserRuntime()
   const normalizedRuntime = normalizeAnalysisServerRuntime(
     options.preferCurrentRuntime === true
       ? getSharedAnalysisClientBrowserRuntime() ?? runtime
@@ -469,6 +495,9 @@ export function retainAnalysisClientBrowserRuntime(
     runtime: normalizedRuntime,
   })
   applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
+  notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
+    didHaveRetainedBrowserRuntime
+  )
 
   return () => {
     const registrationIndex = browserRuntimeRegistrations.findIndex(
@@ -478,8 +507,13 @@ export function retainAnalysisClientBrowserRuntime(
       return
     }
 
+    const didHaveRetainedBrowserRuntime =
+      hasRetainedAnalysisClientBrowserRuntime()
     browserRuntimeRegistrations.splice(registrationIndex, 1)
     applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
+    notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
+      didHaveRetainedBrowserRuntime
+    )
   }
 }
 

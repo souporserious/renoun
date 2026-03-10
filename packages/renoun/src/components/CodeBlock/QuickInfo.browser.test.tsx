@@ -679,6 +679,70 @@ describe('QuickInfo browser regression', () => {
     )
   })
 
+  it('switches an open hover back to its request runtime when a retained page runtime is registered without changing the shared runtime key', async () => {
+    setAnalysisClientBrowserRuntime(SECOND_RUNTIME)
+    renderQuickInfoFixture(root, 'retain-without-runtime-change')
+
+    const symbol = await waitForSymbol('symbol-short')
+    hoverSymbol(symbol)
+
+    await waitFor(
+      () =>
+        counters.quickInfoByRuntimeKey.get(
+          'quick-info-browser-test-secondary@ws://127.0.0.1:43124'
+        ) === 1,
+      1_000
+    )
+
+    const releaseRuntime = retainAnalysisClientBrowserRuntime(SECOND_RUNTIME)
+
+    try {
+      expect(getAnalysisClientBrowserRuntime()?.id).toBe(SECOND_RUNTIME.id)
+
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test@ws://127.0.0.1:43123'
+          ) === 1,
+        1_000
+      )
+    } finally {
+      releaseRuntime()
+    }
+  })
+
+  it('switches an open hover to the shared runtime when a retained page runtime is released without changing the shared runtime key', async () => {
+    setAnalysisClientBrowserRuntime(SECOND_RUNTIME)
+    const releaseRuntime = retainAnalysisClientBrowserRuntime(SECOND_RUNTIME)
+    renderQuickInfoFixture(root, 'release-without-runtime-change')
+
+    try {
+      const symbol = await waitForSymbol('symbol-short')
+      hoverSymbol(symbol)
+
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test@ws://127.0.0.1:43123'
+          ) === 1,
+        1_000
+      )
+
+      releaseRuntime()
+
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test-secondary@ws://127.0.0.1:43124'
+          ) === 1,
+        1_000
+      )
+    } finally {
+      releaseRuntime()
+      setAnalysisClientBrowserRuntime(undefined)
+    }
+  })
+
 })
 
 function renderQuickInfoFixture(root: Root | null, cacheScope: string) {
@@ -773,6 +837,14 @@ function renderSignatureCacheFixture(root: Root | null) {
       </div>
     </QuickInfoProvider>
   )
+}
+
+async function waitForSymbol(testId: string): Promise<HTMLElement> {
+  await waitFor(
+    () => Boolean(document.querySelector(`[data-testid="${testId}"]`)),
+    1_000
+  )
+  return getSymbolAnchor(testId)
 }
 
 function getPopover(): HTMLElement | null {

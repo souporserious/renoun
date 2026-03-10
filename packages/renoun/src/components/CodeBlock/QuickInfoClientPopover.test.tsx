@@ -11,6 +11,7 @@ vi.mock('../../analysis/client.ts', () => ({
   ) => mockGetQuickInfoAtPosition(...args),
   getTokens: (...args: Parameters<typeof mockGetTokens>) => mockGetTokens(...args),
   hasRetainedAnalysisClientBrowserRuntime: () => false,
+  onAnalysisClientBrowserRuntimeRetentionChange: () => () => {},
   onAnalysisClientBrowserRefreshNotification: () => () => {},
   onAnalysisClientBrowserRuntimeChange: () => () => {},
   onAnalysisClientRefreshVersionChange: () => () => {},
