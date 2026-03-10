@@ -41,31 +41,37 @@
   },
   "exports": {
     ".": {
+      "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./rehype": {
+      "source": "./src/rehype/index.ts",
       "types": "./dist/rehype/index.d.ts",
       "import": "./dist/rehype/index.js",
       "default": "./dist/rehype/index.js"
     },
     "./rehype/*": {
+      "source": "./src/rehype/*.ts",
       "types": "./dist/rehype/*.d.ts",
       "import": "./dist/rehype/*.js",
       "default": "./dist/rehype/*.js"
     },
     "./remark": {
+      "source": "./src/remark/index.ts",
       "types": "./dist/remark/index.d.ts",
       "import": "./dist/remark/index.js",
       "default": "./dist/remark/index.js"
     },
     "./remark/*": {
+      "source": "./src/remark/*.ts",
       "types": "./dist/remark/*.d.ts",
       "import": "./dist/remark/*.js",
       "default": "./dist/remark/*.js"
     },
     "./utils": {
+      "source": "./src/utils/index.ts",
       "types": "./dist/utils/index.d.ts",
       "import": "./dist/utils/index.js",
       "default": "./dist/utils/index.js"
