@@ -1,7 +1,18 @@
+import {
+  mkdtempSync,
+  mkdirSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const originalFetch = globalThis.fetch
+const originalCwd = process.cwd()
 const originalSponsorsToken = process.env['GITHUB_SPONSORS_TOKEN']
 const SPONSORS_CACHE_PREFIX = 'component-sponsors:2:github-sponsors:'
 
@@ -14,6 +25,20 @@ async function clearSponsorsCache(): Promise<void> {
   const nodeKeys = await session.cache.listNodeKeysByPrefix(SPONSORS_CACHE_PREFIX)
   if (nodeKeys.length > 0) {
     await session.cache.deleteMany(nodeKeys)
+  }
+}
+
+async function withWorkingDirectory<T>(
+  directory: string,
+  callback: () => Promise<T>
+): Promise<T> {
+  const previousCwd = process.cwd()
+  process.chdir(directory)
+
+  try {
+    return await callback()
+  } finally {
+    process.chdir(previousCwd)
   }
 }
 
@@ -96,6 +121,9 @@ describe('Sponsors cache', () => {
 
   afterEach(() => {
     globalThis.fetch = originalFetch
+    if (process.cwd() !== originalCwd) {
+      process.chdir(originalCwd)
+    }
 
     if (originalSponsorsToken === undefined) {
       delete process.env['GITHUB_SPONSORS_TOKEN']
@@ -289,6 +317,132 @@ describe('Sponsors cache', () => {
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('scopes cached sponsor sessions by workspace root in the same process', async () => {
+    const [{ Sponsors }, { disposeCacheStorePersistence }] = await Promise.all([
+      import('./Sponsors.tsx'),
+      import('../file-system/CacheSqlite.ts'),
+    ])
+    const tempDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-sponsors-workspace-root-')
+    )
+    const workspaceOne = join(tempDirectory, 'workspace-one')
+    const workspaceTwo = join(tempDirectory, 'workspace-two')
+    const tiers = [{ amount: 100, title: 'Bronze' }] as const
+
+    mkdirSync(workspaceOne, { recursive: true })
+    mkdirSync(workspaceTwo, { recursive: true })
+    writeFileSync(
+      join(workspaceOne, 'package.json'),
+      JSON.stringify({ name: 'sponsors-workspace-one', private: true }),
+      'utf8'
+    )
+    writeFileSync(
+      join(workspaceTwo, 'package.json'),
+      JSON.stringify({ name: 'sponsors-workspace-two', private: true }),
+      'utf8'
+    )
+    const canonicalWorkspaceOne = realpathSync(workspaceOne)
+    const canonicalWorkspaceTwo = realpathSync(workspaceTwo)
+
+    process.env['GITHUB_SPONSORS_TOKEN'] = 'shared-token'
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL): Promise<Response> => {
+        const url = typeof input === 'string' ? input : input.toString()
+        const currentWorkspace = realpathSync(process.cwd())
+
+        if (url === 'https://api.github.com/graphql') {
+          if (currentWorkspace === canonicalWorkspaceOne) {
+            return createGraphqlResponse({
+              username: 'octocat-one',
+              viewerLogin: 'renoun-one',
+            })
+          }
+
+          if (currentWorkspace === canonicalWorkspaceTwo) {
+            return createGraphqlResponse({
+              username: 'octocat-two',
+              viewerLogin: 'renoun-two',
+            })
+          }
+        }
+
+        if (url === 'https://github.com/sponsors/renoun-one') {
+          return createSponsorsPageResponse('renoun-one')
+        }
+
+        if (url === 'https://github.com/sponsors/renoun-two') {
+          return createSponsorsPageResponse('renoun-two')
+        }
+
+        throw new Error(
+          `Unexpected fetch URL "${url}" while rendering from "${currentWorkspace}"`
+        )
+      }
+    )
+
+    globalThis.fetch = fetchMock as typeof fetch
+
+    let firstResolvedTiers: unknown
+    let secondResolvedTiers: unknown
+
+    try {
+      await withWorkingDirectory(workspaceOne, async () => {
+        await clearSponsorsCache()
+        await Sponsors({
+          tiers,
+          children: (resolvedTiers) => {
+            firstResolvedTiers = resolvedTiers
+            return <></>
+          },
+        })
+      })
+
+      await withWorkingDirectory(workspaceTwo, async () => {
+        await clearSponsorsCache()
+        await Sponsors({
+          tiers,
+          children: (resolvedTiers) => {
+            secondResolvedTiers = resolvedTiers
+            return <></>
+          },
+        })
+      })
+
+      expect(fetchMock).toHaveBeenCalledTimes(4)
+      expect(firstResolvedTiers).toEqual([
+        {
+          href: 'https://github.com/sponsors/renoun-one/sponsorships?tier_id=12345',
+          sponsors: [
+            {
+              username: 'octocat-one',
+              avatarUrl: 'https://avatars.githubusercontent.com/u/583231?v=4',
+            },
+          ],
+          title: 'Bronze',
+          description: 'Bronze tier',
+        },
+      ])
+      expect(secondResolvedTiers).toEqual([
+        {
+          href: 'https://github.com/sponsors/renoun-two/sponsorships?tier_id=12345',
+          sponsors: [
+            {
+              username: 'octocat-two',
+              avatarUrl: 'https://avatars.githubusercontent.com/u/583231?v=4',
+            },
+          ],
+          title: 'Bronze',
+          description: 'Bronze tier',
+        },
+      ])
+    } finally {
+      disposeCacheStorePersistence({ projectRoot: canonicalWorkspaceOne })
+      disposeCacheStorePersistence({ projectRoot: canonicalWorkspaceTwo })
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
   })
 
   it('recovers cache session setup after a transient failure', async () => {

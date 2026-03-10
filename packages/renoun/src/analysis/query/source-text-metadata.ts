@@ -14,11 +14,6 @@ import {
   updateAnalysisDocumentValue,
   hydrateAnalysisDocumentSourceFile,
 } from '../document.ts'
-import {
-  isProductionEnvironment,
-  isTestEnvironment,
-  isVitestRuntime,
-} from '../../utils/env.ts'
 import { formatSourceText } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
 import {
@@ -179,14 +174,7 @@ export async function getSourceTextMetadata({
         document.filePath,
         document.value,
         finalLanguage,
-        isFormattingExplicit,
-        {
-          nonBlocking:
-            !isProductionEnvironment() &&
-            !isTestEnvironment() &&
-            !isVitestRuntime() &&
-            isFormattingExplicit !== true,
-        }
+        isFormattingExplicit
       )
     } catch (error) {
       throw new Error(

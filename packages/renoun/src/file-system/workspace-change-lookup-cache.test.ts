@@ -63,6 +63,60 @@ test('awaits refreshed changed paths for the active key in swr mode', async () =
   }
 })
 
+test('awaits refreshed workspace tokens after ttl expiry in swr mode', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+
+  try {
+    const tokenRefreshGate = createDeferred<string | null>()
+    let lookupCount = 0
+    const cache = new WorkspaceChangeLookupCache({
+      getWorkspaceTokenTtlMs: () => 5,
+      getWorkspaceChangedPathsTtlMs: () => 0,
+      normalizeRootPath: (rootPath) => rootPath,
+      normalizeChangedPath: (changedPath) => changedPath,
+      lookupWorkspaceToken: async (rootPath) => {
+        lookupCount += 1
+        if (lookupCount === 1) {
+          return `${rootPath}:v1`
+        }
+
+        return tokenRefreshGate.promise
+      },
+      lookupWorkspaceChangedPaths: async () => null,
+      serveStaleWhileRevalidate: true,
+    })
+
+    expect(await cache.getWorkspaceChangeToken('docs')).toBe('docs:v1')
+
+    vi.setSystemTime(Date.now() + 10)
+
+    const refreshedPromise = cache.getWorkspaceChangeToken('docs')
+    const concurrentPromise = cache.getWorkspaceChangeToken('docs')
+    let refreshedResolved = false
+    let concurrentResolved = false
+    void refreshedPromise.then(() => {
+      refreshedResolved = true
+    })
+    void concurrentPromise.then(() => {
+      concurrentResolved = true
+    })
+
+    await Promise.resolve()
+
+    expect(refreshedResolved).toBe(false)
+    expect(concurrentResolved).toBe(false)
+
+    tokenRefreshGate.resolve('docs:v2')
+
+    await expect(refreshedPromise).resolves.toBe('docs:v2')
+    await expect(concurrentPromise).resolves.toBe('docs:v2')
+    expect(lookupCount).toBe(2)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
 test('evicts expired changed-path entries for other keys under swr', async () => {
   vi.useFakeTimers()
   vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))

@@ -44,7 +44,10 @@ const SPONSORS_CACHE_VERSION_DEP = 'component-sponsors-version'
 const SPONSORS_CACHE_TTL_BUCKET_DEP = 'component-sponsors-ttl-bucket'
 const SPONSORS_CACHE_TOKEN_DEP = 'component-sponsors-token'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
-let sponsorsCacheSessionPromise: Promise<RenounSession | undefined> | undefined
+const sponsorsCacheSessionPromisesByProjectRoot = new Map<
+  string,
+  Promise<RenounSession | undefined>
+>()
 
 function getTokenCacheKey(token: string): string {
   return hashString(token)
@@ -77,26 +80,43 @@ function resolveSponsorsCacheTtlMs(cacheTtlMs?: number): number {
 }
 
 async function getSponsorsCacheSession(): Promise<RenounSession | undefined> {
-  if (!sponsorsCacheSessionPromise) {
-    sponsorsCacheSessionPromise = (async () => {
-      try {
-        const [{ NodeFileSystem }, { Session }] = await Promise.all([
-          import('../file-system/NodeFileSystem.ts'),
-          import('../file-system/Session.ts'),
-        ])
-        return Session.for(new NodeFileSystem())
-      } catch {
-        return undefined
-      }
-    })()
-  }
+  try {
+    const [
+      { NodeFileSystem },
+      { Session },
+      { getRootDirectory },
+      { getDefaultCacheDatabasePath },
+    ] = await Promise.all([
+        import('../file-system/NodeFileSystem.ts'),
+        import('../file-system/Session.ts'),
+        import('../utils/get-root-directory.ts'),
+        import('../file-system/CacheSqlite.ts'),
+      ])
+    const projectRoot = getRootDirectory()
+    const cacheScopeKey = getDefaultCacheDatabasePath(projectRoot)
+    let sessionPromise =
+      sponsorsCacheSessionPromisesByProjectRoot.get(cacheScopeKey)
 
-  const session = await sponsorsCacheSessionPromise
-  if (!session) {
-    sponsorsCacheSessionPromise = undefined
-  }
+    if (!sessionPromise) {
+      sessionPromise = (async () => {
+        try {
+          return Session.for(new NodeFileSystem())
+        } catch {
+          return undefined
+        }
+      })()
+      sponsorsCacheSessionPromisesByProjectRoot.set(cacheScopeKey, sessionPromise)
+    }
 
-  return session
+    const session = await sessionPromise
+    if (!session) {
+      sponsorsCacheSessionPromisesByProjectRoot.delete(cacheScopeKey)
+    }
+
+    return session
+  } catch {
+    return undefined
+  }
 }
 
 /** Clamp and sanitize avatar size. */

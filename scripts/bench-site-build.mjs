@@ -6,10 +6,11 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, parse, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
+import { fileURLToPath } from 'node:url'
 
 import { createOutputParser } from './bench-site-build-output.mjs'
 
-const DEFAULT_FILTER = '@apps/site'
+export const DEFAULT_FILTER = '@apps/site'
 const DEFAULT_COLD_RUNS = 1
 const DEFAULT_WARM_RUNS = 2
 const DEFAULT_CLEAN_PATHS = [
@@ -195,6 +196,20 @@ async function cleanPaths(projectRoot, cleanPaths) {
   }
 }
 
+export function resolveBuildInvocation({ projectRoot, filter }) {
+  if (filter === DEFAULT_FILTER) {
+    return {
+      command: 'pnpm',
+      args: ['--dir', join(projectRoot, 'apps/site'), 'build'],
+    }
+  }
+
+  return {
+    command: 'pnpm',
+    args: ['--filter', filter, 'build'],
+  }
+}
+
 async function runBuild({
   projectRoot,
   filter,
@@ -206,8 +221,7 @@ async function runBuild({
   const parser = createOutputParser()
   const logPath = join(logsDirectory, `${runName}.log`)
   const logStream = createWriteStream(logPath, { encoding: 'utf8' })
-  const command = 'pnpm'
-  const args = ['--filter', filter, 'build']
+  const { command, args } = resolveBuildInvocation({ projectRoot, filter })
   const env = {
     ...process.env,
     NEXT_TELEMETRY_DISABLED: '1',
@@ -477,11 +491,16 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(
-    error instanceof Error
-      ? error.message
-      : '[bench] Unexpected benchmark error'
-  )
-  process.exit(1)
-})
+if (
+  process.argv[1] &&
+  resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+) {
+  main().catch((error) => {
+    console.error(
+      error instanceof Error
+        ? error.message
+        : '[bench] Unexpected benchmark error'
+    )
+    process.exit(1)
+  })
+}

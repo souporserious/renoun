@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 
 import {
+  __TEST_ONLY__ as ANALYSIS_CLIENT_TEST_ONLY__,
   configureAnalysisClientRuntime,
+  getQuickInfoAtPosition,
   resetAnalysisClientRuntimeConfiguration,
   setAnalysisClientBrowserRuntime,
 } from '../../analysis/client.ts'
@@ -59,6 +61,8 @@ describe('RefreshClient browser lifecycle', () => {
 
     setAnalysisClientBrowserRuntime(undefined)
     resetAnalysisClientRuntimeConfiguration()
+    ANALYSIS_CLIENT_TEST_ONLY__.clearAnalysisClientRpcState()
+    ANALYSIS_CLIENT_TEST_ONLY__.disposeAnalysisBrowserClient()
     delete (window as any).nd
     ;(globalThis as any).WebSocket = originalWebSocket
   })
@@ -181,6 +185,87 @@ describe('RefreshClient browser lifecycle', () => {
       data: {
         refreshCursor: 1,
         filePaths: ['/docs/page.mdx'],
+      },
+    })
+
+    await waitFor(() => hmrRefresh.mock.calls.length === 1, 1_000)
+  })
+
+  it('ignores refresh notifications from explicit runtimes while a retained page runtime is active', async () => {
+    const hmrRefresh = vi.fn()
+    ;(window as any).nd = {
+      router: {
+        hmrRefresh,
+      },
+    }
+
+    root?.render(
+      <RefreshClient
+        port="43123"
+        id="refresh-browser-test"
+        host="127.0.0.1"
+      />
+    )
+
+    await waitFor(
+      () => getAnalysisClientBrowserRuntime()?.id === 'refresh-browser-test',
+      1_000
+    )
+    await waitFor(() => counters.sockets.length === 1, 1_000)
+
+    const explicitRuntime = {
+      id: 'refresh-explicit-runtime',
+      port: '43124',
+      host: '127.0.0.1',
+    }
+    const quickInfoPromise = getQuickInfoAtPosition(
+      '/project/src/runtime-b.ts',
+      10,
+      undefined,
+      explicitRuntime
+    )
+
+    await waitFor(() => counters.sockets.length === 2, 1_000)
+    const explicitSocket = counters.sockets[1]
+    if (!explicitSocket) {
+      throw new Error('[renoun] expected explicit runtime socket')
+    }
+
+    await waitFor(() => explicitSocket.sentMessages.length === 1, 1_000)
+    const request = JSON.parse(explicitSocket.sentMessages[0] ?? '{}') as {
+      id?: number
+    }
+    explicitSocket.emitMessage({
+      id: request.id,
+      result: {
+        text: 'runtime-b',
+      },
+    })
+    await expect(quickInfoPromise).resolves.toEqual({
+      text: 'runtime-b',
+    })
+
+    explicitSocket.emitMessage({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/runtime-b.ts'],
+      },
+    })
+
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(hmrRefresh).toHaveBeenCalledTimes(0)
+
+    const retainedSocket = counters.sockets[0]
+    if (!retainedSocket) {
+      throw new Error('[renoun] expected retained runtime socket')
+    }
+
+    retainedSocket.emitMessage({
+      type: 'refresh',
+      data: {
+        refreshCursor: 2,
+        filePaths: ['/project/src/runtime-a.ts'],
       },
     })
 

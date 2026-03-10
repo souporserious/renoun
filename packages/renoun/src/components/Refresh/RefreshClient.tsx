@@ -1,6 +1,7 @@
 'use client'
 import { useEffect } from 'react'
 
+import { getAnalysisServerRuntimeKey } from '../../analysis/browser-runtime.ts'
 import {
   onAnalysisClientBrowserRefreshNotification,
   retainAnalysisClientBrowserRuntime,
@@ -25,6 +26,13 @@ export function RefreshClient({
   host?: string
   emitRefreshNotifications?: boolean
 }) {
+  const runtimeKey = getAnalysisServerRuntimeKey({
+    port,
+    id,
+    host,
+    emitRefreshNotifications,
+  })
+
   useEffect(() => {
     if (port === undefined) {
       return
@@ -37,7 +45,11 @@ export function RefreshClient({
       emitRefreshNotifications,
     })
     const unsubscribe = onAnalysisClientBrowserRefreshNotification((message) => {
-      if (message.type === 'refresh' && 'nd' in window) {
+      if (
+        message.type === 'refresh' &&
+        message.runtimeKey === runtimeKey &&
+        'nd' in window
+      ) {
         // @ts-ignore - private Next.js API
         const router = window.nd.router
 
@@ -57,7 +69,7 @@ export function RefreshClient({
       unsubscribe()
       releaseRuntime()
     }
-  }, [emitRefreshNotifications, host, id, port])
+  }, [emitRefreshNotifications, host, id, port, runtimeKey])
 
   return null
 }

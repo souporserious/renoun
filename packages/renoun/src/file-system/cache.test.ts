@@ -3134,7 +3134,7 @@ describe('session cache persistence policy', () => {
     }
   })
 
-  test('serves stale workspace token but awaits refreshed changed paths while revalidating in development', async () => {
+  test('awaits refreshed workspace token and changed paths while revalidating in development', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'development'
 
@@ -3193,26 +3193,26 @@ describe('session cache persistence policy', () => {
       const refreshedChangedPathsPromise =
         session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
 
-      let staleTokenResolved = false
+      let refreshedTokenResolved = false
       let refreshedChangedPathsResolved = false
       void staleTokenPromise.then(() => {
-        staleTokenResolved = true
+        refreshedTokenResolved = true
       })
       void refreshedChangedPathsPromise.then(() => {
         refreshedChangedPathsResolved = true
       })
 
       await new Promise((resolve) => setTimeout(resolve, 10))
-      expect(staleTokenResolved).toBe(true)
+      expect(refreshedTokenResolved).toBe(false)
       expect(refreshedChangedPathsResolved).toBe(false)
 
-      const staleToken = await staleTokenPromise
       tokenRefreshGate.resolve()
+      const refreshedTokenDuringRevalidation = await staleTokenPromise
       changedPathsRefreshGate.resolve()
 
       const refreshedChangedPathsAfterRevalidation =
         await refreshedChangedPathsPromise
-      expect(staleToken).toBe('token:v1:docs')
+      expect(refreshedTokenDuringRevalidation).toBe('token:v2:docs')
       expect(
         Array.from(refreshedChangedPathsAfterRevalidation ?? [])
       ).toEqual([

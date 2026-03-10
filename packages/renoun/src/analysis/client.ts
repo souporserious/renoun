@@ -97,6 +97,12 @@ interface RefreshSubscribedClientState {
   refreshSubscriptionsAttached: boolean
 }
 
+export interface AnalysisClientBrowserRefreshNotification
+  extends RefreshNotificationMessage {
+  runtime: AnalysisServerRuntime
+  runtimeKey: string
+}
+
 interface BrowserRuntimeClientState {
   client: WebSocketClient
   runtime: AnalysisServerRuntime
@@ -130,7 +136,7 @@ const browserRuntimeRetentionListeners = new Set<
   (hasRetainedBrowserRuntime: boolean) => void
 >()
 const browserRefreshNotificationListeners = new Set<
-  (message: RefreshNotificationMessage) => void
+  (message: AnalysisClientBrowserRefreshNotification) => void
 >()
 let loadedAnalysisClientServerModules: AnalysisClientServerModules | undefined
 let analysisClientServerModulesPromise:
@@ -327,7 +333,7 @@ export function getAnalysisClientRetainedBrowserRuntimeActivationKey():
 }
 
 export function onAnalysisClientBrowserRefreshNotification(
-  listener: (message: RefreshNotificationMessage) => void
+  listener: (message: AnalysisClientBrowserRefreshNotification) => void
 ): () => void {
   browserRefreshNotificationListeners.add(listener)
   ensureRefreshSubscriptionsForCurrentClients()
@@ -337,7 +343,7 @@ export function onAnalysisClientBrowserRefreshNotification(
 }
 
 function notifyAnalysisClientBrowserRefreshNotification(
-  message: RefreshNotificationMessage
+  message: AnalysisClientBrowserRefreshNotification
 ): void {
   for (const listener of browserRefreshNotificationListeners) {
     listener(message)
@@ -345,11 +351,18 @@ function notifyAnalysisClientBrowserRefreshNotification(
 }
 
 function emitAnalysisClientBrowserRefreshNotification(
-  refreshCursor?: number,
-  invalidationPaths: readonly string[] = []
+  options: {
+    runtime: AnalysisServerRuntime
+    runtimeKey: string
+    refreshCursor?: number
+    invalidationPaths?: readonly string[]
+  }
 ): void {
+  const { runtime, runtimeKey, refreshCursor, invalidationPaths = [] } = options
   notifyAnalysisClientBrowserRefreshNotification({
     type: 'refresh',
+    runtime,
+    runtimeKey,
     data: {
       ...(refreshCursor !== undefined ? { refreshCursor } : {}),
       ...(invalidationPaths.length > 0
@@ -889,7 +902,12 @@ function queueRefreshResync(
             setLatestRefreshCursorForRuntime(state.runtimeKey, nextCursor ?? 0, {
               notify: shouldConsumeNotifications,
             })
-            emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
+            emitAnalysisClientBrowserRefreshNotification({
+              runtime: state.runtime,
+              runtimeKey: state.runtimeKey,
+              refreshCursor: nextCursor,
+              invalidationPaths: paths,
+            })
             return
           }
 
@@ -905,7 +923,12 @@ function queueRefreshResync(
             }
           }
           if (paths.length > 0) {
-            emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
+            emitAnalysisClientBrowserRefreshNotification({
+              runtime: state.runtime,
+              runtimeKey: state.runtimeKey,
+              refreshCursor: nextCursor,
+              invalidationPaths: paths,
+            })
           }
           return
         } catch {
@@ -921,7 +944,10 @@ function queueRefreshResync(
             setLatestRefreshCursorForRuntime(state.runtimeKey, 0, {
               notify: shouldConsumeRefreshNotifications(state.runtime),
             })
-            emitAnalysisClientBrowserRefreshNotification()
+            emitAnalysisClientBrowserRefreshNotification({
+              runtime: state.runtime,
+              runtimeKey: state.runtimeKey,
+            })
             return
           }
 
@@ -931,7 +957,11 @@ function queueRefreshResync(
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
             applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
             setLatestRefreshCursorForRuntime(state.runtimeKey, 0)
-            emitAnalysisClientBrowserRefreshNotification(undefined, fallbackPaths)
+            emitAnalysisClientBrowserRefreshNotification({
+              runtime: state.runtime,
+              runtimeKey: state.runtimeKey,
+              invalidationPaths: fallbackPaths,
+            })
             return
           }
 
@@ -1004,7 +1034,11 @@ function attachClientRefreshSubscriptions(
         queueRefreshInvalidation(path, invalidationScopeKey)
       }
     }
-    notifyAnalysisClientBrowserRefreshNotification(message)
+    notifyAnalysisClientBrowserRefreshNotification({
+      ...message,
+      runtime: state.runtime,
+      runtimeKey: state.runtimeKey,
+    })
   })
 
   if (options.resyncImmediately) {

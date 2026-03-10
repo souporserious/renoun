@@ -96,26 +96,7 @@ export class WorkspaceChangeLookupCache {
     }
 
     if (cached?.promise) {
-      if (
-        this.#serveStaleWhileRevalidate &&
-        ttlMs > 0 &&
-        cached.expiresAt <= now &&
-        cached.token !== null
-      ) {
-        return cached.token
-      }
       return cached.promise
-    }
-
-    if (ttlMs > 0 && cached && this.#serveStaleWhileRevalidate) {
-      this.#startWorkspaceTokenLookup({
-        rootPath,
-        normalizedRootPath,
-        cachedToken: cached.token,
-        startedAt: now,
-        ttlMs,
-      })
-      return cached.token
     }
 
     const lookupPromise = this.#startWorkspaceTokenLookup({
