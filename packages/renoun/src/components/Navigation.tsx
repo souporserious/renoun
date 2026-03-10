@@ -150,10 +150,10 @@ function trackNavigationEntriesInvalidations(
   entries: readonly FileSystemEntry<any>[]
 ): void {
   for (const entry of entries) {
-    const session = isDirectory(entry)
-      ? (entry.getSession() as SessionLikeWithInvalidation)
-      : (entry.getParent().getSession() as SessionLikeWithInvalidation)
-    trackNavigationSessionInvalidations(sourceState, session)
+    trackNavigationSessionInvalidations(
+      sourceState,
+      getNavigationEntrySession(entry)
+    )
   }
 }
 
@@ -181,6 +181,22 @@ function trackNavigationSourceInvalidations(
   sourceState.hasTrackedCollectionRoots = true
 }
 
+function getNavigationEntrySession(
+  entry: FileSystemEntry<any>
+): SessionLikeWithInvalidation {
+  return isDirectory(entry)
+    ? (entry.getSession() as SessionLikeWithInvalidation)
+    : (entry.getParent().getSession() as SessionLikeWithInvalidation)
+}
+
+function getNavigationEntryFileSystem(entry: FileSystemEntry<any>): {
+  getWorkspaceChangeToken?: (rootPath: string) => Promise<string | null>
+} {
+  return isDirectory(entry)
+    ? entry.getFileSystem()
+    : entry.getParent().getFileSystem()
+}
+
 async function readNavigationEntriesWithTracking(
   source: Directory<any> | Collection<any>,
   readEntries: () => Promise<readonly FileSystemEntry<any>[]>
@@ -198,7 +214,7 @@ async function readNavigationEntriesWithTracking(
 async function getDirectoryNavigationFreshnessKey(
   source: Directory<any>
 ): Promise<string | undefined> {
-  const fileSystem = source.getFileSystem()
+  const fileSystem = getNavigationEntryFileSystem(source)
   const getWorkspaceChangeToken = fileSystem.getWorkspaceChangeToken
 
   if (typeof getWorkspaceChangeToken !== 'function') {
@@ -221,9 +237,59 @@ async function getDirectoryNavigationFreshnessKey(
   }
 }
 
-function invalidateNavigationDirectorySource(source: Directory<any>): void {
-  const session = source.getSession() as SessionLikeWithInvalidation
-  session.invalidatePath?.(source.workspacePath)
+async function getCollectionNavigationFreshnessKey(
+  source: Collection<any>
+): Promise<string> {
+  const roots = await Promise.all(
+    source.getRootEntries().map(async (entry) => {
+      const fileSystem = getNavigationEntryFileSystem(entry)
+      const getWorkspaceChangeToken = fileSystem.getWorkspaceChangeToken
+      let workspaceChangeToken: string | null = null
+
+      if (typeof getWorkspaceChangeToken === 'function') {
+        try {
+          workspaceChangeToken = await getWorkspaceChangeToken.call(
+            fileSystem,
+            entry.workspacePath
+          )
+        } catch {
+          workspaceChangeToken = null
+        }
+      }
+
+      return JSON.stringify({
+        kind: isDirectory(entry) ? 'directory' : 'file',
+        pathname: entry.getPathname(),
+        workspacePath: entry.workspacePath,
+        supportsWorkspaceChangeToken:
+          typeof getWorkspaceChangeToken === 'function',
+        workspaceChangeToken,
+      })
+    })
+  )
+
+  return roots.join('\u0000')
+}
+
+async function getNavigationSourceFreshnessKey(
+  source: Directory<any> | Collection<any>
+): Promise<string | undefined> {
+  return isDirectory(source)
+    ? getDirectoryNavigationFreshnessKey(source)
+    : getCollectionNavigationFreshnessKey(source)
+}
+
+function invalidateNavigationSource(
+  source: Directory<any> | Collection<any>
+): void {
+  if (isDirectory(source)) {
+    getNavigationEntrySession(source).invalidatePath?.(source.workspacePath)
+    return
+  }
+
+  for (const entry of source.getRootEntries()) {
+    getNavigationEntrySession(entry).invalidatePath?.(entry.workspacePath)
+  }
 }
 
 async function getNavigationEntriesWithDevSWR({
@@ -247,9 +313,7 @@ async function getNavigationEntriesWithDevSWR({
   const cacheBucket = sourceState.entriesCacheByKey
   const cacheEntry = cacheBucket.get(cacheKey)
   const now = Date.now()
-  const freshnessKey = isDirectory(source)
-    ? await getDirectoryNavigationFreshnessKey(source)
-    : undefined
+  const freshnessKey = await getNavigationSourceFreshnessKey(source)
 
   if (cacheEntry?.value) {
     const isWithinStaleWindow =
@@ -261,8 +325,8 @@ async function getNavigationEntriesWithDevSWR({
     const shouldAwaitFreshEntries =
       !isCurrentInvalidationEpoch || !isCurrentFreshnessKey
 
-    if (!isCurrentFreshnessKey && isDirectory(source)) {
-      invalidateNavigationDirectorySource(source)
+    if (!isCurrentFreshnessKey) {
+      invalidateNavigationSource(source)
     }
 
     if (

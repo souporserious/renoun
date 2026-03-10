@@ -1,4 +1,4 @@
-import { safeAssign } from './safe-assign.js'
+import { safeAssign } from './safe-assign.ts'
 
 export interface FrontmatterParseResult {
   content: string

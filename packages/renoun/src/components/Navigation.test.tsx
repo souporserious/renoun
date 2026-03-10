@@ -373,8 +373,9 @@ describe('Navigation development SWR', () => {
 
     invalidateListener?.('/docs/first-edit.mdx')
     const secondNavigationPromise = Navigation({ source: source as any })
-    await Promise.resolve()
-    expect(source.getEntries).toHaveBeenCalledTimes(2)
+    await vi.waitFor(() => {
+      expect(source.getEntries).toHaveBeenCalledTimes(2)
+    })
 
     invalidateListener?.('/docs/second-edit.mdx')
     slowRefresh.resolve(firstEditEntries)
@@ -423,6 +424,41 @@ describe('Navigation development SWR', () => {
     MockFinalizationRegistry.instances[0]?.cleanupNext()
 
     expect(unsubscribe).toHaveBeenCalledTimes(1)
+  })
+
+  test('refreshes collection-backed navigation when a root workspace token changes without invalidation', async () => {
+    let currentToken = 'guides:token:v1'
+    const getWorkspaceChangeToken = vi.fn(async () => currentToken)
+    const rootDirectory = createFakeDirectoryEntry('/guides', {
+      getWorkspaceChangeToken,
+    })
+    let currentEntries: readonly FakeFileEntry[] = [
+      createFakeFileEntry('Old Guide', '/guides/old-guide', rootDirectory),
+    ]
+
+    const source: FakeCollectionSource = {
+      getRootEntries: () => [rootDirectory],
+      getEntries: vi.fn(async () => currentEntries),
+    }
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    const firstElement = await Navigation({ source: source as any })
+    const firstMarkup = renderToStaticMarkup(<>{firstElement}</>)
+    expect(firstMarkup).toContain('Old Guide')
+    expect(source.getEntries).toHaveBeenCalledTimes(1)
+
+    currentEntries = [
+      createFakeFileEntry('New Guide', '/guides/new-guide', rootDirectory),
+    ]
+    currentToken = 'guides:token:v2'
+
+    const secondElement = await Navigation({ source: source as any })
+    const secondMarkup = renderToStaticMarkup(<>{secondElement}</>)
+    expect(getWorkspaceChangeToken).toHaveBeenCalledWith('guides')
+    expect(source.getEntries).toHaveBeenCalledTimes(2)
+    expect(secondMarkup).toContain('New Guide')
+    expect(secondMarkup).not.toContain('Old Guide')
   })
 
   test('refreshes collection-backed navigation when a tracked root gains its first entry', async () => {

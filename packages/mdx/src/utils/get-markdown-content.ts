@@ -9,7 +9,7 @@ import {
 } from 'hast-util-to-jsx-runtime'
 import type { Properties, Root } from 'hast'
 
-import { urlAttributes } from './url-attributes.js'
+import { urlAttributes } from './url-attributes.ts'
 
 declare module 'unified' {
   interface Data {

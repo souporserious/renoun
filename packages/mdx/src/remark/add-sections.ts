@@ -31,7 +31,7 @@ import { toString } from 'mdast-util-to-string'
 import type { MdxJsxAttributeValueExpression, MdxjsEsm } from 'mdast-util-mdx'
 import 'mdast-util-mdx'
 
-import { createSlug } from '../utils/create-slug.js'
+import { createSlug } from '../utils/create-slug.ts'
 
 declare module 'unified' {
   interface Data {
