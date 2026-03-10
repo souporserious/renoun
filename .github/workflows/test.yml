@@ -78,7 +78,12 @@ jobs:
 
           # Count affected packages, excluding screenshot (handled by separate workflow)
           PACKAGE_COUNT=$(echo "$AFFECTED" | jq '[.packages.items[] | select(.name != "@renoun/screenshot")] | length')
-          HAS_RENOUN=$(echo "$AFFECTED" | jq -r 'any(.packages.items[]?; (.path // "") | test("(^|/)packages/renoun$"))')
+          HAS_RENOUN=$(echo "$AFFECTED" | jq -r 'any(.packages.items[]?; (.name // "") == "renoun" or (.name // "") == "@renoun/mdx")')
+          if [[ "$HAS_RENOUN" != "true" ]]; then
+            if git diff --name-only "$TURBO_SCM_BASE"...HEAD | grep -Eq '^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|turbo\.json)$'; then
+              HAS_RENOUN=true
+            fi
+          fi
           echo "package_count=$PACKAGE_COUNT" >> $GITHUB_OUTPUT
           echo "has_renoun=$HAS_RENOUN" >> $GITHUB_OUTPUT
           echo "turbo_scm_base=$TURBO_SCM_BASE" >> $GITHUB_OUTPUT

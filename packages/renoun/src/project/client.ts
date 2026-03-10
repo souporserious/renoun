@@ -115,7 +115,6 @@ export function resetProjectClientRuntimeConfiguration(): void {
 /**
  * Parses and normalizes source text metadata. This also optionally formats the
  * source text using the project's installed formatter.
- * @internal
  */
 export async function getSourceTextMetadata(
   options: ProjectSourceTextMetadataOptions
@@ -130,7 +129,6 @@ export async function getSourceTextMetadata(
 
 /**
  * Resolve quick info for a symbol position in a source file.
- * @internal
  */
 export async function getQuickInfoAtPosition(
   filePath: string,
@@ -150,7 +148,6 @@ export async function getQuickInfoAtPosition(
 
 /**
  * Resolve the type of an expression at a specific location.
- * @internal
  */
 export async function resolveTypeAtLocation(
   filePath: string,
@@ -171,7 +168,6 @@ export async function resolveTypeAtLocation(
 /**
  * Resolve the type of an expression at a specific location and include
  * dependency metadata for cache invalidation.
- * @internal
  */
 export async function resolveTypeAtLocationWithDependencies(
   filePath: string,
@@ -191,7 +187,6 @@ export async function resolveTypeAtLocationWithDependencies(
 
 /**
  * Tokenize source text based on a language and return highlighted tokens.
- * @internal
  */
 export async function getTokens(
   options: ProjectTokensOptions
@@ -206,7 +201,6 @@ export async function getTokens(
 
 /**
  * Get the exports of a file.
- * @internal
  */
 export async function getFileExports(
   filePath: string,
@@ -217,7 +211,6 @@ export async function getFileExports(
 
 /**
  * Get outlining ranges for a file.
- * @internal
  */
 export async function getOutlineRanges(
   filePath: string,
@@ -228,7 +221,6 @@ export async function getOutlineRanges(
 
 /**
  * Get a specific file export in a source file.
- * @internal
  */
 export async function getFileExportMetadata(
   name: string,
@@ -248,7 +240,6 @@ export async function getFileExportMetadata(
 
 /**
  * Attempt to get a statically analyzable literal value for a file export.
- * @internal
  */
 export async function getFileExportStaticValue(
   filePath: string,
@@ -266,7 +257,6 @@ export async function getFileExportStaticValue(
 
 /**
  * Get a specific file export's text by identifier, optionally including its dependencies.
- * @internal
  */
 export async function getFileExportText(
   filePath: string,
@@ -286,7 +276,6 @@ export async function getFileExportText(
 
 /**
  * Create a source file in the project.
- * @internal
  */
 export async function createSourceFile(
   filePath: string,
@@ -302,7 +291,6 @@ export async function createSourceFile(
 
 /**
  * Transpile a source file.
- * @internal
  */
 export async function transpileSourceFile(
   filePath: string,
@@ -316,7 +304,6 @@ export async function transpileSourceFile(
 
 /**
  * Generate a cache key for a project's options.
- * @internal
  */
 export function getProjectOptionsCacheKey(options?: ProjectOptions): string {
   if (!options) {

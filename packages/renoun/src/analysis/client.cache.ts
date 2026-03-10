@@ -226,45 +226,21 @@ function stableStringifyClient(value: unknown): string {
 }
 
 function hashClientString(input: string): string {
-  let hash = 2166136261
+  let hash = 14695981039346656037n
 
   for (let index = 0; index < input.length; index += 1) {
-    hash ^= input.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
+    hash ^= BigInt(input.charCodeAt(index))
+    hash = BigInt.asUintN(64, hash * 1099511628211n)
   }
 
-  return (hash >>> 0).toString(16).padStart(8, '0')
-}
-
-function normalizeRpcCacheKeyValue(value: unknown): unknown {
-  if (typeof value === 'string') {
-    return `hash:${hashClientString(value)}`
-  }
-
-  if (value === null || typeof value !== 'object') {
-    return value
-  }
-
-  if (Array.isArray(value)) {
-    return value.map((entry) => normalizeRpcCacheKeyValue(entry))
-  }
-
-  const candidate = value as Record<string, unknown>
-  const normalized: Record<string, unknown> = {}
-  const keys = Object.keys(candidate).sort()
-  for (const key of keys) {
-    normalized[key] = normalizeRpcCacheKeyValue(candidate[key])
-  }
-  return normalized
+  return hash.toString(16).padStart(16, '0')
 }
 
 export function toClientRpcCacheKey(
   method: ClientCachedRpcMethod,
   params: unknown
 ): string {
-  return hashClientString(
-    `${method}|${stableStringifyClient(normalizeRpcCacheKeyValue(params))}`
-  )
+  return hashClientString(`${method}|${stableStringifyClient(params)}`)
 }
 
 function toComparablePath(path: string): string {

@@ -1227,6 +1227,64 @@ describe('analysis client transport guards', () => {
     ).toHaveLength(2)
   })
 
+  test('keeps colliding source metadata inputs in distinct RPC cache entries', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'false'
+
+    const callMethod = vi.fn(
+      async (method: string, params?: Record<string, unknown>) => {
+        if (method === 'getSourceTextMetadata') {
+          return {
+            value: String(params?.value ?? ''),
+            language: 'txt',
+          }
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      }
+    )
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    const module = await import('./client.ts')
+    const firstRequest = {
+      value: 'dKpCCVlY',
+      language: 'txt' as const,
+    }
+    const secondRequest = {
+      value: 'nQE6EsIK',
+      language: 'txt' as const,
+    }
+
+    const first = await module.getSourceTextMetadata(firstRequest)
+    const second = await module.getSourceTextMetadata(secondRequest)
+    const third = await module.getSourceTextMetadata(firstRequest)
+
+    expect(first).toEqual({
+      value: 'dKpCCVlY',
+      language: 'txt',
+    })
+    expect(second).toEqual({
+      value: 'nQE6EsIK',
+      language: 'txt',
+    })
+    expect(third).toEqual({
+      value: 'dKpCCVlY',
+      language: 'txt',
+    })
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getSourceTextMetadata')
+    ).toHaveLength(2)
+  })
+
   test('falls back to default RPC cache TTL when env value is invalid', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
