@@ -67,7 +67,7 @@ import type {
   FileSystemWriteFileContent,
   FileWritableStream,
 } from './FileSystem.ts'
-import type { Cache } from './Cache.ts'
+import type { Cache, CacheStoreComputeContext } from './Cache.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
@@ -100,6 +100,7 @@ import {
   serializeTypeFilterForCache,
 } from './cache-key.ts'
 import {
+  extractHeadFromWorkspaceToken,
   isTrustedWorkspaceChangeToken,
   markWorkspaceTokenForGitIgnoredSnapshots,
 } from './workspace-change-token.ts'
@@ -479,6 +480,38 @@ function deserializeGitExportMetadataFromCache(
     firstCommitHash: metadata.firstCommitHash,
     lastCommitHash: metadata.lastCommitHash,
   }
+}
+
+function getGitHistoryDependencyName(rootPath: string): string {
+  return `git-history:${normalizePathKey(rootPath)}`
+}
+
+async function resolveGitHistoryDependency(
+  session: Session,
+  rootPath: string
+): Promise<{ name: string; version: string } | undefined> {
+  const token = await session.getWorkspaceChangeToken(rootPath)
+  const version = token ? extractHeadFromWorkspaceToken(token) ?? token : null
+
+  if (!version) {
+    return undefined
+  }
+
+  return {
+    name: getGitHistoryDependencyName(rootPath),
+    version,
+  }
+}
+
+function recordGitHistoryDependency(
+  context: CacheStoreComputeContext,
+  dependency: { name: string; version: string } | undefined
+): void {
+  if (!dependency) {
+    return
+  }
+
+  context.recordConstDep(dependency.name, dependency.version)
 }
 
 function isRepositoryInstance(value: unknown): value is Repository {
@@ -1383,15 +1416,22 @@ export class File<
   async #getCachedGitMetadata(): Promise<GitMetadata> {
     const session = this.#directory.getSession()
     const filePath = this.absolutePath
+    const rootPath = this.#directory.getRootPath()
     const nodeKey = this.#getGitMetadataCacheNodeKey(session)
+    const gitHistoryDependency = await resolveGitHistoryDependency(
+      session,
+      rootPath
+    )
     const persisted = await session.cache.getOrCompute<PersistedGitMetadata>(
       nodeKey,
       {
         persist: true,
+        constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
         staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
       },
       async (ctx) => {
         await ctx.recordFileDep(filePath)
+        recordGitHistoryDependency(ctx, gitHistoryDependency)
         return serializeGitMetadataForCache(
           await this.#loadGitMetadataForStructure()
         )
@@ -2255,15 +2295,21 @@ export class ModuleExport<Value> {
     const session = directory.getSession()
     const filePath = this.#file.absolutePath
     const nodeKey = await this.#getGitMetadataCacheNodeKey(session)
+    const gitHistoryDependency = await resolveGitHistoryDependency(
+      session,
+      directory.getRootPath()
+    )
     const persisted =
       await session.cache.getOrCompute<PersistedGitExportMetadata>(
         nodeKey,
         {
           persist: true,
+          constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
           staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
         },
         async (ctx) => {
           await ctx.recordFileDep(filePath)
+          recordGitHistoryDependency(ctx, gitHistoryDependency)
           return serializeGitExportMetadataForCache(
             await this.#loadGitExportMetadataForStructure()
           )
@@ -8645,14 +8691,20 @@ export class Directory<
     const session = this.#getSession()
     const directoryPath = this.absolutePath
     const nodeKey = this.#getGitMetadataCacheNodeKey(session)
+    const gitHistoryDependency = await resolveGitHistoryDependency(
+      session,
+      this.getRootPath()
+    )
     const persisted = await session.cache.getOrCompute<PersistedGitMetadata>(
       nodeKey,
       {
         persist: true,
+        constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
         staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
       },
       async (ctx) => {
         await ctx.recordDirectoryDep(directoryPath)
+        recordGitHistoryDependency(ctx, gitHistoryDependency)
         return serializeGitMetadataForCache(
           await this.#loadGitMetadataForStructure()
         )

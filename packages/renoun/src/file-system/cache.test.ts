@@ -239,6 +239,98 @@ class TokenAwareNodeFileSystem extends NestedCwdNodeFileSystem {
   }
 }
 
+class HeadAwareMetadataNodeFileSystem extends NestedCwdNodeFileSystem {
+  #workspaceChangeToken: string
+  readonly #changedPathsByToken = new Map<
+    string,
+    Map<string, readonly string[] | null>
+  >()
+
+  fileMetadata: GitMetadata = {
+    authors: [
+      {
+        name: 'Ada',
+        commitCount: 1,
+        firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+      },
+    ],
+    firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+    lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+  }
+
+  exportMetadata: GitExportMetadata = {
+    firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+    lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+    firstCommitHash: 'a1',
+    lastCommitHash: 'a1',
+  }
+
+  fileMetadataCalls = 0
+  exportMetadataCalls = 0
+
+  constructor(cwd: string, tsConfigPath: string, token: string) {
+    super(cwd, tsConfigPath)
+    this.#workspaceChangeToken = token
+  }
+
+  setWorkspaceChangeToken(token: string): void {
+    this.#workspaceChangeToken = token
+  }
+
+  override async getWorkspaceChangeToken(_rootPath: string): Promise<string> {
+    return this.#workspaceChangeToken
+  }
+
+  setChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string,
+    changedPaths: readonly string[] | null
+  ): void {
+    const normalizedRootPath = normalizePathKey(rootPath)
+    const changedPathsByToken =
+      this.#changedPathsByToken.get(normalizedRootPath) ??
+      new Map<string, readonly string[] | null>()
+    changedPathsByToken.set(previousToken, changedPaths)
+    this.#changedPathsByToken.set(normalizedRootPath, changedPathsByToken)
+  }
+
+  override async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null> {
+    const changedPathsByToken = this.#changedPathsByToken.get(
+      normalizePathKey(rootPath)
+    )
+    const configuredChangedPaths =
+      changedPathsByToken?.get(previousToken) ?? undefined
+    if (configuredChangedPaths !== undefined) {
+      return configuredChangedPaths
+    }
+
+    const currentToken = await this.getWorkspaceChangeToken(rootPath)
+    if (currentToken === previousToken) {
+      return []
+    }
+
+    return null
+  }
+
+  async getGitFileMetadata(_path: string): Promise<GitMetadata> {
+    this.fileMetadataCalls += 1
+    return this.fileMetadata
+  }
+
+  async getGitExportMetadata(
+    _path: string,
+    _startLine: number,
+    _endLine: number
+  ): Promise<GitExportMetadata> {
+    this.exportMetadataCalls += 1
+    return this.exportMetadata
+  }
+}
+
 class ThrowingByteLengthNodeFileSystem extends NestedCwdNodeFileSystem {
   override getFileByteLengthSync(_path: string): number | undefined {
     throw new Error('byte-length-lookup-should-not-run')
@@ -3543,6 +3635,97 @@ describe('sqlite cache persistence', () => {
 
       expect(secondReadDirectory).toHaveBeenCalledTimes(0)
       expect(secondStatLookup).toHaveBeenCalledTimes(0)
+    })
+  })
+
+  test('recomputes persisted git metadata when HEAD changes without path changes', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      const firstToken = `head:${'a'.repeat(40)};dirty:${'0'.repeat(40)};count:0;ignored-only:0`
+      const secondToken = `head:${'b'.repeat(40)};dirty:${'0'.repeat(40)};count:0;ignored-only:0`
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'index.ts'), 'export const value = 1', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const firstFileSystem = new HeadAwareMetadataNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        firstToken
+      )
+      ;(firstFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+
+      const firstDirectory = new Directory({
+        fileSystem: firstFileSystem,
+        path: workspaceDirectory,
+      })
+      const firstFile = await firstDirectory.getFile('index', 'ts')
+      const firstExport = await firstFile.getExport('value')
+
+      expect((await firstFile.getLastCommitDate())?.toISOString()).toBe(
+        '2024-01-01T00:00:00.000Z'
+      )
+      expect((await firstFile.getAuthors())[0]?.commitCount).toBe(1)
+      expect((await firstExport.getLastCommitDate())?.toISOString()).toBe(
+        '2024-01-01T00:00:00.000Z'
+      )
+      expect((await firstDirectory.getLastCommitDate())?.toISOString()).toBe(
+        '2024-01-01T00:00:00.000Z'
+      )
+      expect((await firstDirectory.getAuthors())[0]?.commitCount).toBe(1)
+
+      const secondFileSystem = new HeadAwareMetadataNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        secondToken
+      )
+      secondFileSystem.fileMetadata = {
+        authors: [
+          {
+            name: 'Ada',
+            commitCount: 2,
+            firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+            lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+          },
+        ],
+        firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+      }
+      secondFileSystem.exportMetadata = {
+        firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+        firstCommitHash: 'a1',
+        lastCommitHash: 'b2',
+      }
+      secondFileSystem.setChangedPathsSinceToken(
+        workspaceDirectory,
+        firstToken,
+        []
+      )
+      ;(secondFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+
+      const secondDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: workspaceDirectory,
+      })
+      const secondFile = await secondDirectory.getFile('index', 'ts')
+      const secondExport = await secondFile.getExport('value')
+
+      expect((await secondFile.getLastCommitDate())?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
+      )
+      expect((await secondFile.getAuthors())[0]?.commitCount).toBe(2)
+      expect((await secondExport.getLastCommitDate())?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
+      )
+      expect((await secondDirectory.getLastCommitDate())?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
+      )
+      expect((await secondDirectory.getAuthors())[0]?.commitCount).toBe(2)
+      expect(secondFileSystem.fileMetadataCalls).toBeGreaterThan(0)
+      expect(secondFileSystem.exportMetadataCalls).toBeGreaterThan(0)
     })
   })
 
