@@ -7,6 +7,8 @@ import { dirname, join, parse, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
 
+import { createOutputParser } from './bench-site-build-output.mjs'
+
 const DEFAULT_FILTER = '@apps/site'
 const DEFAULT_COLD_RUNS = 1
 const DEFAULT_WARM_RUNS = 2
@@ -133,105 +135,6 @@ function parseArgs(argv) {
   }
 
   return parsed
-}
-
-function stripAnsi(value) {
-  return value.replace(
-    // eslint-disable-next-line no-control-regex
-    /[\u001B\u009B][[\]()#;?]*(?:\d{1,4}(?:;\d{0,4})*)?[\dA-PR-TZcf-ntqry=><~]/g,
-    ''
-  )
-}
-
-function createOutputParser() {
-  let buffer = ''
-  const lines = []
-  let compileSeconds
-  let staticSeconds
-  let routeTotal
-  let cacheHits = 0
-  let cacheMisses = 0
-  let cacheSets = 0
-  let cacheClears = 0
-
-  function processLine(rawLine) {
-    const line = stripAnsi(rawLine)
-      .replace(/\u0008/g, '')
-      .trimEnd()
-    if (line.length === 0) {
-      return
-    }
-
-    lines.push(line)
-    if (lines.length > 250) {
-      lines.shift()
-    }
-
-    const compileMatch = line.match(
-      /Compiled successfully in (\d+(?:\.\d+)?)s/i
-    )
-    if (compileMatch) {
-      compileSeconds = Number.parseFloat(compileMatch[1])
-    }
-
-    const staticMatch = line.match(
-      /Generating static pages(?:.*?)in (\d+(?:\.\d+)?)s/i
-    )
-    if (staticMatch) {
-      staticSeconds = Number.parseFloat(staticMatch[1])
-    }
-
-    const routeMatch = line.match(
-      /Generating static pages .*?\((\d+)\/(\d+)\)/i
-    )
-    if (routeMatch) {
-      routeTotal = Number.parseInt(routeMatch[2], 10)
-    }
-
-    if (/\[cache\]\s+Cache hit\b/i.test(line)) {
-      cacheHits += 1
-    } else if (/\[cache\]\s+Cache miss\b/i.test(line)) {
-      cacheMisses += 1
-    } else if (/\[cache\]\s+Cache set\b/i.test(line)) {
-      cacheSets += 1
-    } else if (/\[cache\]\s+Cache clear\b/i.test(line)) {
-      cacheClears += 1
-    }
-  }
-
-  return {
-    write(text) {
-      const normalized = text.replace(/\r/g, '\n')
-      buffer += normalized
-      while (true) {
-        const newlineIndex = buffer.indexOf('\n')
-        if (newlineIndex === -1) {
-          break
-        }
-
-        const line = buffer.slice(0, newlineIndex)
-        processLine(line)
-        buffer = buffer.slice(newlineIndex + 1)
-      }
-    },
-    finish() {
-      if (buffer.length > 0) {
-        processLine(buffer)
-        buffer = ''
-      }
-
-      return {
-        compileSeconds,
-        staticSeconds,
-        routeTotal,
-        cacheHits,
-        cacheMisses,
-        cacheSets,
-        cacheClears,
-        lastLines: [...lines],
-      }
-    },
-  }
 }
 
 function average(values) {
