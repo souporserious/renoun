@@ -9105,6 +9105,80 @@ export type Metadata = Value`,
     }
   }, 12000)
 
+  test('rechecks persisted cache when the compute-slot owner disappears after owner grace elapses', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'compute-slot-owner-disappears'
+    )
+    const nodeKey = 'test:compute-slot-owner-disappears'
+    const persistedEntries = new Map<string, CacheEntry<string>>()
+    let inFlightOwner: string | undefined = 'leader-owner'
+    let getComputeSlotOwnerCalls = 0
+    const persistence: SqliteComputeSlotPersistence = {
+      computeSlotTtlMs: 5,
+      async load(lookupNodeKey) {
+        return persistedEntries.get(lookupNodeKey)
+      },
+      async save(lookupNodeKey, entry) {
+        persistedEntries.set(lookupNodeKey, entry as CacheEntry<string>)
+      },
+      async delete(lookupNodeKey) {
+        persistedEntries.delete(lookupNodeKey)
+      },
+      async acquireComputeSlot(_lookupNodeKey, owner) {
+        if (inFlightOwner) {
+          return false
+        }
+
+        inFlightOwner = owner
+        return true
+      },
+      async getComputeSlotOwner(lookupNodeKey) {
+        getComputeSlotOwnerCalls += 1
+
+        if (getComputeSlotOwnerCalls === 2) {
+          persistedEntries.set(lookupNodeKey, {
+            value: 'winner',
+            deps: [],
+            fingerprint: createFingerprint([]),
+            persist: true,
+            updatedAt: Date.now(),
+          })
+          inFlightOwner = undefined
+        }
+
+        return inFlightOwner
+      },
+      async releaseComputeSlot(_lookupNodeKey, owner) {
+        if (inFlightOwner === owner) {
+          inFlightOwner = undefined
+        }
+      },
+    }
+    const followerStore = new CacheStore({
+      snapshot,
+      persistence,
+      computeSlotPollMs: 25,
+    })
+
+    let computeCount = 0
+    const result = await followerStore.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async () => {
+        computeCount += 1
+        return 'computed'
+      }
+    )
+
+    expect(result).toBe('winner')
+    expect(computeCount).toBe(0)
+    expect(getComputeSlotOwnerCalls).toBe(2)
+  })
+
   test('does not persist a stale leader result after the heartbeat loses compute-slot ownership', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-sqlite-slot-heartbeat-loss-')
@@ -9182,6 +9256,94 @@ export type Metadata = Value`,
 
       const persisted = await thirdStore.getOrCompute(
         'test:sqlite-compute-slot-heartbeat-loss',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'third'
+        }
+      )
+
+      expect(persisted).toBe('second')
+      expect(computeCount).toBe(2)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('does not persist a stale leader result after heartbeat refresh errors', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-heartbeat-refresh-error-')
+    )
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'sqlite-compute-slot-heartbeat-refresh-error'
+    )
+    const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+    const slotTtlMs = 200
+    let didThrowRefreshError = false
+    const persistence: SqliteComputeSlotPersistence = {
+      load: sqlitePersistence.load.bind(sqlitePersistence),
+      save: sqlitePersistence.save.bind(sqlitePersistence),
+      delete: sqlitePersistence.delete.bind(sqlitePersistence),
+      computeSlotTtlMs: slotTtlMs,
+      acquireComputeSlot: (nodeKey, owner) =>
+        sqlitePersistence.acquireComputeSlot(nodeKey, owner, slotTtlMs),
+      refreshComputeSlot: async (nodeKey, owner) => {
+        if (!didThrowRefreshError) {
+          didThrowRefreshError = true
+          await sqlitePersistence.releaseComputeSlot(nodeKey, owner)
+          throw new Error('refresh failed')
+        }
+
+        return sqlitePersistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
+      },
+      getComputeSlotOwner:
+        sqlitePersistence.getComputeSlotOwner.bind(sqlitePersistence),
+      releaseComputeSlot:
+        sqlitePersistence.releaseComputeSlot.bind(sqlitePersistence),
+    }
+    const firstStore = new CacheStore({ snapshot, persistence })
+    const secondStore = new CacheStore({ snapshot, persistence })
+    const thirdStore = new CacheStore({ snapshot, persistence })
+    const releaseFirst = createDeferredPromise()
+
+    try {
+      let computeCount = 0
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat-refresh-error',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          await releaseFirst.promise
+          return 'first'
+        }
+      )
+
+      await waitForMilliseconds(130)
+
+      const secondResult = await secondStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat-refresh-error',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'second'
+        }
+      )
+
+      releaseFirst.resolve()
+      const firstResult = await first
+
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('second')
+      expect(computeCount).toBe(2)
+      expect(didThrowRefreshError).toBe(true)
+
+      const persisted = await thirdStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat-refresh-error',
         { persist: true },
         async () => {
           computeCount += 1

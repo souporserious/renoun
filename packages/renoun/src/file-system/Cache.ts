@@ -1825,7 +1825,7 @@ export class CacheStore {
       return await persistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
     } catch (error) {
       reportBestEffortError('file-system/cache', error)
-      return true
+      return false
     }
   }
 
@@ -1879,6 +1879,11 @@ export class CacheStore {
         ownerGraceMs <= 0 ||
         now - firstObservedOwnerAt >= ownerGraceMs
       ) {
+        const settledEntry = await this.#getFreshEntry(nodeKey)
+        if (settledEntry) {
+          return settledEntry.value as Value
+        }
+
         return NO_COMPUTE_SLOT_SHARED_VALUE
       }
 

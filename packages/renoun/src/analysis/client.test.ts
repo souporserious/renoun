@@ -179,6 +179,48 @@ describe('analysis client transport guards', () => {
     })
   })
 
+  test('does not preload local analysis modules for RPC-only calls', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getSourceTextMetadata') {
+        return {
+          value: 'remote-result',
+          language: 'txt',
+        }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    const module = await import('./client.ts')
+    module.configureAnalysisClientRuntime({
+      analysisCacheMaxEntries: 32,
+    })
+    const result = await module.getSourceTextMetadata({
+      value: 'const answer = 42',
+      language: 'txt',
+    })
+
+    expect(result).toEqual({
+      value: 'remote-result',
+      language: 'txt',
+    })
+    expect(callMethod).toHaveBeenCalledTimes(1)
+    expect(mocks.configureAnalysisCacheRuntime).not.toHaveBeenCalled()
+    expect(mocks.getProgram).not.toHaveBeenCalled()
+  })
+
   test('disables client RPC cache by default when server refresh notifications are disabled', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
@@ -203,6 +245,9 @@ describe('analysis client transport guards', () => {
     })
 
     const module = await import('./client.ts')
+    module.configureAnalysisClientRuntime({
+      analysisCacheMaxEntries: 32,
+    })
     const first = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -562,7 +607,7 @@ describe('analysis client transport guards', () => {
     expect(mocks.getCachedSourceTextMetadata).toHaveBeenCalledTimes(1)
   })
 
-  test('invalidates dependency-aware RPC cache entries after source updates', async () => {
+  test('does not load local analysis modules when source updates only need RPC invalidation', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
@@ -605,6 +650,61 @@ describe('analysis client transport guards', () => {
 
     expect(first).toMatchObject({ resolveTypeCallCount: 1 })
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
+    expect(mocks.configureAnalysisCacheRuntime).not.toHaveBeenCalled()
+    expect(mocks.invalidateProgramCachesByPaths).not.toHaveBeenCalled()
+    expect(mocks.invalidateRuntimeAnalysisCachePath).not.toHaveBeenCalled()
+    expect(
+      mocks.invalidateSharedFileTextPrefixCachePath
+    ).not.toHaveBeenCalled()
+  })
+
+  test('invalidates dependency-aware RPC cache entries after source updates', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'false'
+
+    let resolveTypeCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'resolveTypeAtLocationWithDependencies') {
+        return { resolveTypeCallCount: ++resolveTypeCallCount }
+      }
+      if (method === 'createSourceFile') {
+        return
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    const module = await import('./client.ts')
+    module.configureAnalysisClientRuntime({
+      analysisCacheMaxEntries: 32,
+    })
+    await preloadLocalAnalysisRuntime(module)
+    const first = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    await module.createSourceFile('/project/src/b.ts', 'export const b = 2')
+
+    const second = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(first).toMatchObject({ resolveTypeCallCount: 1 })
+    expect(second).toMatchObject({ resolveTypeCallCount: 2 })
     expect(mocks.invalidateProgramCachesByPaths).toHaveBeenCalledWith([
       '/project/src/b.ts',
     ])
@@ -614,6 +714,9 @@ describe('analysis client transport guards', () => {
     expect(mocks.invalidateSharedFileTextPrefixCachePath).toHaveBeenCalledWith(
       '/project/src/b.ts'
     )
+    expect(mocks.configureAnalysisCacheRuntime).toHaveBeenCalledWith({
+      maxEntries: 32,
+    })
   })
 
   test('does not cache getFileExportText results when includeDependencies is enabled', async () => {
@@ -1366,6 +1469,7 @@ describe('analysis client transport guards', () => {
     })
 
     const module = await import('./client.ts')
+    await preloadLocalAnalysisRuntime(module)
     const first = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -1408,6 +1512,93 @@ describe('analysis client transport guards', () => {
     expect(mocks.invalidateProgramCachesByPaths).toHaveBeenCalledWith([
       '/project/src/b.ts',
     ])
+  })
+
+  test('refresh notifications do not import local analysis modules when only RPC caches are loaded', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let getFileExportTextCallCount = 0
+    const callMethod = vi.fn(
+      async (method: string, params?: Record<string, unknown>) => {
+        if (method === 'getFileExportText') {
+          getFileExportTextCallCount += 1
+          return {
+            text: `export-text-${getFileExportTextCallCount}`,
+            dependencies: [
+              String(params?.filePath ?? ''),
+              '/project/src/dep.ts',
+            ],
+          }
+        }
+
+        if (method === 'getRefreshInvalidationsSince') {
+          return { nextCursor: 0, fullRefresh: false }
+        }
+
+        throw new Error(`Unexpected method: ${method}`)
+      }
+    )
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./client.ts')
+    module.configureAnalysisClientRuntime({
+      analysisCacheMaxEntries: 32,
+    })
+    const first = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true
+    )
+    const second = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true
+    )
+
+    expect(first).toBe('export-text-1')
+    expect(second).toBe('export-text-1')
+    expect(mocks.configureAnalysisCacheRuntime).not.toHaveBeenCalled()
+
+    const notificationListener = listeners.get('notification')
+    expect(notificationListener).toBeTypeOf('function')
+    notificationListener!({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/project/src/dep.ts'],
+      },
+    })
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const third = await module.getFileExportText(
+      '/project/src/a.ts',
+      0,
+      0 as never,
+      true
+    )
+
+    expect(third).toBe('export-text-2')
+    expect(mocks.configureAnalysisCacheRuntime).not.toHaveBeenCalled()
+    expect(mocks.invalidateRuntimeAnalysisCachePaths).not.toHaveBeenCalled()
+    expect(mocks.invalidateProgramCachesByPaths).not.toHaveBeenCalled()
   })
 
   test('refresh notifications invalidate token cache conservatively', async () => {
@@ -1796,6 +1987,7 @@ describe('analysis client transport guards', () => {
     })
 
     const module = await import('./client.ts')
+    await preloadLocalAnalysisRuntime(module)
     const firstA = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -1891,6 +2083,7 @@ describe('analysis client transport guards', () => {
       })
 
       const module = await import('./client.ts')
+      await preloadLocalAnalysisRuntime(module)
 
       await module.resolveTypeAtLocationWithDependencies(
         '/project/src/a.ts',
@@ -2004,6 +2197,7 @@ describe('analysis client transport guards', () => {
 
     const module = await import('./client.ts')
     const runtimeEnvModule = await import('./runtime-env.ts')
+    await preloadLocalAnalysisRuntime(module)
 
     expect(await module.getOutlineRanges('/project/src/a.ts')).toEqual([
       'first-client',
@@ -2155,6 +2349,7 @@ describe('analysis client transport guards', () => {
 
       const module = await import('./client.ts')
       const externalProjectRoot = resolve('/tmp/renoun-external-project')
+      await preloadLocalAnalysisRuntime(module)
 
       await module.resolveTypeAtLocationWithDependencies(
         `${externalProjectRoot}/src/a.ts`,
@@ -2186,3 +2381,45 @@ describe('analysis client transport guards', () => {
     }
   })
 })
+
+async function preloadLocalAnalysisRuntime(
+  module: typeof import('./client.ts')
+): Promise<void> {
+  const serverPort = process.env['RENOUN_SERVER_PORT']
+  const serverHost = process.env['RENOUN_SERVER_HOST']
+  const serverId = process.env['RENOUN_SERVER_ID']
+
+  delete process.env['RENOUN_SERVER_PORT']
+  delete process.env['RENOUN_SERVER_HOST']
+  delete process.env['RENOUN_SERVER_ID']
+
+  try {
+    await module.getSourceTextMetadata({
+      value: 'const local = true',
+      language: 'txt',
+    })
+  } finally {
+    restoreEnvValue('RENOUN_SERVER_PORT', serverPort)
+    restoreEnvValue('RENOUN_SERVER_HOST', serverHost)
+    restoreEnvValue('RENOUN_SERVER_ID', serverId)
+  }
+
+  mocks.getProgram.mockClear()
+  mocks.getCachedSourceTextMetadata.mockClear()
+  mocks.invalidateProgramCachesByPaths.mockClear()
+  mocks.invalidateRuntimeAnalysisCachePath.mockClear()
+  mocks.invalidateRuntimeAnalysisCachePaths.mockClear()
+  mocks.invalidateSharedFileTextPrefixCachePath.mockClear()
+}
+
+function restoreEnvValue(
+  key: keyof NodeJS.ProcessEnv,
+  value: string | undefined
+): void {
+  if (value === undefined) {
+    delete process.env[key]
+    return
+  }
+
+  process.env[key] = value
+}

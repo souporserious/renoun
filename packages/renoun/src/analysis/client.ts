@@ -663,20 +663,12 @@ function applyLoadedRuntimeRefreshInvalidations(runtimePaths: string[]): void {
   }
 
   const loadedServerModules = getLoadedAnalysisClientServerModules()
-  if (loadedServerModules) {
-    loadedServerModules.invalidateRuntimeAnalysisCachePaths(runtimePaths)
-    loadedServerModules.invalidateProgramCachesByPaths(runtimePaths)
+  if (!loadedServerModules) {
     return
   }
 
-  if (typeof window !== 'undefined') {
-    return
-  }
-
-  void loadAnalysisClientServerModules().then((serverModules) => {
-    serverModules.invalidateRuntimeAnalysisCachePaths(runtimePaths)
-    serverModules.invalidateProgramCachesByPaths(runtimePaths)
-  })
+  loadedServerModules.invalidateRuntimeAnalysisCachePaths(runtimePaths)
+  loadedServerModules.invalidateProgramCachesByPaths(runtimePaths)
 }
 
 function applyRefreshInvalidations(
@@ -707,17 +699,8 @@ async function callClientMethod<
     cacheKeyPrefix?: string
     disableRpcCache?: boolean
     serverRuntime?: AnalysisServerRuntime
-    skipServerModulePreload?: boolean
   } = {}
 ): Promise<Value> {
-  if (
-    options.skipServerModulePreload !== true &&
-    typeof window === 'undefined' &&
-    !loadedAnalysisClientServerModules
-  ) {
-    await loadAnalysisClientServerModules().catch(() => undefined)
-  }
-
   const cacheParams = options.cacheParams ?? params
   rememberWorkspaceRootCandidates(params)
 
@@ -1279,7 +1262,6 @@ async function callBrowserRuntimeClientMethod<
         ...options,
         cacheKeyPrefix: cacheScopeKey,
         serverRuntime: runtime,
-        skipServerModulePreload: true,
       }
     )
   }
@@ -1295,7 +1277,6 @@ async function callBrowserRuntimeClientMethod<
       ...options,
       cacheKeyPrefix: cacheScopeKey,
       serverRuntime: runtime,
-      skipServerModulePreload: true,
     })
   }
 
@@ -1311,7 +1292,6 @@ async function callBrowserRuntimeClientMethod<
         ...options,
         cacheKeyPrefix: cacheScopeKey,
         serverRuntime: runtime,
-        skipServerModulePreload: true,
       }
     )
   } finally {
@@ -1864,11 +1844,7 @@ export async function createSourceFile(
     // Source updates can affect dependency-aware RPC results for many files.
     // Clear client-side RPC state so stale dependent entries are not reused.
     invalidateAllClientRpcState()
-    const loadedServerModules =
-      getLoadedAnalysisClientServerModules() ??
-      (typeof window === 'undefined'
-        ? await loadAnalysisClientServerModules().catch(() => undefined)
-        : undefined)
+    const loadedServerModules = getLoadedAnalysisClientServerModules()
     loadedServerModules?.invalidateProgramCachesByPaths([filePath])
     loadedServerModules?.invalidateRuntimeAnalysisCachePath(filePath)
     loadedServerModules?.invalidateSharedFileTextPrefixCachePath(filePath)
