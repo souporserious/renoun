@@ -131,6 +131,8 @@ describe('package exports', () => {
     expect(analysisDeclarations).toContain(
       'export declare function getFileExports'
     )
+    expect(analysisDeclarations).not.toContain('ConfigurationOptions')
+    expect(analysisDeclarations).not.toContain('../components/Config/types.ts')
 
     expect(projectDeclarations).toContain(
       'export declare function getQuickInfoAtPosition'
@@ -141,6 +143,8 @@ describe('package exports', () => {
     expect(projectDeclarations).toContain(
       'export declare function getFileExports'
     )
+    expect(projectDeclarations).not.toContain('ConfigurationOptions')
+    expect(projectDeclarations).not.toContain('../components/Config/types.ts')
   })
 
   test('keeps source and dist analysis server aliases split in package imports', async () => {

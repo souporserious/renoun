@@ -1,6 +1,7 @@
 import type { Project as TsMorphProject, SyntaxKind } from '../utils/ts-morph.ts'
 
 import type { ConfigurationOptions } from '../components/Config/types.ts'
+import type { Languages as GrammarLanguage } from '../grammars/index.ts'
 import type { Highlighter } from '../utils/create-highlighter.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import type {
@@ -1674,7 +1675,7 @@ export async function resolveTypeAtLocationWithDependencies(
  */
 export async function getTokens(
   options: Omit<GetTokensOptions, 'highlighter' | 'project'> & {
-    languages?: ConfigurationOptions['languages']
+    languages?: GrammarLanguage[]
     analysisOptions?: AnalysisOptions
     waitForWarmResult?: boolean
     runtime?: AnalysisServerRuntime

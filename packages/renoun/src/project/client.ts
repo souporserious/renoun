@@ -6,7 +6,7 @@ import type { AnalysisClientRuntimeOptions } from '../analysis/client.ts'
 import type { GetSourceTextMetadataOptions } from '../analysis/query/source-text-metadata.ts'
 import type { AnalysisServerRuntime } from '../analysis/runtime-env.ts'
 import type { AnalysisOptions } from '../analysis/types.ts'
-import type { ConfigurationOptions } from '../components/Config/types.ts'
+import type { Languages as GrammarLanguage } from '../grammars/index.ts'
 import type { DistributiveOmit } from '../types.ts'
 import type {
   ModuleExport,
@@ -54,7 +54,7 @@ type ProjectSourceTextMetadataOptions = DistributiveOmit<
 }
 
 type ProjectTokensOptions = Omit<GetTokensOptions, 'highlighter' | 'project'> & {
-  languages?: ConfigurationOptions['languages']
+  languages?: GrammarLanguage[]
   projectOptions?: ProjectOptions
   waitForWarmResult?: boolean
   runtime?: ProjectServerRuntime
