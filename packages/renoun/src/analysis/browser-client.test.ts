@@ -324,6 +324,157 @@ describe('browser-client runtime transport', () => {
       }
     }
   })
+
+  it('treats a secondary runtime first connection as fresh', async () => {
+    const module = await import('./client.ts')
+    const retainedRuntime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const explicitRuntime: AnalysisServerRuntime = {
+      id: 'runtime-b',
+      port: '43124',
+      host: '127.0.0.1',
+    }
+    const originalWebSocket = globalThis.WebSocket
+    if (originalWebSocket === undefined) {
+      ;(globalThis as any).WebSocket = class MockWebSocket {}
+    }
+
+    const releaseRuntime =
+      module.retainAnalysisClientBrowserRuntime(retainedRuntime)
+
+    try {
+      const retainedClient = getMockBrowserClient(0)
+      emitBrowserClientEvent(retainedClient, 'connected', {})
+
+      const firstExplicitPromise = module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      await flushBrowserClientCallQueue()
+
+      const explicitClient = getMockBrowserClient(1)
+      emitBrowserClientEvent(explicitClient, 'connected', {})
+      await flushBrowserClientCallQueue()
+
+      expect(explicitClient.callMethod).toHaveBeenCalledTimes(1)
+      expect(explicitClient.pendingCalls.map(({ method }) => method)).toEqual([
+        'getQuickInfoAtPosition',
+      ])
+
+      resolveNextPendingCall(explicitClient, { text: 'quick-info-b' })
+      await expect(firstExplicitPromise).resolves.toEqual({
+        text: 'quick-info-b',
+      })
+
+      const cachedExplicit = await module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      expect(cachedExplicit).toEqual({ text: 'quick-info-b' })
+      expect(explicitClient.callMethod).toHaveBeenCalledTimes(1)
+    } finally {
+      releaseRuntime()
+      if (originalWebSocket === undefined) {
+        delete (globalThis as { WebSocket?: typeof WebSocket }).WebSocket
+      } else {
+        ;(globalThis as { WebSocket?: typeof WebSocket }).WebSocket =
+          originalWebSocket
+      }
+    }
+  })
+
+  it('resyncs a secondary runtime from its own cursor on reconnect', async () => {
+    const module = await import('./client.ts')
+    const retainedRuntime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const explicitRuntime: AnalysisServerRuntime = {
+      id: 'runtime-b',
+      port: '43124',
+      host: '127.0.0.1',
+    }
+    const originalWebSocket = globalThis.WebSocket
+    if (originalWebSocket === undefined) {
+      ;(globalThis as any).WebSocket = class MockWebSocket {}
+    }
+
+    const releaseRuntime =
+      module.retainAnalysisClientBrowserRuntime(retainedRuntime)
+
+    try {
+      const retainedClient = getMockBrowserClient(0)
+      emitBrowserClientEvent(retainedClient, 'connected', {})
+      emitBrowserClientEvent(retainedClient, 'connected', {})
+      await flushBrowserClientCallQueue()
+
+      expect(retainedClient.pendingCalls[0]).toMatchObject({
+        method: 'getRefreshInvalidationsSince',
+        params: { sinceCursor: 0 },
+      })
+      resolveNextPendingCall(retainedClient, {
+        nextCursor: 7,
+        fullRefresh: false,
+      })
+      await flushBrowserClientCallQueue()
+
+      const firstExplicitPromise = module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      await flushBrowserClientCallQueue()
+
+      const explicitClient = getMockBrowserClient(1)
+      emitBrowserClientEvent(explicitClient, 'connected', {})
+      resolveNextPendingCall(explicitClient, { text: 'quick-info-b' })
+      await expect(firstExplicitPromise).resolves.toEqual({
+        text: 'quick-info-b',
+      })
+
+      emitBrowserClientEvent(explicitClient, 'connected', {})
+      await flushBrowserClientCallQueue()
+
+      expect(explicitClient.pendingCalls[0]).toMatchObject({
+        method: 'getRefreshInvalidationsSince',
+        params: { sinceCursor: 0 },
+      })
+      resolveNextPendingCall(explicitClient, {
+        nextCursor: 3,
+        fullRefresh: false,
+      })
+      await flushBrowserClientCallQueue()
+
+      emitBrowserClientEvent(explicitClient, 'connected', {})
+      await flushBrowserClientCallQueue()
+
+      expect(explicitClient.pendingCalls[0]).toMatchObject({
+        method: 'getRefreshInvalidationsSince',
+        params: { sinceCursor: 3 },
+      })
+      resolveNextPendingCall(explicitClient, {
+        nextCursor: 3,
+        fullRefresh: false,
+      })
+    } finally {
+      releaseRuntime()
+      if (originalWebSocket === undefined) {
+        delete (globalThis as { WebSocket?: typeof WebSocket }).WebSocket
+      } else {
+        ;(globalThis as { WebSocket?: typeof WebSocket }).WebSocket =
+          originalWebSocket
+      }
+    }
+  })
 })
 
 function resolveNextPendingCall(

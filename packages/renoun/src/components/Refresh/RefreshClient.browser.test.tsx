@@ -2,7 +2,11 @@ import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRoot, type Root } from 'react-dom/client'
 
-import { setAnalysisClientBrowserRuntime } from '../../analysis/client.ts'
+import {
+  configureAnalysisClientRuntime,
+  resetAnalysisClientRuntimeConfiguration,
+  setAnalysisClientBrowserRuntime,
+} from '../../analysis/client.ts'
 import { getAnalysisClientBrowserRuntime } from '../../analysis/browser-runtime.ts'
 import { RefreshClient } from './RefreshClient.tsx'
 
@@ -54,6 +58,7 @@ describe('RefreshClient browser lifecycle', () => {
     }
 
     setAnalysisClientBrowserRuntime(undefined)
+    resetAnalysisClientRuntimeConfiguration()
     delete (window as any).nd
     ;(globalThis as any).WebSocket = originalWebSocket
   })
@@ -134,6 +139,48 @@ describe('RefreshClient browser lifecycle', () => {
       id: request.id,
       error: {
         message: 'server restarting',
+      },
+    })
+
+    await waitFor(() => hmrRefresh.mock.calls.length === 1, 1_000)
+  })
+
+  it('reloads the page on refresh notifications when cache invalidation notifications are disabled', async () => {
+    configureAnalysisClientRuntime({
+      consumeRefreshNotifications: false,
+    })
+
+    const hmrRefresh = vi.fn()
+    ;(window as any).nd = {
+      router: {
+        hmrRefresh,
+      },
+    }
+
+    root?.render(
+      <RefreshClient
+        port="43123"
+        id="refresh-browser-test"
+        host="127.0.0.1"
+      />
+    )
+
+    await waitFor(
+      () => getAnalysisClientBrowserRuntime()?.id === 'refresh-browser-test',
+      1_000
+    )
+    await waitFor(() => counters.sockets.length === 1, 1_000)
+
+    const socket = counters.sockets[0]
+    if (!socket) {
+      throw new Error('[renoun] expected refresh socket')
+    }
+
+    socket.emitMessage({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/docs/page.mdx'],
       },
     })
 

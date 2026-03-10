@@ -511,7 +511,7 @@ describe('Navigation development SWR', () => {
     }
   })
 
-  test('builds ancestor directories for recursive predicate-filtered entries', async () => {
+  test('keeps synthesized predicate-filtered ancestors scoped to filtered children', async () => {
     const rootDirectory = createFakeDirectoryEntry('/docs', {
       getFilterPatternKind: () => null,
     })
@@ -521,11 +521,19 @@ describe('Navigation development SWR', () => {
     const advancedDirectory = createFakeDirectoryEntry('/docs/guides/advanced', {
       parent: guidesDirectory,
     })
+    const draftsDirectory = createFakeDirectoryEntry('/docs/guides/drafts', {
+      parent: guidesDirectory,
+    })
     const nestedEntry = createFakeFileEntry(
       'Deep Dive',
       '/docs/guides/advanced/deep-dive',
       advancedDirectory
     )
+    guidesDirectory.getEntries = vi.fn(async () => [
+      advancedDirectory,
+      draftsDirectory,
+    ])
+    advancedDirectory.getEntries = vi.fn(async () => [nestedEntry])
     rootDirectory.getEntries = vi.fn(async (options?: { recursive?: boolean }) =>
       options?.recursive ? [nestedEntry] : []
     )
@@ -536,9 +544,12 @@ describe('Navigation development SWR', () => {
     const markup = renderToStaticMarkup(<>{element}</>)
 
     expect(rootDirectory.getEntries).toHaveBeenCalledWith({ recursive: true })
+    expect(guidesDirectory.getEntries).not.toHaveBeenCalled()
+    expect(advancedDirectory.getEntries).not.toHaveBeenCalled()
     expect(markup).toContain('guides')
     expect(markup).toContain('advanced')
     expect(markup).toContain('Deep Dive')
+    expect(markup).not.toContain('drafts')
   })
 
   test('preserves empty directories when recursive navigation omits them', async () => {

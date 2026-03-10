@@ -112,9 +112,11 @@ const pendingRefreshInvalidationPathsByScope = new Map<
   Set<string>
 >()
 let isRefreshInvalidationFlushQueued = false
-let hasConnectedAnalysisServerClient = false
+const connectedAnalysisServerClientRuntimeKeys = new Set<string>()
+const refreshCursorByRuntimeKey = new Map<string, number>()
 let refreshResyncQueue: Promise<void> = Promise.resolve()
 let latestRefreshCursor = 0
+let latestRefreshCursorRuntimeKey: string | undefined
 let explicitBrowserRuntime: AnalysisServerRuntime | undefined
 const browserRuntimeRegistrations: Array<{
   token: symbol
@@ -142,42 +144,133 @@ export function getAnalysisClientRefreshVersion(): string {
   return `${latestRefreshCursor}:${getClientRpcInvalidationEpoch()}`
 }
 
+function getAnalysisClientRefreshVersionRuntimeKey(): string | undefined {
+  return (
+    getAnalysisServerRuntimeKey(getSharedAnalysisClientBrowserRuntime()) ??
+    activeClientState?.runtimeKey ??
+    cachedBrowserClientState?.runtimeKey
+  )
+}
+
 function notifyAnalysisClientRefreshVersionChanged(): void {
   setSharedAnalysisClientBrowserRefreshVersion(getAnalysisClientRefreshVersion())
 }
 
-function hydrateRefreshStateFromSharedAnalysisBrowserVersion(): void {
+function hydrateRefreshStateFromSharedAnalysisBrowserVersion(
+  runtimeKey: string | undefined = getAnalysisClientRefreshVersionRuntimeKey()
+): void {
+  if (!runtimeKey || getAnalysisClientRefreshVersionRuntimeKey() !== runtimeKey) {
+    return
+  }
+
   const sharedVersion = parseAnalysisClientRefreshVersion(
     getSharedAnalysisClientBrowserRefreshVersion()
   )
   const currentInvalidationEpoch = getClientRpcInvalidationEpoch()
+  const currentRefreshCursor =
+    refreshCursorByRuntimeKey.get(runtimeKey) ??
+    (latestRefreshCursorRuntimeKey === runtimeKey ? latestRefreshCursor : 0)
   if (
     sharedVersion.epoch > currentInvalidationEpoch ||
     (currentInvalidationEpoch === 0 &&
-      latestRefreshCursor === 0 &&
+      currentRefreshCursor === 0 &&
       (sharedVersion.epoch > 0 || sharedVersion.cursor > 0))
   ) {
     latestRefreshCursor = sharedVersion.cursor
+    latestRefreshCursorRuntimeKey = runtimeKey
     setClientRpcInvalidationEpoch(sharedVersion.epoch)
+    refreshCursorByRuntimeKey.set(runtimeKey, sharedVersion.cursor)
+    return
+  }
+
+  if (
+    !refreshCursorByRuntimeKey.has(runtimeKey) &&
+    latestRefreshCursorRuntimeKey === undefined &&
+    currentInvalidationEpoch === sharedVersion.epoch &&
+    latestRefreshCursor === sharedVersion.cursor
+  ) {
+    latestRefreshCursorRuntimeKey = runtimeKey
+    refreshCursorByRuntimeKey.set(runtimeKey, latestRefreshCursor)
   }
 }
 
-function setLatestRefreshCursor(value: number): void {
+function setLatestRefreshCursor(
+  value: number,
+  options: {
+    notify?: boolean
+  } = {}
+): void {
+  const { notify = true } = options
   const normalizedValue = Math.max(0, Math.floor(value))
+  const runtimeKey = getAnalysisClientRefreshVersionRuntimeKey()
+  if (runtimeKey) {
+    latestRefreshCursorRuntimeKey = runtimeKey
+    refreshCursorByRuntimeKey.set(runtimeKey, normalizedValue)
+  } else {
+    latestRefreshCursorRuntimeKey = undefined
+  }
   if (latestRefreshCursor === normalizedValue) {
     return
   }
 
   latestRefreshCursor = normalizedValue
-  notifyAnalysisClientRefreshVersionChanged()
+  if (notify) {
+    notifyAnalysisClientRefreshVersionChanged()
+  }
 }
 
-function bumpLatestRefreshCursor(value: number): void {
+function getLatestRefreshCursorForRuntime(runtimeKey: string): number {
+  return (
+    refreshCursorByRuntimeKey.get(runtimeKey) ??
+    (latestRefreshCursorRuntimeKey === runtimeKey ? latestRefreshCursor : 0)
+  )
+}
+
+function syncLatestRefreshCursorForRuntime(
+  runtimeKey: string,
+  options?: {
+    notify?: boolean
+  }
+): void {
+  if (getAnalysisClientRefreshVersionRuntimeKey() !== runtimeKey) {
+    return
+  }
+
+  if (!refreshCursorByRuntimeKey.has(runtimeKey)) {
+    return
+  }
+
+  setLatestRefreshCursor(getLatestRefreshCursorForRuntime(runtimeKey), options)
+}
+
+function setLatestRefreshCursorForRuntime(
+  runtimeKey: string,
+  value: number,
+  options?: {
+    notify?: boolean
+  }
+): void {
+  const normalizedValue = Math.max(0, Math.floor(value))
+  refreshCursorByRuntimeKey.set(runtimeKey, normalizedValue)
+  syncLatestRefreshCursorForRuntime(runtimeKey, options)
+}
+
+function bumpLatestRefreshCursorForRuntime(
+  runtimeKey: string,
+  value: number,
+  options?: {
+    notify?: boolean
+  }
+): void {
   if (!Number.isFinite(value) || value < 0) {
     return
   }
 
-  setLatestRefreshCursor(Math.max(latestRefreshCursor, Math.floor(value)))
+  setLatestRefreshCursorForRuntime(
+    runtimeKey,
+    Math.max(getLatestRefreshCursorForRuntime(runtimeKey), Math.floor(value)),
+    options
+  )
 }
 
 export function onAnalysisClientRefreshVersionChange(
@@ -202,6 +295,7 @@ export function onAnalysisClientBrowserRefreshNotification(
   listener: (message: RefreshNotificationMessage) => void
 ): () => void {
   browserRefreshNotificationListeners.add(listener)
+  ensureRefreshSubscriptionsForCurrentClients()
   return () => {
     browserRefreshNotificationListeners.delete(listener)
   }
@@ -231,6 +325,19 @@ function emitAnalysisClientBrowserRefreshNotification(
         : {}),
     },
   })
+}
+
+function ensureRefreshSubscriptionsForCurrentClients(): void {
+  if (activeClientState) {
+    attachClientRefreshSubscriptions(activeClientState)
+  }
+
+  const cachedState = cachedBrowserClientState
+  if (cachedState) {
+    attachClientRefreshSubscriptions(cachedState, {
+      isCurrentState: () => isCurrentBrowserClientState(cachedState),
+    })
+  }
 }
 
 function getResolvedAnalysisClientBrowserRuntime():
@@ -276,6 +383,10 @@ function applyAnalysisClientBrowserRuntime(
 
   if (didRuntimeChange) {
     setSharedAnalysisClientBrowserRuntime(normalizedRuntime)
+    if (!didSwitchFromExistingRuntime && nextRuntimeKey) {
+      hydrateRefreshStateFromSharedAnalysisBrowserVersion(nextRuntimeKey)
+      syncLatestRefreshCursorForRuntime(nextRuntimeKey)
+    }
   }
 
   if (typeof WebSocket === 'undefined') {
@@ -497,7 +608,14 @@ function resetClientRefreshStateForRuntimeChange(): void {
   hydrateRefreshStateFromSharedAnalysisBrowserVersion()
   resetClientRpcCacheForRuntimeChange()
   pendingRefreshInvalidationPathsByScope.clear()
+  const runtimeKey = getAnalysisClientRefreshVersionRuntimeKey()
+  if (runtimeKey) {
+    setLatestRefreshCursorForRuntime(runtimeKey, 0)
+    return
+  }
+
   latestRefreshCursor = 0
+  latestRefreshCursorRuntimeKey = undefined
   notifyAnalysisClientRefreshVersionChanged()
 }
 
@@ -667,7 +785,7 @@ function queueRefreshResync(
         return
       }
 
-      hydrateRefreshStateFromSharedAnalysisBrowserVersion()
+      hydrateRefreshStateFromSharedAnalysisBrowserVersion(state.runtimeKey)
 
       for (
         let attempt = 1;
@@ -679,7 +797,7 @@ function queueRefreshResync(
             RefreshInvalidationsSinceRequest,
             RefreshInvalidationsSinceResponse
           >('getRefreshInvalidationsSince', {
-            sinceCursor: latestRefreshCursor,
+            sinceCursor: getLatestRefreshCursorForRuntime(state.runtimeKey),
           })
           if (!isCurrentState()) {
             return
@@ -687,23 +805,32 @@ function queueRefreshResync(
 
           const nextCursor = normalizeRefreshCursor(response.nextCursor)
           const paths = getRefreshInvalidationPaths(response)
+          const shouldConsumeNotifications = shouldConsumeRefreshNotifications()
           if (response.fullRefresh) {
-            if (paths.length > 0) {
-              applyRefreshInvalidations(paths, invalidationScopeKey)
-            } else {
-              invalidateAllClientRpcState(invalidationScopeKey)
+            if (shouldConsumeNotifications) {
+              if (paths.length > 0) {
+                applyRefreshInvalidations(paths, invalidationScopeKey)
+              } else {
+                invalidateAllClientRpcState(invalidationScopeKey)
+              }
             }
-            setLatestRefreshCursor(nextCursor ?? 0)
+            setLatestRefreshCursorForRuntime(state.runtimeKey, nextCursor ?? 0, {
+              notify: shouldConsumeNotifications,
+            })
             emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
             return
           }
 
           if (nextCursor !== undefined) {
-            bumpLatestRefreshCursor(nextCursor)
+            bumpLatestRefreshCursorForRuntime(state.runtimeKey, nextCursor, {
+              notify: shouldConsumeNotifications,
+            })
           }
 
-          for (const path of paths) {
-            queueRefreshInvalidation(path, invalidationScopeKey)
+          if (shouldConsumeNotifications) {
+            for (const path of paths) {
+              queueRefreshInvalidation(path, invalidationScopeKey)
+            }
           }
           if (paths.length > 0) {
             emitAnalysisClientBrowserRefreshNotification(nextCursor, paths)
@@ -716,8 +843,12 @@ function queueRefreshResync(
 
           if (typeof window !== 'undefined') {
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
-            applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
-            setLatestRefreshCursor(0)
+            if (shouldConsumeRefreshNotifications()) {
+              applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
+            }
+            setLatestRefreshCursorForRuntime(state.runtimeKey, 0, {
+              notify: shouldConsumeRefreshNotifications(),
+            })
             emitAnalysisClientBrowserRefreshNotification()
             return
           }
@@ -727,7 +858,7 @@ function queueRefreshResync(
             // runtime/project caches for all observed project roots.
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
             applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
-            setLatestRefreshCursor(0)
+            setLatestRefreshCursorForRuntime(state.runtimeKey, 0)
             emitAnalysisClientBrowserRefreshNotification(undefined, fallbackPaths)
             return
           }
@@ -752,7 +883,7 @@ function attachClientRefreshSubscriptions(
     resyncImmediately?: boolean
   } = {}
 ): void {
-  if (state.refreshSubscriptionsAttached || !shouldConsumeRefreshNotifications()) {
+  if (state.refreshSubscriptionsAttached || !shouldAttachRefreshTransport()) {
     return
   }
 
@@ -768,8 +899,8 @@ function attachClientRefreshSubscriptions(
 
     options.onConnected?.()
 
-    if (!hasConnectedAnalysisServerClient) {
-      hasConnectedAnalysisServerClient = true
+    if (!connectedAnalysisServerClientRuntimeKeys.has(state.runtimeKey)) {
+      connectedAnalysisServerClientRuntimeKeys.add(state.runtimeKey)
       return
     }
 
@@ -786,19 +917,23 @@ function attachClientRefreshSubscriptions(
 
     const refreshCursor = normalizeRefreshCursor(message.data.refreshCursor)
     if (refreshCursor !== undefined) {
-      bumpLatestRefreshCursor(refreshCursor)
+      bumpLatestRefreshCursorForRuntime(state.runtimeKey, refreshCursor, {
+        notify: shouldConsumeRefreshNotifications(),
+      })
     }
 
     const paths = getRefreshInvalidationPaths(message.data)
-    const invalidationScopeKey = toRuntimeCacheScopeKey(state.runtimeKey)
-    for (const path of paths) {
-      queueRefreshInvalidation(path, invalidationScopeKey)
+    if (shouldConsumeRefreshNotifications()) {
+      const invalidationScopeKey = toRuntimeCacheScopeKey(state.runtimeKey)
+      for (const path of paths) {
+        queueRefreshInvalidation(path, invalidationScopeKey)
+      }
     }
     notifyAnalysisClientBrowserRefreshNotification(message)
   })
 
   if (options.resyncImmediately) {
-    hasConnectedAnalysisServerClient = true
+    connectedAnalysisServerClientRuntimeKeys.add(state.runtimeKey)
     queueRefreshResync(state, isCurrentState)
   }
 }
@@ -1211,6 +1346,13 @@ function shouldConsumeRefreshNotifications(): boolean {
   }
 
   return true
+}
+
+function shouldAttachRefreshTransport(): boolean {
+  return (
+    shouldConsumeRefreshNotifications() ||
+    browserRefreshNotificationListeners.size > 0
+  )
 }
 
 /**
@@ -1722,9 +1864,16 @@ export async function transpileSourceFile(
 
 function setAnalysisClientRefreshVersionForTests(version: string): void {
   const parsedVersion = parseAnalysisClientRefreshVersion(version)
+  refreshCursorByRuntimeKey.clear()
   latestRefreshCursor = parsedVersion.cursor
+  latestRefreshCursorRuntimeKey = undefined
   setClientRpcInvalidationEpoch(parsedVersion.epoch)
   pendingRefreshInvalidationPathsByScope.clear()
+  const runtimeKey = getAnalysisClientRefreshVersionRuntimeKey()
+  if (runtimeKey) {
+    refreshCursorByRuntimeKey.set(runtimeKey, parsedVersion.cursor)
+    latestRefreshCursorRuntimeKey = runtimeKey
+  }
   setSharedAnalysisClientBrowserRefreshVersion(
     `${parsedVersion.cursor}:${parsedVersion.epoch}`
   )
@@ -1733,6 +1882,11 @@ function setAnalysisClientRefreshVersionForTests(version: string): void {
 function clearAnalysisClientStateForTests(): void {
   clearClientRpcCacheStateForTests()
   pendingRefreshInvalidationPathsByScope.clear()
+  connectedAnalysisServerClientRuntimeKeys.clear()
+  refreshCursorByRuntimeKey.clear()
+  latestRefreshCursor = 0
+  latestRefreshCursorRuntimeKey = undefined
+  refreshResyncQueue = Promise.resolve()
 }
 
 export const __TEST_ONLY__ = {
