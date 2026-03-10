@@ -14,7 +14,10 @@ export default defineConfig({
   },
   test: {
     testTimeout: 15_000,
-    include: ['src/**/*.{test,spec}.?(c|m)[jt]s?(x)'],
+    include: [
+      'src/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+      'scripts/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+    ],
     exclude: [
       'src/**/*.browser.test.?(c|m)[jt]s?(x)',
       'src/**/*.browser.spec.?(c|m)[jt]s?(x)',

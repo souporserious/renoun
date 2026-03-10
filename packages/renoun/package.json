@@ -141,7 +141,7 @@
   },
   "scripts": {
     "build": "tsc && chmod +x dist/cli/index.js",
-    "postbuild": "node ./scripts/patch-load-package.ts && node ./scripts/patch-analysis-client-imports.ts",
+    "postbuild": "node ./scripts/postbuild.ts",
     "dev": "node ./scripts/dev.ts",
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
