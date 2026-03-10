@@ -443,7 +443,7 @@ interface CacheStorePersistenceComputeSlot {
     nodeKey: string,
     owner: string,
     ttlMs: number
-  ): Promise<void>
+  ): Promise<boolean>
   releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
   getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
   /**
@@ -1642,7 +1642,7 @@ export class CacheStore {
       return 'follower'
     }
 
-    const stopHeartbeat = this.#startComputeSlotHeartbeat(
+    const computeSlotHeartbeat = this.#startComputeSlotHeartbeat(
       nodeKey,
       owner,
       slotTtlMs
@@ -1651,7 +1651,7 @@ export class CacheStore {
     try {
       await options.leader()
     } finally {
-      stopHeartbeat()
+      computeSlotHeartbeat.stop()
       await this.#releaseComputeSlot(nodeKey, owner)
     }
 
@@ -1777,19 +1777,37 @@ export class CacheStore {
     nodeKey: string,
     owner: string,
     slotTtlMs: number
-  ): () => void {
+  ): { stop: () => void; hasLostOwnership: () => boolean } {
     const persistence = this.#getComputeSlotPersistence()
     const heartbeatMs = getComputeSlotHeartbeatMs(slotTtlMs)
     if (!persistence?.refreshComputeSlot || heartbeatMs <= 0) {
-      return () => {}
+      return {
+        stop: () => {},
+        hasLostOwnership: () => false,
+      }
     }
 
+    let stopped = false
+    let lostOwnership = false
     const heartbeat = setInterval(() => {
-      void this.#refreshComputeSlot(nodeKey, owner, slotTtlMs)
+      void this.#refreshComputeSlot(nodeKey, owner, slotTtlMs).then(
+        (retainedOwnership) => {
+          if (stopped || retainedOwnership !== false) {
+            return
+          }
+
+          lostOwnership = true
+          clearInterval(heartbeat)
+        }
+      )
     }, heartbeatMs)
 
-    return () => {
-      clearInterval(heartbeat)
+    return {
+      stop: () => {
+        stopped = true
+        clearInterval(heartbeat)
+      },
+      hasLostOwnership: () => lostOwnership,
     }
   }
 
@@ -1797,16 +1815,17 @@ export class CacheStore {
     nodeKey: string,
     owner: string,
     slotTtlMs: number
-  ): Promise<void> {
+  ): Promise<boolean> {
     const persistence = this.#getComputeSlotPersistence()
     if (!persistence?.refreshComputeSlot) {
-      return
+      return true
     }
 
     try {
-      await persistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
+      return await persistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
     } catch (error) {
       reportBestEffortError('file-system/cache', error)
+      return true
     }
   }
 
@@ -2062,7 +2081,12 @@ export class CacheStore {
       this.#computeSlotTtlMs
     )
     let computeSlotOwner: string | undefined
-    let stopComputeSlotHeartbeat: (() => void) | undefined
+    let computeSlotHeartbeat:
+      | {
+          stop: () => void
+          hasLostOwnership: () => boolean
+        }
+      | undefined
     if (shouldCoordinate) {
       const candidateOwner = this.#createComputeSlotOwner()
 
@@ -2081,7 +2105,7 @@ export class CacheStore {
         }
       } else {
         computeSlotOwner = candidateOwner
-        stopComputeSlotHeartbeat = this.#startComputeSlotHeartbeat(
+        computeSlotHeartbeat = this.#startComputeSlotHeartbeat(
           nodeKey,
           computeSlotOwner,
           computeSlotTtlMs
@@ -2166,6 +2190,14 @@ export class CacheStore {
         return value
       }
 
+      if (computeSlotHeartbeat?.hasLostOwnership()) {
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'compute',
+          reason: 'lost-compute-slot-ownership',
+        })
+        return value
+      }
+
       this.#entries.set(nodeKey, entry)
       this.#deleteRetainedStaleEntry(nodeKey)
       this.#registerEntryInGraph(nodeKey, entry)
@@ -2176,7 +2208,7 @@ export class CacheStore {
       return value
     } finally {
       if (computeSlotOwner) {
-        stopComputeSlotHeartbeat?.()
+        computeSlotHeartbeat?.stop()
         await this.#releaseComputeSlot(nodeKey, computeSlotOwner)
       }
     }

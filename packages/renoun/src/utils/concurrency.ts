@@ -69,76 +69,12 @@ export async function mapConcurrent<Type, Result>(
     return []
   }
 
-  const concurrency = Math.min(
-    normalizeConcurrency(options.concurrency),
-    items.length
-  )
-  const signal = options.signal ?? getContext()?.signal
-  const stopOnError = options.stopOnError !== false
   const results = new Array<Result>(items.length)
-  const errors: unknown[] = []
-  let firstError: unknown
-  let nextIndex = 0
-
-  emitTelemetryEvent({
-    name: 'renoun.concurrency.map.start',
-    fields: {
-      items: items.length,
-      concurrency,
-      stopOnError,
-    },
+  const state = await runConcurrentWorkers(items, options, 'map', async (item, index) => {
+    results[index] = await fn(item, index)
   })
 
-  const startedAt = Date.now()
-
-  async function worker() {
-    while (true) {
-      if (stopOnError && firstError !== undefined) {
-        return
-      }
-
-      throwIfAborted(signal)
-
-      const currentIndex = nextIndex
-      if (currentIndex >= items.length) {
-        return
-      }
-
-      nextIndex += 1
-
-      try {
-        results[currentIndex] = await fn(items[currentIndex]!, currentIndex)
-      } catch (error) {
-        if (stopOnError) {
-          if (firstError === undefined) {
-            firstError = error
-          }
-          return
-        }
-        errors.push(error)
-      }
-    }
-  }
-
-  await Promise.all(Array.from({ length: concurrency }, () => worker()))
-
-  emitTelemetryEvent({
-    name: 'renoun.concurrency.map.end',
-    fields: {
-      items: items.length,
-      concurrency,
-      durationMs: Date.now() - startedAt,
-      errors: errors.length + (firstError === undefined ? 0 : 1),
-    },
-  })
-
-  if (firstError !== undefined) {
-    throw firstError
-  }
-
-  if (errors.length > 0) {
-    throw new AggregateError(errors, 'mapConcurrent failed')
-  }
+  throwConcurrentWorkerErrors(state, 'mapConcurrent failed')
 
   return results
 }
@@ -152,22 +88,50 @@ export async function forEachConcurrent<Type>(
     return
   }
 
-  const concurrency = Math.min(
-    normalizeConcurrency(options.concurrency),
-    items.length
+  const state = await runConcurrentWorkers(
+    items,
+    options,
+    'foreach',
+    async (item, index) => {
+      await fn(item, index)
+    }
   )
+
+  throwConcurrentWorkerErrors(state, 'forEachConcurrent failed')
+}
+
+interface ConcurrentWorkerState {
+  concurrency: number
+  stopOnError: boolean
+  errors: unknown[]
+  firstError: unknown
+  nextIndex: number
+}
+
+async function runConcurrentWorkers<Type>(
+  items: readonly Type[],
+  options: ConcurrentMapOptions,
+  telemetryName: 'map' | 'foreach',
+  fn: (item: Type, index: number) => Promise<void>
+): Promise<ConcurrentWorkerState> {
+  const state: ConcurrentWorkerState = {
+    concurrency: Math.min(
+      normalizeConcurrency(options.concurrency),
+      items.length
+    ),
+    stopOnError: options.stopOnError !== false,
+    errors: [],
+    firstError: undefined,
+    nextIndex: 0,
+  }
   const signal = options.signal ?? getContext()?.signal
-  const stopOnError = options.stopOnError !== false
-  const errors: unknown[] = []
-  let firstError: unknown
-  let nextIndex = 0
 
   emitTelemetryEvent({
-    name: 'renoun.concurrency.foreach.start',
+    name: `renoun.concurrency.${telemetryName}.start`,
     fields: {
       items: items.length,
-      concurrency,
-      stopOnError,
+      concurrency: state.concurrency,
+      stopOnError: state.stopOnError,
     },
   })
 
@@ -175,51 +139,58 @@ export async function forEachConcurrent<Type>(
 
   async function worker() {
     while (true) {
-      if (stopOnError && firstError !== undefined) {
+      if (state.stopOnError && state.firstError !== undefined) {
         return
       }
 
       throwIfAborted(signal)
 
-      const currentIndex = nextIndex
+      const currentIndex = state.nextIndex
       if (currentIndex >= items.length) {
         return
       }
 
-      nextIndex += 1
+      state.nextIndex += 1
 
       try {
         await fn(items[currentIndex]!, currentIndex)
       } catch (error) {
-        if (stopOnError) {
-          if (firstError === undefined) {
-            firstError = error
+        if (state.stopOnError) {
+          if (state.firstError === undefined) {
+            state.firstError = error
           }
           return
         }
-        errors.push(error)
+        state.errors.push(error)
       }
     }
   }
 
-  await Promise.all(Array.from({ length: concurrency }, () => worker()))
+  await Promise.all(Array.from({ length: state.concurrency }, () => worker()))
 
   emitTelemetryEvent({
-    name: 'renoun.concurrency.foreach.end',
+    name: `renoun.concurrency.${telemetryName}.end`,
     fields: {
       items: items.length,
-      concurrency,
+      concurrency: state.concurrency,
       durationMs: Date.now() - startedAt,
-      errors: errors.length + (firstError === undefined ? 0 : 1),
+      errors: state.errors.length + (state.firstError === undefined ? 0 : 1),
     },
   })
 
-  if (firstError !== undefined) {
-    throw firstError
+  return state
+}
+
+function throwConcurrentWorkerErrors(
+  state: ConcurrentWorkerState,
+  aggregateMessage: string
+): void {
+  if (state.firstError !== undefined) {
+    throw state.firstError
   }
 
-  if (errors.length > 0) {
-    throw new AggregateError(errors, 'forEachConcurrent failed')
+  if (state.errors.length > 0) {
+    throw new AggregateError(state.errors, aggregateMessage)
   }
 }
 

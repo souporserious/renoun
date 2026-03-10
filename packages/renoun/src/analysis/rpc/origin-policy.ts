@@ -39,36 +39,9 @@ function readHeader(
   return rawHeader
 }
 
-function requestTargetsLoopbackHost(hostHeader: string | undefined): boolean {
-  if (!hostHeader) {
-    return false
-  }
-
-  try {
-    return isLoopbackHostname(new URL(`http://${hostHeader}`).hostname)
-  } catch {
-    return false
-  }
-}
-
-function offersServerProtocol(
-  protocolHeader: string | undefined,
-  serverId: string
-): boolean {
-  if (!protocolHeader) {
-    return false
-  }
-
-  return protocolHeader
-    .split(',')
-    .map((value) => value.trim())
-    .some((value) => value === serverId)
-}
-
 export function isAllowedAnalysisServerOrigin(
   originHeader: string | undefined,
-  request: IncomingMessage,
-  serverId: string
+  request: IncomingMessage
 ): boolean {
   const remoteAddress = request.socket.remoteAddress
   if (originHeader === undefined) {
@@ -101,12 +74,5 @@ export function isAllowedAnalysisServerOrigin(
     return false
   }
 
-  return (
-    isLoopbackAddress(remoteAddress) &&
-    requestTargetsLoopbackHost(hostHeader) &&
-    offersServerProtocol(
-      readHeader(request, 'sec-websocket-protocol'),
-      serverId
-    )
-  )
+  return false
 }

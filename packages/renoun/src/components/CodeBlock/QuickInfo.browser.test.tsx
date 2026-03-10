@@ -629,8 +629,13 @@ describe('QuickInfo browser regression', () => {
 
       hoverSymbol(symbol)
       await waitFor(() => Boolean(getPopover()), 1_000)
-      await sleep(50)
-      expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBe(1)
+      await waitForStableValue(
+        () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
+        {
+          stableForMs: 75,
+          timeoutMs: 1_000,
+        }
+      )
     } finally {
       releaseRuntime()
     }
@@ -832,6 +837,34 @@ async function waitFor(
   }
 
   throw new Error(`Condition did not resolve within ${timeoutMs}ms.`)
+}
+
+async function waitForStableValue(
+  predicate: () => boolean,
+  options: {
+    stableForMs: number
+    timeoutMs: number
+  }
+): Promise<void> {
+  const startedAt = performance.now()
+  let stableSince: number | undefined
+
+  while (performance.now() - startedAt < options.timeoutMs) {
+    if (predicate()) {
+      stableSince ??= performance.now()
+      if (performance.now() - stableSince >= options.stableForMs) {
+        return
+      }
+    } else {
+      stableSince = undefined
+    }
+
+    await sleep(16)
+  }
+
+  throw new Error(
+    `Condition did not stay stable for ${options.stableForMs}ms within ${options.timeoutMs}ms.`
+  )
 }
 
 function sleep(timeoutMs: number): Promise<void> {

@@ -133,4 +133,24 @@ describe('project client compatibility', () => {
       't:github-dark;u:https://renoun.dev;s:souporserious/renoun;b:main;h:github;i:docs;f:/project/tsconfig.json;m:1;c:jsx=4;strict=true;'
     )
   })
+
+  test('normalizes compiler option ordering in project cache keys', async () => {
+    const module = await import('./client.ts')
+
+    const firstKey = module.getProjectOptionsCacheKey({
+      compilerOptions: {
+        strict: true,
+        jsx: 4,
+      },
+    })
+    const secondKey = module.getProjectOptionsCacheKey({
+      compilerOptions: {
+        jsx: 4,
+        strict: true,
+      },
+    })
+
+    expect(firstKey).toBe('m:0;c:jsx=4;strict=true;')
+    expect(secondKey).toBe(firstKey)
+  })
 })

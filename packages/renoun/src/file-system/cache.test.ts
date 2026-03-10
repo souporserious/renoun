@@ -59,7 +59,7 @@ type SqliteComputeSlotPersistence = CacheStorePersistence & {
     nodeKey: string,
     owner: string,
     ttlMs: number
-  ): Promise<void>
+  ): Promise<boolean>
   releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
   getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
 }
@@ -8165,7 +8165,6 @@ export type Metadata = Value`,
       lockDb.exec('BEGIN IMMEDIATE')
 
       try {
-        const startedAt = Date.now()
         const first = firstStore.getOrCompute(
           'test:sqlite-compute-slot-lock',
           { persist: true },
@@ -8179,7 +8178,9 @@ export type Metadata = Value`,
         await new Promise((resolve) => {
           setTimeout(resolve, 30)
         })
-        const second = secondStore.getOrCompute(
+        let secondSettled = false
+        const second = secondStore
+          .getOrCompute(
           'test:sqlite-compute-slot-lock',
           { persist: true },
           async () => {
@@ -8187,6 +8188,14 @@ export type Metadata = Value`,
             return 'second'
           }
         )
+          .finally(() => {
+            secondSettled = true
+          })
+
+        await new Promise((resolve) => {
+          setTimeout(resolve, 30)
+        })
+        expect(secondSettled).toBe(false)
 
         await new Promise((resolve) => {
           setTimeout(resolve, 120)
@@ -8198,7 +8207,6 @@ export type Metadata = Value`,
         expect(firstResult).toBe('first')
         expect(secondResult).toBe('first')
         expect(computeCount).toBe(1)
-        expect(Date.now() - startedAt).toBeGreaterThan(80)
       } finally {
         lockDb.close()
       }
@@ -8909,6 +8917,97 @@ export type Metadata = Value`,
       expect(firstResult).toBe('first')
       expect(secondResult).toBe('first')
       expect(computeCount).toBe(1)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  }, 12000)
+
+  test('does not persist a stale leader result after the heartbeat loses compute-slot ownership', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-sqlite-slot-heartbeat-loss-')
+    )
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+    const snapshot = new FileSystemSnapshot(
+      fileSystem,
+      'sqlite-compute-slot-heartbeat-loss'
+    )
+    const sqlitePersistence = new SqliteCacheStorePersistence({ dbPath })
+    const slotTtlMs = 60
+    let didLoseOwnership = false
+    const persistence: SqliteComputeSlotPersistence = {
+      load: sqlitePersistence.load.bind(sqlitePersistence),
+      save: sqlitePersistence.save.bind(sqlitePersistence),
+      delete: sqlitePersistence.delete.bind(sqlitePersistence),
+      computeSlotTtlMs: slotTtlMs,
+      acquireComputeSlot: (nodeKey, owner) =>
+        sqlitePersistence.acquireComputeSlot(nodeKey, owner, slotTtlMs),
+      refreshComputeSlot: async (nodeKey, owner) => {
+        if (!didLoseOwnership) {
+          didLoseOwnership = true
+          await sqlitePersistence.releaseComputeSlot(nodeKey, owner)
+        }
+
+        return false
+      },
+      getComputeSlotOwner:
+        sqlitePersistence.getComputeSlotOwner.bind(sqlitePersistence),
+      releaseComputeSlot:
+        sqlitePersistence.releaseComputeSlot.bind(sqlitePersistence),
+    }
+    const firstStore = new CacheStore({ snapshot, persistence })
+    const secondStore = new CacheStore({ snapshot, persistence })
+    const thirdStore = new CacheStore({ snapshot, persistence })
+    const releaseFirst = createDeferredPromise<void>()
+
+    try {
+      let computeCount = 0
+      const first = firstStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat-loss',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          await releaseFirst.promise
+          return 'first'
+        }
+      )
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 90)
+      })
+
+      const second = secondStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat-loss',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'second'
+        }
+      )
+
+      await new Promise((resolve) => {
+        setTimeout(resolve, 20)
+      })
+      releaseFirst.resolve()
+
+      const [firstResult, secondResult] = await Promise.all([first, second])
+      expect(firstResult).toBe('first')
+      expect(secondResult).toBe('second')
+      expect(computeCount).toBe(2)
+
+      const persisted = await thirdStore.getOrCompute(
+        'test:sqlite-compute-slot-heartbeat-loss',
+        { persist: true },
+        async () => {
+          computeCount += 1
+          return 'third'
+        }
+      )
+
+      expect(persisted).toBe('second')
+      expect(computeCount).toBe(2)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }

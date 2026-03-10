@@ -14,6 +14,8 @@ interface MockBrowserClientInstance {
   callMethod: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
   removeAllListeners: ReturnType<typeof vi.fn>
+  on: ReturnType<typeof vi.fn>
+  listeners: Map<string, (payload: unknown) => void>
   pendingCalls: PendingCall[]
 }
 
@@ -39,8 +41,10 @@ describe('browser-client runtime transport', () => {
         runtime?: AnalysisServerRuntime
       ) {
         const pendingCalls: PendingCall[] = []
+        const listeners = new Map<string, (payload: unknown) => void>()
         const instance: MockBrowserClientInstance = {
           runtime,
+          listeners,
           pendingCalls,
           callMethod: vi.fn((method: string, params: Record<string, unknown>) => {
             return new Promise((resolve, reject) => {
@@ -58,6 +62,9 @@ describe('browser-client runtime transport', () => {
                 new Error('[renoun] Mock browser client closed')
               )
             }
+          }),
+          on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+            listeners.set(eventName, listener)
           }),
           removeAllListeners: vi.fn(),
         }
@@ -155,6 +162,59 @@ describe('browser-client runtime transport', () => {
 
     await expect(secondPromise).resolves.toEqual({ text: 'quick-info-b' })
   })
+
+  it('invalidates cached explicit-runtime requests on relative refresh notifications', async () => {
+    const module = await import('./client.ts')
+    const runtime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+
+    const firstPromise = module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      10,
+      undefined,
+      runtime
+    )
+    await flushBrowserClientCallQueue()
+
+    const client = getMockBrowserClient(0)
+    resolveNextPendingCall(client, { text: 'quick-info-a' })
+    await expect(firstPromise).resolves.toEqual({ text: 'quick-info-a' })
+
+    const second = await module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      10,
+      undefined,
+      runtime
+    )
+    expect(second).toEqual({ text: 'quick-info-a' })
+    expect(client.callMethod).toHaveBeenCalledTimes(1)
+    expect(client.on).toHaveBeenCalled()
+
+    emitBrowserClientEvent(client, 'notification', {
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['src/a.ts'],
+      },
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    const thirdPromise = module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      10,
+      undefined,
+      runtime
+    )
+    await flushBrowserClientCallQueue()
+
+    expect(client.callMethod).toHaveBeenCalledTimes(2)
+    resolveNextPendingCall(client, { text: 'quick-info-b' })
+    await expect(thirdPromise).resolves.toEqual({ text: 'quick-info-b' })
+  })
 })
 
 function resolveNextPendingCall(
@@ -176,6 +236,19 @@ function getMockBrowserClient(index: number): MockBrowserClientInstance {
   }
 
   return client
+}
+
+function emitBrowserClientEvent(
+  client: MockBrowserClientInstance,
+  eventName: string,
+  payload: unknown
+): void {
+  const listener = client.listeners.get(eventName)
+  if (!listener) {
+    throw new Error(`[renoun] Expected browser client listener for ${eventName}.`)
+  }
+
+  listener(payload)
 }
 
 async function flushBrowserClientCallQueue(): Promise<void> {

@@ -107,7 +107,7 @@ jobs:
   renoun-browser:
     needs: test
     if: needs.test.outputs.has_renoun == 'true'
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - name: Checkout Repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683

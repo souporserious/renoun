@@ -82,4 +82,37 @@ describe('concurrency utilities', () => {
     expect(visited.sort((first, second) => first - second)).toEqual(items)
     expect(maxRunning).toBeLessThanOrEqual(2)
   })
+
+  test('aggregates worker failures when stopOnError is disabled', async () => {
+    await expect(
+      mapConcurrent([0, 1, 2], { concurrency: 2, stopOnError: false }, async (item) => {
+        if (item !== 0) {
+          throw new Error(`map-${item}`)
+        }
+
+        return item
+      })
+    ).rejects.toMatchObject({
+      name: 'AggregateError',
+      errors: [expect.objectContaining({ message: 'map-1' }), expect.objectContaining({ message: 'map-2' })],
+    })
+
+    await expect(
+      forEachConcurrent(
+        [0, 1, 2],
+        { concurrency: 2, stopOnError: false },
+        async (item) => {
+          if (item !== 0) {
+            throw new Error(`foreach-${item}`)
+          }
+        }
+      )
+    ).rejects.toMatchObject({
+      name: 'AggregateError',
+      errors: [
+        expect.objectContaining({ message: 'foreach-1' }),
+        expect.objectContaining({ message: 'foreach-2' }),
+      ],
+    })
+  })
 })

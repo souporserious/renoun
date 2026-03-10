@@ -89,11 +89,18 @@ interface ActiveClientState {
   rpcUnavailableUntil: number
 }
 
+interface RefreshSubscribedClientState {
+  client: WebSocketClient
+  runtimeKey: string
+  refreshSubscriptionsAttached: boolean
+}
+
 interface BrowserRuntimeClientState {
   client: WebSocketClient
   runtimeKey: string
   inFlightRequestCount: number
   isCached: boolean
+  refreshSubscriptionsAttached: boolean
 }
 
 let activeClientState: ActiveClientState | undefined
@@ -239,6 +246,13 @@ function isCurrentActiveClientState(
     state !== undefined &&
     activeClientState?.generation === state.generation &&
     activeClientState.client === state.client
+  )
+}
+
+function isCurrentBrowserClientState(state: BrowserRuntimeClientState): boolean {
+  return (
+    cachedBrowserClientState?.runtimeKey === state.runtimeKey &&
+    cachedBrowserClientState.client === state.client
   )
 }
 
@@ -646,11 +660,14 @@ async function callClientMethod<
   return request
 }
 
-function queueRefreshResync(state: ActiveClientState): void {
+function queueRefreshResync(
+  state: RefreshSubscribedClientState,
+  isCurrentState: () => boolean
+): void {
   refreshResyncQueue = refreshResyncQueue
     .catch(() => {})
     .then(async () => {
-      if (!isCurrentActiveClientState(state)) {
+      if (!isCurrentState()) {
         return
       }
 
@@ -668,7 +685,7 @@ function queueRefreshResync(state: ActiveClientState): void {
           >('getRefreshInvalidationsSince', {
             sinceCursor: latestRefreshCursor,
           })
-          if (!isCurrentActiveClientState(state)) {
+          if (!isCurrentState()) {
             return
           }
 
@@ -699,7 +716,7 @@ function queueRefreshResync(state: ActiveClientState): void {
           }
           return
         } catch {
-          if (!isCurrentActiveClientState(state)) {
+          if (!isCurrentState()) {
             return
           }
 
@@ -734,8 +751,10 @@ function queueRefreshResync(state: ActiveClientState): void {
 }
 
 function attachClientRefreshSubscriptions(
-  state: ActiveClientState,
+  state: RefreshSubscribedClientState,
   options: {
+    isCurrentState?: () => boolean
+    onConnected?: () => void
     resyncImmediately?: boolean
   } = {}
 ): void {
@@ -743,23 +762,27 @@ function attachClientRefreshSubscriptions(
     return
   }
 
+  const isCurrentState =
+    options.isCurrentState ??
+    (() => isCurrentActiveClientState(state as ActiveClientState))
+
   state.refreshSubscriptionsAttached = true
   state.client.on('connected', () => {
-    if (!isCurrentActiveClientState(state)) {
+    if (!isCurrentState()) {
       return
     }
 
-    state.rpcUnavailableUntil = 0
+    options.onConnected?.()
 
     if (!hasConnectedAnalysisServerClient) {
       hasConnectedAnalysisServerClient = true
       return
     }
 
-    queueRefreshResync(state)
+    queueRefreshResync(state, isCurrentState)
   })
   state.client.on('notification', (message) => {
-    if (!isCurrentActiveClientState(state)) {
+    if (!isCurrentState()) {
       return
     }
 
@@ -781,7 +804,7 @@ function attachClientRefreshSubscriptions(
 
   if (options.resyncImmediately) {
     hasConnectedAnalysisServerClient = true
-    queueRefreshResync(state)
+    queueRefreshResync(state, isCurrentState)
   }
 }
 
@@ -803,10 +826,14 @@ function createAnalysisBrowserClient(
     runtimeKey,
     inFlightRequestCount: 0,
     isCached,
+    refreshSubscriptionsAttached: false,
   }
 
   if (isCached) {
     cachedBrowserClientState = state
+    attachClientRefreshSubscriptions(state, {
+      isCurrentState: () => isCurrentBrowserClientState(state),
+    })
   }
 
   return state
@@ -859,7 +886,11 @@ function getAnalysisBrowserClientState(
   }
 
   if (cachedBrowserClientState.runtimeKey === runtimeKey) {
-    return cachedBrowserClientState
+    const cachedState = cachedBrowserClientState
+    attachClientRefreshSubscriptions(cachedState, {
+      isCurrentState: () => isCurrentBrowserClientState(cachedState),
+    })
+    return cachedState
   }
 
   if (cachedBrowserClientState.inFlightRequestCount === 0) {
@@ -930,6 +961,9 @@ function replaceClientForRuntime(
   })
   const nextClientState = createClientForRuntime(runtime)
   attachClientRefreshSubscriptions(nextClientState, {
+    onConnected: () => {
+      nextClientState.rpcUnavailableUntil = 0
+    },
     resyncImmediately: options.resyncImmediately,
   })
   return nextClientState
@@ -986,7 +1020,11 @@ function getClient(): WebSocketClient | undefined {
   }
 
   if (activeClientState) {
-    attachClientRefreshSubscriptions(activeClientState, {
+    const currentState = activeClientState
+    attachClientRefreshSubscriptions(currentState, {
+      onConnected: () => {
+        currentState.rpcUnavailableUntil = 0
+      },
       resyncImmediately: hadExistingClient,
     })
   }

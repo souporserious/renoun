@@ -187,7 +187,6 @@ const runtimeTypeScriptDependencySidecarHydrationQueue: Array<{
   run: () => Promise<void>
 }> = []
 let runtimeTypeScriptDependencySidecarHydrationActiveCount = 0
-let runtimeAnalysisInvalidationPendingCount = 0
 const runtimeAnalysisBackgroundRefreshListeners = new Set<
   (paths: readonly string[]) => void
 >()
@@ -852,7 +851,6 @@ async function getRuntimeAnalysisSessionsUnchecked(
 }
 
 function enqueueRuntimeAnalysisInvalidation(task: () => Promise<void>): void {
-  runtimeAnalysisInvalidationPendingCount += 1
   runtimeAnalysisInvalidationQueue = runtimeAnalysisInvalidationQueue
     .catch(() => {})
     .then(task)
@@ -871,23 +869,10 @@ function enqueueRuntimeAnalysisInvalidation(task: () => Promise<void>): void {
         }
       })
     })
-    .finally(() => {
-      runtimeAnalysisInvalidationPendingCount = Math.max(
-        0,
-        runtimeAnalysisInvalidationPendingCount - 1
-      )
-    })
 }
 
 async function waitForRuntimeAnalysisInvalidations(): Promise<void> {
   await runtimeAnalysisInvalidationQueue
-}
-
-function shouldBypassRuntimeAnalysisInvalidationWait(): boolean {
-  return (
-    isRuntimeAnalysisDevelopmentLikeEnvironment() &&
-    runtimeAnalysisInvalidationPendingCount > 0
-  )
 }
 
 async function getRuntimeAnalysisSession(
@@ -895,9 +880,7 @@ async function getRuntimeAnalysisSession(
 ): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
-  if (!shouldBypassRuntimeAnalysisInvalidationWait()) {
-    await waitForRuntimeAnalysisInvalidations()
-  }
+  await waitForRuntimeAnalysisInvalidations()
   return getRuntimeAnalysisSessionUnchecked(scopePath)
 }
 

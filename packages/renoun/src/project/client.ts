@@ -338,7 +338,7 @@ export function getProjectOptionsCacheKey(options?: ProjectOptions): string {
 
   if (options.compilerOptions) {
     key += 'c:'
-    for (const compilerOption in options.compilerOptions) {
+    for (const compilerOption of Object.keys(options.compilerOptions).sort()) {
       const value = options.compilerOptions[compilerOption]
       key += `${compilerOption}=${value};`
     }

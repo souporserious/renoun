@@ -520,18 +520,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     nodeKey: string,
     owner: string,
     ttlMs: number = SQLITE_DEFAULTS.inflightTtlMs
-  ): Promise<void> {
+  ): Promise<boolean> {
     await this.#readyPromise
 
     if (!this.#db) {
-      return
+      return true
     }
 
     const now = Date.now()
     const expiresAt = now + ttlMs
 
-    await this.#runWithBusyRetries(() => {
-      this
+    return this.#runWithBusyRetries(() => {
+      const result = this
         .#prepareStatement(
           `
             UPDATE cache_inflight
@@ -540,6 +540,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           `
         )
         .run(expiresAt, nodeKey, owner)
+
+      return Number((result as { changes?: number }).changes ?? 0) > 0
     })
   }
 

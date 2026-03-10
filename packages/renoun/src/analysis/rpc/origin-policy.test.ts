@@ -24,7 +24,7 @@ function createRequest(options: {
 }
 
 describe('isAllowedAnalysisServerOrigin', () => {
-  test('allows proxied preview origins when the loopback request presents the server id', () => {
+  test('rejects proxied preview origins even when they present the server id', () => {
     const request = createRequest({
       host: '127.0.0.1:43123',
       origin: 'https://preview.example.dev',
@@ -35,25 +35,7 @@ describe('isAllowedAnalysisServerOrigin', () => {
     expect(
       isAllowedAnalysisServerOrigin(
         'https://preview.example.dev',
-        request,
-        'server-id'
-      )
-    ).toBe(true)
-  })
-
-  test('rejects proxied preview origins without the matching server id', () => {
-    const request = createRequest({
-      host: '127.0.0.1:43123',
-      origin: 'https://preview.example.dev',
-      protocol: 'different-id',
-      remoteAddress: '127.0.0.1',
-    })
-
-    expect(
-      isAllowedAnalysisServerOrigin(
-        'https://preview.example.dev',
-        request,
-        'server-id'
+        request
       )
     ).toBe(false)
   })
@@ -68,8 +50,7 @@ describe('isAllowedAnalysisServerOrigin', () => {
     expect(
       isAllowedAnalysisServerOrigin(
         'http://localhost:3000',
-        request,
-        'server-id'
+        request
       )
     ).toBe(true)
   })

@@ -289,6 +289,10 @@ function makeKey(method: string, params: unknown): string {
 }
 
 function isCriticalMessage(message: any): boolean {
+  if (message?.type === 'refresh') {
+    return true
+  }
+
   return (
     message &&
     typeof message === 'object' &&
@@ -477,7 +481,7 @@ export class WebSocketServer {
       backlog: 1024,
       maxPayload: MAX_PAYLOAD_BYTES,
       allowedOrigins: (origin, request) => {
-        const allowed = isAllowedAnalysisServerOrigin(origin, request, this.#id)
+        const allowed = isAllowedAnalysisServerOrigin(origin, request)
         if (!allowed) {
           getDebugLogger().logWebSocketServerEvent('client_rejected', {
             reason: 'forbidden_origin',

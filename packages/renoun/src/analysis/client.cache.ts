@@ -360,10 +360,40 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
     return true
   }
 
-  return (
+  if (
     firstPath === secondPath ||
     firstPath.startsWith(`${secondPath}/`) ||
     secondPath.startsWith(`${firstPath}/`)
+  ) {
+    return true
+  }
+
+  const firstIsAbsolute = isAbsoluteClientPath(firstPath)
+  const secondIsAbsolute = isAbsoluteClientPath(secondPath)
+  if (firstIsAbsolute === secondIsAbsolute) {
+    return false
+  }
+
+  return doesAbsolutePathContainRelativePath(
+    firstIsAbsolute ? firstPath : secondPath,
+    firstIsAbsolute ? secondPath : firstPath
+  )
+}
+
+function doesAbsolutePathContainRelativePath(
+  absolutePath: string,
+  relativePath: string
+): boolean {
+  const normalizedRelativePath = trimTrailingSlashes(
+    trimLeadingSlashes(trimLeadingDotSlash(relativePath))
+  )
+  if (normalizedRelativePath.length === 0) {
+    return false
+  }
+
+  return (
+    absolutePath.endsWith(`/${normalizedRelativePath}`) ||
+    absolutePath.includes(`/${normalizedRelativePath}/`)
   )
 }
 
