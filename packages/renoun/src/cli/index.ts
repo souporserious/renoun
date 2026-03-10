@@ -141,6 +141,11 @@ if (firstArgument === 'validate') {
       'cli.runSubProcess',
       async () => {
         const server = await createServer()
+        const serverHost = process.env[PROCESS_ENV_KEYS.renounServerHost]
+        const serverRefreshNotificationsEffective =
+          process.env[
+            PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
+          ]
         const port = String(await server.getPort())
         const id = server.getId()
 
@@ -174,6 +179,18 @@ if (firstArgument === 'validate') {
             ...process.env,
             [PROCESS_ENV_KEYS.renounServerPort]: port,
             [PROCESS_ENV_KEYS.renounServerId]: id,
+            ...(typeof serverHost === 'string' && serverHost.length > 0
+              ? {
+                  [PROCESS_ENV_KEYS.renounServerHost]: serverHost,
+                }
+              : {}),
+            ...(typeof serverRefreshNotificationsEffective === 'string' &&
+            serverRefreshNotificationsEffective.length > 0
+              ? {
+                  [PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]:
+                    serverRefreshNotificationsEffective,
+                }
+              : {}),
           },
         })
 
