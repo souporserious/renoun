@@ -20,6 +20,37 @@ interface PackDryRunResult {
   files: PackedFile[]
 }
 
+interface PackageExportEntry {
+  source?: string
+}
+
+interface MdxPackageJson {
+  exports?: Record<string, PackageExportEntry>
+}
+
+function normalizePackagePath(filePath: string): string {
+  return filePath.startsWith('./') ? filePath.slice(2) : filePath
+}
+
+function getPackedFileMatches(
+  filePattern: string,
+  packedFiles: string[]
+): string[] {
+  const normalizedPattern = normalizePackagePath(filePattern)
+
+  if (!normalizedPattern.includes('*')) {
+    return packedFiles.filter((filePath) => filePath === normalizedPattern)
+  }
+
+  const pattern = normalizedPattern
+    .replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+    .replaceAll('*', '[^/]+')
+
+  return packedFiles.filter((filePath) =>
+    new RegExp(`^${pattern}$`).test(filePath)
+  )
+}
+
 async function getPackedFiles(): Promise<string[]> {
   const npmCacheDirectory = await mkdtemp(join(tmpdir(), 'renoun-mdx-npm-cache-'))
 
@@ -45,15 +76,25 @@ async function getPackedFiles(): Promise<string[]> {
 }
 
 describe('package exports', () => {
-  test('does not expose source conditions for unpublished raw source files', async () => {
-    const packageJson = JSON.parse(
-      await readFile(new URL('../package.json', import.meta.url), 'utf8')
-    ) as {
-      exports?: Record<string, Record<string, unknown>>
-    }
+  test('publishes raw source files for every source export condition', async () => {
+    const [packageJson, packedFiles] = await Promise.all([
+      readFile(new URL('../package.json', import.meta.url), 'utf8').then(
+        (file) => JSON.parse(file) as MdxPackageJson
+      ),
+      getPackedFiles(),
+    ])
 
     for (const exportEntry of Object.values(packageJson.exports ?? {})) {
-      expect(exportEntry).not.toHaveProperty('source')
+      const sourcePath = exportEntry.source
+
+      expect(exportEntry).toHaveProperty('source')
+      expect(sourcePath).toMatch(/^\.\/src\/.+\.ts$/)
+
+      if (!sourcePath) continue
+
+      const matchedFiles = getPackedFileMatches(sourcePath, packedFiles)
+
+      expect(matchedFiles).not.toEqual([])
     }
   })
 
