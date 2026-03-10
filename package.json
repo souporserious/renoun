@@ -20,7 +20,7 @@
     "validate": "node ./packages/renoun/dist/cli/index.js validate"
   },
   "devDependencies": {
-    "@changesets/cli": "2.29.8",
+    "@changesets/cli": "2.30.0",
     "@octokit/rest": "22.0.1",
     "@types/node": "catalog:",
     "@vitest/browser": "4.0.18",
@@ -28,7 +28,7 @@
     "geist": "catalog:",
     "playwright": "1.58.2",
     "prettier": "catalog:",
-    "turbo": "2.8.11",
+    "turbo": "2.8.14",
     "typescript": "catalog:",
     "vitest": "4.0.18"
   },

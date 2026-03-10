@@ -146,7 +146,7 @@
     "@types/estree": "1.0.8",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "dedent": "1.7.1",
+    "dedent": "1.7.2",
     "geist": "catalog:",
     "prettier": "catalog:",
     "react": "catalog:",
