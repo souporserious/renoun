@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises'
-import { realpathSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { existsSync, realpathSync } from 'node:fs'
+import { basename, dirname, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
 
 import { delay } from '../utils/delay.ts'
@@ -158,8 +158,8 @@ export function getDefaultCacheDatabasePath(
   debugSessionRoot?: boolean
 ): string {
   let root = projectRoot
-    ? resolveCanonicalProjectRootPath(projectRoot)
-    : resolve(getRootDirectory())
+    ? resolvePersistentCacheProjectRootPath(projectRoot)
+    : resolvePersistentCacheProjectRootPath(getRootDirectory())
   if (root === resolve('/')) {
     throw new Error(
       '[renoun] Refusing to write cache database at filesystem root "/". Run from a workspace directory or pass `dbPath`/`projectRoot` explicitly.'
@@ -197,6 +197,35 @@ function resolveCanonicalProjectRootPath(pathToResolve: string): string {
   } catch {
     return resolve(pathToResolve)
   }
+}
+
+function resolvePersistentCacheProjectRootPath(pathToResolve: string): string {
+  const canonicalPath = resolveCanonicalProjectRootPath(pathToResolve)
+  return resolveAppRuntimeProjectRoot(canonicalPath) ?? canonicalPath
+}
+
+function resolveAppRuntimeProjectRoot(
+  pathToResolve: string
+): string | undefined {
+  const appDirectory = dirname(pathToResolve)
+  const renounDirectory = dirname(appDirectory)
+
+  if (
+    basename(appDirectory) !== 'app' ||
+    basename(renounDirectory) !== '.renoun'
+  ) {
+    return undefined
+  }
+
+  const projectRoot = dirname(renounDirectory)
+  if (
+    !existsSync(resolve(projectRoot, 'package.json')) &&
+    !existsSync(resolve(projectRoot, 'pnpm-workspace.yaml'))
+  ) {
+    return undefined
+  }
+
+  return resolveCanonicalProjectRootPath(projectRoot)
 }
 
 export function getCacheStorePersistence(

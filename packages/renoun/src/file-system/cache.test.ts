@@ -6421,6 +6421,53 @@ export type Metadata = Value`,
     )
   })
 
+  test('stores app-mode sqlite cache under the project root instead of the runtime directory', () => {
+    const tmpDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-app-runtime-root-'
+    )
+    const projectRoot = join(tmpDirectory, 'project')
+    const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
+    const previousRuntimeDirectory = process.env.RENOUN_RUNTIME_DIRECTORY
+
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ name: 'cache-app-runtime-root-test', private: true }),
+      'utf8'
+    )
+
+    try {
+      process.env.RENOUN_RUNTIME_DIRECTORY = runtimeRoot
+
+      const expectedDbPath = join(
+        projectRoot,
+        '.renoun',
+        'cache',
+        'fs-cache.sqlite'
+      )
+
+      expect(getDefaultCacheDatabasePath()).toBe(expectedDbPath)
+      expect(getDefaultCacheDatabasePath(runtimeRoot)).toBe(expectedDbPath)
+
+      const projectPersistence = getCacheStorePersistence({ projectRoot })
+      const runtimePersistence = getCacheStorePersistence({
+        projectRoot: runtimeRoot,
+      })
+
+      expect(runtimePersistence).toBe(projectPersistence)
+    } finally {
+      if (previousRuntimeDirectory === undefined) {
+        delete process.env.RENOUN_RUNTIME_DIRECTORY
+      } else {
+        process.env.RENOUN_RUNTIME_DIRECTORY = previousRuntimeDirectory
+      }
+
+      disposeCacheStorePersistence({ projectRoot })
+      disposeCacheStorePersistence({ projectRoot: runtimeRoot })
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('canonicalizes alias session roots so symlinked paths share one sqlite namespace', async () => {
     const tmpDirectory = createTmpRenounCacheDirectory(
       'renoun-cache-session-root-alias-'
