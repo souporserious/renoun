@@ -4,8 +4,8 @@
   "homepage": "https://renoun.dev",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next dev --webpack",
-    "build": "pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next build --webpack",
+    "dev": "pnpm --dir ../../packages/mdx build && pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next dev --webpack",
+    "build": "pnpm --dir ../../packages/mdx build && pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next build --webpack",
     "start": "serve out"
   },
   "dependencies": {

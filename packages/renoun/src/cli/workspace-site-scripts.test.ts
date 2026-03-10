@@ -8,7 +8,7 @@ const SITE_PACKAGE_JSON_PATH = fileURLToPath(
 )
 
 describe('workspace site scripts', () => {
-  test('build the renoun CLI before running the site entrypoints', async () => {
+  test('build @renoun/mdx and the renoun CLI before running the site entrypoints', async () => {
     const packageJson = JSON.parse(
       await readFile(SITE_PACKAGE_JSON_PATH, 'utf-8')
     ) as {
@@ -16,10 +16,10 @@ describe('workspace site scripts', () => {
     }
 
     expect(packageJson.scripts?.dev).toBe(
-      'pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next dev --webpack'
+      'pnpm --dir ../../packages/mdx build && pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next dev --webpack'
     )
     expect(packageJson.scripts?.build).toBe(
-      'pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next build --webpack'
+      'pnpm --dir ../../packages/mdx build && pnpm --dir ../../packages/renoun build && node ../../packages/renoun/dist/cli/index.js next build --webpack'
     )
   })
 })

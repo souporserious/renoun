@@ -2,7 +2,7 @@
 
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, parse, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
@@ -13,17 +13,14 @@ import { createOutputParser } from './bench-site-build-output.mjs'
 export const DEFAULT_FILTER = '@apps/site'
 const DEFAULT_COLD_RUNS = 1
 const DEFAULT_WARM_RUNS = 2
-const DEFAULT_CLEAN_PATHS = [
-  '.renoun',
-  'apps/site/.next',
-  'apps/site/out',
-  'apps/site/.renoun',
-]
+const DEFAULT_WORKSPACE_CLEAN_PATHS = ['.renoun']
+const DEFAULT_TARGET_CLEAN_PATHS = ['.next', 'out', '.renoun']
+const WORKSPACE_PACKAGE_DIRECTORIES = ['apps', 'examples', 'packages']
 
 function printHelp() {
   console.log(`Usage: node ./scripts/bench-site-build.mjs [options]
 
-Runs deterministic cold/warm @apps/site builds and prints timing + cache stats.
+Runs deterministic cold/warm workspace builds and prints timing + cache stats.
 
 Options:
   --filter <name>        pnpm filter value (default: ${DEFAULT_FILTER})
@@ -52,7 +49,7 @@ function parseArgs(argv) {
     filter: DEFAULT_FILTER,
     coldRuns: DEFAULT_COLD_RUNS,
     warmRuns: DEFAULT_WARM_RUNS,
-    cleanPaths: [...DEFAULT_CLEAN_PATHS],
+    cleanPaths: [],
     cacheStats: true,
     verbose: false,
     dryRun: false,
@@ -136,6 +133,93 @@ function parseArgs(argv) {
   }
 
   return parsed
+}
+
+function normalizeFilterPattern(filter) {
+  return filter.trim().replace(/^\.\.\.\^?/, '').replace(/\^?\.\.\.$/, '')
+}
+
+function createSimpleGlobRegExp(pattern) {
+  const escapedPattern = pattern.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+  return new RegExp(`^${escapedPattern.replaceAll('*', '.*')}$`)
+}
+
+async function listWorkspacePackages(projectRoot) {
+  const workspacePackages = []
+
+  for (const workspaceDirectory of WORKSPACE_PACKAGE_DIRECTORIES) {
+    const absoluteWorkspaceDirectory = join(projectRoot, workspaceDirectory)
+    let entries = []
+
+    try {
+      entries = await readdir(absoluteWorkspaceDirectory, {
+        withFileTypes: true,
+      })
+    } catch {
+      continue
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) {
+        continue
+      }
+
+      const relativePackageDirectory = join(workspaceDirectory, entry.name)
+      const packageJsonPath = join(
+        projectRoot,
+        relativePackageDirectory,
+        'package.json'
+      )
+
+      try {
+        const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
+
+        if (typeof packageJson.name === 'string' && packageJson.name.length > 0) {
+          workspacePackages.push({
+            name: packageJson.name,
+            directory: relativePackageDirectory,
+          })
+        }
+      } catch {
+        continue
+      }
+    }
+  }
+
+  return workspacePackages
+}
+
+export async function resolveDefaultCleanPaths({ projectRoot, filter }) {
+  const normalizedFilter = normalizeFilterPattern(filter)
+  const workspacePackages = await listWorkspacePackages(projectRoot)
+  const packageMatcher = normalizedFilter.includes('*')
+    ? createSimpleGlobRegExp(normalizedFilter)
+    : undefined
+  const matchingPackages = workspacePackages.filter((workspacePackage) =>
+    packageMatcher
+      ? packageMatcher.test(workspacePackage.name)
+      : workspacePackage.name === normalizedFilter
+  )
+
+  if (matchingPackages.length === 0) {
+    throw new Error(
+      `Could not resolve default clean paths for filter "${filter}". ` +
+        'Pass a workspace package filter or add explicit --clean-path entries.'
+    )
+  }
+
+  return [
+    ...DEFAULT_WORKSPACE_CLEAN_PATHS,
+    ...Array.from(
+      new Set(
+        matchingPackages.flatMap(({ directory }) =>
+          DEFAULT_TARGET_CLEAN_PATHS.map((cleanPath) =>
+            join(directory, cleanPath)
+          )
+        )
+      )
+    ),
+  ]
 }
 
 function average(values) {
@@ -381,6 +465,15 @@ function printFinalSummary(coldRuns, warmRuns) {
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const projectRoot = process.cwd()
+  const resolvedCleanPaths = Array.from(
+    new Set([
+      ...(await resolveDefaultCleanPaths({
+        projectRoot,
+        filter: options.filter,
+      })),
+      ...options.cleanPaths,
+    ])
+  )
 
   const logsDirectory = await mkdtemp(
     join(tmpdir(), 'renoun-site-cache-benchmark-')
@@ -391,6 +484,7 @@ async function main() {
   console.log(`- Filter: ${options.filter}`)
   console.log(`- Cold runs: ${options.coldRuns}`)
   console.log(`- Warm runs: ${options.warmRuns}`)
+  console.log(`- Clean paths: ${resolvedCleanPaths.join(', ')}`)
   console.log(`- Cache stats: ${options.cacheStats ? 'enabled' : 'disabled'}`)
   console.log(`- Logs: ${logsDirectory}`)
   console.log(`- Dry run: ${options.dryRun ? 'yes' : 'no'}`)
@@ -415,7 +509,7 @@ async function main() {
   for (let index = 0; index < options.coldRuns; index += 1) {
     const runName = `cold-${index + 1}`
     console.log(`\n[${runName}] Cleaning cache state...`)
-    await cleanPaths(projectRoot, options.cleanPaths)
+    await cleanPaths(projectRoot, resolvedCleanPaths)
 
     console.log(`[${runName}] Running build...`)
     const run = await runBuild({
@@ -475,7 +569,7 @@ async function main() {
       coldRuns: options.coldRuns,
       warmRuns: options.warmRuns,
       cacheStats: options.cacheStats,
-      cleanPaths: options.cleanPaths,
+      cleanPaths: resolvedCleanPaths,
       verbose: options.verbose,
       dryRun: options.dryRun,
       logsDirectory,
