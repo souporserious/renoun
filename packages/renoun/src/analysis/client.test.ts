@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
       value: 'local-result',
       language: 'txt',
     })),
+    getQuickInfoAtPositionBase: vi.fn(),
     getCachedFileExportText: vi.fn(),
     getCachedFileExportMetadata: vi.fn(),
     getCachedFileExportStaticValue: vi.fn(),
@@ -24,6 +25,7 @@ const mocks = vi.hoisted(() => {
     transpileCachedSourceFile: vi.fn(),
     invalidateProgramFileCache: vi.fn(),
     invalidateSharedFileTextPrefixCachePath: vi.fn(),
+    createHighlighter: vi.fn(),
     configureAnalysisCacheRuntime: vi.fn(),
     resetAnalysisCacheRuntimeConfiguration: vi.fn(),
   }
@@ -66,6 +68,32 @@ vi.mock('./file-text-prefix-cache.ts', () => ({
     mocks.invalidateSharedFileTextPrefixCachePath,
 }))
 
+vi.mock('#analysis-client-server', () => ({
+  configureAnalysisCacheRuntime: mocks.configureAnalysisCacheRuntime,
+  createHighlighter: mocks.createHighlighter,
+  getCachedFileExportMetadata: mocks.getCachedFileExportMetadata,
+  getCachedFileExportStaticValue: mocks.getCachedFileExportStaticValue,
+  getCachedFileExportText: mocks.getCachedFileExportText,
+  getCachedFileExports: mocks.getCachedFileExports,
+  getCachedOutlineRanges: mocks.getCachedOutlineRanges,
+  getCachedSourceTextMetadata: mocks.getCachedSourceTextMetadata,
+  getCachedTokens: mocks.getCachedTokens,
+  getProgram: mocks.getProgram,
+  getQuickInfoAtPositionBase: mocks.getQuickInfoAtPositionBase,
+  invalidateProgramCachesByPaths: mocks.invalidateProgramCachesByPaths,
+  invalidateProgramFileCache: mocks.invalidateProgramFileCache,
+  invalidateRuntimeAnalysisCachePath: mocks.invalidateRuntimeAnalysisCachePath,
+  invalidateRuntimeAnalysisCachePaths:
+    mocks.invalidateRuntimeAnalysisCachePaths,
+  invalidateSharedFileTextPrefixCachePath:
+    mocks.invalidateSharedFileTextPrefixCachePath,
+  resetAnalysisCacheRuntimeConfiguration:
+    mocks.resetAnalysisCacheRuntimeConfiguration,
+  resolveCachedTypeAtLocationWithDependencies:
+    mocks.resolveCachedTypeAtLocationWithDependencies,
+  transpileCachedSourceFile: mocks.transpileCachedSourceFile,
+}))
+
 describe('analysis client transport guards', () => {
   const originalEnvironment = captureProcessEnv([
     'RENOUN_SERVER_PORT',
@@ -83,10 +111,12 @@ describe('analysis client transport guards', () => {
     mocks.WebSocketClient.mockClear()
     mocks.getProgram.mockClear()
     mocks.getCachedSourceTextMetadata.mockClear()
+    mocks.getQuickInfoAtPositionBase.mockClear()
     mocks.invalidateRuntimeAnalysisCachePaths.mockClear()
     mocks.invalidateRuntimeAnalysisCachePath.mockClear()
     mocks.invalidateProgramCachesByPaths.mockClear()
     mocks.invalidateSharedFileTextPrefixCachePath.mockClear()
+    mocks.createHighlighter.mockClear()
     mocks.configureAnalysisCacheRuntime.mockClear()
     mocks.resetAnalysisCacheRuntimeConfiguration.mockClear()
   })
@@ -106,6 +136,41 @@ describe('analysis client transport guards', () => {
     })
 
     expect(mocks.WebSocketClient).not.toHaveBeenCalled()
+    expect(mocks.getProgram).toHaveBeenCalledTimes(1)
+    expect(mocks.getCachedSourceTextMetadata).toHaveBeenCalledTimes(1)
+    expect(result).toEqual({
+      value: 'local-result',
+      language: 'txt',
+    })
+  })
+
+  test('retries loading server modules after a preload failure', async () => {
+    const module = await import('./client.ts')
+    const transientError = new Error('transient preload failure')
+
+    mocks.configureAnalysisCacheRuntime
+      .mockImplementationOnce(() => {
+        throw transientError
+      })
+      .mockImplementation(() => undefined)
+
+    module.configureAnalysisClientRuntime({
+      analysisCacheMaxEntries: 32,
+    })
+
+    await expect(
+      module.getSourceTextMetadata({
+        value: 'const answer = 42',
+        language: 'txt',
+      })
+    ).rejects.toThrow(transientError)
+
+    const result = await module.getSourceTextMetadata({
+      value: 'const answer = 42',
+      language: 'txt',
+    })
+
+    expect(mocks.configureAnalysisCacheRuntime).toHaveBeenCalledTimes(2)
     expect(mocks.getProgram).toHaveBeenCalledTimes(1)
     expect(mocks.getCachedSourceTextMetadata).toHaveBeenCalledTimes(1)
     expect(result).toEqual({

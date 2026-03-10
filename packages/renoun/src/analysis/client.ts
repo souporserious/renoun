@@ -366,13 +366,21 @@ async function loadAnalysisClientServerModules(): Promise<AnalysisClientServerMo
   }
 
   if (!analysisClientServerModulesPromise) {
-    analysisClientServerModulesPromise = import('#analysis-client-server').then(
-      (modules) => {
+    const loadPromise = import('#analysis-client-server')
+      .then((modules) => {
         applyAnalysisCacheRuntimeOptions(modules)
         loadedAnalysisClientServerModules = modules
         return modules
-      }
-    )
+      })
+      .catch((error) => {
+        if (analysisClientServerModulesPromise === loadPromise) {
+          analysisClientServerModulesPromise = undefined
+        }
+
+        throw error
+      })
+
+    analysisClientServerModulesPromise = loadPromise
   }
 
   return analysisClientServerModulesPromise

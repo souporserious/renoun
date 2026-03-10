@@ -64,17 +64,10 @@ function resolveWebSocketAuthority(
       ? location.hostname.trim()
       : undefined
 
-  // When the browser is connected through a tunnel or preview proxy, loopback
-  // runtime hosts are not browser-reachable. Reuse the current page hostname so
-  // the proxy can forward the runtime port and secure origins can use `wss://`.
-  const resolvedHost =
-    browserHost &&
-    !isLoopbackHost(browserHost) &&
-    (!runtimeHost || isLoopbackHost(runtimeHost))
-      ? browserHost
-      : runtimeHost ?? (browserHost && isLoopbackHost(browserHost)
-          ? browserHost
-          : 'localhost')
+  // Keep the exported runtime host when available. The analysis websocket
+  // server binds to loopback-only hosts, so rewriting an explicit loopback
+  // runtime to the page hostname breaks LAN/custom-host dev sessions.
+  const resolvedHost = runtimeHost ?? browserHost ?? 'localhost'
 
   return {
     host: resolvedHost,
