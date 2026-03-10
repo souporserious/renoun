@@ -1026,12 +1026,15 @@ export async function createServer(options?: CreateServerOptions) {
       return
     }
 
-    await prewarmRuntimeAnalysisSession(rootDirectory)
+    const project = getProgram()
+    await prewarmRuntimeAnalysisSession({
+      project,
+      filePath: rootDirectory,
+    })
     if (cleanedUp) {
       return
     }
 
-    const project = getProgram()
     await mapConcurrent(
       STARTUP_RUNTIME_METADATA_WARMUP_SAMPLES,
       {

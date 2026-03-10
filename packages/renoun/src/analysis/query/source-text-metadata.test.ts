@@ -327,6 +327,47 @@ describe('getSourceTextMetadata', () => {
     ).toBeDefined()
   })
 
+  test('promotes cached anchored snippets to the protected stable alias when an in-memory project later adds the real source file', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const filePath = '/workspace/src/foo.ts'
+
+    const first = await getSourceTextMetadata({
+      project,
+      value: 'export const snippet = 1\n',
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(first.filePath).toContain('/workspace/src/foo.__renoun_snippet_')
+
+    project.createSourceFile(filePath, 'export const real = 1\n', {
+      overwrite: true,
+    })
+
+    const second = await getSourceTextMetadata({
+      project,
+      value: 'export const snippet = 1\n',
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(second.filePath).toContain(
+      '/workspace/src/foo.__renoun_source.__renoun_snippet_'
+    )
+    expect(project.getSourceFile(filePath)?.getFullText()).toBe(
+      'export const real = 1\n'
+    )
+    expect(
+      project.getSourceFile('/workspace/src/foo.__renoun_source.ts')?.getFullText()
+    ).toBe(second.value)
+  })
+
   test('rewrites the stable alias with the final normalized snippet content', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,

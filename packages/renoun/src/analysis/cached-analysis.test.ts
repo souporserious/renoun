@@ -115,6 +115,29 @@ async function withDevelopmentLikeRuntime<T>(
   }
 }
 
+async function withNodeEnv<T>(
+  nodeEnv: 'development' | 'production' | 'test' | undefined,
+  run: () => Promise<T>
+): Promise<T> {
+  const previousNodeEnv = process.env['NODE_ENV']
+
+  if (nodeEnv === undefined) {
+    delete process.env['NODE_ENV']
+  } else {
+    process.env['NODE_ENV'] = nodeEnv
+  }
+
+  try {
+    return await run()
+  } finally {
+    if (previousNodeEnv === undefined) {
+      delete process.env['NODE_ENV']
+    } else {
+      process.env['NODE_ENV'] = previousNodeEnv
+    }
+  }
+}
+
 function createDisposeHandle(dispose: () => void) {
   return {
     [Symbol.dispose]() {
@@ -1996,6 +2019,91 @@ describe('analysis cached analysis', () => {
     30_000
   )
 
+  test(
+    'invalidates persisted virtualized source metadata when transitive TypeScript dependencies change in production',
+    async () => {
+      await withNodeEnv('production', async () => {
+        await using workspace = await createTemporaryWorkspace({
+          'package.json': JSON.stringify({
+            name: 'cached-analysis-test',
+            private: true,
+          }),
+          'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+              module: 'ESNext',
+              moduleResolution: 'Bundler',
+              target: 'ESNext',
+              strict: true,
+            },
+            include: ['src/**/*.ts'],
+          }),
+          'src/dep.ts': "export const dep = 'one'\n",
+        })
+
+        const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+        const virtualSnippetPath = join(
+          workspace.workspacePath,
+          'src/snippets/example.ts'
+        )
+        const transitiveDependencyPath = join(
+          workspace.workspacePath,
+          'src/dep.ts'
+        )
+        const entrySource =
+          "import { dep } from '../dep'\nexport const value = dep\n"
+        const project = new Project({
+          tsConfigFilePath,
+        })
+        const createSourceFileSpy = vi.spyOn(project, 'createSourceFile')
+        await delay(1_100)
+
+        await getCachedSourceTextMetadata(project, {
+          value: entrySource,
+          filePath: virtualSnippetPath,
+          language: 'ts',
+          virtualizeFilePath: true,
+          shouldFormat: false,
+        })
+        await getCachedSourceTextMetadata(project, {
+          value: entrySource,
+          filePath: virtualSnippetPath,
+          language: 'ts',
+          virtualizeFilePath: true,
+          shouldFormat: false,
+        })
+        const cachedCreateSourceFileCalls = createSourceFileSpy.mock.calls.length
+
+        await writeFile(
+          transitiveDependencyPath,
+          "export const dep = 'two-updated'\n",
+          'utf8'
+        )
+        await project
+          .getSourceFileOrThrow(transitiveDependencyPath)
+          .refreshFromFileSystem()
+        await delay(325)
+
+        await getCachedSourceTextMetadata(project, {
+          value: entrySource,
+          filePath: virtualSnippetPath,
+          language: 'ts',
+          virtualizeFilePath: true,
+          shouldFormat: false,
+        })
+        if (
+          createSourceFileSpy.mock.calls.length === cachedCreateSourceFileCalls
+        ) {
+          await delay(325)
+        }
+
+        expect(createSourceFileSpy.mock.calls.length).toBeGreaterThan(
+          cachedCreateSourceFileCalls
+        )
+      })
+    },
+    30_000
+  )
+
   test('invalidates cached tokens when transitive TypeScript dependencies change on disk', async () => {
     await using workspace = await createTemporaryWorkspace({
       'package.json': JSON.stringify({
@@ -2173,6 +2281,107 @@ describe('analysis cached analysis', () => {
 
     expect(metadataCalls).toBe(2)
   })
+
+  test(
+    'invalidates persisted cached tokens for virtualized snippets when transitive TypeScript dependencies change in production',
+    async () => {
+      await withNodeEnv('production', async () => {
+        await using workspace = await createTemporaryWorkspace({
+          'package.json': JSON.stringify({
+            name: 'cached-analysis-test',
+            private: true,
+          }),
+          'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+              module: 'ESNext',
+              moduleResolution: 'Bundler',
+              target: 'ESNext',
+              strict: true,
+            },
+            include: ['src/**/*.ts'],
+          }),
+          'src/dep.ts': "export const dep = 'one'\n",
+        })
+
+        const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+        const virtualSnippetPath = join(
+          workspace.workspacePath,
+          'src/snippets/example.ts'
+        )
+        const transitiveDependencyPath = join(
+          workspace.workspacePath,
+          'src/dep.ts'
+        )
+        const entrySource =
+          "import { dep } from '../dep'\nexport const value = dep\n"
+        const project = new Project({
+          tsConfigFilePath,
+        })
+        const highlighter = createHighlighter()
+        await delay(1_100)
+
+        const metadata = await getCachedSourceTextMetadata(project, {
+          value: entrySource,
+          filePath: virtualSnippetPath,
+          language: 'ts',
+          virtualizeFilePath: true,
+          shouldFormat: false,
+        })
+
+        let metadataCalls = 0
+        const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+          ...args
+        ) => {
+          metadataCalls += 1
+          return collectTypeScriptMetadata(...args)
+        }
+
+        await getCachedTokens(project, {
+          value: metadata.value,
+          language: 'ts',
+          filePath: metadata.filePath,
+          theme: 'default',
+          allowErrors: true,
+          highlighter,
+          metadataCollector,
+        })
+        await getCachedTokens(project, {
+          value: metadata.value,
+          language: 'ts',
+          filePath: metadata.filePath,
+          theme: 'default',
+          allowErrors: true,
+          highlighter,
+          metadataCollector,
+        })
+
+        expect(metadataCalls).toBe(1)
+
+        await writeFile(
+          transitiveDependencyPath,
+          "export const dep = 'two-updated'\n",
+          'utf8'
+        )
+        await project
+          .getSourceFileOrThrow(transitiveDependencyPath)
+          .refreshFromFileSystem()
+        await delay(325)
+
+        await getCachedTokens(project, {
+          value: metadata.value,
+          language: 'ts',
+          filePath: metadata.filePath,
+          theme: 'default',
+          allowErrors: true,
+          highlighter,
+          metadataCollector,
+        })
+
+        expect(metadataCalls).toBe(2)
+      })
+    },
+    30_000
+  )
 
   test('does not invalidate cached tokens when transitive require dependencies change on disk', async () => {
     await using workspace = await createTemporaryWorkspace({

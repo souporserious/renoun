@@ -765,7 +765,7 @@ function toRuntimeAnalysisBootstrappedScopeKey(
 
   const baseScopeKey =
     typeof scopePath === 'string' && scopePath.length > 0
-      ? normalizePathKey(scopePath)
+      ? normalizePathKey(resolve(scopePath))
       : '.'
 
   if (typeof analysisScopeId === 'string' && analysisScopeId.length > 0) {
@@ -830,7 +830,7 @@ export function onRuntimeAnalysisBackgroundRefresh(
 }
 
 function shouldTrackRuntimeTypeScriptDependencies(): boolean {
-  return !isProductionEnvironment()
+  return true
 }
 
 function getRuntimeAnalysisScopePath(
@@ -857,6 +857,11 @@ function getRuntimeAnalysisScopePath(
 interface RuntimeAnalysisScopeOptions {
   scopePath?: string
   analysisScopeId?: string
+}
+
+interface PrewarmRuntimeAnalysisSessionOptions {
+  project: Project
+  filePath?: string
 }
 
 function getRuntimeAnalysisScopeOptions(
@@ -938,10 +943,17 @@ async function getRuntimeAnalysisSession(
 }
 
 export async function prewarmRuntimeAnalysisSession(
-  scopePath?: string
+  options?:
+    | string
+    | RuntimeAnalysisScopeOptions
+    | PrewarmRuntimeAnalysisSessionOptions
 ): Promise<void> {
   const runtimeScope =
-    typeof scopePath === 'string' ? { scopePath } : undefined
+    typeof options === 'string'
+      ? { scopePath: options }
+      : options && 'project' in options
+        ? getRuntimeAnalysisScopeOptions(options.project, options.filePath)
+        : options
   const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   if (runtimeCacheStore) {
     markRuntimeAnalysisScopeBootstrapped(runtimeScope)

@@ -3,11 +3,13 @@ import { extname, isAbsolute, join, posix } from 'node:path'
 import type { Project, SourceFile } from '../utils/ts-morph.ts'
 import { getLanguage, type Languages } from '../utils/get-language.ts'
 import { isJsxOnly } from '../utils/is-jsx-only.ts'
+import { isTrackedVirtualSnippetStableFilePath } from './query/snippet-registry.ts'
 
 const GENERATED_DOCUMENT_SCOPE = '_renoun'
 const RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS = '__renoun_source'
 const VIRTUAL_ANALYSIS_DOCUMENT_FILE_PATH_PATTERN =
   /\.__renoun_snippet_[A-Za-z0-9_-]+(?=(\.[^./\\]+)?$)/
+const MAX_RESOLVED_VIRTUALIZED_STABLE_FILE_PATHS_PER_PROJECT = 512
 const resolvedVirtualizedStableFilePathsByProject = new WeakMap<
   Project,
   Map<string, string>
@@ -152,6 +154,37 @@ function getResolvedVirtualizedStableFilePaths(
   return resolvedPaths
 }
 
+function touchResolvedVirtualizedStableFilePath(
+  resolvedPaths: Map<string, string>,
+  filePath: string,
+  resolvedPath: string
+): void {
+  resolvedPaths.delete(filePath)
+  resolvedPaths.set(filePath, resolvedPath)
+}
+
+function setResolvedVirtualizedStableFilePath(
+  resolvedPaths: Map<string, string>,
+  filePath: string,
+  resolvedPath: string
+): string {
+  touchResolvedVirtualizedStableFilePath(resolvedPaths, filePath, resolvedPath)
+
+  while (
+    resolvedPaths.size > MAX_RESOLVED_VIRTUALIZED_STABLE_FILE_PATHS_PER_PROJECT
+  ) {
+    const leastRecentlyUsedPath = resolvedPaths.keys().next().value
+
+    if (leastRecentlyUsedPath === undefined) {
+      break
+    }
+
+    resolvedPaths.delete(leastRecentlyUsedPath)
+  }
+
+  return resolvedPath
+}
+
 function hasProgramSourceFile(project: Project, filePath: string): boolean {
   if (project.getSourceFile(filePath)) {
     return true
@@ -164,6 +197,13 @@ function hasProgramSourceFile(project: Project, filePath: string): boolean {
   return project
     .getSourceFiles()
     .some((sourceFile) => sourceFile.getFilePath().endsWith(`/${filePath}`))
+}
+
+function hasRealProgramSourceFile(project: Project, filePath: string): boolean {
+  return (
+    hasProgramSourceFile(project, filePath) &&
+    !isTrackedVirtualSnippetStableFilePath(project, filePath)
+  )
 }
 
 export function resolveVirtualizedAnalysisDocumentStableFilePath(
@@ -182,34 +222,38 @@ export function resolveVirtualizedAnalysisDocumentStableFilePath(
   const cachedResolvedPath = resolvedPaths.get(filePath)
 
   if (cachedResolvedPath !== undefined) {
-    const compilerOptions = project.getCompilerOptions() as {
-      configFilePath?: string
-    }
-
     if (
       cachedResolvedPath === filePath &&
-      isAbsolute(filePath) &&
-      typeof compilerOptions.configFilePath === 'string' &&
-      compilerOptions.configFilePath.length > 0 &&
-      project.getFileSystem().fileExistsSync(filePath)
+      (hasRealProgramSourceFile(project, filePath) ||
+        project.getFileSystem().fileExistsSync(filePath))
     ) {
       const protectedPath = toProtectedAnalysisDocumentStableFilePath(filePath)
-      resolvedPaths.set(filePath, protectedPath)
-      return protectedPath
+      return setResolvedVirtualizedStableFilePath(
+        resolvedPaths,
+        filePath,
+        protectedPath
+      )
     }
 
+    touchResolvedVirtualizedStableFilePath(
+      resolvedPaths,
+      filePath,
+      cachedResolvedPath
+    )
     return cachedResolvedPath
   }
 
   const resolvedPath =
-    project.getSourceFile(filePath) !== undefined ||
+    hasRealProgramSourceFile(project, filePath) ||
     project.getFileSystem().fileExistsSync(filePath)
       ? toProtectedAnalysisDocumentStableFilePath(filePath)
       : filePath
 
-  resolvedPaths.set(filePath, resolvedPath)
-
-  return resolvedPath
+  return setResolvedVirtualizedStableFilePath(
+    resolvedPaths,
+    filePath,
+    resolvedPath
+  )
 }
 
 export function hydrateAnalysisDocumentSourceFile(

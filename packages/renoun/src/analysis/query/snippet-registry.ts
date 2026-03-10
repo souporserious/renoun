@@ -136,13 +136,15 @@ function pruneSnippetRegistrations(
     }
 
     registrations.delete(leastRecentlyUsedRegistration.stableFilePath)
+    const shouldRemoveStableSourceFile = shouldRemoveStableSnippetSourceFile(
+      project,
+      leastRecentlyUsedRegistration
+    )
     removeProgramSourceFileIfPresent(
       project,
       leastRecentlyUsedRegistration.currentVirtualFilePath
     )
-    if (
-      shouldRemoveStableSnippetSourceFile(project, leastRecentlyUsedRegistration)
-    ) {
+    if (shouldRemoveStableSourceFile) {
       removeProgramSourceFileIfPresent(
         project,
         leastRecentlyUsedRegistration.stableFilePath
@@ -162,6 +164,30 @@ function setSnippetRegistration(
   registrations.set(registration.stableFilePath, registration)
 }
 
+export function isTrackedVirtualSnippetStableFilePath(
+  project: Project,
+  stableFilePath: string
+): boolean {
+  const registration = getSnippetRegistrations(project).get(stableFilePath)
+
+  if (!registration) {
+    return false
+  }
+
+  const stableSourceText = project
+    .getSourceFile(registration.stableFilePath)
+    ?.getFullText()
+  const currentVirtualSourceText = project
+    .getSourceFile(registration.currentVirtualFilePath)
+    ?.getFullText()
+
+  return (
+    stableSourceText !== undefined &&
+    currentVirtualSourceText !== undefined &&
+    stableSourceText === currentVirtualSourceText
+  )
+}
+
 export function removeVirtualSnippetRegistration(
   project: Project,
   stableFilePath: string
@@ -174,11 +200,15 @@ export function removeVirtualSnippetRegistration(
   }
 
   registrations.delete(stableFilePath)
+  const shouldRemoveStableSourceFile = shouldRemoveStableSnippetSourceFile(
+    project,
+    existingRegistration
+  )
   removeProgramSourceFileIfPresent(
     project,
     existingRegistration.currentVirtualFilePath
   )
-  if (shouldRemoveStableSnippetSourceFile(project, existingRegistration)) {
+  if (shouldRemoveStableSourceFile) {
     removeProgramSourceFileIfPresent(project, existingRegistration.stableFilePath)
   }
 }
