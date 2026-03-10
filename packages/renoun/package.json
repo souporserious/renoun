@@ -33,7 +33,8 @@
     "vscode"
   ],
   "files": [
-    "dist/*"
+    "dist/*",
+    "src/**/*.ts"
   ],
   "sideEffects": false,
   "bin": {
