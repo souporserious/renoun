@@ -55,6 +55,27 @@ function createStubHighlighter(lines: string[][]): Highlighter {
   } as Highlighter
 }
 
+function createRepeatedValueSymbolFixture(referenceCount: number) {
+  const project = new Project({ useInMemoryFileSystem: true })
+  const filePath = 'quick-info-budget.ts'
+  const source = [
+    'const value = 1;',
+    ...Array.from({ length: referenceCount }, () => 'value;'),
+  ].join('\n')
+
+  project.createSourceFile(filePath, `${source}\n`, { overwrite: true })
+
+  return {
+    code: `${source}\n`,
+    filePath,
+    highlighter: createStubHighlighter([
+      ['const', ' ', 'value', ' ', '=', ' ', '1', ';'],
+      ...Array.from({ length: referenceCount }, () => ['value', ';']),
+    ]),
+    project,
+  }
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
   let reject!: (reason?: unknown) => void
@@ -224,6 +245,52 @@ describe('getTokens metadata integration', () => {
 
     expect(componentToken?.isSymbol).toBe(true)
     expect(componentToken?.quickInfo?.displayText).toContain('Component')
+  })
+
+  test.concurrent('preserves quick info past the lookup budget when hover cannot be deferred', async () => {
+    const { project, filePath, code, highlighter } =
+      createRepeatedValueSymbolFixture(170)
+
+    const tokens = await getTokens({
+      project,
+      value: code,
+      language: 'ts',
+      filePath,
+      highlighter,
+      theme: 'default',
+    })
+
+    const valueTokens = tokens
+      .flat()
+      .filter((token) => token.value === 'value' && token.isSymbol)
+
+    expect(valueTokens.length).toBeGreaterThan(160)
+    expect(valueTokens.every((token) => token.quickInfo !== undefined)).toBe(true)
+  })
+
+  test.concurrent('limits precomputed quick info when hover can be deferred', async () => {
+    const { project, filePath, code, highlighter } =
+      createRepeatedValueSymbolFixture(170)
+
+    const tokens = await getTokens({
+      project,
+      value: code,
+      language: 'ts',
+      filePath,
+      highlighter,
+      theme: 'default',
+      deferQuickInfoUntilHover: true,
+    })
+
+    const valueTokens = tokens
+      .flat()
+      .filter((token) => token.value === 'value' && token.isSymbol)
+    const valueTokensWithQuickInfo = valueTokens.filter(
+      (token) => token.quickInfo !== undefined
+    )
+
+    expect(valueTokens.length).toBeGreaterThan(160)
+    expect(valueTokensWithQuickInfo).toHaveLength(160)
   })
 
   test.concurrent('starts highlighter without waiting for TypeScript metadata to resolve', async () => {

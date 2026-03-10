@@ -4,6 +4,20 @@ import { isSameOrigin } from './websocket.ts'
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1'])
 
+function normalizeHostname(hostname: string | undefined): string | undefined {
+  if (!hostname) {
+    return undefined
+  }
+
+  const normalizedHostname = hostname
+    .trim()
+    .replace(/^\[/, '')
+    .replace(/\]$/, '')
+    .toLowerCase()
+
+  return normalizedHostname.length > 0 ? normalizedHostname : undefined
+}
+
 function isLoopbackAddress(address: string | undefined): boolean {
   if (!address) {
     return false
@@ -17,11 +31,25 @@ function isLoopbackAddress(address: string | undefined): boolean {
 }
 
 function isLoopbackHostname(hostname: string | undefined): boolean {
-  if (!hostname) {
+  const normalizedHostname = normalizeHostname(hostname)
+  if (!normalizedHostname) {
     return false
   }
 
-  return LOOPBACK_HOSTNAMES.has(hostname.toLowerCase())
+  return LOOPBACK_HOSTNAMES.has(normalizedHostname)
+}
+
+function isLoopbackRequestHost(hostHeader: string | undefined): boolean {
+  if (!hostHeader) {
+    return false
+  }
+
+  try {
+    const requestUrl = new URL(`http://${hostHeader.trim()}`)
+    return isLoopbackHostname(requestUrl.hostname)
+  } catch {
+    return false
+  }
 }
 
 function readHeader(
@@ -44,8 +72,9 @@ export function isAllowedAnalysisServerOrigin(
   request: IncomingMessage
 ): boolean {
   const remoteAddress = request.socket.remoteAddress
+  const loopbackClient = isLoopbackAddress(remoteAddress)
   if (originHeader === undefined) {
-    return isLoopbackAddress(remoteAddress)
+    return loopbackClient
   }
 
   const normalizedOrigin = originHeader.trim()
@@ -54,7 +83,7 @@ export function isAllowedAnalysisServerOrigin(
     lowerCaseOrigin === 'null' ||
     lowerCaseOrigin.startsWith('file:')
   ) {
-    return isLoopbackAddress(remoteAddress)
+    return loopbackClient
   }
 
   const hostHeader = readHeader(request, 'host')
@@ -64,9 +93,14 @@ export function isAllowedAnalysisServerOrigin(
 
   try {
     const originUrl = new URL(normalizedOrigin)
+    if (loopbackClient && isLoopbackHostname(originUrl.hostname)) {
+      return true
+    }
+
     if (
-      isLoopbackHostname(originUrl.hostname) &&
-      isLoopbackAddress(remoteAddress)
+      loopbackClient &&
+      isLoopbackRequestHost(hostHeader) &&
+      (originUrl.protocol === 'http:' || originUrl.protocol === 'https:')
     ) {
       return true
     }

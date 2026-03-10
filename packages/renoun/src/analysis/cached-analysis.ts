@@ -4243,6 +4243,7 @@ export async function getCachedTokens(
     themeNames: getThemeNamesForCache(options.theme),
     allowErrors: options.allowErrors ?? null,
     showErrors: options.showErrors ?? null,
+    deferQuickInfoUntilHover: options.deferQuickInfoUntilHover ?? null,
     valueSignature: toTokenValueSignature(options.value),
   })
 
@@ -4341,6 +4342,7 @@ export async function getCachedTokens(
         sourcePath: options.sourcePath,
         theme: options.theme,
         metadataCollector: options.metadataCollector,
+        deferQuickInfoUntilHover: options.deferQuickInfoUntilHover,
         highlighter,
         project,
       })

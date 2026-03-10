@@ -417,6 +417,9 @@ async function TokensAsync({
             : undefined
           : context.allowErrors
         : allowErrorsProp
+    const quickInfoRuntime = isDevelopmentRuntime
+      ? getServerRuntimeFromProcessEnv()
+      : undefined
 
     const tokens = await getTokens({
       value: metadata.value,
@@ -426,13 +429,11 @@ async function TokensAsync({
       showErrors,
       theme: themeConfiguration,
       languages: config.languages,
+      deferQuickInfoUntilHover: quickInfoRuntime !== undefined,
       // During development we render a suspense fallback immediately and wait
       // for highlighted tokens so the final stream updates this block.
       waitForWarmResult: isDevelopmentRuntime,
     })
-    const quickInfoRuntime = isDevelopmentRuntime
-      ? getServerRuntimeFromProcessEnv()
-      : undefined
     const quickInfoValueSignature = metadata.valueSignature
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =

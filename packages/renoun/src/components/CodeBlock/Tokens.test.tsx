@@ -198,6 +198,80 @@ describe('Tokens', () => {
     }
   })
 
+  test('does not defer quick info when no development analysis runtime is available', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    const previousServerPort = process.env.RENOUN_SERVER_PORT
+    const previousServerId = process.env.RENOUN_SERVER_ID
+    process.env.NODE_ENV = 'development'
+    delete process.env.RENOUN_SERVER_PORT
+    delete process.env.RENOUN_SERVER_ID
+
+    try {
+      symbolMock.mockClear()
+      mockTokens.mockClear()
+      const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
+      getSourceTextMetadataMock.mockResolvedValueOnce({
+        value: 'History',
+        language: 'ts',
+        filePath: '/tmp/history.ts',
+        label: '/tmp/history.ts',
+      })
+      mockTokens.mockResolvedValueOnce([
+        [
+          {
+            value: 'History',
+            start: 0,
+            end: 7,
+            hasTextStyles: true,
+            isBaseColor: false,
+            isDeprecated: false,
+            isSymbol: true,
+            isWhiteSpace: false,
+            quickInfo: {
+              displayText: '(alias) const History',
+              documentationText: 'History hover info',
+            },
+            style: {},
+          },
+        ],
+      ])
+
+      const { Tokens } = await import('./Tokens.tsx')
+      const element = await Tokens({
+        children: 'History',
+        language: 'ts',
+        shouldAnalyze: true,
+      })
+      renderToStaticMarkup(<>{element}</>)
+
+      expect(mockTokens).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deferQuickInfoUntilHover: false,
+          filePath: '/tmp/history.ts',
+        })
+      )
+      expect(symbolMock).toHaveBeenCalled()
+    } finally {
+      if (previousServerPort === undefined) {
+        delete process.env.RENOUN_SERVER_PORT
+      } else {
+        process.env.RENOUN_SERVER_PORT = previousServerPort
+      }
+
+      if (previousServerId === undefined) {
+        delete process.env.RENOUN_SERVER_ID
+      } else {
+        process.env.RENOUN_SERVER_ID = previousServerId
+      }
+
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
   test('does not enable quick-info request mode outside development runtime', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     const previousServerPort = process.env.RENOUN_SERVER_PORT
@@ -208,6 +282,7 @@ describe('Tokens', () => {
 
     try {
       symbolMock.mockClear()
+      mockTokens.mockClear()
       const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
       getSourceTextMetadataMock.mockResolvedValueOnce({
         value: 'History',
@@ -239,6 +314,12 @@ describe('Tokens', () => {
       })
       renderToStaticMarkup(<>{element}</>)
 
+      expect(mockTokens).toHaveBeenCalledWith(
+        expect.objectContaining({
+          deferQuickInfoUntilHover: false,
+          filePath: '/tmp/history.ts',
+        })
+      )
       expect(symbolMock).not.toHaveBeenCalled()
     } finally {
       if (previousServerPort === undefined) {

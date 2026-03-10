@@ -24,7 +24,7 @@ function createRequest(options: {
 }
 
 describe('isAllowedAnalysisServerOrigin', () => {
-  test('rejects proxied preview origins even when they present the server id', () => {
+  test('allows custom local page origins when the websocket request still targets loopback', () => {
     const request = createRequest({
       host: '127.0.0.1:43123',
       origin: 'https://preview.example.dev',
@@ -37,7 +37,7 @@ describe('isAllowedAnalysisServerOrigin', () => {
         'https://preview.example.dev',
         request
       )
-    ).toBe(false)
+    ).toBe(true)
   })
 
   test('allows loopback origins from loopback clients without the fallback protocol path', () => {
@@ -53,5 +53,51 @@ describe('isAllowedAnalysisServerOrigin', () => {
         request
       )
     ).toBe(true)
+  })
+
+  test('allows bracketed ipv6 loopback origins from loopback clients', () => {
+    const request = createRequest({
+      host: '[::1]:43123',
+      origin: 'http://[::1]:3000',
+      remoteAddress: '::1',
+    })
+
+    expect(
+      isAllowedAnalysisServerOrigin(
+        'http://[::1]:3000',
+        request
+      )
+    ).toBe(true)
+  })
+
+  test('rejects custom page origins when the client is not loopback', () => {
+    const request = createRequest({
+      host: '127.0.0.1:43123',
+      origin: 'https://preview.example.dev',
+      protocol: 'server-id',
+      remoteAddress: '192.168.1.24',
+    })
+
+    expect(
+      isAllowedAnalysisServerOrigin(
+        'https://preview.example.dev',
+        request
+      )
+    ).toBe(false)
+  })
+
+  test('rejects non-http origins even when the websocket request targets loopback', () => {
+    const request = createRequest({
+      host: '127.0.0.1:43123',
+      origin: 'chrome-extension://renoun-devtools',
+      remoteAddress: '127.0.0.1',
+    })
+
+    expect(
+      isAllowedAnalysisServerOrigin(
+        'chrome-extension://renoun-devtools',
+        request
+      )
+    ).toBe(false)
   })
 })

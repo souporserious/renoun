@@ -22,10 +22,6 @@ import {
 } from './telemetry.ts'
 import { attachPublicError, RENOUN_PUBLIC_ERROR_CODES } from './public-error.ts'
 import {
-  isProductionEnvironment,
-  isTestEnvironment,
-} from './env.ts'
-import {
   validateLanguageFileCompatibility,
   isJavaScriptTypeScriptFile,
 } from './validate-language-file-compatibility.ts'
@@ -120,6 +116,12 @@ export interface GetTokensOptions {
   sourcePath?: string | false
   theme: ConfigurationOptions['theme']
   metadataCollector?: MetadataCollector
+
+  /**
+   * When true, only eagerly populate quick info for an initial symbol budget so
+   * the caller can resolve remaining hover data on demand.
+   */
+  deferQuickInfoUntilHover?: boolean
 }
 
 export function createPlainTextTokenizedLines(value: string): TokenizedLines {
@@ -159,6 +161,7 @@ export async function getTokens({
   highlighter = null,
   theme: themeConfig,
   metadataCollector = collectTypeScriptMetadata,
+  deferQuickInfoUntilHover = false,
 }: GetTokensOptions): Promise<TokenizedLines> {
   return getDebugLogger().trackTokenProcessing(
     language,
@@ -320,12 +323,12 @@ export async function getTokens({
         } = tsMetadata
 
         const quickInfoCache = new Map<string, QuickInfoEntry>()
-        const shouldPopulateQuickInfo =
-          isProductionEnvironment() || isTestEnvironment()
-        let remainingQuickInfoLookups = resolveQuickInfoLookupBudget({
-          valueLength: value.length,
-          symbolCount: shouldPopulateQuickInfo ? symbolMetadata.length : 0,
-        })
+        let remainingQuickInfoLookups = deferQuickInfoUntilHover
+          ? resolveQuickInfoLookupBudget({
+              valueLength: value.length,
+              symbolCount: symbolMetadata.length,
+            })
+          : Number.POSITIVE_INFINITY
         let previousTokenStart = 0
         let parsedTokens: Token[][] = tokens.map((line) => {
           if (line.length === 0) {
