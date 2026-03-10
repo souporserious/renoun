@@ -33,9 +33,15 @@
     "vscode"
   ],
   "files": [
-    "dist/*",
+    "dist/**/*",
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/*.bench.*",
+    "!src/**/*.test.*",
+    "!src/**/*.spec.*",
+    "!src/**/*.bench.*"
   ],
   "sideEffects": false,
   "bin": {
@@ -51,6 +57,10 @@
         "browser": "./src/analysis/client.server.browser.ts",
         "default": "./src/analysis/client.server.ts"
       },
+      "browser": "./src/analysis/client.server.browser.ts",
+      "default": "./src/analysis/client.server.ts"
+    },
+    "#analysis-client-server-dist": {
       "browser": "./dist/analysis/client.server.browser.js",
       "default": "./dist/analysis/client.server.js"
     }
@@ -131,7 +141,7 @@
   },
   "scripts": {
     "build": "tsc && chmod +x dist/cli/index.js",
-    "postbuild": "node ./scripts/patch-load-package.ts",
+    "postbuild": "node ./scripts/patch-load-package.ts && node ./scripts/patch-analysis-client-imports.ts",
     "dev": "node ./scripts/dev.ts",
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",

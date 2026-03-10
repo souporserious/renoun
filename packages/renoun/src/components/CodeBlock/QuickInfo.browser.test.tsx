@@ -584,8 +584,12 @@ describe('QuickInfo browser regression', () => {
     }, 1_000)
   })
 
-  it('keeps the shared runtime on the retained page runtime while hover RPCs use the popover runtime', async () => {
+  it('re-fetches an open hover when its explicit runtime refreshes under a retained page runtime', async () => {
     const releaseRuntime = retainAnalysisClientBrowserRuntime(SECOND_RUNTIME)
+    const originalQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)
+    if (!originalQuickInfo) {
+      throw new Error('Expected initial quick info fixture to exist.')
+    }
     renderQuickInfoFixture(root, 'stale-runtime')
 
     try {
@@ -615,9 +619,16 @@ describe('QuickInfo browser regression', () => {
           'quick-info-browser-test-secondary@ws://127.0.0.1:43124'
         )
       ).toBeUndefined()
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes(
+          'Streams export history from a repository source.'
+        )
+      }, 1_000)
 
-      leaveSymbol(symbol)
-      await waitFor(() => !getPopover(), 1_000)
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
+        ...originalQuickInfo,
+        documentationText: 'Updated quick info after a retained runtime refresh.',
+      })
 
       broadcastNotification(counters, {
         type: 'refresh',
@@ -627,16 +638,17 @@ describe('QuickInfo browser regression', () => {
         },
       })
 
-      hoverSymbol(symbol)
-      await waitFor(() => Boolean(getPopover()), 1_000)
-      await waitForStableValue(
-        () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
-        {
-          stableForMs: 75,
-          timeoutMs: 1_000,
-        }
+      await waitFor(
+        () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 2,
+        1_000
       )
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes(
+          'Updated quick info after a retained runtime refresh.'
+        )
+      }, 1_000)
     } finally {
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, originalQuickInfo)
       releaseRuntime()
     }
   })
@@ -837,34 +849,6 @@ async function waitFor(
   }
 
   throw new Error(`Condition did not resolve within ${timeoutMs}ms.`)
-}
-
-async function waitForStableValue(
-  predicate: () => boolean,
-  options: {
-    stableForMs: number
-    timeoutMs: number
-  }
-): Promise<void> {
-  const startedAt = performance.now()
-  let stableSince: number | undefined
-
-  while (performance.now() - startedAt < options.timeoutMs) {
-    if (predicate()) {
-      stableSince ??= performance.now()
-      if (performance.now() - stableSince >= options.stableForMs) {
-        return
-      }
-    } else {
-      stableSince = undefined
-    }
-
-    await sleep(16)
-  }
-
-  throw new Error(
-    `Condition did not stay stable for ${options.stableForMs}ms within ${options.timeoutMs}ms.`
-  )
 }
 
 function sleep(timeoutMs: number): Promise<void> {

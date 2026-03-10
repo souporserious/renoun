@@ -4,11 +4,16 @@ const mockGetQuickInfoAtPosition = vi.fn()
 const mockGetTokens = vi.fn()
 
 vi.mock('../../analysis/client.ts', () => ({
+  getAnalysisClientBrowserRuntime: () => undefined,
+  getAnalysisClientRefreshVersion: () => '0:0',
   getQuickInfoAtPosition: (
     ...args: Parameters<typeof mockGetQuickInfoAtPosition>
   ) => mockGetQuickInfoAtPosition(...args),
   getTokens: (...args: Parameters<typeof mockGetTokens>) => mockGetTokens(...args),
   hasRetainedAnalysisClientBrowserRuntime: () => false,
+  onAnalysisClientBrowserRefreshNotification: () => () => {},
+  onAnalysisClientBrowserRuntimeChange: () => () => {},
+  onAnalysisClientRefreshVersionChange: () => () => {},
 }))
 
 import { __TEST_ONLY__ } from './QuickInfoClientState.tsx'
@@ -101,7 +106,7 @@ describe('QuickInfoClientPopover runtime selection', () => {
     ).toEqual(sharedBrowserRuntime)
   })
 
-  it('does not derive a hover cache version from another runtime refresh cursor', () => {
+  it('rebuilds the hover cache version from the selected runtime refresh state', () => {
     const requestRuntime = {
       id: 'quick-info-request-runtime',
       port: '43123',
@@ -110,28 +115,6 @@ describe('QuickInfoClientPopover runtime selection', () => {
 
     expect(
       __TEST_ONLY__.resolveQuickInfoAnalysisVersion({
-        browserRuntime: {
-          id: 'quick-info-page-runtime',
-          port: '43124',
-          host: '127.0.0.1',
-        },
-        selectedRuntime: requestRuntime,
-        requestAnalysisVersion: 'quick-info-request-runtime:0:0',
-        refreshVersion: '8:3',
-      })
-    ).toBe('quick-info-request-runtime:0:0')
-  })
-
-  it('derives a hover cache version from the retained runtime when it matches the request runtime', () => {
-    const requestRuntime = {
-      id: 'quick-info-request-runtime',
-      port: '43123',
-      host: '127.0.0.1',
-    }
-
-    expect(
-      __TEST_ONLY__.resolveQuickInfoAnalysisVersion({
-        browserRuntime: requestRuntime,
         selectedRuntime: requestRuntime,
         requestAnalysisVersion: 'quick-info-request-runtime:0:0',
         refreshVersion: '8:3',
@@ -148,11 +131,24 @@ describe('QuickInfoClientPopover runtime selection', () => {
 
     expect(
       __TEST_ONLY__.resolveQuickInfoAnalysisVersion({
-        browserRuntime: undefined,
         selectedRuntime: requestRuntime,
         requestAnalysisVersion: undefined,
         refreshVersion: '0:0',
       })
     ).toBe('quick-info-request-runtime:0:0')
+  })
+
+  it('drops a stale request analysis version when the runtime changes', () => {
+    expect(
+      __TEST_ONLY__.resolveQuickInfoAnalysisVersion({
+        selectedRuntime: {
+          id: 'quick-info-updated-runtime',
+          port: '43124',
+          host: '::1',
+        },
+        requestAnalysisVersion: 'quick-info-request-runtime:0:0',
+        refreshVersion: '0:0',
+      })
+    ).toBe('quick-info-updated-runtime:0:0')
   })
 })

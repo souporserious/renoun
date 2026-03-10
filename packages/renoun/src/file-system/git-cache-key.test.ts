@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 import {
   createGitFileSystemPersistentCacheNodeKey,
   createGitVirtualPersistentCacheNodeKey,
+  sanitizeCredentialedGitRemote,
 } from './git-cache-key.ts'
 
 describe('git cache key sanitization', () => {
@@ -98,5 +99,32 @@ describe('git cache key sanitization', () => {
     })
 
     expect(virtualWithSuffix).toBe(virtualWithoutSuffix)
+  })
+
+  test('preserves literal local repository paths that contain # or ?', () => {
+    expect(sanitizeCredentialedGitRemote('/tmp/repo#1')).toBe('/tmp/repo#1')
+    expect(sanitizeCredentialedGitRemote('/tmp/repo?2')).toBe('/tmp/repo?2')
+
+    const firstKey = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: '1',
+      repository: '/tmp/repo#1',
+      repoRoot: '/tmp/cache?1',
+      namespace: 'file-meta',
+      payload: {
+        path: 'README.md',
+      },
+    })
+
+    const secondKey = createGitFileSystemPersistentCacheNodeKey({
+      domainVersion: '1',
+      repository: '/tmp/repo#2',
+      repoRoot: '/tmp/cache?2',
+      namespace: 'file-meta',
+      payload: {
+        path: 'README.md',
+      },
+    })
+
+    expect(firstKey).not.toBe(secondKey)
   })
 })

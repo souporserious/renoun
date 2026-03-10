@@ -143,8 +143,21 @@ const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
  * A monotonic version that advances as refresh notifications invalidate client
  * runtime state. UI caches can include this to avoid stale data after edits.
  */
-export function getAnalysisClientRefreshVersion(): string {
-  return `${latestRefreshCursor}:${getClientRpcInvalidationEpoch()}`
+export function getAnalysisClientRefreshVersion(
+  runtime?: AnalysisServerRuntime
+): string {
+  return `${getAnalysisClientRefreshCursor(runtime)}:${getClientRpcInvalidationEpoch()}`
+}
+
+function getAnalysisClientRefreshCursor(
+  runtime?: AnalysisServerRuntime
+): number {
+  if (!runtime) {
+    return latestRefreshCursor
+  }
+
+  const runtimeKey = getAnalysisServerRuntimeKey(runtime)
+  return runtimeKey ? getLatestRefreshCursorForRuntime(runtimeKey) : 0
 }
 
 function getAnalysisClientRefreshVersionRuntimeKey(): string | undefined {

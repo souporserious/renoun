@@ -7,6 +7,7 @@ import {
   getQuickInfoAtPosition as getAnalysisClientQuickInfoAtPosition,
   getTokens as getAnalysisClientTokens,
   hasRetainedAnalysisClientBrowserRuntime,
+  onAnalysisClientBrowserRefreshNotification,
   onAnalysisClientBrowserRuntimeChange,
   onAnalysisClientRefreshVersionChange,
 } from '../../analysis/client.ts'
@@ -60,11 +61,30 @@ function useAnalysisClientBrowserRuntimeSnapshot(
   )
 }
 
-function useAnalysisClientRefreshVersionSnapshot(): string {
+function subscribeToAnalysisClientRefreshChanges(
+  listener: () => void
+): () => void {
+  const unsubscribeRefreshVersion = onAnalysisClientRefreshVersionChange(() => {
+    listener()
+  })
+  const unsubscribeRefreshNotification =
+    onAnalysisClientBrowserRefreshNotification(() => {
+      listener()
+    })
+
+  return () => {
+    unsubscribeRefreshVersion()
+    unsubscribeRefreshNotification()
+  }
+}
+
+function useAnalysisClientRefreshVersionSnapshot(
+  runtime: AnalysisServerRuntime | undefined
+): string {
   return React.useSyncExternalStore(
-    onAnalysisClientRefreshVersionChange,
-    getAnalysisClientRefreshVersion,
-    getAnalysisClientRefreshVersion
+    subscribeToAnalysisClientRefreshChanges,
+    () => getAnalysisClientRefreshVersion(runtime),
+    () => getAnalysisClientRefreshVersion(runtime)
   )
 }
 
@@ -113,46 +133,23 @@ export function resolveQuickInfoRuntime(
 }
 
 export function resolveQuickInfoAnalysisVersion(options: {
-  browserRuntime: AnalysisServerRuntime | undefined
   selectedRuntime: AnalysisServerRuntime | undefined
   requestAnalysisVersion: string | undefined
   refreshVersion: string
 }): string | undefined {
-  const {
-    browserRuntime,
-    selectedRuntime,
-    requestAnalysisVersion,
-    refreshVersion,
-  } = options
+  const { selectedRuntime, requestAnalysisVersion, refreshVersion } = options
 
   if (!selectedRuntime) {
     return requestAnalysisVersion
   }
 
-  const defaultVersion = `${selectedRuntime.id}:0:0`
+  const matchingRequestAnalysisVersion = getQuickInfoRequestAnalysisVersion(
+    requestAnalysisVersion,
+    selectedRuntime
+  )
 
-  if (!browserRuntime) {
-    if (
-      refreshVersion === '0:0' &&
-      typeof requestAnalysisVersion === 'string' &&
-      requestAnalysisVersion.length > 0
-    ) {
-      return requestAnalysisVersion
-    }
-
-    return `${selectedRuntime.id}:${refreshVersion}`
-  }
-
-  if (!areAnalysisServerRuntimesEqual(browserRuntime, selectedRuntime)) {
-    return requestAnalysisVersion ?? defaultVersion
-  }
-
-  if (
-    refreshVersion === '0:0' &&
-    typeof requestAnalysisVersion === 'string' &&
-    requestAnalysisVersion.length > 0
-  ) {
-    return requestAnalysisVersion
+  if (refreshVersion === '0:0') {
+    return matchingRequestAnalysisVersion ?? `${selectedRuntime.id}:0:0`
   }
 
   return `${selectedRuntime.id}:${refreshVersion}`
@@ -172,17 +169,15 @@ export function useResolvedQuickInfoClientState({
   const [isLoading, setIsLoading] = React.useState<boolean>(
     quickInfo === undefined && request !== undefined
   )
-  const browserRuntime = useAnalysisClientBrowserRuntimeSnapshot(request?.runtime)
   const selectedRuntime = useQuickInfoRuntimeSelection(request?.runtime)
-  const refreshVersion = useAnalysisClientRefreshVersionSnapshot()
+  const refreshVersion = useAnalysisClientRefreshVersionSnapshot(selectedRuntime)
   const effectiveAnalysisVersion = React.useMemo(() => {
     return resolveQuickInfoAnalysisVersion({
-      browserRuntime,
       selectedRuntime,
       requestAnalysisVersion: request?.analysisVersion,
       refreshVersion,
     })
-  }, [browserRuntime, refreshVersion, request?.analysisVersion, selectedRuntime])
+  }, [refreshVersion, request?.analysisVersion, selectedRuntime])
   const effectiveRequest = React.useMemo(() => {
     if (!request || !selectedRuntime) {
       return undefined
@@ -282,21 +277,6 @@ async function getQuickInfoDisplayTokens(options: {
   return requestDisplayTokens(runtime, displayText, tokenThemeConfig)
 }
 
-function areAnalysisServerRuntimesEqual(
-  left: AnalysisServerRuntime | undefined,
-  right: AnalysisServerRuntime | undefined
-): boolean {
-  if (!left || !right) {
-    return false
-  }
-
-  return (
-    left.id === right.id &&
-    left.port === right.port &&
-    left.host === right.host
-  )
-}
-
 function toAnalysisServerRuntimeKey(
   runtime: AnalysisServerRuntime | undefined
 ): string | undefined {
@@ -311,6 +291,35 @@ function toQuickInfoCacheKey(request: ResolvedQuickInfoRequest): string {
   const analysisVersion = request.analysisVersion ?? `${request.runtime.id}:0:0`
   const valueSignature = request.valueSignature ?? ''
   return `${analysisVersion}:${valueSignature}:${request.filePath}:${request.position}`
+}
+
+function getQuickInfoRequestAnalysisVersion(
+  requestAnalysisVersion: string | undefined,
+  runtime: AnalysisServerRuntime
+): string | undefined {
+  if (
+    typeof requestAnalysisVersion !== 'string' ||
+    requestAnalysisVersion.length === 0
+  ) {
+    return undefined
+  }
+
+  const lastColonIndex = requestAnalysisVersion.lastIndexOf(':')
+  if (lastColonIndex === -1) {
+    return undefined
+  }
+
+  const previousColonIndex = requestAnalysisVersion.lastIndexOf(
+    ':',
+    lastColonIndex - 1
+  )
+  if (previousColonIndex === -1) {
+    return undefined
+  }
+
+  return requestAnalysisVersion.slice(0, previousColonIndex) === runtime.id
+    ? requestAnalysisVersion
+    : undefined
 }
 
 function normalizeQuickInfoResult(value: unknown): QuickInfoData | null {

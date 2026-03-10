@@ -24,8 +24,14 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist/*",
-    "src/**/*.ts"
+    "dist/**/*",
+    "src/**/*.ts",
+    "!dist/**/*.test.*",
+    "!dist/**/*.spec.*",
+    "!dist/**/*.bench.*",
+    "!src/**/*.test.*",
+    "!src/**/*.spec.*",
+    "!src/**/*.bench.*"
   ],
   "sideEffects": false,
   "scripts": {

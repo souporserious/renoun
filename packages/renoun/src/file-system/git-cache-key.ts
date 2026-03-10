@@ -18,6 +18,17 @@ function stripSensitiveSuffix(value: string): string {
   return cutIndex === -1 ? value : value.slice(0, cutIndex)
 }
 
+function hasUrlSchemePrefix(value: string): boolean {
+  return /^[A-Za-z][A-Za-z\d+.-]*:/.test(value)
+}
+
+function isLiteralLocalRepositoryPath(value: string): boolean {
+  return (
+    !hasUrlSchemePrefix(value) ||
+    /^[A-Za-z]:(?:[\\/]|$)/.test(value)
+  )
+}
+
 function sanitizeScpLikeRemote(value: string): string | undefined {
   const match = SCP_REMOTE_RE.exec(value)
   if (!match?.groups) {
@@ -61,7 +72,9 @@ export function sanitizeCredentialedGitRemote(value: string): string {
       return sanitizedScpRemote
     }
 
-    return stripSensitiveSuffix(input)
+    return isLiteralLocalRepositoryPath(input)
+      ? input
+      : stripSensitiveSuffix(input)
   }
 
   const sanitizedScpRemote = sanitizeScpLikeRemote(input)
@@ -69,7 +82,9 @@ export function sanitizeCredentialedGitRemote(value: string): string {
     return sanitizedScpRemote
   }
 
-  return stripSensitiveSuffix(input)
+  return isLiteralLocalRepositoryPath(input)
+    ? input
+    : stripSensitiveSuffix(input)
 }
 
 export function createGitFileSystemPersistentCacheNodeKey(options: {
