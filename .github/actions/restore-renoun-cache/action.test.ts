@@ -1,35 +1,39 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
 
-function getRestoreKeys(actionSource: string): string[] {
+function getIndentedBlock(actionSource: string, field: string): string[] {
   const lines = actionSource.split('\n')
-  const restoreKeysLineIndex = lines.findIndex(
-    (line) => line.trim() === 'restore-keys: |'
-  )
+  const fieldLineIndex = lines.findIndex((line) => line.trim() === `${field}: |`)
 
-  expect(restoreKeysLineIndex).toBeGreaterThan(-1)
+  expect(fieldLineIndex).toBeGreaterThan(-1)
 
-  const restoreKeyLines = lines.slice(restoreKeysLineIndex + 1)
-  const firstRestoreKeyLine = restoreKeyLines.find(
-    (line) => line.trim().length > 0
-  )
+  const fieldLines = lines.slice(fieldLineIndex + 1)
+  const firstFieldLine = fieldLines.find((line) => line.trim().length > 0)
 
-  if (!firstRestoreKeyLine) return []
+  if (!firstFieldLine) return []
 
-  const restoreKeyIndentation =
-    firstRestoreKeyLine.length - firstRestoreKeyLine.trimStart().length
-  const restoreKeys: string[] = []
+  const fieldIndentation =
+    firstFieldLine.length - firstFieldLine.trimStart().length
+  const values: string[] = []
 
-  for (const line of restoreKeyLines) {
+  for (const line of fieldLines) {
     if (line.trim().length === 0) continue
 
     const indentation = line.length - line.trimStart().length
-    if (indentation < restoreKeyIndentation) break
+    if (indentation < fieldIndentation) break
 
-    restoreKeys.push(line.trim())
+    values.push(line.trim())
   }
 
-  return restoreKeys
+  return values
+}
+
+function getRestoreKeys(actionSource: string): string[] {
+  return getIndentedBlock(actionSource, 'restore-keys')
+}
+
+function getCachePaths(actionSource: string): string[] {
+  return getIndentedBlock(actionSource, 'path')
 }
 
 function getPrimaryKey(actionSource: string): string {
@@ -70,6 +74,18 @@ describe('restore-renoun-cache action', () => {
     expect(actionSource).not.toContain(
       'uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
     )
+  })
+
+  test('caches repo and workspace SQLite databases used by app and example builds', () => {
+    const actionSource = readFileSync(
+      '.github/actions/restore-renoun-cache/action.yml',
+      'utf8'
+    )
+    const cachePaths = getCachePaths(actionSource)
+
+    expect(cachePaths).toContain('.renoun/cache/fs-cache.sqlite*')
+    expect(cachePaths).toContain('apps/*/.renoun/cache/fs-cache.sqlite*')
+    expect(cachePaths).toContain('examples/*/.renoun/cache/fs-cache.sqlite*')
   })
 
   test('uses a job-scoped save key built from a commit-scoped prefix', () => {

@@ -22,6 +22,11 @@ interface PackDryRunResult {
   files: PackedFile[]
 }
 
+interface RenounPackageJson {
+  exports?: Record<string, unknown>
+  imports?: Record<string, unknown>
+}
+
 async function emitPackageClientDeclarations() {
   const configFile = ts.readConfigFile(packageTsConfigPath, ts.sys.readFile)
   const parsedConfig = ts.parseJsonConfigFileContent(
@@ -84,6 +89,12 @@ async function getPackedFiles(): Promise<string[]> {
   }
 }
 
+async function readPackageJson(): Promise<RenounPackageJson> {
+  return JSON.parse(
+    await readFile(new URL('../package.json', import.meta.url), 'utf8')
+  ) as RenounPackageJson
+}
+
 describe('package exports', () => {
   test('resolves source analysis client server modules by default and keeps a dist alias for built output', () => {
     expect(import.meta.resolve('#analysis-client-server')).toBe(
@@ -95,11 +106,7 @@ describe('package exports', () => {
   })
 
   test('keeps renoun/project as a dedicated compatibility entry point', async () => {
-    const packageJson = JSON.parse(
-      await readFile(new URL('../package.json', import.meta.url), 'utf8')
-    ) as {
-      exports?: Record<string, unknown>
-    }
+    const packageJson = await readPackageJson()
 
     expect(packageJson.exports?.['./project']).toEqual({
       types: './dist/project/client.d.ts',
@@ -136,14 +143,21 @@ describe('package exports', () => {
     )
   })
 
-  test('keeps the built analysis client pointed at the dist-only internal alias', async () => {
-    const builtClient = await readFile(
-      new URL('../dist/analysis/client.js', import.meta.url),
-      'utf8'
-    )
+  test('keeps source and dist analysis server aliases split in package imports', async () => {
+    const packageJson = await readPackageJson()
 
-    expect(builtClient).toContain("import('#analysis-client-server-dist')")
-    expect(builtClient).not.toContain("import('#analysis-client-server')")
+    expect(packageJson.imports?.['#analysis-client-server']).toEqual({
+      source: {
+        browser: './src/analysis/client.server.browser.ts',
+        default: './src/analysis/client.server.ts',
+      },
+      browser: './src/analysis/client.server.browser.ts',
+      default: './src/analysis/client.server.ts',
+    })
+    expect(packageJson.imports?.['#analysis-client-server-dist']).toEqual({
+      browser: './dist/analysis/client.server.browser.js',
+      default: './dist/analysis/client.server.js',
+    })
   })
 
   test('excludes test and bench artifacts from the published tarball', async () => {

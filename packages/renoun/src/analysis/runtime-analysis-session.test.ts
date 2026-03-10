@@ -39,6 +39,24 @@ describe('runtime analysis session', () => {
     expect(first?.session).not.toBe(second?.session)
   })
 
+  test('isolates sessions between different analysis scopes for the same path', async () => {
+    const { getRuntimeAnalysisSession } = await loadRuntimeAnalysisSessionModule()
+    const scopePath = `${process.cwd()}/.cache/runtime-analysis/session-analysis-scope-${Date.now()}`
+
+    const first = await getRuntimeAnalysisSession(
+      undefined,
+      scopePath,
+      'scope-a'
+    )
+    const second = await getRuntimeAnalysisSession(
+      undefined,
+      scopePath,
+      'scope-b'
+    )
+
+    expect(first?.session).not.toBe(second?.session)
+  })
+
   test('returns only intersecting sessions when filtering by paths', async () => {
     const { getRuntimeAnalysisSession, getRuntimeAnalysisSessions } =
       await loadRuntimeAnalysisSessionModule()

@@ -10,6 +10,8 @@ export type RuntimeAnalysisFileSystem = FileSystem
 export interface RuntimeAnalysisSession {
   session: Session
   fileSystem: RuntimeAnalysisFileSystem
+  scopePathKey: string
+  analysisScopeId: string | null
 }
 
 let runtimeAnalysisFileSystem: RuntimeAnalysisFileSystem | null | undefined
@@ -18,7 +20,7 @@ let runtimeAnalysisFileSystemPromise:
   | undefined
 const runtimeAnalysisSessionByScopeKey = new Map<string, RuntimeAnalysisSession>()
 
-function toRuntimeAnalysisScopeKey(
+function toRuntimeAnalysisScopePathKey(
   fileSystem: RuntimeAnalysisFileSystem,
   scopePath?: string
 ): string {
@@ -29,10 +31,25 @@ function toRuntimeAnalysisScopeKey(
   return normalizePathKey(fileSystem.getAbsolutePath(scopePath))
 }
 
-function toRuntimeAnalysisSnapshotId(scopeKey: string): string {
+function toRuntimeAnalysisScopeKey(
+  scopePathKey: string,
+  analysisScopeId?: string
+): string {
+  if (typeof analysisScopeId === 'string' && analysisScopeId.length > 0) {
+    return `${scopePathKey}#${analysisScopeId}`
+  }
+
+  return scopePathKey
+}
+
+function toRuntimeAnalysisSnapshotId(options: {
+  scopePathKey: string
+  analysisScopeId?: string
+}): string {
   const descriptor = {
-    version: 1,
-    scopeKey,
+    version: 2,
+    scopePathKey: options.scopePathKey,
+    analysisScopeId: options.analysisScopeId ?? null,
   }
   return `runtime:${hashString(stableStringify(descriptor)).slice(0, 16)}`
 }
@@ -70,14 +87,16 @@ async function getRuntimeAnalysisFileSystem(): Promise<
 
 export async function getRuntimeAnalysisSession(
   cache?: Cache,
-  scopePath?: string
+  scopePath?: string,
+  analysisScopeId?: string
 ): Promise<RuntimeAnalysisSession | undefined> {
   const fileSystem = await getRuntimeAnalysisFileSystem()
   if (!fileSystem) {
     return undefined
   }
 
-  const scopeKey = toRuntimeAnalysisScopeKey(fileSystem, scopePath)
+  const scopePathKey = toRuntimeAnalysisScopePathKey(fileSystem, scopePath)
+  const scopeKey = toRuntimeAnalysisScopeKey(scopePathKey, analysisScopeId)
   const existing = runtimeAnalysisSessionByScopeKey.get(scopeKey)
   if (existing) {
     return existing
@@ -85,12 +104,17 @@ export async function getRuntimeAnalysisSession(
 
   const snapshot = new FileSystemSnapshot(
     fileSystem,
-    toRuntimeAnalysisSnapshotId(scopeKey)
+    toRuntimeAnalysisSnapshotId({
+      scopePathKey,
+      analysisScopeId,
+    })
   )
   const session = Session.for(fileSystem, snapshot, cache)
   const created = {
     session,
     fileSystem,
+    scopePathKey,
+    analysisScopeId: analysisScopeId ?? null,
   } satisfies RuntimeAnalysisSession
   runtimeAnalysisSessionByScopeKey.set(scopeKey, created)
 
@@ -114,7 +138,7 @@ export async function getRuntimeAnalysisSessions(
     if (typeof path !== 'string' || path.length === 0) {
       continue
     }
-    normalizedPaths.add(toRuntimeAnalysisScopeKey(fileSystem, path))
+    normalizedPaths.add(toRuntimeAnalysisScopePathKey(fileSystem, path))
   }
 
   if (normalizedPaths.size === 0) {
@@ -122,9 +146,9 @@ export async function getRuntimeAnalysisSessions(
   }
 
   const sessions: RuntimeAnalysisSession[] = []
-  for (const [scopeKey, runtimeSession] of runtimeAnalysisSessionByScopeKey) {
+  for (const runtimeSession of runtimeAnalysisSessionByScopeKey.values()) {
     for (const normalizedPath of normalizedPaths) {
-      if (pathsIntersect(scopeKey, normalizedPath)) {
+      if (pathsIntersect(runtimeSession.scopePathKey, normalizedPath)) {
         sessions.push(runtimeSession)
         break
       }

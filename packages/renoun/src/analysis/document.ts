@@ -182,6 +182,22 @@ export function resolveVirtualizedAnalysisDocumentStableFilePath(
   const cachedResolvedPath = resolvedPaths.get(filePath)
 
   if (cachedResolvedPath !== undefined) {
+    const compilerOptions = project.getCompilerOptions() as {
+      configFilePath?: string
+    }
+
+    if (
+      cachedResolvedPath === filePath &&
+      isAbsolute(filePath) &&
+      typeof compilerOptions.configFilePath === 'string' &&
+      compilerOptions.configFilePath.length > 0 &&
+      project.getFileSystem().fileExistsSync(filePath)
+    ) {
+      const protectedPath = toProtectedAnalysisDocumentStableFilePath(filePath)
+      resolvedPaths.set(filePath, protectedPath)
+      return protectedPath
+    }
+
     return cachedResolvedPath
   }
 
@@ -255,6 +271,24 @@ export function getAnalysisDocumentStableFilePathFromVirtualFilePath(
   )
 
   return stableFilePath === filePath ? undefined : stableFilePath
+}
+
+export function getOriginalAnalysisDocumentFilePathFromStableFilePath(
+  filePath: string
+): string {
+  if (!filePath.includes(`.${RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS}`)) {
+    return filePath
+  }
+
+  const extension = extname(filePath)
+  const protectedSuffix = `.${RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS}`
+
+  if (!extension) {
+    return filePath.slice(0, -protectedSuffix.length)
+  }
+
+  const basePath = filePath.slice(0, -extension.length)
+  return `${basePath.slice(0, -protectedSuffix.length)}${extension}`
 }
 
 export function resolveAnalysisDocument({

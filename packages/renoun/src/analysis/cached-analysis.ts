@@ -87,6 +87,8 @@ import {
   getRuntimeAnalysisSession as getSharedRuntimeAnalysisSession,
   getRuntimeAnalysisSessions as getSharedRuntimeAnalysisSessions,
 } from './runtime-analysis-session.ts'
+import { getProjectAnalysisScopeId } from './project-scope.ts'
+import { getTypeScriptConfigDependencyPaths } from './tsconfig-dependencies.ts'
 
 const RUNTIME_ANALYSIS_CACHE_NAMES = {
   fileExports: 'fileExports',
@@ -107,7 +109,7 @@ const RUNTIME_ANALYSIS_CACHE_NAMES = {
 
 const RUNTIME_ANALYSIS_CACHE_CONFIG = {
   scope: 'program-analysis-runtime',
-  version: '3',
+  version: '4',
   versionDependency: 'runtime-analysis-cache-version',
   programCompilerOptionsDependency: 'program:compiler-options',
   defaultSwrMaxStaleAgeMs: 120_000,
@@ -154,7 +156,16 @@ const compilerOptionsVersionByProject = new WeakMap<
   Project,
   {
     version: string
-    configPathKey: string | null
+    configPathKeySignature: string
+    epoch: number
+  }
+>()
+const compilerOptionsConfigPathsByProject = new WeakMap<
+  Project,
+  {
+    paths: string[]
+    pathKeys: string[]
+    pathKeySignature: string
     epoch: number
   }
 >()
@@ -215,6 +226,11 @@ const programConfigDependencyVersionByKey = new Map<
     version: string
   }
 >()
+const metadataCollectorCacheKeyByCollector = new WeakMap<
+  NonNullable<GetTokensOptions['metadataCollector']>,
+  string
+>()
+let nextMetadataCollectorCacheKey = 0
 const RUNTIME_ANALYSIS_SWR_PREWARM_MAX_ENTRIES = 512
 const RUNTIME_ANALYSIS_SWR_PREWARM_MAX_AGE_MS = 5 * 60_000
 const RUNTIME_ANALYSIS_SWR_PREWARM_CONCURRENCY = 1
@@ -734,23 +750,44 @@ async function resolveWithinRuntimeAnalysisColdResponseBudget<Value>(options: {
   return resolved.value
 }
 
-function toRuntimeAnalysisBootstrappedScopeKey(scopePath?: string): string {
-  if (typeof scopePath === 'string' && scopePath.length > 0) {
-    return normalizePathKey(scopePath)
+function toRuntimeAnalysisBootstrappedScopeKey(
+  options?: string | RuntimeAnalysisScopeOptions
+): string {
+  let scopePath: string | undefined
+  let analysisScopeId: string | undefined
+
+  if (typeof options === 'string') {
+    scopePath = options
+  } else if (options) {
+    scopePath = options.scopePath
+    analysisScopeId = options.analysisScopeId
   }
 
-  return '.'
+  const baseScopeKey =
+    typeof scopePath === 'string' && scopePath.length > 0
+      ? normalizePathKey(scopePath)
+      : '.'
+
+  if (typeof analysisScopeId === 'string' && analysisScopeId.length > 0) {
+    return `${baseScopeKey}#${analysisScopeId}`
+  }
+
+  return baseScopeKey
 }
 
-function isRuntimeAnalysisScopeBootstrapped(scopePath?: string): boolean {
+function isRuntimeAnalysisScopeBootstrapped(
+  options?: string | RuntimeAnalysisScopeOptions
+): boolean {
   return runtimeAnalysisBootstrappedScopeKeys.has(
-    toRuntimeAnalysisBootstrappedScopeKey(scopePath)
+    toRuntimeAnalysisBootstrappedScopeKey(options)
   )
 }
 
-function markRuntimeAnalysisScopeBootstrapped(scopePath?: string): void {
+function markRuntimeAnalysisScopeBootstrapped(
+  options?: string | RuntimeAnalysisScopeOptions
+): void {
   runtimeAnalysisBootstrappedScopeKeys.add(
-    toRuntimeAnalysisBootstrappedScopeKey(scopePath)
+    toRuntimeAnalysisBootstrappedScopeKey(options)
   )
 }
 
@@ -817,14 +854,30 @@ function getRuntimeAnalysisScopePath(
   return undefined
 }
 
-async function getRuntimeAnalysisSessionUnchecked(
+interface RuntimeAnalysisScopeOptions {
   scopePath?: string
+  analysisScopeId?: string
+}
+
+function getRuntimeAnalysisScopeOptions(
+  project: Project,
+  filePath?: string
+): RuntimeAnalysisScopeOptions {
+  return {
+    scopePath: getRuntimeAnalysisScopePath(project, filePath),
+    analysisScopeId: getProjectAnalysisScopeId(project),
+  }
+}
+
+async function getRuntimeAnalysisSessionUnchecked(
+  options?: RuntimeAnalysisScopeOptions
 ): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
   const runtimeSession = await getSharedRuntimeAnalysisSession(
     undefined,
-    scopePath
+    options?.scopePath,
+    options?.analysisScopeId
   )
   if (!runtimeSession) {
     return undefined
@@ -876,20 +929,22 @@ async function waitForRuntimeAnalysisInvalidations(): Promise<void> {
 }
 
 async function getRuntimeAnalysisSession(
-  scopePath?: string
+  options?: RuntimeAnalysisScopeOptions
 ): Promise<
   RuntimeAnalysisCacheStore | undefined
 > {
   await waitForRuntimeAnalysisInvalidations()
-  return getRuntimeAnalysisSessionUnchecked(scopePath)
+  return getRuntimeAnalysisSessionUnchecked(options)
 }
 
 export async function prewarmRuntimeAnalysisSession(
   scopePath?: string
 ): Promise<void> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession(scopePath)
+  const runtimeScope =
+    typeof scopePath === 'string' ? { scopePath } : undefined
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   if (runtimeCacheStore) {
-    markRuntimeAnalysisScopeBootstrapped(scopePath)
+    markRuntimeAnalysisScopeBootstrapped(runtimeScope)
   }
 }
 
@@ -2450,9 +2505,8 @@ export async function getCachedTypeScriptDependencyPaths(
   filePath: string
 ): Promise<string[]> {
   const dependencyPaths = new Set<string>([filePath])
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, filePath)
-  )
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
 
   if (
     runtimeCacheStore &&
@@ -2628,56 +2682,123 @@ async function recordProgramCompilerOptionsDependency(
   runtimeCacheStore: RuntimeAnalysisCacheStore,
   project: Project
 ): Promise<void> {
-  const compilerOptions = project.getCompilerOptions() as {
+  const { paths: configPaths } = getProgramCompilerOptionsConfigPaths(project)
+
+  for (const configPath of configPaths) {
+    const programConfigDependency = await resolveProgramConfigDependencyVersion({
+      runtimeCacheStore,
+      configFilePath: configPath,
+    })
+    if (!programConfigDependency) {
+      continue
+    }
+
+    context.recordConstDep(
+      programConfigDependency.name,
+      programConfigDependency.version
+    )
+  }
+}
+
+function getCompilerOptionsEpochForConfigPathKeys(
+  configPathKeys: readonly string[]
+): number {
+  let epoch = compilerOptionsVersionGlobalEpoch
+
+  for (const configPathKey of configPathKeys) {
+    epoch += compilerOptionsVersionEpochByConfigPath.get(configPathKey) ?? 0
+  }
+
+  return epoch
+}
+
+function getProgramCompilerOptionsConfigPaths(project: Project): {
+  paths: string[]
+  pathKeys: string[]
+  pathKeySignature: string
+} {
+  const cachedConfigPaths = compilerOptionsConfigPathsByProject.get(project)
+  if (cachedConfigPaths) {
+    const epoch = getCompilerOptionsEpochForConfigPathKeys(
+      cachedConfigPaths.pathKeys
+    )
+    if (cachedConfigPaths.epoch === epoch) {
+      return {
+        paths: cachedConfigPaths.paths,
+        pathKeys: cachedConfigPaths.pathKeys,
+        pathKeySignature: cachedConfigPaths.pathKeySignature,
+      }
+    }
+  }
+
+  const configFilePath = (project.getCompilerOptions() as {
     configFilePath?: string
-  }
+  }).configFilePath
+  const paths = getTypeScriptConfigDependencyPaths(configFilePath)
+  const pathKeys = paths.map((path) => normalizePathKey(path))
+  const pathKeySignature = stableStringify(pathKeys)
+  const epoch = getCompilerOptionsEpochForConfigPathKeys(pathKeys)
 
-  if (!compilerOptions.configFilePath) {
-    return
-  }
-
-  const programConfigDependency = await resolveProgramConfigDependencyVersion({
-    runtimeCacheStore,
-    configFilePath: compilerOptions.configFilePath,
+  compilerOptionsConfigPathsByProject.set(project, {
+    paths,
+    pathKeys,
+    pathKeySignature,
+    epoch,
   })
-  if (!programConfigDependency) {
-    return
-  }
 
-  context.recordConstDep(
-    programConfigDependency.name,
-    programConfigDependency.version
-  )
+  return {
+    paths,
+    pathKeys,
+    pathKeySignature,
+  }
 }
 
 function getCompilerOptionsVersion(project: Project): string {
   const compilerOptions = project.getCompilerOptions() as {
     configFilePath?: string
   }
-  const configPathKey =
-    typeof compilerOptions.configFilePath === 'string'
-      ? normalizePathKey(compilerOptions.configFilePath)
-      : null
-  const configPathEpoch = configPathKey
-    ? (compilerOptionsVersionEpochByConfigPath.get(configPathKey) ?? 0)
-    : 0
-  const epoch = compilerOptionsVersionGlobalEpoch + configPathEpoch
+  const { pathKeys, pathKeySignature } = getProgramCompilerOptionsConfigPaths(
+    project
+  )
+  const epoch = getCompilerOptionsEpochForConfigPathKeys(pathKeys)
   const cachedVersion = compilerOptionsVersionByProject.get(project)
   if (
     cachedVersion &&
     cachedVersion.epoch === epoch &&
-    cachedVersion.configPathKey === configPathKey
+    cachedVersion.configPathKeySignature === pathKeySignature
   ) {
     return cachedVersion.version
   }
 
-  const version = hashString(stableStringify(compilerOptions))
+  const version = hashString(
+    stableStringify({
+      analysisScopeId: getProjectAnalysisScopeId(project) ?? null,
+      compilerOptions,
+    })
+  )
   compilerOptionsVersionByProject.set(project, {
     version,
-    configPathKey,
+    configPathKeySignature: pathKeySignature,
     epoch,
   })
   return version
+}
+
+function getMetadataCollectorCacheKey(
+  metadataCollector: GetTokensOptions['metadataCollector']
+): string | null {
+  if (!metadataCollector) {
+    return null
+  }
+
+  let cacheKey = metadataCollectorCacheKeyByCollector.get(metadataCollector)
+  if (!cacheKey) {
+    nextMetadataCollectorCacheKey += 1
+    cacheKey = `collector:${nextMetadataCollectorCacheKey}`
+    metadataCollectorCacheKeyByCollector.set(metadataCollector, cacheKey)
+  }
+
+  return cacheKey
 }
 
 function canUseRuntimePathCache(
@@ -3348,9 +3469,8 @@ export async function getCachedFileExports(
 ): Promise<ModuleExport[]> {
   ensureProjectSourceFileLoaded(project, filePath)
 
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, filePath)
-  )
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -3427,9 +3547,8 @@ export async function getCachedOutlineRanges(
   project: Project,
   filePath: string
 ): Promise<OutlineRange[]> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, filePath)
-  )
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -3490,9 +3609,8 @@ export async function getCachedFileExportMetadata(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportMetadata>>> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, options.filePath)
-  )
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -3576,9 +3694,8 @@ export async function getCachedFileExportStaticValue(
     kind: SyntaxKind
   }
 ): Promise<Awaited<ReturnType<typeof baseGetFileExportStaticValue>>> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, options.filePath)
-  )
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -3673,9 +3790,8 @@ export async function getCachedFileExportText(
     includeDependencies?: boolean
   }
 ): Promise<string> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, options.filePath)
-  )
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -3787,9 +3903,8 @@ export async function resolveCachedTypeAtLocationWithDependencies(
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (!options.isInMemoryFileSystem) {
-    const runtimeCacheStore = await getRuntimeAnalysisSession(
-      getRuntimeAnalysisScopePath(project, options.filePath)
-    )
+    const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+    const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
     if (
       runtimeCacheStore &&
       canUseRuntimePathCache(runtimeCacheStore, options.filePath)
@@ -3904,9 +4019,8 @@ export async function transpileCachedSourceFile(
   project: Project,
   filePath: string
 ): Promise<string> {
-  const runtimeCacheStore = await getRuntimeAnalysisSession(
-    getRuntimeAnalysisScopePath(project, filePath)
-  )
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
 
   if (
@@ -3976,7 +4090,8 @@ export async function getCachedSourceTextMetadata(
     filePath: options.filePath,
     fallback: `inline:${options.language ?? 'txt'}`,
   })
-  const scopePath = getRuntimeAnalysisScopePath(project, options.filePath)
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const scopePath = runtimeScope.scopePath
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const nodeKey = createRuntimeAnalysisCacheNodeKey(
     RUNTIME_ANALYSIS_CACHE_NAMES.sourceTextMetadata,
@@ -4002,9 +4117,7 @@ export async function getCachedSourceTextMetadata(
         return metadata
       }
 
-      const runtimeCacheStore = await getRuntimeAnalysisSession(
-        scopePath
-      )
+      const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
       if (!runtimeCacheStore) {
         if (shouldProfileRpcCacheReuse) {
           await profileRuntimeCacheReuse({
@@ -4021,7 +4134,7 @@ export async function getCachedSourceTextMetadata(
           })
         )
       }
-      markRuntimeAnalysisScopeBootstrapped(scopePath)
+      markRuntimeAnalysisScopeBootstrapped(runtimeScope)
 
       if (shouldProfileRpcCacheReuse) {
         await profileRuntimeCacheReuse({
@@ -4184,7 +4297,7 @@ export async function getCachedSourceTextMetadata(
 
   if (
     shouldServeSourceTextColdFallback &&
-    !isRuntimeAnalysisScopeBootstrapped(scopePath)
+    !isRuntimeAnalysisScopeBootstrapped(runtimeScope)
   ) {
     queueRuntimeAnalysisColdStartTask({
       taskKey: `source-text:${nodeKey}`,
@@ -4228,7 +4341,8 @@ export async function getCachedTokens(
         ? normalizePathKey(options.sourcePath)
         : `inline:${options.language ?? 'plaintext'}`,
   })
-  const scopePath = getRuntimeAnalysisScopePath(project, options.filePath)
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const scopePath = runtimeScope.scopePath
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const normalizedFilePath = normalizeCacheFilePath(options.filePath)
   const nodeKey = createRuntimeAnalysisCacheNodeKey(RUNTIME_ANALYSIS_CACHE_NAMES.tokens, {
@@ -4243,6 +4357,7 @@ export async function getCachedTokens(
     themeNames: getThemeNamesForCache(options.theme),
     allowErrors: options.allowErrors ?? null,
     showErrors: options.showErrors ?? null,
+    metadataCollectorKey: getMetadataCollectorCacheKey(options.metadataCollector),
     deferQuickInfoUntilHover: options.deferQuickInfoUntilHover ?? null,
     valueSignature: toTokenValueSignature(options.value),
   })
@@ -4250,9 +4365,7 @@ export async function getCachedTokens(
   const resolveTokensFromRuntimeCache = async (overrides?: {
     waitForWarmResult?: boolean
   }): Promise<TokenizedLines> => {
-    const runtimeCacheStore = await getRuntimeAnalysisSession(
-      scopePath
-    )
+    const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
     if (!runtimeCacheStore) {
       if (shouldProfileRpcCacheReuse) {
         await profileRuntimeCacheReuse({
@@ -4267,7 +4380,7 @@ export async function getCachedTokens(
         project,
       })
     }
-    markRuntimeAnalysisScopeBootstrapped(scopePath)
+    markRuntimeAnalysisScopeBootstrapped(runtimeScope)
 
     if (shouldProfileRpcCacheReuse) {
       await profileRuntimeCacheReuse({
@@ -4451,7 +4564,7 @@ export async function getCachedTokens(
 
   if (
     shouldServeTokensColdFallback &&
-    !isRuntimeAnalysisScopeBootstrapped(scopePath)
+    !isRuntimeAnalysisScopeBootstrapped(runtimeScope)
   ) {
     queueRuntimeAnalysisColdStartTask({
       taskKey: `tokens:${nodeKey}`,

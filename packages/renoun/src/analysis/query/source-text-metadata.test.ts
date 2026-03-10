@@ -1,4 +1,7 @@
-import { describe, expect, test } from 'vitest'
+import { rmSync } from 'node:fs'
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { describe, expect, test, vi } from 'vitest'
 
 import { getTsMorph } from '../../utils/ts-morph.ts'
 import {
@@ -9,6 +12,32 @@ import {
 import { MAX_VIRTUAL_SNIPPET_REGISTRATIONS_PER_PROJECT } from './snippet-registry.ts'
 
 const { Project } = getTsMorph()
+
+async function createTemporaryWorkspace(
+  files: Record<string, string>
+): Promise<{
+  workspacePath: string
+  [Symbol.asyncDispose](): Promise<void>
+}> {
+  const cacheDirectory = join(process.cwd(), '.cache')
+  await mkdir(cacheDirectory, { recursive: true })
+  const workspacePath = await mkdtemp(
+    join(cacheDirectory, 'source-text-metadata-')
+  )
+
+  for (const [relativePath, contents] of Object.entries(files)) {
+    const absolutePath = join(workspacePath, relativePath)
+    await mkdir(dirname(absolutePath), { recursive: true })
+    await writeFile(absolutePath, contents, 'utf8')
+  }
+
+  return {
+    workspacePath,
+    async [Symbol.asyncDispose]() {
+      rmSync(workspacePath, { recursive: true, force: true })
+    },
+  }
+}
 
 describe('getSourceTextMetadataFallback', () => {
   test('returns deterministic generated metadata for inline TypeScript', () => {
@@ -241,6 +270,56 @@ describe('getSourceTextMetadata', () => {
     ).toHaveLength(0)
   })
 
+  test('switches anchored snippets to the protected stable alias once a real file appears on disk', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/dep.ts': 'export const dep = 1\n',
+    })
+
+    const project = new Project({
+      tsConfigFilePath: join(workspace.workspacePath, 'tsconfig.json'),
+    })
+    const filePath = join(workspace.workspacePath, 'src/foo.ts')
+
+    const first = await getSourceTextMetadata({
+      project,
+      value: "import { dep } from './dep.ts'\ndep\n",
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(first.filePath).toContain('/src/foo.__renoun_snippet_')
+
+    await writeFile(filePath, 'export const real = 1\n', 'utf8')
+
+    const second = await getSourceTextMetadata({
+      project,
+      value: "import { dep } from './dep.ts'\ndep\n",
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(second.filePath).toContain(
+      '/src/foo.__renoun_source.__renoun_snippet_'
+    )
+    expect(project.getSourceFile(filePath)).toBeUndefined()
+    expect(
+      project.getSourceFile(join(workspace.workspacePath, 'src/foo.__renoun_source.ts'))
+    ).toBeDefined()
+  })
+
   test('rewrites the stable alias with the final normalized snippet content', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -358,5 +437,56 @@ describe('getSourceTextMetadata', () => {
           sourceFile.getFilePath().includes('.__renoun_snippet_')
         )
     ).toHaveLength(MAX_VIRTUAL_SNIPPET_REGISTRATIONS_PER_PROJECT)
+  })
+
+  test('refreshes snippet LRU order on warm hydration hits even when timestamps tie', () => {
+    vi.useFakeTimers()
+
+    try {
+      const project = new Project({
+        useInMemoryFileSystem: true,
+      })
+      const firstFilePath = '_renoun/a.__renoun_snippet_sig_a.ts'
+      const secondFilePath = '_renoun/b.__renoun_snippet_sig_b.ts'
+
+      hydrateSourceTextMetadataSourceFile(project, {
+        value: 'export const a = 1\n',
+        language: 'ts',
+        filePath: firstFilePath,
+        valueSignature: 'sig_a',
+      })
+      hydrateSourceTextMetadataSourceFile(project, {
+        value: 'export const b = 2\n',
+        language: 'ts',
+        filePath: secondFilePath,
+        valueSignature: 'sig_b',
+      })
+      hydrateSourceTextMetadataSourceFile(project, {
+        value: 'export const a = 1\n',
+        language: 'ts',
+        filePath: firstFilePath,
+        valueSignature: 'sig_a',
+      })
+
+      for (
+        let index = 2;
+        index <= MAX_VIRTUAL_SNIPPET_REGISTRATIONS_PER_PROJECT;
+        index += 1
+      ) {
+        hydrateSourceTextMetadataSourceFile(project, {
+          value: `export const snippet${index} = ${index}\n`,
+          language: 'ts',
+          filePath: `_renoun/snippet-${index}.__renoun_snippet_sig_${index}.ts`,
+          valueSignature: `sig_${index}`,
+        })
+      }
+
+      expect(project.getSourceFile(firstFilePath)).toBeDefined()
+      expect(project.getSourceFile('_renoun/a.ts')).toBeDefined()
+      expect(project.getSourceFile(secondFilePath)).toBeUndefined()
+      expect(project.getSourceFile('_renoun/b.ts')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

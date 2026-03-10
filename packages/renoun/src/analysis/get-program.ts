@@ -27,6 +27,10 @@ import {
 } from './cached-analysis.ts'
 import { invalidateSharedFileTextPrefixCachePaths } from './file-text-prefix-cache.ts'
 import {
+  clearProjectAnalysisScopeId,
+  setProjectAnalysisScopeId,
+} from './project-scope.ts'
+import {
   activeRefreshingPrograms,
   completeRefreshingPrograms,
   startRefreshingPrograms,
@@ -35,6 +39,7 @@ import {
   getServerPortFromProcessEnv,
   resolveAnalysisWatchersEnvOverride,
 } from './runtime-env.ts'
+import { getTypeScriptConfigDependencyPaths } from './tsconfig-dependencies.ts'
 import type { AnalysisOptions } from './types.ts'
 
 const { Project, ts } = getTsMorph()
@@ -42,6 +47,10 @@ const { Project, ts } = getTsMorph()
 const projects = new Map<string, TsMorphProject>()
 const directoryWatchers = new Map<string, FSWatcher>()
 const directoryToProjects = new Map<string, Set<TsMorphProject>>()
+const typeScriptConfigDependencyPathsByProject = new WeakMap<
+  TsMorphProject,
+  string[]
+>()
 const directoryInvalidationPathQueue = new Map<string, Map<string, string>>()
 const directoryInvalidationTimers = new Map<string, NodeJS.Timeout>()
 const directoryInvalidationScheduledDelayByWorkspace = new Map<string, number>()
@@ -107,6 +116,8 @@ export function getProgram(options?: AnalysisOptions) {
 
   if (projects.has(programKey)) {
     const existingProject = projects.get(programKey)!
+    setProjectAnalysisScopeId(existingProject, options?.analysisScopeId)
+    recordProjectTypeScriptConfigDependencies(existingProject)
     let associatedProjects = directoryToProjects.get(workspaceDirectory)
     if (!associatedProjects) {
       associatedProjects = new Set()
@@ -157,6 +168,8 @@ export function getProgram(options?: AnalysisOptions) {
 
   ensureProgramDirectoryWatcher(workspaceDirectory)
 
+  setProjectAnalysisScopeId(project, options?.analysisScopeId)
+  recordProjectTypeScriptConfigDependencies(project)
   projects.set(programKey, project)
 
   getDebugLogger().info('Created new program instance', () =>
@@ -354,14 +367,16 @@ function flushAnalysisWatcherInvalidation(workspaceDirectory: string): void {
   invalidateRuntimeAnalysisCachePaths(pathsToInvalidate)
   invalidateSharedFileTextPrefixCachePaths(pathsToInvalidate)
 
-  const projectsToUpdate = directoryToProjects.get(workspaceDirectory)
-  if (!projectsToUpdate) {
+  const projectsToInvalidate = directoryToProjects.get(workspaceDirectory)
+  if (!projectsToInvalidate) {
     return
   }
 
-  for (const project of projectsToUpdate) {
+  for (const project of projectsToInvalidate) {
     invalidateProgramFileCachePaths(project, pathsToInvalidate)
   }
+
+  evictTrackedProjectsForPaths(pathsToInvalidate)
 }
 
 export function invalidateProgramCachesByPath(path: string): number {
@@ -411,6 +426,8 @@ export function invalidateProgramCachesByPaths(
     affectedPrograms += 1
   }
 
+  evictTrackedProjectsForPaths(pathsToInvalidate)
+
   return affectedPrograms
 }
 
@@ -447,6 +464,78 @@ function getProgramKeyForAnalysisOptions(options?: AnalysisOptions) {
       compilerOptions: options.compilerOptions ?? null,
     })
   )
+}
+
+function recordProjectTypeScriptConfigDependencies(
+  project: TsMorphProject
+): void {
+  const configFilePath = (project.getCompilerOptions() as {
+    configFilePath?: string
+  }).configFilePath
+
+  typeScriptConfigDependencyPathsByProject.set(
+    project,
+    getTypeScriptConfigDependencyPaths(configFilePath)
+  )
+}
+
+function evictTrackedProject(project: TsMorphProject): void {
+  for (const [programKey, trackedProject] of projects) {
+    if (trackedProject === project) {
+      projects.delete(programKey)
+    }
+  }
+
+  for (const associatedProjects of directoryToProjects.values()) {
+    associatedProjects.delete(project)
+  }
+
+  typeScriptConfigDependencyPathsByProject.delete(project)
+  clearProjectAnalysisScopeId(project)
+}
+
+function evictTrackedProjectsForPaths(paths: Iterable<string>): void {
+  const normalizedPaths = Array.from(paths, (path) => normalizeComparablePath(path))
+  if (normalizedPaths.length === 0) {
+    return
+  }
+
+  const trackedProjects = new Set<TsMorphProject>()
+  for (const associatedProjects of directoryToProjects.values()) {
+    for (const project of associatedProjects) {
+      trackedProjects.add(project)
+    }
+  }
+
+  for (const project of trackedProjects) {
+    const dependencyPaths =
+      typeScriptConfigDependencyPathsByProject.get(project) ??
+      getTypeScriptConfigDependencyPaths(
+        (project.getCompilerOptions() as {
+          configFilePath?: string
+        }).configFilePath
+      )
+
+    if (dependencyPaths.length === 0) {
+      continue
+    }
+
+    const shouldEvict = dependencyPaths.some((dependencyPath) => {
+      const normalizedDependencyPath = normalizeComparablePath(dependencyPath)
+
+      return normalizedPaths.some((normalizedPath) => {
+        return (
+          normalizedPath === normalizedDependencyPath ||
+          normalizedPath.startsWith(`${normalizedDependencyPath}/`) ||
+          normalizedDependencyPath.startsWith(`${normalizedPath}/`)
+        )
+      })
+    })
+
+    if (shouldEvict) {
+      evictTrackedProject(project)
+    }
+  }
 }
 
 function shouldEnableAnalysisWatchers(): boolean {

@@ -19,6 +19,7 @@ import type { Languages } from '../../utils/get-language.ts'
 import {
   removeProgramSourceFileIfPresent,
   syncVirtualSnippetSourceFiles,
+  touchVirtualSnippetRegistration,
 } from './snippet-registry.ts'
 
 export interface SourceTextMetadata {
@@ -93,6 +94,11 @@ export function hydrateSourceTextMetadataSourceFile(
     virtualSourceFile?.getFullText() === metadata.value &&
     stableSourceFile?.getFullText() === metadata.value
   ) {
+    touchVirtualSnippetRegistration(project, {
+      ...hydratedDocument,
+      filePath,
+      valueSignature: metadata.valueSignature ?? hydratedDocument.valueSignature,
+    })
     return
   }
 

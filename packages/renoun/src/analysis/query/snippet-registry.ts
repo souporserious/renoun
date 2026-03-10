@@ -5,12 +5,14 @@ import type { Project } from '../../utils/ts-morph.ts'
 import {
   coerceAnalysisDocumentSourceFileToModule,
   getAnalysisDocumentStableFilePath,
+  getOriginalAnalysisDocumentFilePathFromStableFilePath,
   type ResolvedAnalysisDocument,
 } from '../document.ts'
 
 interface SnippetRegistration {
   stableFilePath: string
   currentVirtualFilePath: string
+  valueSignature: string
   lastUsedAt: number
 }
 
@@ -110,6 +112,59 @@ function pruneSnippetRegistrations(
   }
 }
 
+function setSnippetRegistration(
+  registrations: Map<string, SnippetRegistration>,
+  registration: SnippetRegistration
+): void {
+  if (registrations.has(registration.stableFilePath)) {
+    registrations.delete(registration.stableFilePath)
+  }
+
+  registrations.set(registration.stableFilePath, registration)
+}
+
+export function removeVirtualSnippetRegistration(
+  project: Project,
+  stableFilePath: string
+): void {
+  const registrations = getSnippetRegistrations(project)
+  const existingRegistration = registrations.get(stableFilePath)
+
+  if (!existingRegistration) {
+    return
+  }
+
+  registrations.delete(stableFilePath)
+  removeProgramSourceFileIfPresent(
+    project,
+    existingRegistration.currentVirtualFilePath
+  )
+  removeProgramSourceFileIfPresent(project, existingRegistration.stableFilePath)
+}
+
+export function touchVirtualSnippetRegistration(
+  project: Project,
+  document: ResolvedAnalysisDocument
+): void {
+  if (document.kind !== 'snippet' || !document.shouldVirtualizeFilePath) {
+    return
+  }
+
+  const stableFilePath = getAnalysisDocumentStableFilePath(document)
+  if (stableFilePath === document.filePath) {
+    return
+  }
+
+  const registrations = getSnippetRegistrations(project)
+  setSnippetRegistration(registrations, {
+    stableFilePath,
+    currentVirtualFilePath: document.filePath,
+    valueSignature: document.valueSignature,
+    lastUsedAt: Date.now(),
+  })
+  pruneSnippetRegistrations(project, registrations, stableFilePath)
+}
+
 export function syncVirtualSnippetSourceFiles(
   project: Project,
   document: ResolvedAnalysisDocument
@@ -124,6 +179,12 @@ export function syncVirtualSnippetSourceFiles(
   }
 
   const registrations = getSnippetRegistrations(project)
+  const previousStableFilePath =
+    getOriginalAnalysisDocumentFilePathFromStableFilePath(stableFilePath)
+  if (previousStableFilePath !== stableFilePath) {
+    removeVirtualSnippetRegistration(project, previousStableFilePath)
+  }
+
   const existingRegistration = registrations.get(stableFilePath)
   const virtualSnippetPathPrefix = getVirtualSnippetPathPrefix(stableFilePath)
 
@@ -158,9 +219,10 @@ export function syncVirtualSnippetSourceFiles(
 
   coerceAnalysisDocumentSourceFileToModule(stableSourceFile)
 
-  registrations.set(stableFilePath, {
+  setSnippetRegistration(registrations, {
     stableFilePath,
     currentVirtualFilePath: document.filePath,
+    valueSignature: document.valueSignature,
     lastUsedAt: Date.now(),
   })
 

@@ -23,6 +23,7 @@ import {
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
+import { getProgram, invalidateProgramCachesByPath } from './get-program.ts'
 
 const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget } =
   getTsMorph()
@@ -364,6 +365,248 @@ describe('analysis cached analysis', () => {
     expect(metadataCalls).toBe(1)
   })
 
+  test('does not reuse cached tokens across different metadata collectors', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': 'export const value = 1\n',
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const entrySource = await readFile(entryFilePath, 'utf8')
+    const project = new Project({
+      tsConfigFilePath,
+    })
+    const highlighter = createHighlighter()
+
+    let firstCollectorCalls = 0
+    const firstCollector: GetTokensOptions['metadataCollector'] = async (
+      ...args
+    ) => {
+      firstCollectorCalls += 1
+      return collectTypeScriptMetadata(...args)
+    }
+
+    let secondCollectorCalls = 0
+    const secondCollector: GetTokensOptions['metadataCollector'] = async (
+      ...args
+    ) => {
+      secondCollectorCalls += 1
+      return collectTypeScriptMetadata(...args)
+    }
+
+    await getCachedTokens(project, {
+      value: entrySource,
+      language: 'ts',
+      filePath: entryFilePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector: firstCollector,
+      waitForWarmResult: true,
+    })
+    await getCachedTokens(project, {
+      value: entrySource,
+      language: 'ts',
+      filePath: entryFilePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector: firstCollector,
+      waitForWarmResult: true,
+    })
+    await getCachedTokens(project, {
+      value: entrySource,
+      language: 'ts',
+      filePath: entryFilePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector: secondCollector,
+      waitForWarmResult: true,
+    })
+
+    expect(firstCollectorCalls).toBe(1)
+    expect(secondCollectorCalls).toBe(1)
+  })
+
+  test('does not reuse runtime-cached tokens across analysisScopeId changes', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': 'export const value = 1\n',
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const entrySource = await readFile(entryFilePath, 'utf8')
+    const uniqueId = Date.now()
+    const projectA = getProgram({
+      tsConfigFilePath,
+      analysisScopeId: `tokens-a-${uniqueId}`,
+    })
+    const projectB = getProgram({
+      tsConfigFilePath,
+      analysisScopeId: `tokens-b-${uniqueId}`,
+    })
+    const highlighter = createHighlighter()
+
+    let metadataCalls = 0
+    const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+      ...args
+    ) => {
+      metadataCalls += 1
+      return collectTypeScriptMetadata(...args)
+    }
+
+    await getCachedTokens(projectA, {
+      value: entrySource,
+      language: 'ts',
+      filePath: entryFilePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      waitForWarmResult: true,
+    })
+    await getCachedTokens(projectA, {
+      value: entrySource,
+      language: 'ts',
+      filePath: entryFilePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      waitForWarmResult: true,
+    })
+    await getCachedTokens(projectB, {
+      value: entrySource,
+      language: 'ts',
+      filePath: entryFilePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      waitForWarmResult: true,
+    })
+
+    expect(projectB).not.toBe(projectA)
+    expect(metadataCalls).toBe(2)
+  })
+
+  test('separates cached tokens by quick-info deferral mode', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const filePath = `/project/src/token-cache-quick-info-${Date.now()}.ts`
+    const source = [
+      'const value = 1;',
+      ...Array.from({ length: 170 }, () => 'value;'),
+    ].join('\n')
+    const highlighter: GetTokensOptions['highlighter'] = {
+      async tokenize() {
+        return [
+          [
+            createTextMateToken('const'),
+            createTextMateToken(' '),
+            createTextMateToken('value'),
+            createTextMateToken(' '),
+            createTextMateToken('='),
+            createTextMateToken(' '),
+            createTextMateToken('1'),
+            createTextMateToken(';'),
+          ],
+          ...Array.from({ length: 170 }, () => [
+            createTextMateToken('value'),
+            createTextMateToken(';'),
+          ]),
+        ]
+      },
+      async *stream() {
+        yield [
+          createTextMateToken('const'),
+          createTextMateToken(' '),
+          createTextMateToken('value'),
+          createTextMateToken(' '),
+          createTextMateToken('='),
+          createTextMateToken(' '),
+          createTextMateToken('1'),
+          createTextMateToken(';'),
+        ]
+        for (let index = 0; index < 170; index += 1) {
+          yield [createTextMateToken('value'), createTextMateToken(';')]
+        }
+      },
+    }
+
+    project.createSourceFile(filePath, source, {
+      overwrite: true,
+    })
+
+    let metadataCalls = 0
+    const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+      ...args
+    ) => {
+      metadataCalls += 1
+      return collectTypeScriptMetadata(...args)
+    }
+
+    const deferredTokens = await getCachedTokens(project, {
+      value: source,
+      language: 'ts',
+      filePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      deferQuickInfoUntilHover: true,
+    })
+    const eagerTokens = await getCachedTokens(project, {
+      value: source,
+      language: 'ts',
+      filePath,
+      theme: 'default',
+      allowErrors: true,
+      highlighter,
+      metadataCollector,
+      deferQuickInfoUntilHover: false,
+    })
+
+    const deferredQuickInfoCount = deferredTokens
+      .flat()
+      .filter((token) => token.value === 'value' && token.quickInfo).length
+    const eagerQuickInfoCount = eagerTokens
+      .flat()
+      .filter((token) => token.value === 'value' && token.quickInfo).length
+
+    expect(deferredQuickInfoCount).toBe(160)
+    expect(eagerQuickInfoCount).toBeGreaterThan(160)
+    expect(metadataCalls).toBe(2)
+  })
+
   test('serves plain token fallback immediately on cold development reads', async () => {
     await withDevelopmentLikeRuntime(async () => {
       const project = new Project({
@@ -669,6 +912,71 @@ describe('analysis cached analysis', () => {
     expect(getSourceFileSpy.mock.calls.length).toBeGreaterThan(
       getSourceFileCallsAfterSecondRun
     )
+  })
+
+  test('refreshes inherited tsconfig changes without touching the root tsconfig file', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.base.json': JSON.stringify({
+        compilerOptions: {
+          target: 'ES2020',
+        },
+      }),
+      'tsconfig.json': JSON.stringify({
+        extends: './tsconfig.base.json',
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/index.ts': 'const maybe = value ?? 1\nexport { maybe }\n',
+    })
+
+    const uniqueId = Date.now()
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const baseConfigPath = join(workspace.workspacePath, 'tsconfig.base.json')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const analysisScopeId = `config-chain-${uniqueId}`
+    const project = getProgram({
+      tsConfigFilePath,
+      analysisScopeId,
+    })
+
+    const first = await transpileCachedSourceFile(project, entryFilePath)
+    expect(first).toContain('??')
+
+    await writeFile(
+      baseConfigPath,
+      JSON.stringify(
+        {
+          compilerOptions: {
+            target: 'ES2019',
+          },
+        },
+        null,
+        2
+      ),
+      'utf8'
+    )
+    invalidateRuntimeAnalysisCachePath(baseConfigPath)
+    invalidateProgramCachesByPath(baseConfigPath)
+
+    const refreshedProject = getProgram({
+      tsConfigFilePath,
+      analysisScopeId,
+    })
+    const second = await transpileCachedSourceFile(
+      refreshedProject,
+      entryFilePath
+    )
+
+    expect(refreshedProject).not.toBe(project)
+    expect(second).not.toContain('??')
   })
 
   test('hydrates source files for runtime-cached export metadata lookups', async () => {

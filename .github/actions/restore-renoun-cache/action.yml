@@ -17,9 +17,9 @@ runs:
       uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
       with:
         path: |
-          .renoun/cache/fs-cache.sqlite
-          .renoun/cache/fs-cache.sqlite-shm
-          .renoun/cache/fs-cache.sqlite-wal
+          .renoun/cache/fs-cache.sqlite*
+          apps/*/.renoun/cache/fs-cache.sqlite*
+          examples/*/.renoun/cache/fs-cache.sqlite*
         key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}-${{ github.workflow }}-${{ github.job }}
         restore-keys: |
           ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}-
