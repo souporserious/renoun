@@ -8,7 +8,6 @@ import {
   createHighlighter,
   type Highlighter,
 } from '../utils/create-highlighter.ts'
-import type { ConfigurationOptions } from '../components/Config/types.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
@@ -26,6 +25,9 @@ import { mapConcurrent } from '../utils/concurrency.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getFileExportTextResult } from '../utils/get-file-export-text.ts'
 import { getQuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
+import type {
+  HighlighterInitializationOptions,
+} from '../utils/highlighter-options.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
 import {
@@ -172,10 +174,6 @@ interface RpcValueWithDependenciesResponse<Value> {
   dependencies: string[]
 }
 
-type HighlighterInitializationOptions = Partial<
-  Pick<ConfigurationOptions, 'theme' | 'languages'>
->
-
 function toRpcValueWithDependenciesResponse<Value>(
   value: Value,
   dependencies: Iterable<string>
@@ -214,7 +212,7 @@ function toFileExportDependencyPaths(
 }
 
 function getThemeNamesForCodeFencePrewarm(
-  themeConfig: ConfigurationOptions['theme']
+  themeConfig: HighlighterInitializationOptions['theme']
 ): string[] {
   if (!themeConfig) {
     return ['default']
@@ -1408,7 +1406,7 @@ export async function createServer(options?: CreateServerOptions) {
       ...options
     }: GetTokensOptions & {
       analysisOptions?: AnalysisOptions
-      languages?: ConfigurationOptions['languages']
+      languages?: HighlighterInitializationOptions['languages']
       waitForWarmResult?: boolean
     }) {
       const project = getProgram(analysisOptions)

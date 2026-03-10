@@ -2,7 +2,6 @@ import { join, posix } from 'node:path'
 import { getTsMorph } from './ts-morph.ts'
 import type { Diagnostic, Project, SourceFile, ts } from './ts-morph.ts'
 
-import type { ConfigurationOptions } from '../components/Config/types.ts'
 import type { Languages as TextMateLanguages } from '../grammars/index.ts'
 import type { Highlighter } from './create-highlighter.ts'
 import { getDebugLogger } from './debug.ts'
@@ -25,6 +24,7 @@ import {
   validateLanguageFileCompatibility,
   isJavaScriptTypeScriptFile,
 } from './validate-language-file-compatibility.ts'
+import type { HighlighterInitializationOptions } from './highlighter-options.ts'
 
 const tsMorph = getTsMorph()
 const { Node, SyntaxKind } = tsMorph
@@ -114,7 +114,7 @@ export interface GetTokensOptions {
   showErrors?: boolean
   highlighter: Highlighter | null
   sourcePath?: string | false
-  theme: ConfigurationOptions['theme']
+  theme: HighlighterInitializationOptions['theme']
   metadataCollector?: MetadataCollector
 
   /**

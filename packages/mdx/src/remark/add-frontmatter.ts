@@ -5,7 +5,7 @@ import type { VFile } from 'vfile'
 import { valueToEstree } from 'estree-util-value-to-estree'
 import 'mdast-util-mdx'
 
-import { parseFrontmatter } from '../utils/parse-frontmatter.ts'
+import { parseFrontmatter } from '../utils/parse-frontmatter.js'
 
 function hasFrontmatterExport(tree: Root): boolean {
   for (const node of tree.children) {

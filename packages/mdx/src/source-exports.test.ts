@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, test } from 'vitest'
 
-const relativeJsSpecifierPattern =
-  /(?:from\s+|import\s+)(['"])(\.\.?\/[^'"]+\.js)\1/g
+const relativeTypeScriptSpecifierPattern =
+  /(?:from\s+|import\s+)(['"])(\.\.?\/[^'"]+\.(?:cts|mts|ts|tsx))\1/g
 
 async function collectPublishedSourceFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -32,14 +32,16 @@ async function collectPublishedSourceFiles(directory: string): Promise<string[]>
 }
 
 describe('source exports', () => {
-  test('published source files do not reference relative .js modules', async () => {
+  test('published source files do not reference relative TypeScript modules', async () => {
     const sourceDirectory = fileURLToPath(new URL('.', import.meta.url))
     const sourceFiles = await collectPublishedSourceFiles(sourceDirectory)
     const offenders: string[] = []
 
     for (const sourceFile of sourceFiles) {
       const source = await readFile(sourceFile, 'utf8')
-      const matches = Array.from(source.matchAll(relativeJsSpecifierPattern))
+      const matches = Array.from(
+        source.matchAll(relativeTypeScriptSpecifierPattern)
+      )
 
       for (const match of matches) {
         offenders.push(

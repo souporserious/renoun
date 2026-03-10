@@ -1,31 +1,30 @@
 import type { PackageManagerName } from '../../file-system/PackageManager.ts'
-import type { Languages, Themes } from '../../grammars/index.ts'
+import type { Languages } from '../../grammars/index.ts'
 import type { Editors } from '../../utils/get-editor-uri.ts'
+import type {
+  ThemeConfig as PublicThemeConfig,
+  ThemeName as PublicThemeName,
+  ThemeOverride as PublicThemeOverride,
+  ThemeValue as PublicThemeValue,
+} from '../../utils/highlighter-options.ts'
 
 /**
  * The theme name.
  * @internal
  */
-export type ThemeName = Themes | (string & {})
+export type ThemeName = PublicThemeName
 
 /**
  * The theme override.
  * @internal
  */
-export type ThemeOverride = {
-  colors?: Record<string, string>
-  tokenColors?: any[]
-  semanticTokenColors?: Record<string, any>
-  settings?: any[]
-  type?: 'light' | 'dark'
-  [key: string]: any
-}
+export type ThemeOverride = PublicThemeOverride
 
 /**
  * The theme value.
  * @internal
  */
-export type ThemeValue = ThemeName | [ThemeName, ThemeOverride]
+export type ThemeValue = PublicThemeValue
 
 /**
  * The git host.
@@ -92,7 +91,7 @@ export interface ImagesConfig {
  */
 export interface ConfigurationOptions {
   /** Path to the VS Code compatible theme used for syntax highlighting the `CodeBlock` and `Tokens` components. */
-  theme?: ThemeValue | Record<string, ThemeValue>
+  theme?: PublicThemeConfig
 
   /** Configuration for image assets. */
   images?: ImagesConfig

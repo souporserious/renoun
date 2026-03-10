@@ -1,6 +1,6 @@
 export type { PluggableList } from 'unified'
 export type { MDXComponents, MDXContent } from 'mdx/types.js'
-export type { MDXReadingTime } from './rehype/add-reading-time.ts'
+export type { MDXReadingTime } from './rehype/add-reading-time.js'
 export type {
   ContentSection,
   AddSectionsOptions,
@@ -8,9 +8,9 @@ export type {
   HeadingComponentProps,
   SectionComponent,
   SectionComponentProps,
-} from './remark/add-sections.ts'
-export { rehypePlugins } from './rehype/index.ts'
-export { remarkPlugins } from './remark/index.ts'
+} from './remark/add-sections.js'
+export { rehypePlugins } from './rehype/index.js'
+export { remarkPlugins } from './remark/index.js'
 export {
   createSlug,
   getMarkdownContent,
@@ -27,4 +27,4 @@ export {
   type LinkPosition,
   type LinkSource,
   type LinkKind,
-} from './utils/index.ts'
+} from './utils/index.js'

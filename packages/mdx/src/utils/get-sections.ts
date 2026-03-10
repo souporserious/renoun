@@ -5,8 +5,8 @@ import { visit } from 'unist-util-visit'
 import { toString } from 'mdast-util-to-string'
 import type { Root, Heading } from 'mdast'
 
-import type { ContentSection } from '../remark/add-sections.ts'
-import { createSlug } from './create-slug.ts'
+import type { ContentSection } from '../remark/add-sections.js'
+import { createSlug } from './create-slug.js'
 
 interface FlatSection {
   id: string

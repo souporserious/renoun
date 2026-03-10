@@ -1,6 +1,5 @@
 import type { Project as TsMorphProject, SyntaxKind } from '../utils/ts-morph.ts'
 
-import type { ConfigurationOptions } from '../components/Config/types.ts'
 import type { Languages as GrammarLanguage } from '../grammars/index.ts'
 import type { Highlighter } from '../utils/create-highlighter.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
@@ -17,6 +16,7 @@ import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { QuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
+import type { HighlighterInitializationOptions } from '../utils/highlighter-options.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
   getAnalysisClientBrowserRefreshVersion as getSharedAnalysisClientBrowserRefreshVersion,
@@ -1561,7 +1561,7 @@ let queuedHighlighterLoad: NodeJS.Timeout | null = null
 
 /** Ensure the highlighter is loaded when analysis needs it. */
 function ensureHighlighterLoaded(
-  options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+  options: HighlighterInitializationOptions
 ): Promise<Highlighter | null> {
   if (currentHighlighter.current) {
     return Promise.resolve(currentHighlighter.current)
@@ -1592,7 +1592,7 @@ function ensureHighlighterLoaded(
 }
 
 function queueHighlighterLoad(
-  options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+  options: HighlighterInitializationOptions
 ): void {
   if (currentHighlighter.current || highlighterPromise || queuedHighlighterLoad) {
     return

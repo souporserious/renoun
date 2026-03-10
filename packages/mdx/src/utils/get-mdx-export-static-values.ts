@@ -2,7 +2,7 @@ import type { Node } from 'estree'
 import { createProcessor } from '@mdx-js/mdx'
 import { visit } from 'unist-util-visit'
 
-import { safeAssign } from './safe-assign.ts'
+import { safeAssign } from './safe-assign.js'
 
 let processor: ReturnType<typeof createProcessor>
 
