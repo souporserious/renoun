@@ -9,6 +9,7 @@ export interface AnalysisServerRuntime {
   port: string
   id: string
   host?: string
+  emitRefreshNotifications?: boolean
 }
 
 const serverRuntimeEnvListeners = new Set<
@@ -59,11 +60,17 @@ export function getServerRuntimeFromProcessEnv():
   }
 
   const host = getServerHostFromProcessEnv()
+  const emitRefreshNotifications =
+    resolveServerRefreshNotificationsEffectiveFromEnv() ??
+    resolveServerRefreshNotificationsEnvOverride()
 
   return {
     port,
     id,
     ...(host ? { host } : {}),
+    ...(typeof emitRefreshNotifications === 'boolean'
+      ? { emitRefreshNotifications }
+      : {}),
   }
 }
 

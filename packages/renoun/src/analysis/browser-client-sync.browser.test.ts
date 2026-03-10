@@ -142,6 +142,39 @@ describe('analysis/client browser refresh runtime', () => {
     })
   })
 
+  it('updates runtime metadata when only refresh notification capability changes', async () => {
+    setAnalysisClientBrowserRuntime({
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+      emitRefreshNotifications: true,
+    })
+
+    await waitFor(() => controller.instances.length === 1, 1_000)
+    expect(getAnalysisClientBrowserRuntime()).toEqual({
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+      emitRefreshNotifications: true,
+    })
+
+    setAnalysisClientBrowserRuntime({
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+      emitRefreshNotifications: false,
+    })
+
+    expect(getAnalysisClientBrowserRuntime()).toEqual({
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+      emitRefreshNotifications: false,
+    })
+    expect(controller.openedUrls).toEqual(['ws://127.0.0.1:43123'])
+    expect(controller.closedUrls).toEqual([])
+  })
+
   it('does not discard retained runtimes when clearing the explicit runtime', async () => {
     const releaseRuntime = retainAnalysisClientBrowserRuntime({
       id: 'runtime-retained',

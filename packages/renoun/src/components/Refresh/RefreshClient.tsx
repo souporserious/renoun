@@ -18,10 +18,12 @@ export function RefreshClient({
   port,
   id,
   host,
+  emitRefreshNotifications,
 }: {
   port: string
   id: string
   host?: string
+  emitRefreshNotifications?: boolean
 }) {
   useEffect(() => {
     if (port === undefined) {
@@ -32,6 +34,7 @@ export function RefreshClient({
       port,
       id,
       host,
+      emitRefreshNotifications,
     })
     const unsubscribe = onAnalysisClientBrowserRefreshNotification((message) => {
       if (message.type === 'refresh' && 'nd' in window) {
@@ -54,7 +57,7 @@ export function RefreshClient({
       unsubscribe()
       releaseRuntime()
     }
-  }, [host, id, port])
+  }, [emitRefreshNotifications, host, id, port])
 
   return null
 }

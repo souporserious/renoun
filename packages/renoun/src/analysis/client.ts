@@ -82,6 +82,7 @@ type AnalysisClientServerModules = typeof import('#analysis-client-server')
 
 interface ActiveClientState {
   client: WebSocketClient
+  runtime: AnalysisServerRuntime
   runtimeKey: string
   generation: number
   refreshSubscriptionsAttached: boolean
@@ -91,12 +92,14 @@ interface ActiveClientState {
 
 interface RefreshSubscribedClientState {
   client: WebSocketClient
+  runtime: AnalysisServerRuntime
   runtimeKey: string
   refreshSubscriptionsAttached: boolean
 }
 
 interface BrowserRuntimeClientState {
   client: WebSocketClient
+  runtime: AnalysisServerRuntime
   runtimeKey: string
   inFlightRequestCount: number
   isCached: boolean
@@ -381,8 +384,9 @@ function applyAnalysisClientBrowserRuntime(
   const didSwitchFromExistingRuntime =
     didRuntimeChange && currentRuntimeKey !== undefined
 
+  setSharedAnalysisClientBrowserRuntime(normalizedRuntime)
+
   if (didRuntimeChange) {
-    setSharedAnalysisClientBrowserRuntime(normalizedRuntime)
     if (!didSwitchFromExistingRuntime && nextRuntimeKey) {
       hydrateRefreshStateFromSharedAnalysisBrowserVersion(nextRuntimeKey)
       syncLatestRefreshCursorForRuntime(nextRuntimeKey)
@@ -420,6 +424,7 @@ function applyAnalysisClientBrowserRuntime(
     return
   }
 
+  activeClientState.runtime = normalizedRuntime
   attachClientRefreshSubscriptions(activeClientState)
 }
 
@@ -563,7 +568,27 @@ function getActiveAnalysisServerRuntime(): AnalysisServerRuntime | undefined {
   return getServerRuntimeFromProcessEnv()
 }
 
-function shouldUseClientRpcCache(): boolean {
+function resolveActiveRuntimeRefreshNotificationsCapability(
+  runtime?: AnalysisServerRuntime
+):
+  | boolean
+  | undefined {
+  if (typeof runtime?.emitRefreshNotifications === 'boolean') {
+    return runtime.emitRefreshNotifications
+  }
+
+  const activeRuntime = getActiveAnalysisServerRuntime()
+  if (typeof activeRuntime?.emitRefreshNotifications === 'boolean') {
+    return activeRuntime.emitRefreshNotifications
+  }
+
+  return (
+    resolveServerRefreshNotificationsEffectiveFromEnv() ??
+    resolveServerRefreshNotificationsEnvOverride()
+  )
+}
+
+function shouldUseClientRpcCache(runtime?: AnalysisServerRuntime): boolean {
   if (typeof analysisClientRuntimeOptions.useRpcCache === 'boolean') {
     return analysisClientRuntimeOptions.useRpcCache
   }
@@ -573,7 +598,7 @@ function shouldUseClientRpcCache(): boolean {
     return override
   }
 
-  if (!shouldConsumeRefreshNotifications()) {
+  if (!shouldConsumeRefreshNotifications(runtime)) {
     return false
   }
 
@@ -668,6 +693,7 @@ async function callClientMethod<
     cacheParams?: unknown
     cacheKeyPrefix?: string
     disableRpcCache?: boolean
+    serverRuntime?: AnalysisServerRuntime
     skipServerModulePreload?: boolean
   } = {}
 ): Promise<Value> {
@@ -684,7 +710,7 @@ async function callClientMethod<
 
   if (
     options.disableRpcCache === true ||
-    !shouldUseClientRpcCache() ||
+    !shouldUseClientRpcCache(options.serverRuntime) ||
     !CLIENT_CACHED_RPC_METHODS.has(method as ClientCachedRpcMethod)
   ) {
     return activeClient.callMethod<Params, Value>(method, params)
@@ -700,7 +726,7 @@ async function callClientMethod<
     shouldBypassClientRpcCache(
       typedMethod,
       params,
-      shouldConsumeRefreshNotifications()
+      shouldConsumeRefreshNotifications(options.serverRuntime)
     )
   ) {
     return activeClient.callMethod<Params, Value>(method, params)
@@ -805,7 +831,9 @@ function queueRefreshResync(
 
           const nextCursor = normalizeRefreshCursor(response.nextCursor)
           const paths = getRefreshInvalidationPaths(response)
-          const shouldConsumeNotifications = shouldConsumeRefreshNotifications()
+          const shouldConsumeNotifications = shouldConsumeRefreshNotifications(
+            state.runtime
+          )
           if (response.fullRefresh) {
             if (shouldConsumeNotifications) {
               if (paths.length > 0) {
@@ -843,11 +871,11 @@ function queueRefreshResync(
 
           if (typeof window !== 'undefined') {
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
-            if (shouldConsumeRefreshNotifications()) {
+            if (shouldConsumeRefreshNotifications(state.runtime)) {
               applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
             }
             setLatestRefreshCursorForRuntime(state.runtimeKey, 0, {
-              notify: shouldConsumeRefreshNotifications(),
+              notify: shouldConsumeRefreshNotifications(state.runtime),
             })
             emitAnalysisClientBrowserRefreshNotification()
             return
@@ -883,7 +911,10 @@ function attachClientRefreshSubscriptions(
     resyncImmediately?: boolean
   } = {}
 ): void {
-  if (state.refreshSubscriptionsAttached || !shouldAttachRefreshTransport()) {
+  if (
+    state.refreshSubscriptionsAttached ||
+    !shouldAttachRefreshTransport(state.runtime)
+  ) {
     return
   }
 
@@ -918,12 +949,12 @@ function attachClientRefreshSubscriptions(
     const refreshCursor = normalizeRefreshCursor(message.data.refreshCursor)
     if (refreshCursor !== undefined) {
       bumpLatestRefreshCursorForRuntime(state.runtimeKey, refreshCursor, {
-        notify: shouldConsumeRefreshNotifications(),
+        notify: shouldConsumeRefreshNotifications(state.runtime),
       })
     }
 
     const paths = getRefreshInvalidationPaths(message.data)
-    if (shouldConsumeRefreshNotifications()) {
+    if (shouldConsumeRefreshNotifications(state.runtime)) {
       const invalidationScopeKey = toRuntimeCacheScopeKey(state.runtimeKey)
       for (const path of paths) {
         queueRefreshInvalidation(path, invalidationScopeKey)
@@ -953,6 +984,7 @@ function createAnalysisBrowserClient(
 ): BrowserRuntimeClientState {
   const state: BrowserRuntimeClientState = {
     client: new WebSocketClient(runtime.id, runtime),
+    runtime,
     runtimeKey,
     inFlightRequestCount: 0,
     isCached,
@@ -1017,6 +1049,7 @@ function getAnalysisBrowserClientState(
 
   if (cachedBrowserClientState.runtimeKey === runtimeKey) {
     const cachedState = cachedBrowserClientState
+    cachedState.runtime = runtime
     attachClientRefreshSubscriptions(cachedState, {
       isCurrentState: () => isCurrentBrowserClientState(cachedState),
     })
@@ -1069,6 +1102,7 @@ function createClientForRuntime(
 ): ActiveClientState {
   const state: ActiveClientState = {
     client: new WebSocketClient(runtime.id, runtime),
+    runtime,
     runtimeKey: toServerRuntimeKey(runtime),
     generation: ++nextActiveClientGeneration,
     refreshSubscriptionsAttached: false,
@@ -1117,6 +1151,7 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
 
     const nextRuntimeKey = toServerRuntimeKey(runtime)
     if (activeClientState.runtimeKey === nextRuntimeKey) {
+      activeClientState.runtime = runtime
       return
     }
 
@@ -1147,6 +1182,8 @@ function getClient(): WebSocketClient | undefined {
     replaceClientForRuntime(serverRuntime, {
       resyncImmediately: true,
     })
+  } else if (activeClientState && serverRuntime) {
+    activeClientState.runtime = serverRuntime
   }
 
   if (activeClientState) {
@@ -1228,6 +1265,7 @@ async function callBrowserRuntimeClientMethod<
       {
         ...options,
         cacheKeyPrefix: cacheScopeKey,
+        serverRuntime: runtime,
         skipServerModulePreload: true,
       }
     )
@@ -1243,6 +1281,7 @@ async function callBrowserRuntimeClientMethod<
     return callClientMethod<Params, Value>(activeClient, method, params, {
       ...options,
       cacheKeyPrefix: cacheScopeKey,
+      serverRuntime: runtime,
       skipServerModulePreload: true,
     })
   }
@@ -1258,6 +1297,7 @@ async function callBrowserRuntimeClientMethod<
       {
         ...options,
         cacheKeyPrefix: cacheScopeKey,
+        serverRuntime: runtime,
         skipServerModulePreload: true,
       }
     )
@@ -1315,14 +1355,13 @@ function queueRefreshInvalidation(
   })
 }
 
-function shouldConsumeRefreshNotifications(): boolean {
-  const serverEffective = resolveServerRefreshNotificationsEffectiveFromEnv()
-  if (serverEffective === false) {
-    return false
-  }
-
-  const serverOverride = resolveServerRefreshNotificationsEnvOverride()
-  if (serverOverride === false) {
+function shouldConsumeRefreshNotifications(
+  runtime?: AnalysisServerRuntime
+): boolean {
+  const serverCapability = resolveActiveRuntimeRefreshNotificationsCapability(
+    runtime
+  )
+  if (serverCapability === false) {
     return false
   }
 
@@ -1337,20 +1376,16 @@ function shouldConsumeRefreshNotifications(): boolean {
     return override
   }
 
-  if (serverOverride !== undefined) {
-    return serverOverride
-  }
-
-  if (serverEffective !== undefined) {
-    return serverEffective
+  if (serverCapability !== undefined) {
+    return serverCapability
   }
 
   return true
 }
 
-function shouldAttachRefreshTransport(): boolean {
+function shouldAttachRefreshTransport(runtime?: AnalysisServerRuntime): boolean {
   return (
-    shouldConsumeRefreshNotifications() ||
+    shouldConsumeRefreshNotifications(runtime) ||
     browserRefreshNotificationListeners.size > 0
   )
 }

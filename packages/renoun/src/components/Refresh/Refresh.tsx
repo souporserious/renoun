@@ -19,6 +19,7 @@ export async function Refresh() {
         port={runtime.port}
         id={runtime.id}
         host={runtime.host}
+        emitRefreshNotifications={runtime.emitRefreshNotifications}
       />
     )
   }

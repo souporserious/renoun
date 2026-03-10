@@ -475,6 +475,7 @@ describe('analysis client transport guards', () => {
       id: 'server-id',
       port: '4545',
       host: '127.0.0.1',
+      emitRefreshNotifications: true,
     })
 
     process.env['RENOUN_SERVER_PORT'] = '5454'
@@ -487,6 +488,7 @@ describe('analysis client transport guards', () => {
       id: 'server-id',
       port: '5454',
       host: 'localhost',
+      emitRefreshNotifications: true,
     })
     expect(firstRemoveAllListeners).toHaveBeenCalledTimes(1)
     expect(firstClose).toHaveBeenCalledTimes(1)

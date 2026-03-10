@@ -214,6 +214,41 @@ describe('browser-client runtime transport', () => {
     await expect(thirdPromise).resolves.toEqual({ text: 'quick-info-b' })
   })
 
+  it('disables browser RPC caching when the runtime cannot emit refresh notifications', async () => {
+    const module = await import('./client.ts')
+    const runtime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+      emitRefreshNotifications: false,
+    }
+
+    const firstPromise = module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      10,
+      undefined,
+      runtime
+    )
+    await flushBrowserClientCallQueue()
+
+    const client = getMockBrowserClient(0)
+    resolveNextPendingCall(client, { text: 'quick-info-a' })
+    await expect(firstPromise).resolves.toEqual({ text: 'quick-info-a' })
+
+    const secondPromise = module.getQuickInfoAtPosition(
+      '/project/src/a.ts',
+      10,
+      undefined,
+      runtime
+    )
+    await flushBrowserClientCallQueue()
+
+    expect(client.callMethod).toHaveBeenCalledTimes(2)
+    expect(client.on).not.toHaveBeenCalled()
+    resolveNextPendingCall(client, { text: 'quick-info-b' })
+    await expect(secondPromise).resolves.toEqual({ text: 'quick-info-b' })
+  })
+
   it('scopes refresh invalidations to the runtime that emitted them', async () => {
     const module = await import('./client.ts')
     const retainedRuntime: AnalysisServerRuntime = {

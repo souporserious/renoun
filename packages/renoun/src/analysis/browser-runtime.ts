@@ -38,7 +38,26 @@ export function normalizeAnalysisServerRuntime(
     ...(typeof runtime.host === 'string' && runtime.host.trim().length > 0
       ? { host: runtime.host.trim() }
       : {}),
+    ...(typeof runtime.emitRefreshNotifications === 'boolean'
+      ? { emitRefreshNotifications: runtime.emitRefreshNotifications }
+      : {}),
   }
+}
+
+function areAnalysisServerRuntimesEqual(
+  left: AnalysisServerRuntime | undefined,
+  right: AnalysisServerRuntime | undefined
+): boolean {
+  if (!left || !right) {
+    return left === right
+  }
+
+  return (
+    left.id === right.id &&
+    left.port === right.port &&
+    left.host === right.host &&
+    left.emitRefreshNotifications === right.emitRefreshNotifications
+  )
 }
 
 export function parseAnalysisClientRefreshVersion(
@@ -73,10 +92,12 @@ export function setAnalysisClientBrowserRuntime(
   runtime?: AnalysisServerRuntime
 ): void {
   const normalizedRuntime = normalizeAnalysisServerRuntime(runtime)
-  const currentKey = getAnalysisServerRuntimeKey(browserAnalysisServerRuntime)
-  const nextKey = getAnalysisServerRuntimeKey(normalizedRuntime)
-
-  if (currentKey === nextKey) {
+  if (
+    areAnalysisServerRuntimesEqual(
+      browserAnalysisServerRuntime,
+      normalizedRuntime
+    )
+  ) {
     return
   }
 
