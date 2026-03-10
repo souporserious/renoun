@@ -743,6 +743,59 @@ describe('QuickInfo browser regression', () => {
     }
   })
 
+  it('switches open and new hovers to an updated retained runtime without rerendering the code block', async () => {
+    const releaseInitialRuntime = retainAnalysisClientBrowserRuntime(
+      SECOND_RUNTIME
+    )
+    renderQuickInfoFixture(root, 'retained-runtime-switch')
+
+    try {
+      const symbol = await waitForSymbol('symbol-short')
+      hoverSymbol(symbol)
+
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test@ws://127.0.0.1:43123'
+          ) === 1,
+        1_000
+      )
+
+      const releaseUpdatedRuntime = retainAnalysisClientBrowserRuntime({
+        id: 'quick-info-browser-test-retained-updated',
+        port: '43125',
+        host: '::1',
+      })
+
+      try {
+        await waitFor(
+          () =>
+            counters.quickInfoByRuntimeKey.get(
+              'quick-info-browser-test-retained-updated@ws://[::1]:43125'
+            ) === 1,
+          1_000
+        )
+
+        leaveSymbol(symbol)
+        await waitFor(() => !getPopover(), 1_000)
+
+        hoverSymbol(getSymbolAnchor('symbol-long'))
+
+        await waitFor(
+          () =>
+            counters.quickInfoByRuntimeKey.get(
+              'quick-info-browser-test-retained-updated@ws://[::1]:43125'
+            ) === 2,
+          1_000
+        )
+      } finally {
+        releaseUpdatedRuntime()
+      }
+    } finally {
+      releaseInitialRuntime()
+    }
+  })
+
 })
 
 function renderQuickInfoFixture(root: Root | null, cacheScope: string) {

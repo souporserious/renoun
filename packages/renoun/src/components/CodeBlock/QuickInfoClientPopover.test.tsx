@@ -6,6 +6,7 @@ const mockGetTokens = vi.fn()
 vi.mock('../../analysis/client.ts', () => ({
   getAnalysisClientBrowserRuntime: () => undefined,
   getAnalysisClientRefreshVersion: () => '0:0',
+  getAnalysisClientRetainedBrowserRuntimeActivationKey: () => undefined,
   getQuickInfoAtPosition: (
     ...args: Parameters<typeof mockGetQuickInfoAtPosition>
   ) => mockGetQuickInfoAtPosition(...args),
@@ -105,6 +106,28 @@ describe('QuickInfoClientPopover runtime selection', () => {
         false
       )
     ).toEqual(sharedBrowserRuntime)
+  })
+
+  it('re-selects the shared runtime after the retained page runtime changes', () => {
+    const requestRuntime = {
+      id: 'quick-info-request-runtime',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const updatedRetainedBrowserRuntime = {
+      id: 'quick-info-page-runtime',
+      port: '43125',
+      host: '::1',
+    }
+
+    expect(
+      __TEST_ONLY__.resolveQuickInfoRuntime(
+        requestRuntime,
+        updatedRetainedBrowserRuntime,
+        true,
+        'quick-info-page-runtime:127.0.0.1:43124'
+      )
+    ).toEqual(updatedRetainedBrowserRuntime)
   })
 
   it('rebuilds the hover cache version from the selected runtime refresh state', () => {

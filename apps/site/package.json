@@ -4,8 +4,8 @@
   "homepage": "https://renoun.dev",
   "type": "module",
   "scripts": {
-    "dev": "renoun next dev --webpack",
-    "build": "renoun next build --webpack",
+    "dev": "node ../../packages/renoun/dist/cli/index.js next dev --webpack",
+    "build": "node ../../packages/renoun/dist/cli/index.js next build --webpack",
     "start": "serve out"
   },
   "dependencies": {

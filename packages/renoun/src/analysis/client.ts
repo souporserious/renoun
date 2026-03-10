@@ -125,6 +125,7 @@ const browserRuntimeRegistrations: Array<{
   token: symbol
   runtime: AnalysisServerRuntime
 }> = []
+let retainedBrowserRuntimeKeyAtActivation: string | undefined
 const browserRuntimeRetentionListeners = new Set<
   (hasRetainedBrowserRuntime: boolean) => void
 >()
@@ -319,6 +320,12 @@ export function onAnalysisClientBrowserRuntimeRetentionChange(
   }
 }
 
+export function getAnalysisClientRetainedBrowserRuntimeActivationKey():
+  | string
+  | undefined {
+  return retainedBrowserRuntimeKeyAtActivation
+}
+
 export function onAnalysisClientBrowserRefreshNotification(
   listener: (message: RefreshNotificationMessage) => void
 ): () => void {
@@ -494,6 +501,10 @@ export function retainAnalysisClientBrowserRuntime(
     token,
     runtime: normalizedRuntime,
   })
+  if (!didHaveRetainedBrowserRuntime) {
+    retainedBrowserRuntimeKeyAtActivation =
+      getAnalysisServerRuntimeKey(normalizedRuntime)
+  }
   applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
   notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
     didHaveRetainedBrowserRuntime
@@ -510,6 +521,9 @@ export function retainAnalysisClientBrowserRuntime(
     const didHaveRetainedBrowserRuntime =
       hasRetainedAnalysisClientBrowserRuntime()
     browserRuntimeRegistrations.splice(registrationIndex, 1)
+    if (browserRuntimeRegistrations.length === 0) {
+      retainedBrowserRuntimeKeyAtActivation = undefined
+    }
     applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
     notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
       didHaveRetainedBrowserRuntime

@@ -4,6 +4,7 @@ import React from 'react'
 import {
   getAnalysisClientBrowserRuntime,
   getAnalysisClientRefreshVersion,
+  getAnalysisClientRetainedBrowserRuntimeActivationKey,
   getQuickInfoAtPosition as getAnalysisClientQuickInfoAtPosition,
   getTokens as getAnalysisClientTokens,
   hasRetainedAnalysisClientBrowserRuntime,
@@ -107,16 +108,29 @@ function useQuickInfoRuntimeSelection(
   return resolveQuickInfoRuntime(
     initialRuntime,
     browserRuntime,
-    hasRetainedBrowserRuntime
+    hasRetainedBrowserRuntime,
+    getAnalysisClientRetainedBrowserRuntimeActivationKey()
   )
 }
 
 export function resolveQuickInfoRuntime(
   initialRuntime: AnalysisServerRuntime | undefined,
   browserRuntime: AnalysisServerRuntime | undefined,
-  hasRetainedBrowserRuntime: boolean
+  hasRetainedBrowserRuntime: boolean,
+  retainedBrowserRuntimeKeyAtActivation?: string
 ): AnalysisServerRuntime | undefined {
   if (initialRuntime && hasRetainedBrowserRuntime) {
+    const currentBrowserRuntimeKey = toAnalysisServerRuntimeKey(browserRuntime)
+
+    if (
+      browserRuntime &&
+      retainedBrowserRuntimeKeyAtActivation &&
+      currentBrowserRuntimeKey &&
+      currentBrowserRuntimeKey !== retainedBrowserRuntimeKeyAtActivation
+    ) {
+      return browserRuntime
+    }
+
     return initialRuntime
   }
 
