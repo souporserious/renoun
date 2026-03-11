@@ -206,4 +206,30 @@ describe('QuickInfoClientPopover runtime selection', () => {
       })
     ).toBe('quick-info-updated-runtime:0:0')
   })
+
+  it('reuses hydrated quick info only while the derived request key stays stable', () => {
+    expect(
+      __TEST_ONLY__.shouldReuseHydratedQuickInfo({
+        quickInfo: {
+          displayText: 'History',
+          documentationText: 'Server rendered quick info',
+        },
+        canRequestQuickInfo: true,
+        requestKey: 'quick-info-request-runtime:0:0::/tmp/history.ts:42',
+        hydratedRequestKey: 'quick-info-request-runtime:0:0::/tmp/history.ts:42',
+      })
+    ).toBe(true)
+
+    expect(
+      __TEST_ONLY__.shouldReuseHydratedQuickInfo({
+        quickInfo: {
+          displayText: 'History',
+          documentationText: 'Server rendered quick info',
+        },
+        canRequestQuickInfo: true,
+        requestKey: 'quick-info-request-runtime:1:0::/tmp/history.ts:42',
+        hydratedRequestKey: 'quick-info-request-runtime:0:0::/tmp/history.ts:42',
+      })
+    ).toBe(false)
+  })
 })

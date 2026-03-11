@@ -547,6 +547,56 @@ describe('QuickInfo browser regression', () => {
     }
   })
 
+  it('re-fetches hydrated quick info after the selected runtime changes', async () => {
+    const originalQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)
+    if (!originalQuickInfo) {
+      throw new Error('Expected initial quick info fixture to exist.')
+    }
+
+    renderHydratedQuickInfoFixture(root, 'hydrated-runtime', {
+      displayText: '(alias) const History',
+      documentationText: 'Server rendered quick info snapshot.',
+    })
+
+    try {
+      await waitFor(
+        () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+        1_000
+      )
+      const symbol = getSymbolAnchor('symbol-short')
+
+      hoverSymbol(symbol)
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes(
+          'Server rendered quick info snapshot.'
+        )
+      }, 1_000)
+      expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBeUndefined()
+
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
+        ...originalQuickInfo,
+        documentationText: 'Refetched quick info after runtime change.',
+      })
+
+      setAnalysisClientBrowserRuntime(SECOND_RUNTIME)
+
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test-secondary@ws://127.0.0.1:43124'
+          ) === 1,
+        1_000
+      )
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes(
+          'Refetched quick info after runtime change.'
+        )
+      }, 1_000)
+    } finally {
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, originalQuickInfo)
+    }
+  })
+
   it('retries quick info after a transient transport failure instead of caching an empty result', async () => {
     counters.quickInfoFailuresByPosition.set(SHORT_SYMBOL_POSITION, 1)
     renderQuickInfoFixture(root, 'transient-failure')
@@ -838,6 +888,40 @@ function renderQuickInfoFixture(root: Root | null, cacheScope: string) {
           }
         >
           <span data-testid="symbol-long">Directory</span>
+        </Symbol>
+      </div>
+    </QuickInfoProvider>
+  )
+}
+
+function renderHydratedQuickInfoFixture(
+  root: Root | null,
+  cacheScope: string,
+  quickInfo: QuickInfoFixture
+) {
+  if (!root) {
+    throw new Error('Expected react root to exist.')
+  }
+
+  root.render(
+    <QuickInfoProvider openDelay={0} closeDelay={0}>
+      <div>
+        <Symbol
+          popover={
+            <QuickInfoClientPopover
+              quickInfo={quickInfo}
+              request={{
+                filePath: `/tmp/history.${cacheScope}.ts`,
+                position: SHORT_SYMBOL_POSITION,
+                runtime: RUNTIME,
+                themeConfig: THEME_CONFIG,
+              }}
+              theme={QUICK_INFO_THEME}
+              className="quick-info-popover"
+            />
+          }
+        >
+          <span data-testid="symbol-short">History</span>
         </Symbol>
       </div>
     </QuickInfoProvider>

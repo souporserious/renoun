@@ -35,6 +35,7 @@ interface FetchSponsorsOptions {
 const AVATAR_MIN = 64
 const AVATAR_MAX = 512
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
+const SPONSORS_CACHE_MAX_ENTRIES = 32
 type FetchSponsorsAndTierLinksResult = Awaited<
   ReturnType<typeof fetchSponsorsAndTierLinksUncached>
 >
@@ -72,9 +73,53 @@ function createSponsorsCacheKey(payload: unknown): string {
   return hashString(JSON.stringify(payload))
 }
 
+function touchSponsorsCacheEntry(
+  cacheKey: string,
+  entry: SponsorsCacheEntry
+): SponsorsCacheEntry {
+  sponsorsCache.delete(cacheKey)
+  sponsorsCache.set(cacheKey, entry)
+  return entry
+}
+
+function pruneSponsorsCache(
+  now: number,
+  protectedCacheKey?: string
+): void {
+  for (const [cacheKey, entry] of sponsorsCache) {
+    if (cacheKey === protectedCacheKey || entry.promise) {
+      continue
+    }
+
+    if (entry.expiresAt <= now) {
+      sponsorsCache.delete(cacheKey)
+    }
+  }
+
+  if (sponsorsCache.size <= SPONSORS_CACHE_MAX_ENTRIES) {
+    return
+  }
+
+  for (const [cacheKey, entry] of sponsorsCache) {
+    if (cacheKey === protectedCacheKey || entry.promise) {
+      continue
+    }
+
+    sponsorsCache.delete(cacheKey)
+    if (sponsorsCache.size <= SPONSORS_CACHE_MAX_ENTRIES) {
+      return
+    }
+  }
+}
+
 /** @internal */
 export function clearSponsorsCacheForTests(): void {
   sponsorsCache.clear()
+}
+
+/** @internal */
+export function getSponsorsCacheSizeForTests(): number {
+  return sponsorsCache.size
 }
 
 /** Clamp and sanitize avatar size. */
@@ -515,22 +560,24 @@ async function fetchSponsorsAndTierLinks(
     token: getTokenCacheKey(token),
   })
   const now = Date.now()
+  pruneSponsorsCache(now, cacheKey)
   const cachedEntry = sponsorsCache.get(cacheKey)
 
   if (cachedEntry?.value && cachedEntry.expiresAt > now) {
-    return cachedEntry.value
+    return touchSponsorsCacheEntry(cacheKey, cachedEntry).value!
   }
 
   if (cachedEntry?.promise) {
-    return cachedEntry.promise
+    return touchSponsorsCacheEntry(cacheKey, cachedEntry).promise!
   }
 
   const loadPromise = fetchSponsorsAndTierLinksUncached(normalizedOptions)
     .then((result) => {
-      sponsorsCache.set(cacheKey, {
+      touchSponsorsCacheEntry(cacheKey, {
         expiresAt: Date.now() + ttlMs,
         value: result,
       })
+      pruneSponsorsCache(Date.now(), cacheKey)
       return result
     })
     .catch((error) => {
@@ -540,10 +587,11 @@ async function fetchSponsorsAndTierLinks(
       throw error
     })
 
-  sponsorsCache.set(cacheKey, {
+  touchSponsorsCacheEntry(cacheKey, {
     expiresAt: now + ttlMs,
     promise: loadPromise,
   })
+  pruneSponsorsCache(now, cacheKey)
 
   return loadPromise
 }

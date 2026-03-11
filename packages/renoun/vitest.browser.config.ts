@@ -6,9 +6,6 @@ export default defineConfig({
   plugins: [mdx()],
   optimizeDeps: {
     include: [
-      '@renoun/mdx',
-      '@renoun/mdx/rehype',
-      '@renoun/mdx/remark',
       'react/jsx-dev-runtime',
       'react/jsx-runtime',
     ],

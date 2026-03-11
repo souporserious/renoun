@@ -222,7 +222,7 @@ export function resolveBuildInvocation({ projectRoot, filter }) {
   if (filter === DEFAULT_FILTER) {
     return {
       command: 'pnpm',
-      args: ['--dir', join(projectRoot, 'apps/site'), 'build'],
+      args: ['build', `--filter=${filter}`],
     }
   }
 

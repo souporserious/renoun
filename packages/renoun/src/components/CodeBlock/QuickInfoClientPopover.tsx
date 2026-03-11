@@ -1,10 +1,6 @@
 'use client'
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
-import { getMarkdownContent } from '@renoun/mdx'
-import { rehypePlugins } from '@renoun/mdx/rehype'
-import { remarkPlugins } from '@renoun/mdx/remark'
-import { Fragment as JsxRuntimeFragment, jsx, jsxs } from 'react/jsx-runtime'
 
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import {
@@ -12,7 +8,6 @@ import {
   QuickInfoDisplayText,
   QuickInfoDisplayToken,
   QuickInfoDocumentationText,
-  QuickInfoMarkdown,
   type QuickInfoTheme,
 } from './QuickInfoContent.tsx'
 import { useQuickInfoContext } from './QuickInfoProvider.tsx'
@@ -70,6 +65,8 @@ const QUICK_INFO_KEYWORDS = new Set([
 
 const QUICK_INFO_TOKEN_PATTERN =
   /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[\r\n]+|[ \t]+|[^\sA-Za-z0-9_$]+)/g
+const QUICK_INFO_DOCUMENTATION_TOKEN_PATTERN =
+  /(\[[^\]]+\]\([^)]+\)|`[^`]+`)/g
 const QUICK_INFO_TEST_IDS_ENABLED = process.env.NODE_ENV === 'test'
 
 function getQuickInfoTestId(
@@ -123,8 +120,9 @@ export function QuickInfoClientPopover({
   })
   const displayText = resolvedQuickInfo?.displayText || ''
   const documentationText = resolvedQuickInfo?.documentationText || ''
-  const resolvedDocumentationContent =
-    useResolvedQuickInfoDocumentation(documentationText)
+  const documentationContent = React.useMemo(() => {
+    return renderQuickInfoDocumentationContent(documentationText)
+  }, [documentationText])
 
   return (
     <QuickInfoContent
@@ -140,16 +138,10 @@ export function QuickInfoClientPopover({
         ) : undefined
       }
       documentation={
-        !isLoading &&
-        documentationText.length &&
-        resolvedDocumentationContent !== null ? (
-          typeof resolvedDocumentationContent === 'string' ? (
-            <QuickInfoDocumentationText>
-              {resolvedDocumentationContent}
-            </QuickInfoDocumentationText>
-          ) : (
-            <QuickInfoMarkdown>{resolvedDocumentationContent}</QuickInfoMarkdown>
-          )
+        !isLoading && documentationContent ? (
+          <QuickInfoDocumentationText>
+            {documentationContent}
+          </QuickInfoDocumentationText>
         ) : undefined
       }
       theme={theme}
@@ -171,41 +163,6 @@ function useActiveThemeName(anchorId: string | undefined): string | undefined {
     () => readActiveThemeName(anchorId),
     () => readActiveThemeName(anchorId)
   )
-}
-
-function useResolvedQuickInfoDocumentation(
-  documentationText: string
-): React.ReactNode | string | null {
-  const [resolvedDocumentationContent, setResolvedDocumentationContent] =
-    React.useState<React.ReactNode | string | null>(null)
-
-  React.useEffect(() => {
-    let isDisposed = false
-
-    if (!documentationText) {
-      setResolvedDocumentationContent(null)
-      return
-    }
-
-    setResolvedDocumentationContent(null)
-    void renderQuickInfoDocumentationContent(documentationText)
-      .then((value) => {
-        if (!isDisposed) {
-          setResolvedDocumentationContent(value)
-        }
-      })
-      .catch(() => {
-        if (!isDisposed) {
-          setResolvedDocumentationContent(documentationText)
-        }
-      })
-
-    return () => {
-      isDisposed = true
-    }
-  }, [documentationText])
-
-  return resolvedDocumentationContent
 }
 
 function renderTokenizedDisplayText(
@@ -398,20 +355,85 @@ function subscribeToQuickInfoThemeChanges(onStoreChange: () => void): () => void
   }
 }
 
-async function renderQuickInfoDocumentationContent(
+function renderQuickInfoDocumentationContent(
   documentationText: string
-): Promise<React.ReactNode> {
-  return getMarkdownContent({
-    source: documentationText,
-    components: quickInfoMarkdownComponents,
-    remarkPlugins,
-    rehypePlugins,
-    runtime: {
-      Fragment: JsxRuntimeFragment,
-      jsx,
-      jsxs,
-    },
-  })
+): React.ReactNode | null {
+  const content = renderQuickInfoDocumentationInline(documentationText)
+  if (content.length === 0) {
+    return null
+  }
+
+  return content
+}
+
+function renderQuickInfoDocumentationInline(
+  value: string
+): React.ReactNode[] {
+  const content = value.replace(/\r\n?/g, '\n').trim()
+  if (content.length === 0) {
+    return []
+  }
+
+  const inlineNodes: React.ReactNode[] = []
+  let cursor = 0
+
+  for (const match of content.matchAll(QUICK_INFO_DOCUMENTATION_TOKEN_PATTERN)) {
+    const matchIndex = match.index ?? -1
+    if (matchIndex > cursor) {
+      pushQuickInfoDocumentationText(
+        content.slice(cursor, matchIndex),
+        inlineNodes
+      )
+    }
+
+    const token = match[0]
+    if (token.startsWith('[')) {
+      const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
+      if (linkMatch) {
+        inlineNodes.push(
+          <DocumentationLink
+            href={linkMatch[2]}
+            key={`link:${matchIndex}:${linkMatch[2]}`}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {linkMatch[1]}
+          </DocumentationLink>
+        )
+      } else {
+        pushQuickInfoDocumentationText(token, inlineNodes)
+      }
+    } else {
+      inlineNodes.push(
+        <DocumentationInlineCode key={`code:${matchIndex}`}>
+          {token.slice(1, -1)}
+        </DocumentationInlineCode>
+      )
+    }
+
+    cursor = matchIndex + token.length
+  }
+
+  if (cursor < content.length) {
+    pushQuickInfoDocumentationText(content.slice(cursor), inlineNodes)
+  }
+
+  return inlineNodes
+}
+
+function pushQuickInfoDocumentationText(
+  value: string,
+  target: React.ReactNode[]
+): void {
+  const collapsed = value.replace(/\s+/g, ' ')
+  const trimmed = collapsed.trim()
+  if (trimmed.length === 0) {
+    return
+  }
+
+  target.push(
+    `${/^\s/.test(collapsed) ? ' ' : ''}${trimmed}${/\s$/.test(collapsed) ? ' ' : ''}`
+  )
 }
 
 const KeywordToken = styled('span', {
@@ -427,46 +449,12 @@ const StringToken = styled('span', {
   color: 'var(--renoun-quick-info-string, #ecc48d)',
 })
 
-const Paragraph = styled('p', {
-  margin: 0,
-  textWrap: 'pretty',
+const DocumentationLink = styled('a', {
+  color: 'inherit',
+  textDecoration: 'underline',
 })
 
-const Table = styled('table', {
-  borderCollapse: 'collapse',
-  'th, td': {
-    padding: '0.25em 0.75em',
-    border: '1px solid var(--renoun-quick-info-table-border, currentColor)',
-  },
-})
-
-function QuickInfoMarkdownCodeBlock({
-  children,
-}: {
-  children?: React.ReactNode
-}) {
-  return (
-    <DocumentationCodeBlock>
-      <code>{children}</code>
-    </DocumentationCodeBlock>
-  )
-}
-
-const quickInfoMarkdownComponents = {
-  CodeBlock: QuickInfoMarkdownCodeBlock,
-  p: Paragraph,
-  table: Table,
-}
-
-const DocumentationCodeBlock = styled('pre', {
-  margin: '0.25rem 0',
-  padding: '0.35rem 0.5rem',
+const DocumentationInlineCode = styled('code', {
   fontFamily: 'monospace',
-  fontSize: '0.8rem',
-  lineHeight: 1.35,
-  whiteSpace: 'pre-wrap',
-  wordBreak: 'break-word',
-  overflowWrap: 'anywhere',
-  borderRadius: 4,
-  backgroundColor: 'color-mix(in oklab, currentColor 10%, transparent)',
+  fontSize: '0.95em',
 })

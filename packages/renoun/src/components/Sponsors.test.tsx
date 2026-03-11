@@ -80,6 +80,7 @@ describe('Sponsors cache', () => {
     vi.resetModules()
     const { clearSponsorsCacheForTests } = await import('./Sponsors.tsx')
     clearSponsorsCacheForTests()
+    vi.useRealTimers()
   })
 
   afterEach(() => {
@@ -277,6 +278,52 @@ describe('Sponsors cache', () => {
       children: () => <></>,
     })
 
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('prunes expired cache variants when new sponsor cache keys are created', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+
+    const { Sponsors, getSponsorsCacheSizeForTests } = await import(
+      './Sponsors.tsx'
+    )
+    process.env['GITHUB_SPONSORS_TOKEN'] = 'token-prune'
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL): Promise<Response> => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url === 'https://api.github.com/graphql') {
+          return createGraphqlResponse()
+        }
+
+        if (url === 'https://github.com/sponsors/renoun') {
+          return createSponsorsPageResponse('renoun')
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`)
+      }
+    )
+
+    globalThis.fetch = fetchMock as typeof fetch
+
+    await Sponsors({
+      tiers: [{ amount: 100, title: 'Bronze', avatarSize: 64 }],
+      cacheTtlMs: 25,
+      children: () => <></>,
+    })
+
+    expect(getSponsorsCacheSizeForTests()).toBe(1)
+
+    vi.setSystemTime(new Date('2026-01-01T00:00:01.000Z'))
+
+    await Sponsors({
+      tiers: [{ amount: 100, title: 'Bronze', avatarSize: 96 }],
+      cacheTtlMs: 25,
+      children: () => <></>,
+    })
+
+    expect(getSponsorsCacheSizeForTests()).toBe(1)
     expect(fetchMock).toHaveBeenCalledTimes(4)
   })
 

@@ -398,6 +398,79 @@ describe('Tokens', () => {
     }
   })
 
+  test('routes precomputed quick info through the client popover in runtime-backed hovers', async () => {
+    symbolMock.mockClear()
+
+    const initialQuickInfo = {
+      displayText: '(alias) const History',
+      documentationText: 'History hover info',
+    }
+    const { __TEST_ONLY__ } = await import('./Tokens.tsx')
+    const tokenNode = __TEST_ONLY__.renderToken({
+      token: {
+        value: 'History',
+        start: 0,
+        end: 7,
+        hasTextStyles: true,
+        isBaseColor: false,
+        isDeprecated: false,
+        isSymbol: true,
+        isWhiteSpace: false,
+        quickInfo: initialQuickInfo,
+        style: {},
+      },
+      tokenIndex: 0,
+      lineIndex: 0,
+      filePath: '/tmp/history.ts',
+      quickInfoRuntime: {
+        id: 'tokens-development-runtime',
+        port: '43123',
+        host: '127.0.0.1',
+      },
+      quickInfoValueSignature: 'history-v1',
+      quickInfoThemeConfig: 'default',
+      theme: {
+        editor: {
+          hoverHighlightBackground: 'transparent',
+        },
+        editorHoverWidget: {
+          border: 'transparent',
+          background: 'transparent',
+          foreground: 'currentColor',
+        },
+        panel: {
+          border: 'transparent',
+        },
+        editorError: {
+          foreground: 'currentColor',
+        },
+      } as any,
+    })
+
+    renderToStaticMarkup(<>{tokenNode}</>)
+
+    expect(symbolMock).toHaveBeenCalled()
+
+    const props = symbolMock.mock.calls[0]?.[0] as
+      | { popover?: React.ReactElement | undefined }
+      | undefined
+    expect(React.isValidElement(props?.popover)).toBe(true)
+    expect(props?.popover?.props.quickInfo).toEqual(initialQuickInfo)
+    expect(props?.popover?.props.request).toEqual(
+      expect.objectContaining({
+        filePath: '/tmp/history.ts',
+        position: 0,
+        valueSignature: 'history-v1',
+        runtime: {
+          id: 'tokens-development-runtime',
+          port: '43123',
+          host: '127.0.0.1',
+        },
+        themeConfig: 'default',
+      })
+    )
+  })
+
   test('virtualizes explicit snippet paths during analysis', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'

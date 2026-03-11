@@ -105,10 +105,9 @@ import {
 } from './runtime-env.ts'
 import type { AnalysisServerRuntime } from './runtime-env.ts'
 import type { AnalysisOptions } from './types.ts'
+import type { AnalysisClientServerModules } from './client.server.types.ts'
 
 export type { AnalysisClientBrowserRefreshNotification } from './client-refresh-state.ts'
-
-type AnalysisClientServerModules = typeof import('./client.server.ts')
 
 interface ActiveClientState {
   client: WebSocketClient
@@ -228,6 +227,24 @@ export function onAnalysisClientBrowserRefreshNotification(
   )
   ensureRefreshSubscriptionsForCurrentClients()
   return unsubscribe
+}
+
+export function subscribeToAnalysisClientBrowserRuntimeRefresh(
+  runtime: AnalysisServerRuntime,
+  listener: (message: ClientBrowserRefreshNotification) => void
+): () => void {
+  const runtimeKey = toServerRuntimeKey(runtime)
+  const releaseRuntime = retainAnalysisClientBrowserRuntime(runtime)
+  const unsubscribe = onAnalysisClientBrowserRefreshNotification((message) => {
+    if (message.runtimeKey === runtimeKey) {
+      listener(message)
+    }
+  })
+
+  return () => {
+    unsubscribe()
+    releaseRuntime()
+  }
 }
 
 function ensureRefreshSubscriptionsForCurrentClients(): void {

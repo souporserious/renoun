@@ -84,7 +84,6 @@ async function NavigationAsync({
   let childrenByPath:
     | ReadonlyMap<string, readonly FileSystemEntry<any>[]>
     | undefined
-  let rootDirectEntryPathnames: ReadonlySet<string> | undefined
 
   if (isDirectory(source)) {
     const canUseRecursiveTree = source.getFilterPatternKind() === null
@@ -99,9 +98,6 @@ async function NavigationAsync({
       const tree = buildNavigationTree(source.getPathname(), recursiveEntries)
       entries = mergeNavigationEntries(directEntries, tree.rootEntries)
       childrenByPath = tree.childrenByPath
-      rootDirectEntryPathnames = new Set(
-        directEntries.map((entry) => entry.getPathname())
-      )
     }
   } else {
     entries = await source.getEntries()
@@ -118,8 +114,6 @@ async function NavigationAsync({
             entry,
             components,
             childrenByPath,
-            canReadDirectChildren:
-              rootDirectEntryPathnames?.has(entry.getPathname()) === true,
           })
         )
       )
@@ -145,12 +139,10 @@ async function renderTreeItem({
   entry,
   components,
   childrenByPath,
-  canReadDirectChildren,
 }: {
   entry: FileSystemEntry<any>
   components: NavigationComponents
   childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]>
-  canReadDirectChildren: boolean
 }): Promise<React.ReactNode> {
   const pathname = entry.getPathname()
   const depth = entry.depth + 1
@@ -163,17 +155,7 @@ async function renderTreeItem({
     )
   }
 
-  const recursiveEntries = childrenByPath.get(pathname) ?? []
-  let entries = recursiveEntries
-  let directChildPathnames: ReadonlySet<string> | undefined
-
-  if (canReadDirectChildren) {
-    const directEntries = await entry.getEntries()
-    entries = mergeNavigationEntries(directEntries, recursiveEntries)
-    directChildPathnames = new Set(
-      directEntries.map((childEntry) => childEntry.getPathname())
-    )
-  }
+  const entries = childrenByPath.get(pathname) ?? []
 
   if (entries.length === 0) {
     return (
@@ -193,8 +175,6 @@ async function renderTreeItem({
               entry: childEntry,
               components,
               childrenByPath,
-              canReadDirectChildren:
-                directChildPathnames?.has(childEntry.getPathname()) === true,
             })
           )
         )}

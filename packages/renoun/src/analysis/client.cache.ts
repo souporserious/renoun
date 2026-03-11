@@ -9,9 +9,7 @@ import {
   trimLeadingSlashes,
   trimTrailingSlashes,
 } from '../utils/path-core.ts'
-import {
-  stableStringify,
-} from '../utils/stable-stringify.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
 export type ClientCachedRpcMethod =
   | 'getQuickInfoAtPosition'
@@ -100,7 +98,7 @@ export function toClientRpcCacheKey(
   method: ClientCachedRpcMethod,
   params: unknown
 ): string {
-  return `${method}|${stableStringify(params)}`
+  return `${method}|${hashString(stableStringify(params))}`
 }
 
 function toComparablePath(path: string): string {
@@ -182,7 +180,9 @@ function getCandidatePaths(
     return [normalizePathKey(normalized)]
   }
 
-  const resolvedCandidates = new Set<string>()
+  const resolvedCandidates = new Set<string>([
+    normalizePathKey(normalized),
+  ])
   for (const rootCandidate of rootCandidates) {
     resolvedCandidates.add(
       normalizePathKey(joinPaths(rootCandidate, normalized))
@@ -205,7 +205,7 @@ function getRuntimeCandidatePaths(
     return [normalized]
   }
 
-  const resolvedCandidates = new Set<string>()
+  const resolvedCandidates = new Set<string>([normalizePathKey(normalized)])
   for (const rootCandidate of rootCandidates) {
     resolvedCandidates.add(
       normalizeSlashes(joinPaths(rootCandidate, normalized))
@@ -539,7 +539,9 @@ export function normalizeInvalidationPaths(
         : [toRuntimeInvalidationPath(path)]
 
     for (const candidatePath of candidatePaths) {
-      const comparablePath = toComparablePath(candidatePath)
+      const comparablePath = isAbsolutePath(candidatePath)
+        ? toComparablePath(candidatePath)
+        : normalizePathKey(candidatePath)
       if (!runtimePathByComparablePath.has(comparablePath)) {
         runtimePathByComparablePath.set(comparablePath, candidatePath)
       }

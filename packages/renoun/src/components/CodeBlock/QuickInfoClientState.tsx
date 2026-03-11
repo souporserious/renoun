@@ -201,13 +201,53 @@ export function useResolvedQuickInfoClientState({
     } satisfies ResolvedQuickInfoRequest
   }, [effectiveAnalysisVersion, request, selectedRuntime])
   const requestKey = effectiveRequest ? toQuickInfoCacheKey(effectiveRequest) : ''
+  const hydrationRequestIdentityKey = React.useMemo(() => {
+    return toQuickInfoHydrationIdentityKey(request)
+  }, [request])
+  const hydratedQuickInfoRequestKeyRef = React.useRef<string | null>(
+    quickInfo !== undefined && requestKey ? requestKey : null
+  )
+  const previousHydrationRequestIdentityKeyRef =
+    React.useRef(hydrationRequestIdentityKey)
+  const previousHasHydratedQuickInfoRef = React.useRef(
+    quickInfo !== undefined
+  )
   const displayText = resolvedQuickInfo?.displayText ?? ''
+
+  React.useEffect(() => {
+    const hasHydratedQuickInfo = quickInfo !== undefined
+    const didHydrationIdentityChange =
+      previousHydrationRequestIdentityKeyRef.current !==
+      hydrationRequestIdentityKey
+    const didHydratedQuickInfoAvailabilityChange =
+      previousHasHydratedQuickInfoRef.current !== hasHydratedQuickInfo
+
+    if (
+      !didHydrationIdentityChange &&
+      !didHydratedQuickInfoAvailabilityChange
+    ) {
+      return
+    }
+
+    previousHydrationRequestIdentityKeyRef.current =
+      hydrationRequestIdentityKey
+    previousHasHydratedQuickInfoRef.current = hasHydratedQuickInfo
+    hydratedQuickInfoRequestKeyRef.current =
+      hasHydratedQuickInfo && requestKey ? requestKey : null
+  }, [hydrationRequestIdentityKey, quickInfo, requestKey])
 
   React.useEffect(() => {
     let isDisposed = false
 
-    if (quickInfo !== undefined) {
-      setResolvedQuickInfo(quickInfo)
+    if (
+      shouldReuseHydratedQuickInfo({
+        quickInfo,
+        canRequestQuickInfo: effectiveRequest !== undefined,
+        requestKey,
+        hydratedRequestKey: hydratedQuickInfoRequestKeyRef.current,
+      })
+    ) {
+      setResolvedQuickInfo(quickInfo ?? null)
       setIsLoading(false)
       return
     }
@@ -321,6 +361,48 @@ function toQuickInfoCacheKey(request: ResolvedQuickInfoRequest): string {
   const analysisVersion = request.analysisVersion ?? `${request.runtime.id}:0:0`
   const valueSignature = request.valueSignature ?? ''
   return `${analysisVersion}:${valueSignature}:${request.filePath}:${request.position}`
+}
+
+function toQuickInfoHydrationIdentityKey(
+  request: QuickInfoRequest | undefined
+): string {
+  if (!request) {
+    return ''
+  }
+
+  return [
+    request.analysisVersion ?? '',
+    request.valueSignature ?? '',
+    request.filePath,
+    request.position,
+    toAnalysisServerRuntimeKey(request.runtime) ?? '',
+    request.sourceMetadata?.language ?? '',
+    request.sourceMetadata?.value ?? '',
+  ].join(':')
+}
+
+function shouldReuseHydratedQuickInfo(options: {
+  quickInfo: QuickInfoData | undefined
+  canRequestQuickInfo: boolean
+  requestKey: string
+  hydratedRequestKey: string | null
+}): boolean {
+  const {
+    quickInfo,
+    canRequestQuickInfo,
+    requestKey,
+    hydratedRequestKey,
+  } = options
+
+  if (quickInfo === undefined) {
+    return false
+  }
+
+  if (!canRequestQuickInfo || requestKey.length === 0) {
+    return true
+  }
+
+  return hydratedRequestKey === requestKey
 }
 
 function getQuickInfoRequestAnalysisVersion(
@@ -487,4 +569,5 @@ export const __TEST_ONLY__ = {
   getQuickInfoForRequest,
   resolveQuickInfoAnalysisVersion,
   resolveQuickInfoRuntime,
+  shouldReuseHydratedQuickInfo,
 }

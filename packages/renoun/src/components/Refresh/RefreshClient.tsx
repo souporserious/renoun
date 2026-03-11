@@ -1,11 +1,10 @@
 'use client'
 import { useEffect } from 'react'
 
-import { getAnalysisServerRuntimeKey } from '../../analysis/browser-runtime.ts'
 import {
-  onAnalysisClientBrowserRefreshNotification,
-  retainAnalysisClientBrowserRuntime,
+  subscribeToAnalysisClientBrowserRuntimeRefresh,
 } from '../../analysis/client.ts'
+import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 
 declare global {
   var __WAKU_RSC_RELOAD_LISTENERS__: (() => void)[] | undefined
@@ -26,50 +25,52 @@ export function RefreshClient({
   host?: string
   emitRefreshNotifications?: boolean
 }) {
-  const runtimeKey = getAnalysisServerRuntimeKey({
-    port,
-    id,
-    host,
-    emitRefreshNotifications,
-  })
-
   useEffect(() => {
     if (port === undefined) {
       return
     }
 
-    const releaseRuntime = retainAnalysisClientBrowserRuntime({
+    const runtime: AnalysisServerRuntime = {
       port,
       id,
-      host,
-      emitRefreshNotifications,
-    })
-    const unsubscribe = onAnalysisClientBrowserRefreshNotification((message) => {
-      if (
-        message.type === 'refresh' &&
-        message.runtimeKey === runtimeKey &&
-        'nd' in window
-      ) {
-        // @ts-ignore - private Next.js API
-        const router = window.nd.router
+      ...(host ? { host } : {}),
+      ...(typeof emitRefreshNotifications === 'boolean'
+        ? { emitRefreshNotifications }
+        : {}),
+    }
 
-        if ('hmrRefresh' in router) {
-          router.hmrRefresh()
-        } else if ('fastRefresh' in router) {
-          router.fastRefresh()
-        } else if ('__WAKU_RSC_RELOAD_LISTENERS__' in globalThis) {
-          globalThis.__WAKU_RSC_RELOAD_LISTENERS__?.forEach((callback) =>
-            callback()
-          )
+    return subscribeToAnalysisClientBrowserRuntimeRefresh(
+      runtime,
+      (message) => {
+        if (message.type === 'refresh') {
+          refreshDevelopmentRouter()
         }
       }
-    })
-
-    return () => {
-      unsubscribe()
-      releaseRuntime()
-    }
-  }, [emitRefreshNotifications, host, id, port, runtimeKey])
+    )
+  }, [emitRefreshNotifications, host, id, port])
 
   return null
+}
+
+function refreshDevelopmentRouter(): void {
+  if (!('nd' in window)) {
+    return
+  }
+
+  // @ts-ignore - private Next.js API
+  const router = window.nd.router
+
+  if ('hmrRefresh' in router) {
+    router.hmrRefresh()
+    return
+  }
+
+  if ('fastRefresh' in router) {
+    router.fastRefresh()
+    return
+  }
+
+  if ('__WAKU_RSC_RELOAD_LISTENERS__' in globalThis) {
+    globalThis.__WAKU_RSC_RELOAD_LISTENERS__?.forEach((callback) => callback())
+  }
 }

@@ -10,7 +10,7 @@ import {
 const PROJECT_ROOT = fileURLToPath(new URL('..', import.meta.url))
 
 describe('bench site build invocation', () => {
-  test('runs the default site benchmark through the package-local build entrypoint', () => {
+  test('runs the default site benchmark through the turbo-backed root build entrypoint', () => {
     expect(
       resolveBuildInvocation({
         projectRoot: '/workspace/renoun',
@@ -18,7 +18,7 @@ describe('bench site build invocation', () => {
       })
     ).toEqual({
       command: 'pnpm',
-      args: ['--dir', '/workspace/renoun/apps/site', 'build'],
+      args: ['build', '--filter=@apps/site'],
     })
   })
 

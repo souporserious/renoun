@@ -147,4 +147,4 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
 
       - name: Run renoun browser regression tests
-        run: pnpm --filter renoun test:browser
+        run: pnpm turbo run test:browser --filter renoun

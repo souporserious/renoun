@@ -673,51 +673,57 @@ function renderToken({
   )
 
   if (hasQuickInfo) {
-    const popover = token.quickInfo ? (
-      <Suspense
-        fallback={
-          <QuickInfoLoading
-            css={cssProp?.popover}
-            className={className?.popover}
-            style={style?.popover}
-          />
+    const request = canRequestQuickInfo
+      ? {
+          filePath: filePath!,
+          position: token.start,
+          valueSignature: quickInfoValueSignature,
+          sourceMetadata: quickInfoSourceMetadata,
+          runtime: quickInfoRuntime!,
+          themeConfig: quickInfoThemeConfig,
         }
-      >
-        <QuickInfo
+      : undefined
+    let popover: React.ReactNode
+
+    if (request) {
+      popover = (
+        <QuickInfoClientPopover
           diagnostics={token.diagnostics}
           quickInfo={token.quickInfo}
+          request={request}
+          theme={{
+            border: theme.editorHoverWidget.border,
+            background: theme.editorHoverWidget.background,
+            foreground: theme.editorHoverWidget.foreground,
+            panelBorder: theme.panel.border,
+            errorForeground: theme.editorError.foreground,
+          }}
           css={cssProp?.popover}
           className={className?.popover}
           style={style?.popover}
         />
-      </Suspense>
-    ) : (
-      <QuickInfoClientPopover
-        diagnostics={token.diagnostics}
-        request={
-          canRequestQuickInfo
-            ? {
-                filePath: filePath!,
-                position: token.start,
-                valueSignature: quickInfoValueSignature,
-                sourceMetadata: quickInfoSourceMetadata,
-                runtime: quickInfoRuntime!,
-                themeConfig: quickInfoThemeConfig,
-              }
-            : undefined
-        }
-        theme={{
-          border: theme.editorHoverWidget.border,
-          background: theme.editorHoverWidget.background,
-          foreground: theme.editorHoverWidget.foreground,
-          panelBorder: theme.panel.border,
-          errorForeground: theme.editorError.foreground,
-        }}
-        css={cssProp?.popover}
-        className={className?.popover}
-        style={style?.popover}
-      />
-    )
+      )
+    } else {
+      popover = (
+        <Suspense
+          fallback={
+            <QuickInfoLoading
+              css={cssProp?.popover}
+              className={className?.popover}
+              style={style?.popover}
+            />
+          }
+        >
+          <QuickInfo
+            diagnostics={token.diagnostics}
+            quickInfo={token.quickInfo}
+            css={cssProp?.popover}
+            className={className?.popover}
+            style={style?.popover}
+          />
+        </Suspense>
+      )
+    }
 
     return (
       <Symbol
@@ -1114,4 +1120,8 @@ function joinClassNames(
     else out += ' ' + value
   }
   return out
+}
+
+export const __TEST_ONLY__ = {
+  renderToken,
 }

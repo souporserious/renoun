@@ -139,7 +139,9 @@ function pruneRuntimeAnalysisSessions(): void {
     return
   }
 
-  for (const [scopeKey, runtimeAnalysisSession] of runtimeAnalysisSessionByScopeKey) {
+  for (const [scopeKey, runtimeAnalysisSession] of Array.from(
+    runtimeAnalysisSessionByScopeKey.entries()
+  )) {
     if (
       runtimeAnalysisSessionByScopeKey.size <=
       RUNTIME_ANALYSIS_SESSION_MAX_ENTRIES
@@ -152,7 +154,6 @@ function pruneRuntimeAnalysisSessions(): void {
     }
 
     if (runtimeAnalysisSession.session.inflight.size > 0) {
-      touchRuntimeAnalysisSession(scopeKey, runtimeAnalysisSession)
       continue
     }
 
@@ -232,7 +233,9 @@ export async function getRuntimeAnalysisSessions(
   }
 
   const sessions: RuntimeAnalysisSession[] = []
-  for (const [scopeKey, runtimeSession] of runtimeAnalysisSessionByScopeKey) {
+  for (const [scopeKey, runtimeSession] of Array.from(
+    runtimeAnalysisSessionByScopeKey.entries()
+  )) {
     for (const normalizedPath of normalizedPaths) {
       if (pathsIntersect(runtimeSession.scopePathKey, normalizedPath)) {
         sessions.push(touchRuntimeAnalysisSession(scopeKey, runtimeSession))
