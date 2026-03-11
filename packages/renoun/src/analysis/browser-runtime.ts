@@ -2,6 +2,7 @@ import type { AnalysisServerRuntime } from './runtime-env.ts'
 
 let browserAnalysisServerRuntime: AnalysisServerRuntime | undefined
 let browserAnalysisClientRefreshVersion = '0:0'
+let browserAnalysisClientRefreshVersionRuntimeKey: string | undefined
 
 const browserAnalysisServerRuntimeListeners = new Set<
   (runtime: AnalysisServerRuntime | undefined) => void
@@ -111,6 +112,12 @@ export function getAnalysisClientBrowserRefreshVersion(): string {
   return browserAnalysisClientRefreshVersion
 }
 
+export function getAnalysisClientBrowserRefreshVersionRuntimeKey():
+  | string
+  | undefined {
+  return browserAnalysisClientRefreshVersionRuntimeKey
+}
+
 export function onAnalysisClientBrowserRefreshVersionChange(
   listener: (version: string) => void
 ): () => void {
@@ -120,12 +127,19 @@ export function onAnalysisClientBrowserRefreshVersionChange(
   }
 }
 
-export function setAnalysisClientBrowserRefreshVersion(version: string): void {
-  if (browserAnalysisClientRefreshVersion === version) {
+export function setAnalysisClientBrowserRefreshVersion(
+  version: string,
+  runtimeKey?: string
+): void {
+  if (
+    browserAnalysisClientRefreshVersion === version &&
+    browserAnalysisClientRefreshVersionRuntimeKey === runtimeKey
+  ) {
     return
   }
 
   browserAnalysisClientRefreshVersion = version
+  browserAnalysisClientRefreshVersionRuntimeKey = runtimeKey
   for (const listener of browserAnalysisClientRefreshVersionListeners) {
     listener(browserAnalysisClientRefreshVersion)
   }

@@ -73,8 +73,6 @@ import {
 
 const { SyntaxKind } = getTsMorph()
 
-let currentHighlighter: Promise<Highlighter> | null = null
-let resolvedHighlighter: Highlighter | null = null
 let activeAnalysisServers = 0
 
 interface ActiveAnalysisServerRuntime {
@@ -556,6 +554,8 @@ export async function createServer(options?: CreateServerOptions) {
 
   let refreshFlushTimer: NodeJS.Timeout | undefined
   let refreshFlushDelayMs: number | undefined
+  let currentHighlighter: Promise<Highlighter> | null = null
+  let resolvedHighlighter: Highlighter | null = null
   const pendingRefreshPaths = new Set<string>()
   const pendingRefreshEventTypes = new Set<string>()
   let refreshCursor = 0
@@ -1285,6 +1285,8 @@ export async function createServer(options?: CreateServerOptions) {
     unregisterActiveAnalysisServerRuntime(server)
     activeAnalysisServers = Math.max(0, activeAnalysisServers - 1)
     if (activeAnalysisServers === 0) {
+      currentHighlighter = null
+      resolvedHighlighter = null
       disposeAnalysisWatchers()
     }
 

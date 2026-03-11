@@ -23,6 +23,7 @@ import type { HighlighterInitializationOptions } from '../utils/highlighter-opti
 import type { DistributiveOmit } from '../types.ts'
 import {
   getAnalysisClientBrowserRefreshVersion,
+  getAnalysisClientBrowserRefreshVersionRuntimeKey,
   getAnalysisClientBrowserRuntime as getSharedAnalysisClientBrowserRuntime,
   getAnalysisServerRuntimeKey,
   normalizeAnalysisServerRuntime,
@@ -182,7 +183,10 @@ function getAnalysisClientRefreshVersionRuntimeKey(): string | undefined {
 }
 
 function notifyAnalysisClientRefreshVersionChanged(): void {
-  setAnalysisClientBrowserRefreshVersion(getAnalysisClientRefreshVersion())
+  setAnalysisClientBrowserRefreshVersion(
+    getAnalysisClientRefreshVersion(),
+    getAnalysisClientRefreshVersionRuntimeKey()
+  )
 }
 
 function hydrateRefreshStateFromSharedAnalysisBrowserVersion(
@@ -192,6 +196,10 @@ function hydrateRefreshStateFromSharedAnalysisBrowserVersion(
     !runtimeKey ||
     getAnalysisClientRefreshVersionRuntimeKey() !== runtimeKey
   ) {
+    return
+  }
+
+  if (getAnalysisClientBrowserRefreshVersionRuntimeKey() !== runtimeKey) {
     return
   }
 
@@ -1999,11 +2007,22 @@ function setAnalysisClientRefreshVersionForTests(version: string): void {
     latestRefreshCursorRuntimeKey = runtimeKey
   }
   setAnalysisClientBrowserRefreshVersion(
-    `${parsedVersion.cursor}:${parsedVersion.epoch}`
+    `${parsedVersion.cursor}:${parsedVersion.epoch}`,
+    runtimeKey
   )
 }
 
 function clearAnalysisClientStateForTests(): void {
+  disposeActiveClient({
+    invalidateClientRpcState: false,
+  })
+  explicitBrowserRuntime = undefined
+  browserRuntimeRegistrations.length = 0
+  retainedBrowserRuntimeKeyAtActivation = undefined
+  setSharedAnalysisClientBrowserRuntime(undefined)
+  disposeAnalysisBrowserClient()
+  browserRuntimeRetentionListeners.clear()
+  browserRefreshNotificationListeners.clear()
   clearClientRpcCacheStateForTests()
   pendingRefreshInvalidationPathsByScope.clear()
   connectedAnalysisServerClientRuntimeKeys.clear()
@@ -2011,6 +2030,7 @@ function clearAnalysisClientStateForTests(): void {
   latestRefreshCursor = 0
   latestRefreshCursorRuntimeKey = undefined
   refreshResyncQueue = Promise.resolve()
+  setAnalysisClientBrowserRefreshVersion('0:0')
 }
 
 export const __TEST_ONLY__ = {

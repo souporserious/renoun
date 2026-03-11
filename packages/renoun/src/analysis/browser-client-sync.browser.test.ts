@@ -55,7 +55,6 @@ describe('analysis/client browser refresh runtime', () => {
   })
 
   it('resets the cursor when switching runtimes', async () => {
-    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('7:3')
     setAnalysisClientBrowserRuntime({
       id: 'runtime-a',
       port: '43123',
@@ -63,6 +62,7 @@ describe('analysis/client browser refresh runtime', () => {
     })
 
     await waitFor(() => controller.instances.length === 1, 1_000)
+    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('7:3')
     expect(getAnalysisClientBrowserRefreshVersion()).toBe('7:3')
 
     setAnalysisClientBrowserRuntime({
@@ -82,7 +82,6 @@ describe('analysis/client browser refresh runtime', () => {
   })
 
   it('syncs to a lower cursor after a full refresh resync', async () => {
-    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('5:2')
     setAnalysisClientBrowserRuntime({
       id: 'runtime-resync',
       port: '43123',
@@ -90,6 +89,7 @@ describe('analysis/client browser refresh runtime', () => {
     })
 
     await waitFor(() => controller.instances.length === 1, 1_000)
+    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('5:2')
     controller.instances[0]?.close()
 
     await waitFor(() => controller.instances.length === 2, 1_000)
@@ -140,6 +140,33 @@ describe('analysis/client browser refresh runtime', () => {
         fullRefresh: false,
       },
     })
+  })
+
+  it('does not hydrate a different runtime from stale shared refresh state', async () => {
+    setAnalysisClientBrowserRuntime({
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    })
+
+    await waitFor(() => controller.instances.length === 1, 1_000)
+    ANALYSIS_CLIENT_TEST_ONLY__.setAnalysisClientRefreshVersion('7:3')
+
+    setAnalysisClientBrowserRuntime(undefined)
+    setAnalysisClientBrowserRuntime({
+      id: 'runtime-b',
+      port: '43124',
+      host: '127.0.0.1',
+    })
+
+    await waitFor(() => controller.instances.length === 2, 1_000)
+
+    expect(getAnalysisClientBrowserRefreshVersion()).toBe('0:4')
+    expect(controller.openedUrls).toEqual([
+      'ws://127.0.0.1:43123',
+      'ws://127.0.0.1:43124',
+    ])
+    expect(controller.closedUrls).toEqual(['ws://127.0.0.1:43123'])
   })
 
   it('updates runtime metadata when only refresh notification capability changes', async () => {

@@ -1801,6 +1801,7 @@ export class CacheStore {
         }
       )
     }, heartbeatMs)
+    ;(heartbeat as NodeJS.Timeout).unref?.()
 
     return {
       stop: () => {

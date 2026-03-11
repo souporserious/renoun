@@ -6,13 +6,9 @@ import { parseAnnotations } from '../../utils/annotations.ts'
 import { getSourceTextMetadata } from '../../analysis/client.ts'
 
 const mockTokens = vi.fn()
-const symbolMock = vi.fn(
-  ({
-    children,
-  }: {
-    children: React.ReactNode
-  }) => <>{children}</>
-)
+const symbolMock = vi.fn(({ children }: { children: React.ReactNode }) => (
+  <>{children}</>
+))
 
 vi.mock('../../analysis/client.ts', () => ({
   getAnalysisClientBrowserRuntime: () => undefined,
@@ -196,6 +192,51 @@ describe('Tokens', () => {
         process.env.NODE_ENV = previousNodeEnv
       }
     }
+  })
+
+  test('does not force in-memory analysis for inline TypeScript snippets', async () => {
+    const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
+    getSourceTextMetadataMock.mockResolvedValueOnce({
+      value: 'export const example = 1\n',
+      language: 'tsx',
+      filePath: '_renoun/example.tsx',
+      label: '_renoun/example.tsx',
+    })
+    mockTokens.mockResolvedValueOnce([
+      [
+        {
+          start: 0,
+          end: 24,
+          value: 'export const example = 1',
+          hasTextStyles: false,
+          isBaseColor: true,
+          isWhiteSpace: false,
+          isDeprecated: false,
+          isSymbol: false,
+          style: {},
+        },
+      ],
+    ])
+
+    const { Tokens } = await import('./Tokens.tsx')
+
+    await Tokens({
+      children: 'export const example = 1\n',
+      language: 'tsx',
+      shouldAnalyze: true,
+      shouldFormat: false,
+    })
+
+    expect(getSourceTextMetadataMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        analysisOptions: expect.anything(),
+      })
+    )
+    expect(mockTokens).toHaveBeenCalledWith(
+      expect.not.objectContaining({
+        analysisOptions: expect.anything(),
+      })
+    )
   })
 
   test('does not defer quick info when no development analysis runtime is available', async () => {

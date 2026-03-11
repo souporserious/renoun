@@ -9,6 +9,7 @@ import type { FSWatcher } from 'node:fs'
 
 import { getDebugLogger } from '../utils/debug.ts'
 import type { DebugContext } from '../utils/debug.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import {
   isDevelopmentEnvironment,
   isVitestRuntime,
@@ -208,87 +209,91 @@ function ensureProgramDirectoryWatcher(workspaceDirectory: string): void {
     return
   }
 
-  const watcher = watch(
-    workspaceDirectory,
-    { recursive: true },
-    async (eventType, fileName) => {
-      if (!fileName) return
+  try {
+    const watcher = watch(
+      workspaceDirectory,
+      { recursive: true },
+      (eventType, fileName) => {
+        if (!fileName) return
 
-      const watchedFileName = String(fileName)
-      if (!watchedFileName) {
-        return
-      }
-
-      if (shouldIgnoreAnalysisWatchPath(watchedFileName)) {
-        return
-      }
-
-      const filePath = join(workspaceDirectory, watchedFileName)
-
-      if (isFilePathGitIgnored(filePath)) {
-        return
-      }
-
-      const isDirectory = existsSync(filePath)
-        ? statSync(filePath).isDirectory()
-        : extname(watchedFileName) === ''
-
-      try {
-        const projectsToUpdate = directoryToProjects.get(workspaceDirectory)
-
-        if (!projectsToUpdate) return
-
-        const invalidationPaths = new Set<string>([filePath])
-        if (eventType === 'rename') {
-          const parentDirectoryPath = dirname(filePath)
-          if (parentDirectoryPath && parentDirectoryPath !== filePath) {
-            invalidationPaths.add(parentDirectoryPath)
-          }
-
-          if (isDirectory) {
-            invalidationPaths.add(workspaceDirectory)
-          }
+        const watchedFileName = String(fileName)
+        if (!watchedFileName) {
+          return
         }
-        queueAnalysisWatcherInvalidation(workspaceDirectory, invalidationPaths, {
-          priority: 'immediate',
-        })
 
-        for (const currentProject of projectsToUpdate) {
+        try {
+          if (shouldIgnoreAnalysisWatchPath(watchedFileName)) {
+            return
+          }
+
+          const filePath = join(workspaceDirectory, watchedFileName)
+
+          if (isFilePathGitIgnored(filePath)) {
+            return
+          }
+
+          const isDirectory = existsSync(filePath)
+            ? statSync(filePath).isDirectory()
+            : extname(watchedFileName) === ''
+          const projectsToUpdate = directoryToProjects.get(workspaceDirectory)
+
+          if (!projectsToUpdate) return
+
+          const invalidationPaths = new Set<string>([filePath])
           if (eventType === 'rename') {
-            if (existsSync(filePath)) {
-              if (isDirectory) {
-                currentProject.addDirectoryAtPath(filePath)
-              } else {
-                refreshOrAddSourceFile(currentProject, filePath)
-              }
-            } else if (isDirectory) {
-              const removedDirectory = currentProject.getDirectory(filePath)
-              if (removedDirectory) {
-                removedDirectory.deleteImmediatelySync()
-              }
-            } else {
-              const removedSourceFile = currentProject.getSourceFile(filePath)
-
-              if (removedSourceFile) {
-                removedSourceFile.deleteImmediatelySync()
-              }
+            const parentDirectoryPath = dirname(filePath)
+            if (parentDirectoryPath && parentDirectoryPath !== filePath) {
+              invalidationPaths.add(parentDirectoryPath)
             }
-          } else if (eventType === 'change') {
-            refreshOrAddSourceFile(currentProject, filePath)
+
+            if (isDirectory) {
+              invalidationPaths.add(workspaceDirectory)
+            }
           }
-        }
-      } catch (error) {
-        if (error instanceof Error) {
-          throw new Error(
-            `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${watchedFileName}`,
-            { cause: error }
+          queueAnalysisWatcherInvalidation(workspaceDirectory, invalidationPaths, {
+            priority: 'immediate',
+          })
+
+          for (const currentProject of projectsToUpdate) {
+            if (eventType === 'rename') {
+              if (existsSync(filePath)) {
+                if (isDirectory) {
+                  currentProject.addDirectoryAtPath(filePath)
+                } else {
+                  refreshOrAddSourceFile(currentProject, filePath)
+                }
+              } else if (isDirectory) {
+                const removedDirectory = currentProject.getDirectory(filePath)
+                if (removedDirectory) {
+                  removedDirectory.deleteImmediatelySync()
+                }
+              } else {
+                const removedSourceFile = currentProject.getSourceFile(filePath)
+
+                if (removedSourceFile) {
+                  removedSourceFile.deleteImmediatelySync()
+                }
+              }
+            } else if (eventType === 'change') {
+              refreshOrAddSourceFile(currentProject, filePath)
+            }
+          }
+        } catch (error) {
+          reportBestEffortError(
+            'analysis/get-program',
+            new Error(
+              `[renoun] An error occurred in the file system watcher while trying to ${eventType} the file path at: ${watchedFileName}`,
+              { cause: error }
+            )
           )
         }
       }
-    }
-  )
+    )
 
-  directoryWatchers.set(workspaceDirectory, watcher)
+    directoryWatchers.set(workspaceDirectory, watcher)
+  } catch (error) {
+    reportBestEffortError('analysis/get-program', error)
+  }
 }
 
 function queueAnalysisWatcherInvalidation(

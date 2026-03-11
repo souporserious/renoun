@@ -4,6 +4,7 @@ import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 
 const watcherState = vi.hoisted(() => {
   return {
+    throwOnWatch: false,
     callback:
       undefined as
         | ((
@@ -23,6 +24,11 @@ const mockedInvalidationFns = vi.hoisted(() => {
 const mockedGitIgnoreFns = vi.hoisted(() => {
   return {
     isFilePathGitIgnored: vi.fn(() => false),
+  }
+})
+const mockedBestEffortFns = vi.hoisted(() => {
+  return {
+    reportBestEffortError: vi.fn(),
   }
 })
 
@@ -54,6 +60,10 @@ vi.mock('../utils/is-file-path-git-ignored.ts', () => ({
   isFilePathGitIgnored: mockedGitIgnoreFns.isFilePathGitIgnored,
 }))
 
+vi.mock('../utils/best-effort.ts', () => ({
+  reportBestEffortError: mockedBestEffortFns.reportBestEffortError,
+}))
+
 vi.mock('node:fs', async () => {
   const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
 
@@ -72,6 +82,9 @@ vi.mock('node:fs', async () => {
           fileName: string | Buffer
         ) => void | Promise<void>
       ) => {
+        if (watcherState.throwOnWatch) {
+          throw new Error('[renoun] recursive watch unavailable')
+        }
         watcherState.callback = callback
         return {
           close: vi.fn(),
@@ -102,7 +115,9 @@ describe('analysis watcher invalidation batching', () => {
     mockedInvalidationFns.invalidateProgramFileCachePaths.mockClear()
     mockedInvalidationFns.invalidateRuntimeAnalysisCachePaths.mockClear()
     mockedGitIgnoreFns.isFilePathGitIgnored.mockClear()
+    mockedBestEffortFns.reportBestEffortError.mockClear()
     watcherState.callback = undefined
+    watcherState.throwOnWatch = false
   })
 
   afterEach(() => {
@@ -255,5 +270,48 @@ describe('analysis watcher invalidation batching', () => {
     })
 
     expect(watcherState.callback).toBeUndefined()
+  })
+
+  test('degrades gracefully when recursive watch is unavailable', () => {
+    watcherState.throwOnWatch = true
+
+    expect(() => {
+      getProgram({
+        useInMemoryFileSystem: true,
+        analysisScopeId: `watcher-unavailable-${Date.now()}`,
+        tsConfigFilePath: `/virtual-project-watch-unavailable/tsconfig.json`,
+      })
+    }).not.toThrow()
+
+    expect(watcherState.callback).toBeUndefined()
+    expect(mockedBestEffortFns.reportBestEffortError).toHaveBeenCalledTimes(1)
+  })
+
+  test('reports watcher callback failures without throwing', () => {
+    const uniqueId = Date.now()
+    const workspaceDirectory = `/virtual-project-watch-errors-${uniqueId}`
+
+    getProgram({
+      useInMemoryFileSystem: true,
+      analysisScopeId: `watcher-errors-${uniqueId}`,
+      tsConfigFilePath: `${workspaceDirectory}/tsconfig.json`,
+    })
+
+    const callback = watcherState.callback
+    expect(typeof callback).toBe('function')
+
+    if (!callback) {
+      throw new Error('[renoun] expected watcher callback to be defined')
+    }
+
+    mockedGitIgnoreFns.isFilePathGitIgnored.mockImplementationOnce(() => {
+      throw new Error('[renoun] git ignore failure')
+    })
+
+    expect(() => {
+      callback('rename', 'src/file.ts')
+    }).not.toThrow()
+
+    expect(mockedBestEffortFns.reportBestEffortError).toHaveBeenCalledTimes(1)
   })
 })

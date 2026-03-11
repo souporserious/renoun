@@ -37,11 +37,7 @@ import {
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
-import {
-  isAbsolutePath,
-  pathLikeToString,
-  type PathLike,
-} from '../../utils/path.ts'
+import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 import {
   getServerRuntimeFromProcessEnv,
   type AnalysisServerRuntime,
@@ -140,11 +136,7 @@ export interface TokensProps {
 
 /** Renders syntax highlighted tokens for the `CodeBlock` component. */
 export function Tokens(props: TokensProps) {
-  if (
-    isProductionEnvironment() ||
-    isTestEnvironment() ||
-    isVitestRuntime()
-  ) {
+  if (isProductionEnvironment() || isTestEnvironment() || isVitestRuntime()) {
     return TokensAsync(props)
   }
 
@@ -194,13 +186,14 @@ function TokensFallback({
     <QuickInfoProvider>
       {lines.map((line, index) => {
         const isLast = index === lastLineIndex
-        const lineNode = tokenClassName || tokenStyle ? (
-          <span className={tokenClassName} style={tokenStyle}>
-            {line}
-          </span>
-        ) : (
-          line
-        )
+        const lineNode =
+          tokenClassName || tokenStyle ? (
+            <span className={tokenClassName} style={tokenStyle}>
+              {line}
+            </span>
+          ) : (
+            line
+          )
         const renderedLine = renderLine({
           children: lineNode,
           index,
@@ -355,15 +348,6 @@ async function TokensAsync({
     const isFormattingExplicit =
       shouldFormatProp !== undefined || context?.shouldFormat !== undefined
     const hasExplicitSourceValue = children !== undefined && children !== null
-    const shouldPreferInMemoryAnalysis =
-      hasExplicitSourceValue &&
-      resolvedBaseDirectory === undefined &&
-      (resolvedPath === undefined || !isAbsolutePath(resolvedPath))
-    const analysisOptions = shouldPreferInMemoryAnalysis
-      ? {
-          useInMemoryFileSystem: true as const,
-        }
-      : undefined
     const metadata: SourceTextMetadata = {} as SourceTextMetadata
     const supportsSourceFormattingInCurrentContext =
       typeof language === 'string'
@@ -382,6 +366,8 @@ async function TokensAsync({
           hasExplicitFormattingPreference === false))
 
     if (shouldAnalyze && !shouldSkipInlineSourceMetadata) {
+      // Generated inline snippets still need the host project's tsconfig so
+      // JSX runtime and package imports resolve correctly.
       const result = await getSourceTextMetadata({
         filePath: resolvedPath,
         baseDirectory: resolvedBaseDirectory,
@@ -389,8 +375,8 @@ async function TokensAsync({
         language,
         shouldFormat,
         isFormattingExplicit,
-        analysisOptions,
-        virtualizeFilePath: hasExplicitSourceValue && resolvedPath !== undefined,
+        virtualizeFilePath:
+          hasExplicitSourceValue && resolvedPath !== undefined,
       })
       metadata.value = result.value
       metadata.language = result.language
@@ -443,7 +429,6 @@ async function TokensAsync({
       showErrors,
       theme: themeConfiguration,
       languages: config.languages,
-      analysisOptions,
       deferQuickInfoUntilHover: quickInfoRuntime !== undefined,
       // During development we render a suspense fallback immediately and wait
       // for highlighted tokens so the final stream updates this block.
