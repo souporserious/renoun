@@ -172,7 +172,11 @@ export function isVitestRuntime(): boolean {
 }
 
 export function isCiEnvironment(): boolean {
-  return readProcessEnv(PROCESS_ENV_KEYS.ci) !== undefined
+  const parsed = parseBooleanProcessEnv(PROCESS_ENV_KEYS.ci, {
+    allowYesNo: true,
+  })
+
+  return parsed ?? readProcessEnv(PROCESS_ENV_KEYS.ci) !== undefined
 }
 
 export function isStrictHermeticFileSystemModeFromEnv(): boolean {

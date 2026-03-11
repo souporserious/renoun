@@ -118,16 +118,6 @@
       "import": "./dist/mdx/*.js",
       "default": "./dist/mdx/*.js"
     },
-    "./analysis": {
-      "types": "./dist/analysis/client.d.ts",
-      "import": "./dist/analysis/client.js",
-      "default": "./dist/analysis/client.js"
-    },
-    "./project": {
-      "types": "./dist/project/client.d.ts",
-      "import": "./dist/project/client.js",
-      "default": "./dist/project/client.js"
-    },
     "./server": {
       "types": "./dist/analysis/server.d.ts",
       "import": "./dist/analysis/server.js",
