@@ -8,10 +8,7 @@ import {
 } from './browser-runtime.ts'
 import type { RefreshNotificationMessage } from './refresh-notifications.ts'
 import type { AnalysisServerRuntime } from './runtime-env.ts'
-import {
-  getClientRpcInvalidationEpoch,
-  setClientRpcInvalidationEpoch,
-} from './client.cache.ts'
+import { setClientRpcInvalidationEpoch } from './client.cache.ts'
 
 export interface AnalysisClientBrowserRefreshNotification extends RefreshNotificationMessage {
   runtime: AnalysisServerRuntime
@@ -23,15 +20,40 @@ const browserRefreshNotificationListeners = new Set<
 >()
 const connectedAnalysisServerClientRuntimeKeys = new Set<string>()
 const refreshCursorByRuntimeKey = new Map<string, number>()
+const refreshInvalidationEpochByRuntimeKey = new Map<string, number>()
 
 let latestRefreshCursor = 0
 let latestRefreshCursorRuntimeKey: string | undefined
+let latestRefreshInvalidationEpoch = 0
+
+function getRefreshVersionRuntimeKey(
+  currentRuntimeKey: string | undefined,
+  runtime?: AnalysisServerRuntime
+): string | undefined {
+  if (!runtime) {
+    return currentRuntimeKey
+  }
+
+  return getAnalysisServerRuntimeKey(runtime) ?? currentRuntimeKey
+}
+
+function getRefreshInvalidationEpoch(
+  currentRuntimeKey: string | undefined,
+  runtime?: AnalysisServerRuntime
+): number {
+  const runtimeKey = getRefreshVersionRuntimeKey(currentRuntimeKey, runtime)
+
+  return (
+    latestRefreshInvalidationEpoch +
+    (runtimeKey ? refreshInvalidationEpochByRuntimeKey.get(runtimeKey) ?? 0 : 0)
+  )
+}
 
 export function getAnalysisClientRefreshVersion(
   currentRuntimeKey: string | undefined,
   runtime?: AnalysisServerRuntime
 ): string {
-  return `${getAnalysisClientRefreshCursor(currentRuntimeKey, runtime)}:${getClientRpcInvalidationEpoch()}`
+  return `${getAnalysisClientRefreshCursor(currentRuntimeKey, runtime)}:${getRefreshInvalidationEpoch(currentRuntimeKey, runtime)}`
 }
 
 export function getAnalysisClientRefreshCursor(
@@ -85,7 +107,7 @@ export function hydrateRefreshStateFromSharedAnalysisBrowserVersion(
   const sharedVersion = parseAnalysisClientRefreshVersion(
     getAnalysisClientBrowserRefreshVersion()
   )
-  const currentInvalidationEpoch = getClientRpcInvalidationEpoch()
+  const currentInvalidationEpoch = getRefreshInvalidationEpoch(currentRuntimeKey)
   const currentRefreshCursor =
     refreshCursorByRuntimeKey.get(currentRuntimeKey) ??
     (latestRefreshCursorRuntimeKey === currentRuntimeKey
@@ -100,6 +122,10 @@ export function hydrateRefreshStateFromSharedAnalysisBrowserVersion(
   ) {
     latestRefreshCursor = sharedVersion.cursor
     latestRefreshCursorRuntimeKey = currentRuntimeKey
+    refreshInvalidationEpochByRuntimeKey.set(
+      currentRuntimeKey,
+      Math.max(0, sharedVersion.epoch - latestRefreshInvalidationEpoch)
+    )
     setClientRpcInvalidationEpoch(sharedVersion.epoch)
     refreshCursorByRuntimeKey.set(currentRuntimeKey, sharedVersion.cursor)
     return
@@ -211,6 +237,20 @@ export function onAnalysisClientRefreshVersionChange(
   return onAnalysisClientBrowserRefreshVersionChange(listener)
 }
 
+export function bumpAnalysisClientRefreshInvalidationEpoch(
+  runtimeKey?: string
+): void {
+  if (!runtimeKey) {
+    latestRefreshInvalidationEpoch += 1
+    return
+  }
+
+  refreshInvalidationEpochByRuntimeKey.set(
+    runtimeKey,
+    (refreshInvalidationEpochByRuntimeKey.get(runtimeKey) ?? 0) + 1
+  )
+}
+
 export function onAnalysisClientBrowserRefreshNotification(
   listener: (message: AnalysisClientBrowserRefreshNotification) => void
 ): () => void {
@@ -297,8 +337,10 @@ export function resetAnalysisClientRefreshState(
 
   connectedAnalysisServerClientRuntimeKeys.clear()
   refreshCursorByRuntimeKey.clear()
+  refreshInvalidationEpochByRuntimeKey.clear()
   latestRefreshCursor = 0
   latestRefreshCursorRuntimeKey = undefined
+  latestRefreshInvalidationEpoch = 0
 
   if (clearListeners) {
     browserRefreshNotificationListeners.clear()
@@ -318,13 +360,21 @@ export function setAnalysisClientRefreshVersionForTests(
   const parsedVersion = parseAnalysisClientRefreshVersion(version)
 
   refreshCursorByRuntimeKey.clear()
+  refreshInvalidationEpochByRuntimeKey.clear()
   latestRefreshCursor = parsedVersion.cursor
   latestRefreshCursorRuntimeKey = undefined
+  latestRefreshInvalidationEpoch = 0
   setClientRpcInvalidationEpoch(parsedVersion.epoch)
 
   if (currentRuntimeKey) {
     refreshCursorByRuntimeKey.set(currentRuntimeKey, parsedVersion.cursor)
+    refreshInvalidationEpochByRuntimeKey.set(
+      currentRuntimeKey,
+      parsedVersion.epoch
+    )
     latestRefreshCursorRuntimeKey = currentRuntimeKey
+  } else {
+    latestRefreshInvalidationEpoch = parsedVersion.epoch
   }
 
   setAnalysisClientBrowserRefreshVersion(

@@ -30,6 +30,11 @@ export interface SourceTextMetadata {
   valueSignature?: string
 }
 
+export type SourceTextHydrationMetadata = Pick<
+  SourceTextMetadata,
+  'value' | 'language'
+>
+
 export interface GetSourceTextMetadataOptions extends Omit<
   SourceTextMetadata,
   'label' | 'valueSignature'

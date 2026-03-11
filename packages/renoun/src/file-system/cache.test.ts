@@ -45,7 +45,7 @@ import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import { Session } from './Session.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
-import { Directory, File, Package, Workspace } from './index.tsx'
+import { Collection, Directory, File, Package, Workspace } from './index.tsx'
 import type { FileStructure, GitExportMetadata, GitMetadata } from './types.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
 
@@ -2068,7 +2068,21 @@ updated content`
     expect(secondPackageEntry?.version).toBe('2.0.0')
   })
 
-  test('rotates snapshot identity after session reset', () => {
+  test('rotates snapshot identity after a full session reset', () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const firstSession = Session.for(fileSystem)
+    const firstSnapshotId = firstSession.snapshot.id
+
+    Session.reset(fileSystem)
+
+    const secondSession = Session.for(fileSystem)
+
+    expect(secondSession.snapshot.id).not.toBe(firstSnapshotId)
+  })
+
+  test('reuses snapshot identity after a targeted session reset', () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
@@ -2079,20 +2093,23 @@ updated content`
 
     const secondSession = Session.for(fileSystem)
 
-    expect(secondSession.snapshot.id).not.toBe(firstSnapshotId)
+    expect(secondSession).not.toBe(firstSession)
+    expect(secondSession.snapshot.id).toBe(firstSnapshotId)
   })
 
-  test('refreshes cached directory sessions after a session reset', () => {
+  test('refreshes cached directory sessions after a targeted session reset', () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
     const directory = new Directory({ fileSystem })
-    const firstSnapshotId = directory.getSession().snapshot.id
+    const firstSession = directory.getSession()
+    const firstSnapshotId = firstSession.snapshot.id
 
     Session.reset(fileSystem, firstSnapshotId)
 
-    const nextSnapshotId = directory.getSession().snapshot.id
-    expect(nextSnapshotId).not.toBe(firstSnapshotId)
+    const nextSession = directory.getSession()
+    expect(nextSession).not.toBe(firstSession)
+    expect(nextSession.snapshot.id).toBe(firstSnapshotId)
   })
 
   test('does not rotate snapshot identity when resetting an unknown snapshot id', () => {
@@ -2301,6 +2318,33 @@ updated content`
     )
     expect(await unrelatedSession.inflight.get('token')).toBe(
       await unrelatedSessionToken
+    )
+  })
+
+  test('reuses unrelated sessions after resetting a different snapshot family', () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+
+    const targetSession = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'target-lineage')
+    )
+    const unrelatedSession = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'unrelated-lineage')
+    )
+
+    Session.reset(fileSystem, targetSession.snapshot.id)
+
+    const reusedUnrelatedSession = Session.for(
+      fileSystem,
+      unrelatedSession.snapshot
+    )
+
+    expect(reusedUnrelatedSession).toBe(unrelatedSession)
+    expect(reusedUnrelatedSession.snapshot.id).toBe(
+      unrelatedSession.snapshot.id
     )
   })
 
@@ -5360,6 +5404,83 @@ describe('sqlite cache persistence', () => {
       expect(thirdPrevious?.baseName).toBe('a')
       expect(thirdNext?.baseName).toBe('c')
     })
+  })
+
+  test('refreshes stale collection sibling navigation after a development restart', async () => {
+    const tmpDirectory = createTmpRenounCacheDirectory(
+      'renoun-dev-collection-navigation-'
+    )
+    const previousNodeEnv = process.env.NODE_ENV
+    let seedFileSystem: ReturnType<typeof createTempNodeFileSystem> | undefined
+    let devFileSystem: ReturnType<typeof createTempNodeFileSystem> | undefined
+
+    process.env.NODE_ENV = 'development'
+    disposeDefaultCacheStorePersistence()
+
+    try {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(join(docsDirectory, 'a.mdx'), '# Alpha', 'utf8')
+      writeFileSync(join(docsDirectory, 'c.mdx'), '# Gamma', 'utf8')
+
+      seedFileSystem = createTempNodeFileSystem(tmpDirectory)
+      const seedDirectory = new Directory({
+        fileSystem: seedFileSystem,
+        path: workspaceDirectory,
+      })
+      const seedCollection = new Collection({ entries: [seedDirectory] })
+      const seedFile = await seedDirectory.getFile('c', 'mdx')
+      const [seedPrevious, seedNext] = await seedFile.getSiblings({
+        collection: seedCollection,
+      })
+      expect(seedPrevious?.baseName).toBe('a')
+      expect(seedNext).toBeUndefined()
+
+      writeFileSync(join(docsDirectory, 'b.mdx'), '# Beta', 'utf8')
+      await waitForMilliseconds(300)
+
+      devFileSystem = createTempNodeFileSystem(tmpDirectory)
+      const devDirectory = new Directory({
+        fileSystem: devFileSystem,
+        path: workspaceDirectory,
+      })
+      const devCollection = new Collection({ entries: [devDirectory] })
+      const devFile = await devDirectory.getFile('c', 'mdx')
+
+      const [initialPrevious, initialNext] = await devFile.getSiblings({
+        collection: devCollection,
+      })
+      expect(initialPrevious?.baseName).toBe('a')
+      expect(initialNext).toBeUndefined()
+
+      const deadline = Date.now() + 3_000
+      let refreshedPrevious = initialPrevious
+
+      while (refreshedPrevious?.baseName !== 'b' && Date.now() < deadline) {
+        await waitForMilliseconds(50)
+        ;[refreshedPrevious] = await devFile.getSiblings({
+          collection: devCollection,
+        })
+      }
+
+      expect(refreshedPrevious?.baseName).toBe('b')
+    } finally {
+      if (seedFileSystem) {
+        Session.reset(seedFileSystem)
+      }
+      if (devFileSystem) {
+        Session.reset(devFileSystem)
+      }
+      disposeDefaultCacheStorePersistence()
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
   })
 
   test('revalidates persisted markdown structure across worker sessions after content updates', async () => {

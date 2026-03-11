@@ -56,10 +56,10 @@ describe('restore-renoun-cache action', () => {
       'utf8'
     )
 
-    expect(actionSource).toContain('node packages/renoun/src/cli/cache-token.ts')
-    expect(actionSource).not.toContain(
+    expect(actionSource).toContain(
       'node packages/renoun/src/cli/index.ts cache-token'
     )
+    expect(actionSource).not.toContain('node packages/renoun/src/cli/cache-token.ts')
   })
 
   test('uses cache action so CI restores now and saves during post-job', () => {

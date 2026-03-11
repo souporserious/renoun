@@ -19,7 +19,11 @@ import {
 } from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import type { GetTokensOptions } from '../utils/get-tokens.ts'
-import type { GetSourceTextMetadataOptions } from './query/source-text-metadata.ts'
+import {
+  hydrateSourceTextMetadataSourceFile,
+  type GetSourceTextMetadataOptions,
+  type SourceTextHydrationMetadata,
+} from './query/source-text-metadata.ts'
 import { prewarmSourceTextFormatterRuntime } from '../utils/format-source-text.ts'
 import { mapConcurrent } from '../utils/concurrency.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
@@ -1326,12 +1330,20 @@ export async function createServer(options?: CreateServerOptions) {
       filePath,
       position,
       analysisOptions,
+      sourceMetadata,
     }: {
       filePath: string
       position: number
       analysisOptions?: AnalysisOptions
+      sourceMetadata?: SourceTextHydrationMetadata
     }) {
       const project = getProgram(analysisOptions)
+      if (sourceMetadata) {
+        hydrateSourceTextMetadataSourceFile(project, {
+          ...sourceMetadata,
+          filePath,
+        })
+      }
       return getQuickInfoAtPosition({
         project,
         filePath,

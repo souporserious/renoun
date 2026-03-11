@@ -214,6 +214,44 @@ describe('browser-client runtime transport', () => {
     await expect(thirdPromise).resolves.toEqual({ text: 'quick-info-b' })
   })
 
+  it('sends synthetic snippet source metadata with deferred quick info RPC requests', async () => {
+    const module = await import('./client.ts')
+    const runtime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+
+    const quickInfoPromise = module.getQuickInfoAtPosition(
+      '/project/src/snippet.__renoun_snippet_sig_1.ts',
+      10,
+      undefined,
+      runtime,
+      undefined,
+      {
+        value: 'const answer = 42',
+        language: 'ts',
+      }
+    )
+    await flushBrowserClientCallQueue()
+
+    const client = getMockBrowserClient(0)
+    expect(client.pendingCalls[0]).toMatchObject({
+      method: 'getQuickInfoAtPosition',
+      params: {
+        filePath: '/project/src/snippet.__renoun_snippet_sig_1.ts',
+        position: 10,
+        sourceMetadata: {
+          value: 'const answer = 42',
+          language: 'ts',
+        },
+      },
+    })
+
+    resolveNextPendingCall(client, { text: 'quick-info-a' })
+    await expect(quickInfoPromise).resolves.toEqual({ text: 'quick-info-a' })
+  })
+
   it('disables browser RPC caching when the runtime cannot emit refresh notifications', async () => {
     const module = await import('./client.ts')
     const runtime: AnalysisServerRuntime = {
@@ -349,6 +387,97 @@ describe('browser-client runtime transport', () => {
       await expect(refreshedExplicitPromise).resolves.toEqual({
         text: 'quick-info-b-2',
       })
+    } finally {
+      releaseRuntime()
+      if (originalWebSocket === undefined) {
+        delete (globalThis as { WebSocket?: typeof WebSocket }).WebSocket
+      } else {
+        ;(globalThis as { WebSocket?: typeof WebSocket }).WebSocket =
+          originalWebSocket
+      }
+    }
+  })
+
+  it('keeps explicit-runtime hover cache versions stable when the retained runtime refreshes', async () => {
+    const module = await import('./client.ts')
+    const retainedRuntime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const explicitRuntime: AnalysisServerRuntime = {
+      id: 'runtime-b',
+      port: '43124',
+      host: '127.0.0.1',
+    }
+    const originalWebSocket = globalThis.WebSocket
+    if (originalWebSocket === undefined) {
+      ;(globalThis as any).WebSocket = class MockWebSocket {}
+    }
+
+    const releaseRuntime =
+      module.retainAnalysisClientBrowserRuntime(retainedRuntime)
+
+    try {
+      const retainedClient = getMockBrowserClient(0)
+
+      const firstRetainedPromise = module.getQuickInfoAtPosition(
+        '/project/src/runtime-a.ts',
+        10,
+        undefined,
+        retainedRuntime
+      )
+      await flushBrowserClientCallQueue()
+      resolveNextPendingCall(retainedClient, { text: 'quick-info-a' })
+      await expect(firstRetainedPromise).resolves.toEqual({
+        text: 'quick-info-a',
+      })
+
+      const firstExplicitPromise = module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      await flushBrowserClientCallQueue()
+
+      expect(mocks.instances).toHaveLength(2)
+      const explicitClient = getMockBrowserClient(1)
+      resolveNextPendingCall(explicitClient, { text: 'quick-info-b' })
+      await expect(firstExplicitPromise).resolves.toEqual({
+        text: 'quick-info-b',
+      })
+
+      const cachedExplicit = await module.getQuickInfoAtPosition(
+        '/project/src/runtime-b.ts',
+        20,
+        undefined,
+        explicitRuntime
+      )
+      expect(cachedExplicit).toEqual({ text: 'quick-info-b' })
+      expect(explicitClient.callMethod).toHaveBeenCalledTimes(1)
+
+      emitBrowserClientEvent(retainedClient, 'notification', {
+        type: 'refresh',
+        data: {
+          refreshCursor: 1,
+          filePaths: ['src/runtime-a.ts'],
+        },
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+
+      const cachedExplicitAfterRetainedRefresh =
+        await module.getQuickInfoAtPosition(
+          '/project/src/runtime-b.ts',
+          20,
+          undefined,
+          explicitRuntime
+        )
+      expect(cachedExplicitAfterRetainedRefresh).toEqual({
+        text: 'quick-info-b',
+      })
+      expect(explicitClient.callMethod).toHaveBeenCalledTimes(1)
     } finally {
       releaseRuntime()
       if (originalWebSocket === undefined) {

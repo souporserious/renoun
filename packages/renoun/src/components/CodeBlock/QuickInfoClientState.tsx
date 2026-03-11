@@ -13,6 +13,7 @@ import {
   onAnalysisClientBrowserRuntimeChange,
   onAnalysisClientRefreshVersionChange,
 } from '../../analysis/client.ts'
+import type { SourceTextHydrationMetadata } from '../../analysis/query/source-text-metadata.ts'
 import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 
@@ -25,6 +26,7 @@ export interface QuickInfoRequest {
   filePath: string
   position: number
   valueSignature?: string
+  sourceMetadata?: SourceTextHydrationMetadata
   analysisVersion?: string
   runtime: AnalysisServerRuntime
   themeConfig?: ConfigurationOptions['theme']
@@ -431,7 +433,8 @@ async function requestQuickInfo(
       request.position,
       undefined,
       request.runtime,
-      toQuickInfoCacheKey(request)
+      toQuickInfoCacheKey(request),
+      request.sourceMetadata
     )
 
     return normalizeQuickInfoResult(result)

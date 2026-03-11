@@ -60,7 +60,38 @@ describe('QuickInfoClientPopover cache behavior', () => {
       42,
       undefined,
       runtime,
-      'quick-info-cache-test:runtime::/tmp/history.ts:42'
+      'quick-info-cache-test:runtime::/tmp/history.ts:42',
+      undefined
+    )
+  })
+
+  it('forwards synthetic snippet source metadata with deferred quick info requests', async () => {
+    mockGetQuickInfoAtPosition.mockReset()
+    mockGetQuickInfoAtPosition.mockResolvedValueOnce({
+      displayText: 'runtime-specific',
+      documentationText: 'Runtime specific docs',
+    })
+
+    await __TEST_ONLY__.getQuickInfoForRequest({
+      ...BASE_REQUEST,
+      filePath: '/tmp/history.__renoun_snippet_sig_1.ts',
+      valueSignature: 'sig-1',
+      sourceMetadata: {
+        value: 'History',
+        language: 'ts',
+      },
+    })
+
+    expect(mockGetQuickInfoAtPosition).toHaveBeenCalledWith(
+      '/tmp/history.__renoun_snippet_sig_1.ts',
+      42,
+      undefined,
+      BASE_REQUEST.runtime,
+      'quick-info-cache-test:0:0:sig-1:/tmp/history.__renoun_snippet_sig_1.ts:42',
+      {
+        value: 'History',
+        language: 'ts',
+      }
     )
   })
 })

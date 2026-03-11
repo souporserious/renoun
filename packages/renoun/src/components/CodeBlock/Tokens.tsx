@@ -3,6 +3,7 @@ import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
 import { getSourceTextMetadata, getTokens } from '../../analysis/client.ts'
+import { isSyntheticAnalysisDocumentFilePath } from '../../analysis/document-paths.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
@@ -12,6 +13,7 @@ import { hasSourceTextFormatterParser } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
 import {
   getSourceTextValueSignature,
+  type SourceTextHydrationMetadata,
   type SourceTextMetadata,
 } from '../../analysis/query/source-text-metadata.ts'
 import type {
@@ -63,6 +65,32 @@ const SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES = new Set([
   'cts',
   'mdx',
 ])
+
+export function shouldSkipInlineSourceMetadataLookup({
+  resolvedPath,
+  language,
+  supportsSourceFormattingInCurrentContext,
+  shouldUseInlineSourceMetadataFastPath,
+  isFormattingExplicit,
+  shouldFormat,
+}: {
+  resolvedPath: string | undefined
+  language: Languages | undefined
+  supportsSourceFormattingInCurrentContext: boolean
+  shouldUseInlineSourceMetadataFastPath: boolean
+  isFormattingExplicit: boolean
+  shouldFormat: boolean
+}): boolean {
+  return (
+    resolvedPath === undefined &&
+    typeof language === 'string' &&
+    !SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES.has(language.toLowerCase()) &&
+    (!supportsSourceFormattingInCurrentContext ||
+      (shouldUseInlineSourceMetadataFastPath &&
+        isFormattingExplicit &&
+        shouldFormat === false))
+  )
+}
 
 export type AnnotationRenderer = React.ComponentType<
   Record<string, any> & { children?: React.ReactNode }
@@ -344,7 +372,6 @@ async function TokensAsync({
 
     const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
     const shouldFormat = shouldFormatProp ?? context?.shouldFormat ?? true
-    const hasExplicitFormattingPreference = shouldFormatProp !== undefined
     const isFormattingExplicit =
       shouldFormatProp !== undefined || context?.shouldFormat !== undefined
     const hasExplicitSourceValue = children !== undefined && children !== null
@@ -358,12 +385,14 @@ async function TokensAsync({
         : false
     const shouldUseInlineSourceMetadataFastPath = isDevelopmentRuntime
     const shouldSkipInlineSourceMetadata =
-      resolvedPath === undefined &&
-      typeof language === 'string' &&
-      !SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES.has(language.toLowerCase()) &&
-      (!supportsSourceFormattingInCurrentContext ||
-        (shouldUseInlineSourceMetadataFastPath &&
-          hasExplicitFormattingPreference === false))
+      shouldSkipInlineSourceMetadataLookup({
+        resolvedPath,
+        language,
+        supportsSourceFormattingInCurrentContext,
+        shouldUseInlineSourceMetadataFastPath,
+        isFormattingExplicit,
+        shouldFormat,
+      })
 
     if (shouldAnalyze && !shouldSkipInlineSourceMetadata) {
       // Generated inline snippets still need the host project's tsconfig so
@@ -435,6 +464,14 @@ async function TokensAsync({
       waitForWarmResult: isDevelopmentRuntime,
     })
     const quickInfoValueSignature = metadata.valueSignature
+    const quickInfoSourceMetadata: SourceTextHydrationMetadata | undefined =
+      metadata.filePath &&
+      isSyntheticAnalysisDocumentFilePath(metadata.filePath)
+        ? {
+            value: metadata.value,
+            language: metadata.language,
+          }
+        : undefined
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =
       annotationInstructions !== null &&
@@ -454,6 +491,7 @@ async function TokensAsync({
                 filePath: metadata.filePath,
                 quickInfoRuntime,
                 quickInfoValueSignature,
+                quickInfoSourceMetadata,
                 quickInfoThemeConfig: themeConfiguration,
                 theme,
                 css,
@@ -520,6 +558,7 @@ async function TokensAsync({
       filePath: metadata.filePath,
       quickInfoRuntime,
       quickInfoValueSignature,
+      quickInfoSourceMetadata,
       quickInfoThemeConfig: themeConfiguration,
       theme,
       css,
@@ -542,6 +581,7 @@ interface RenderTokenOptions {
   filePath?: string
   quickInfoRuntime?: AnalysisServerRuntime
   quickInfoValueSignature?: string
+  quickInfoSourceMetadata?: SourceTextHydrationMetadata
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
@@ -569,6 +609,7 @@ interface RenderWithAnnotationsOptions {
   filePath?: string
   quickInfoRuntime?: AnalysisServerRuntime
   quickInfoValueSignature?: string
+  quickInfoSourceMetadata?: SourceTextHydrationMetadata
   quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
@@ -584,6 +625,7 @@ function renderToken({
   filePath,
   quickInfoRuntime,
   quickInfoValueSignature,
+  quickInfoSourceMetadata,
   quickInfoThemeConfig,
   theme,
   css: cssProp,
@@ -658,6 +700,7 @@ function renderToken({
                 filePath: filePath!,
                 position: token.start,
                 valueSignature: quickInfoValueSignature,
+                sourceMetadata: quickInfoSourceMetadata,
                 runtime: quickInfoRuntime!,
                 themeConfig: quickInfoThemeConfig,
               }
@@ -788,6 +831,7 @@ function renderWithAnnotations({
   filePath,
   quickInfoRuntime,
   quickInfoValueSignature,
+  quickInfoSourceMetadata,
   quickInfoThemeConfig,
   theme,
   css,
@@ -973,6 +1017,7 @@ function renderWithAnnotations({
           filePath,
           quickInfoRuntime,
           quickInfoValueSignature,
+          quickInfoSourceMetadata,
           quickInfoThemeConfig,
           theme,
           css,

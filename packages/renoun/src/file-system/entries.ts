@@ -9233,46 +9233,30 @@ export class Collection<
       this.#invalidateRootEntrySessions()
     }
 
-    const navigationPromise = (async () => {
-      const nodeKey = this.#toNavigationPathsNodeKey(sharedSession, options)
-      const computeNavigationPayload = async () => {
-        return sharedSession.cache.getOrCompute<PersistedCollectionNavigationPathsV1>(
-          nodeKey,
-          { persist: true },
-          async (ctx) => {
-            const entries = await this.getEntries(options)
-            this.#primeSiblingEntryCache(entries)
-            for (const entry of entries as FileSystemEntry<any>[]) {
-              if (entry instanceof Directory) {
-                await ctx.recordDirectoryDep(entry.absolutePath)
-              } else {
-                await ctx.recordFileDep(entry.absolutePath)
-              }
-            }
-
-            return {
-              version: 1 as const,
-              orderedPathnames: entries.map((entry) => entry.getPathname()),
+    const nodeKey = this.#toNavigationPathsNodeKey(sharedSession, options)
+    const computeNavigationPayload = async () => {
+      return sharedSession.cache.getOrCompute<PersistedCollectionNavigationPathsV1>(
+        nodeKey,
+        { persist: true },
+        async (ctx) => {
+          const entries = await this.getEntries(options)
+          this.#primeSiblingEntryCache(entries)
+          for (const entry of entries as FileSystemEntry<any>[]) {
+            if (entry instanceof Directory) {
+              await ctx.recordDirectoryDep(entry.absolutePath)
+            } else {
+              await ctx.recordFileDep(entry.absolutePath)
             }
           }
-        )
-      }
 
-      if (isDevelopmentEnvironment()) {
-        const stalePayload =
-          await sharedSession.cache.getPossiblyStale<unknown>(nodeKey)
-        if (stalePayload !== undefined) {
-          if (isPersistedCollectionNavigationPathsV1(stalePayload)) {
-            void computeNavigationPayload().catch((error) => {
-              reportBestEffortError('file-system/entries', error)
-            })
-            return this.#createNavigationIndex(stalePayload.orderedPathnames)
+          return {
+            version: 1 as const,
+            orderedPathnames: entries.map((entry) => entry.getPathname()),
           }
-
-          await sharedSession.cache.delete(nodeKey)
         }
-      }
-
+      )
+    }
+    const computeNavigationIndex = async () => {
       let payload = await computeNavigationPayload()
       if (!isPersistedCollectionNavigationPathsV1(payload)) {
         await sharedSession.cache.delete(nodeKey)
@@ -9288,7 +9272,38 @@ export class Collection<
       }
 
       return this.#createNavigationIndex(payload.orderedPathnames)
-    })()
+    }
+
+    if (isDevelopmentEnvironment()) {
+      const stalePayload =
+        await sharedSession.cache.getPossiblyStale<unknown>(nodeKey)
+      if (stalePayload !== undefined) {
+        if (isPersistedCollectionNavigationPathsV1(stalePayload)) {
+          const staleNavigationIndex = this.#createNavigationIndex(
+            stalePayload.orderedPathnames
+          )
+          const refreshNavigationPromise = computeNavigationIndex().catch(
+            (error) => {
+              if (navigationMap.get(cacheKey)?.promise === refreshNavigationPromise) {
+                navigationMap.delete(cacheKey)
+              }
+              reportBestEffortError('file-system/entries', error)
+              return staleNavigationIndex
+            }
+          )
+
+          navigationMap.set(cacheKey, {
+            freshnessKey,
+            promise: refreshNavigationPromise,
+          })
+          return staleNavigationIndex
+        }
+
+        await sharedSession.cache.delete(nodeKey)
+      }
+    }
+
+    const navigationPromise = computeNavigationIndex()
 
     navigationMap.set(cacheKey, {
       freshnessKey,

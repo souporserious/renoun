@@ -194,6 +194,21 @@ describe('Tokens', () => {
     }
   })
 
+  test('keeps default formatting enabled for formattable inline non-TypeScript snippets', async () => {
+    const { shouldSkipInlineSourceMetadataLookup } = await import('./Tokens.tsx')
+
+    expect(
+      shouldSkipInlineSourceMetadataLookup({
+        resolvedPath: undefined,
+        language: 'json',
+        supportsSourceFormattingInCurrentContext: true,
+        shouldUseInlineSourceMetadataFastPath: true,
+        isFormattingExplicit: false,
+        shouldFormat: true,
+      })
+    ).toBe(false)
+  })
+
   test('does not force in-memory analysis for inline TypeScript snippets', async () => {
     const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
     getSourceTextMetadataMock.mockResolvedValueOnce({

@@ -14,6 +14,7 @@ import * as getProgramModule from './get-program.ts'
 import * as highlighterModule from '../utils/create-highlighter.ts'
 import * as quickInfoModule from '../utils/get-quick-info-at-position.ts'
 import * as fileTextPrefixCacheModule from './file-text-prefix-cache.ts'
+import * as sourceTextMetadataModule from './query/source-text-metadata.ts'
 
 const WEBSOCKET_READY_TIMEOUT_MS = 30_000
 const REFRESH_NOTIFICATION_TIMEOUT_MS = 5_000
@@ -330,6 +331,59 @@ describe('analysis server refresh invalidations', () => {
       documentationText: '',
     })
     expect(quickInfoSpy).toHaveBeenCalledTimes(2)
+  }, 45_000)
+
+  test('hydrates synthetic snippet source metadata before resolving deferred quick info', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['NODE_ENV'] = 'development'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    const hydrateSpy = vi.spyOn(
+      sourceTextMetadataModule,
+      'hydrateSourceTextMetadataSourceFile'
+    )
+    const quickInfoSpy = vi
+      .spyOn(quickInfoModule, 'getQuickInfoAtPosition')
+      .mockReturnValue({
+        displayText: 'snippet-result',
+        documentationText: '',
+      })
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+    const params = {
+      filePath: '_renoun/history.__renoun_snippet_sig_1.ts',
+      position: 0,
+      sourceMetadata: {
+        value: 'const History = 1',
+        language: 'ts',
+      },
+    }
+    const result = await client.callMethod<typeof params, unknown>(
+      'getQuickInfoAtPosition',
+      params
+    )
+
+    expect(result).toEqual({
+      displayText: 'snippet-result',
+      documentationText: '',
+    })
+    expect(hydrateSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        filePath: '_renoun/history.__renoun_snippet_sig_1.ts',
+        value: 'const History = 1',
+        language: 'ts',
+      })
+    )
+    expect(quickInfoSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filePath: '_renoun/history.__renoun_snippet_sig_1.ts',
+        position: 0,
+      })
+    )
   }, 45_000)
 
   test('does not drop refresh invalidations when root ancestors include ignored segment names', async () => {

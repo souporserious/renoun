@@ -13,6 +13,7 @@ import type {
 import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.ts'
 import type {
   GetSourceTextMetadataOptions,
+  SourceTextHydrationMetadata,
   SourceTextMetadata,
 } from './query/source-text-metadata.ts'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
@@ -66,6 +67,7 @@ import {
 } from './client.cache.ts'
 import {
   type AnalysisClientBrowserRefreshNotification as ClientBrowserRefreshNotification,
+  bumpAnalysisClientRefreshInvalidationEpoch,
   bumpLatestRefreshCursorForRuntime,
   emitAnalysisClientBrowserRefreshNotification,
   getAnalysisClientRefreshVersion as getCurrentAnalysisClientRefreshVersion,
@@ -523,6 +525,9 @@ function invalidateClientRpcStateByNormalizedPaths(
     normalizedPaths,
     invalidationScopeKey
   )
+  bumpAnalysisClientRefreshInvalidationEpoch(
+    getRuntimeKeyFromCacheScopeKey(invalidationScopeKey)
+  )
   notifyAnalysisClientRefreshVersionChanged(
     getCurrentAnalysisClientRefreshVersionRuntimeKey()
   )
@@ -530,6 +535,9 @@ function invalidateClientRpcStateByNormalizedPaths(
 
 function invalidateAllClientRpcState(invalidationScopeKey?: string): void {
   invalidateAllClientRpcCache(invalidationScopeKey)
+  bumpAnalysisClientRefreshInvalidationEpoch(
+    getRuntimeKeyFromCacheScopeKey(invalidationScopeKey)
+  )
   notifyAnalysisClientRefreshVersionChanged(
     getCurrentAnalysisClientRefreshVersionRuntimeKey()
   )
@@ -539,6 +547,7 @@ function resetClientRefreshStateForRuntimeChange(): void {
   const runtimeKey = getCurrentAnalysisClientRefreshVersionRuntimeKey()
   hydrateRefreshStateFromSharedAnalysisBrowserVersion(runtimeKey)
   resetClientRpcCacheForRuntimeChange()
+  bumpAnalysisClientRefreshInvalidationEpoch()
   pendingRefreshInvalidationPathsByScope.clear()
   resetLatestAnalysisClientRefreshCursor(runtimeKey)
 }
@@ -902,6 +911,17 @@ function toServerRuntimeKey(runtime: AnalysisServerRuntime): string {
 
 function toRuntimeCacheScopeKey(runtimeKey: string): string {
   return `runtime:${runtimeKey}`
+}
+
+function getRuntimeKeyFromCacheScopeKey(
+  scopeKey: string | undefined
+): string | undefined {
+  if (!scopeKey?.startsWith('runtime:')) {
+    return undefined
+  }
+
+  const runtimeKey = scopeKey.slice('runtime:'.length)
+  return runtimeKey.length > 0 ? runtimeKey : undefined
 }
 
 function createAnalysisBrowserClient(
@@ -1369,12 +1389,14 @@ export async function getQuickInfoAtPosition(
   position: number,
   analysisOptions?: AnalysisOptions,
   runtime?: AnalysisServerRuntime,
-  cacheKey?: string
+  cacheKey?: string,
+  sourceMetadata?: SourceTextHydrationMetadata
 ): Promise<QuickInfoAtPosition | undefined> {
   const params = {
     filePath,
     position,
     analysisOptions,
+    ...(sourceMetadata ? { sourceMetadata } : {}),
   }
   const cacheParams =
     typeof cacheKey === 'string' && cacheKey.length > 0
@@ -1390,6 +1412,7 @@ export async function getQuickInfoAtPosition(
         filePath: string
         position: number
         analysisOptions?: AnalysisOptions
+        sourceMetadata?: SourceTextHydrationMetadata
       },
       QuickInfoAtPosition | undefined
     >('getQuickInfoAtPosition', params, runtime, {
@@ -1404,6 +1427,7 @@ export async function getQuickInfoAtPosition(
         filePath: string
         position: number
         analysisOptions?: AnalysisOptions
+        sourceMetadata?: SourceTextHydrationMetadata
       },
       QuickInfoAtPosition | undefined
     >(client, 'getQuickInfoAtPosition', params, {
@@ -1413,6 +1437,12 @@ export async function getQuickInfoAtPosition(
 
   const serverModules = await loadAnalysisClientServerModules()
   const project = serverModules.getProgram(analysisOptions)
+  if (sourceMetadata) {
+    serverModules.hydrateSourceTextMetadataSourceFile(project, {
+      ...sourceMetadata,
+      filePath,
+    })
+  }
   return serverModules.getQuickInfoAtPositionBase({
     project,
     filePath,

@@ -12,6 +12,12 @@ export function getQuickInfoAtPositionBase() {
   return throwBrowserAnalysisClientServerError('getQuickInfoAtPositionBase')
 }
 
+export function hydrateSourceTextMetadataSourceFile() {
+  return throwBrowserAnalysisClientServerError(
+    'hydrateSourceTextMetadataSourceFile'
+  )
+}
+
 export function getCachedFileExportText() {
   return throwBrowserAnalysisClientServerError('getCachedFileExportText')
 }

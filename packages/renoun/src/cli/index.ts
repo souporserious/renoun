@@ -5,6 +5,12 @@ import { isRenounDebugEnabled } from '../utils/env.ts'
 import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
 
 type Framework = 'next' | 'vite' | 'waku'
+type AnalysisCliRuntime = {
+  createServer: typeof import('../analysis/server.ts').createServer
+  getDebugLogger: typeof import('../utils/debug.ts').getDebugLogger
+  createDefaultPrewarmOptions: typeof import('./prewarm-runner.ts').createDefaultPrewarmOptions
+  runPrewarmSafely: typeof import('./prewarm-runner.ts').runPrewarmSafely
+}
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
@@ -34,6 +40,31 @@ function toStringArguments(
   return values.filter((value): value is string => typeof value === 'string')
 }
 
+async function loadAnalysisCliRuntime(): Promise<AnalysisCliRuntime> {
+  const [
+    { createServer },
+    { getDebugLogger },
+    { createDefaultPrewarmOptions, runPrewarmSafely },
+  ] = await Promise.all([
+    import('../analysis/server.ts'),
+    import('../utils/debug.ts'),
+    import('./prewarm-runner.ts'),
+  ])
+
+  return {
+    createServer,
+    getDebugLogger,
+    createDefaultPrewarmOptions,
+    runPrewarmSafely,
+  }
+}
+
+function exitWithCommandError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(message)
+  process.exit(1)
+}
+
 if (
   firstArgument === 'help' ||
   firstArgument === '--help' ||
@@ -60,9 +91,7 @@ if (firstArgument === 'validate') {
     await runCacheTokenCommand(args)
     process.exit(0)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(message)
-    process.exit(1)
+    exitWithCommandError(error)
   }
 } else if (firstArgument === 'cache-maintenance') {
   const { runCacheMaintenanceCommand } = await import(
@@ -74,9 +103,7 @@ if (firstArgument === 'validate') {
     await runCacheMaintenanceCommand(args)
     process.exit(0)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(message)
-    process.exit(1)
+    exitWithCommandError(error)
   }
 } else if (firstArgument === 'dev' || firstArgument === 'build') {
   const { runAppCommand } = await import('./app.ts')
@@ -94,12 +121,12 @@ if (firstArgument === 'validate') {
   firstArgument === 'vite' ||
   firstArgument === 'waku'
 ) {
-  const [{ createServer }, { getDebugLogger }, { createDefaultPrewarmOptions, runPrewarmSafely }] =
-    await Promise.all([
-      import('../analysis/server.ts'),
-      import('../utils/debug.ts'),
-      import('./prewarm-runner.ts'),
-    ])
+  const {
+    createServer,
+    getDebugLogger,
+    createDefaultPrewarmOptions,
+    runPrewarmSafely,
+  } = await loadAnalysisCliRuntime()
   const { resolveFrameworkBinFile } = await import('./framework.ts')
 
   let subProcess: ReturnType<typeof spawn> | undefined
@@ -302,9 +329,7 @@ if (firstArgument === 'validate') {
     await runEjectCommand({ appName: secondArgument })
     process.exit(0)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(message)
-    process.exit(1)
+    exitWithCommandError(error)
   }
 } else if (firstArgument === 'override') {
   const { runOverrideCommand } = await import('./override.ts')
@@ -321,9 +346,7 @@ if (firstArgument === 'validate') {
     await runOverrideCommand({ pattern: secondArgument })
     process.exit(0)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(message)
-    process.exit(1)
+    exitWithCommandError(error)
   }
 } else if (firstArgument === 'reorder') {
   const { reorderEntries } = await import('./reorder.ts')
@@ -332,16 +355,15 @@ if (firstArgument === 'validate') {
     process.exit(0)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('Failed to reorder entries:', message)
-    process.exit(1)
+    exitWithCommandError(`Failed to reorder entries: ${message}`)
   }
 } else if (firstArgument === 'watch') {
-  const [{ createServer }, { getDebugLogger }, { createDefaultPrewarmOptions, runPrewarmSafely }] =
-    await Promise.all([
-      import('../analysis/server.ts'),
-      import('../utils/debug.ts'),
-      import('./prewarm-runner.ts'),
-    ])
+  const {
+    createServer,
+    getDebugLogger,
+    createDefaultPrewarmOptions,
+    runPrewarmSafely,
+  } = await loadAnalysisCliRuntime()
 
   if (process.env[PROCESS_ENV_KEYS.nodeEnv] === undefined) {
     process.env[PROCESS_ENV_KEYS.nodeEnv] = 'development'

@@ -232,8 +232,6 @@ export class SessionRegistry<SessionType> {
         return
       }
 
-      this.#incrementGeneration(fileSystem)
-
       for (const [id, cacheSessions] of familyEntries) {
         for (const session of cacheSessions.values()) {
           options.resetSession(session)
