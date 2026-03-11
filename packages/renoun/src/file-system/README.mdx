@@ -472,7 +472,7 @@ In GitHub Actions, resolve the token once and use it in `actions/cache`:
 ```yaml
 - name: Resolve renoun cache token
   id: renoun-cache-token
-  run: echo "token=$(node packages/renoun/src/cli/cache-token.ts)" >> "$GITHUB_OUTPUT"
+  run: echo "token=$(renoun cache-token)" >> "$GITHUB_OUTPUT"
 
 - name: Restore renoun cache
   uses: actions/cache@v4

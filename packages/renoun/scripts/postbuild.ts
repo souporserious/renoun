@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url'
 
+import { patchAnalysisClient } from './patch-analysis-client.ts'
 import { patchLoadPackage } from './patch-load-package.ts'
 
 interface RunPostBuildScriptsOptions {
@@ -7,7 +8,7 @@ interface RunPostBuildScriptsOptions {
   steps?: ReadonlyArray<() => Promise<void>>
 }
 
-export const POST_BUILD_STEPS = [patchLoadPackage] as const
+export const POST_BUILD_STEPS = [patchLoadPackage, patchAnalysisClient] as const
 
 export async function runPostBuildScripts(
   options: RunPostBuildScriptsOptions = {}
