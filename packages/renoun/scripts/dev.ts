@@ -1,18 +1,19 @@
 import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
-import { runPostBuildScripts } from './postbuild.ts'
+import { patchLoadPackage } from './patch-load-package.ts'
 
 export const TSC_WATCH_READY_MESSAGE = 'Watching for file changes.'
-export const POST_BUILD_LOG_MESSAGE = '\n→ Running post-build scripts...'
+export const PATCH_LOAD_PACKAGE_LOG_MESSAGE =
+  '\n→ Running load-package patch...'
 
 interface HandleTypeScriptWatchOutputOptions {
-  runPostBuildScripts?: () => Promise<void>
+  patchLoadPackage?: () => Promise<void>
   writeOutput?: (output: string) => void
   log?: (message: string) => void
 }
 
-export function shouldRunPostBuildScripts(output: string): boolean {
+export function shouldPatchLoadPackage(output: string): boolean {
   return output.includes(TSC_WATCH_READY_MESSAGE)
 }
 
@@ -23,26 +24,26 @@ export async function handleTypeScriptWatchOutput(
   const writeOutput =
     options.writeOutput ?? ((text: string) => process.stdout.write(text))
   const log = options.log ?? console.log
-  const runPatches = options.runPostBuildScripts ?? runPostBuildScripts
+  const runPatch = options.patchLoadPackage ?? patchLoadPackage
 
   writeOutput(output)
 
-  if (!shouldRunPostBuildScripts(output)) {
+  if (!shouldPatchLoadPackage(output)) {
     return false
   }
 
-  log(POST_BUILD_LOG_MESSAGE)
-  await runPatches()
+  log(PATCH_LOAD_PACKAGE_LOG_MESSAGE)
+  await runPatch()
   return true
 }
 
-export function createQueuedPostBuildRunner(
-  runPatches: () => Promise<void> = runPostBuildScripts
+export function createQueuedPatchLoadPackageRunner(
+  runPatch: () => Promise<void> = patchLoadPackage
 ): () => Promise<void> {
   let pending = Promise.resolve()
 
   return () => {
-    const nextRun = pending.then(() => runPatches())
+    const nextRun = pending.then(() => runPatch())
     pending = nextRun.catch(() => undefined)
     return nextRun
   }
@@ -53,15 +54,15 @@ export function startTypeScriptWatch() {
     stdio: ['inherit', 'pipe', 'pipe'],
     shell: true,
   })
-  const queuePostBuildRun = createQueuedPostBuildRunner()
+  const queuePatchLoadPackageRun = createQueuedPatchLoadPackageRunner()
 
   tsc.stdout.on('data', (data) => {
     const output = data.toString()
 
     void handleTypeScriptWatchOutput(output, {
-      runPostBuildScripts: queuePostBuildRun,
+      patchLoadPackage: queuePatchLoadPackageRun,
     }).catch((error) => {
-      console.error('Post-build error:', error)
+      console.error('Patch error:', error)
     })
   })
 

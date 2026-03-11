@@ -394,6 +394,28 @@ function shouldLoadBrowserAnalysisClientServerModule(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined'
 }
 
+async function importAnalysisClientServerModuleAtRuntime():
+  Promise<AnalysisClientServerModules> {
+  const runtimeImport = Function(
+    'specifier',
+    'return import(specifier)'
+  ) as (specifier: string) => Promise<unknown>
+  const [{ createRequire }, { dirname, join }, { pathToFileURL }] =
+    await Promise.all([
+      runtimeImport('node:module') as Promise<typeof import('node:module')>,
+      runtimeImport('node:path') as Promise<typeof import('node:path')>,
+      runtimeImport('node:url') as Promise<typeof import('node:url')>,
+    ])
+
+  const require = createRequire(import.meta.url)
+  const packageEntryPath = require.resolve('renoun')
+  const serverModuleUrl = pathToFileURL(
+    join(dirname(packageEntryPath), 'analysis', 'client.server.js')
+  ).href
+
+  return runtimeImport(serverModuleUrl) as Promise<AnalysisClientServerModules>
+}
+
 async function importAnalysisClientServerModules():
   Promise<AnalysisClientServerModules> {
   if (shouldLoadBrowserAnalysisClientServerModule()) {
@@ -408,7 +430,7 @@ async function importAnalysisClientServerModules():
     return import('./client.server.ts')
   }
 
-  return import('./client.server.js')
+  return importAnalysisClientServerModuleAtRuntime()
 }
 
 async function loadAnalysisClientServerModules(): Promise<AnalysisClientServerModules> {

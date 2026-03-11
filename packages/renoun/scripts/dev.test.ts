@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest'
 
 import {
-  createQueuedPostBuildRunner,
+  createQueuedPatchLoadPackageRunner,
   handleTypeScriptWatchOutput,
-  POST_BUILD_LOG_MESSAGE,
+  PATCH_LOAD_PACKAGE_LOG_MESSAGE,
   TSC_WATCH_READY_MESSAGE,
 } from './dev.ts'
 
@@ -20,56 +20,56 @@ function createDeferred<T>() {
 }
 
 describe('dev watch script', () => {
-  test('runs post-build patches when tsc reports a successful watch rebuild', async () => {
+  test('runs the load-package patch when tsc reports a successful watch rebuild', async () => {
     const writeOutput = vi.fn()
     const log = vi.fn()
-    const runPostBuildScripts = vi.fn(async () => undefined)
+    const patchLoadPackage = vi.fn(async () => undefined)
     const output = `Found 0 errors. ${TSC_WATCH_READY_MESSAGE}`
 
     await expect(
       handleTypeScriptWatchOutput(output, {
         writeOutput,
         log,
-        runPostBuildScripts,
+        patchLoadPackage,
       })
     ).resolves.toBe(true)
 
     expect(writeOutput).toHaveBeenCalledWith(output)
-    expect(log).toHaveBeenCalledWith(POST_BUILD_LOG_MESSAGE)
-    expect(runPostBuildScripts).toHaveBeenCalledTimes(1)
+    expect(log).toHaveBeenCalledWith(PATCH_LOAD_PACKAGE_LOG_MESSAGE)
+    expect(patchLoadPackage).toHaveBeenCalledTimes(1)
   })
 
-  test('skips post-build patches for non-ready tsc output', async () => {
-    const runPostBuildScripts = vi.fn(async () => undefined)
+  test('skips the load-package patch for non-ready tsc output', async () => {
+    const patchLoadPackage = vi.fn(async () => undefined)
 
     await expect(
       handleTypeScriptWatchOutput('Starting compilation in watch mode...', {
-        runPostBuildScripts,
+        patchLoadPackage,
       })
     ).resolves.toBe(false)
 
-    expect(runPostBuildScripts).not.toHaveBeenCalled()
+    expect(patchLoadPackage).not.toHaveBeenCalled()
   })
 
-  test('serializes repeated post-build patch runs', async () => {
+  test('serializes repeated load-package patch runs', async () => {
     const firstRun = createDeferred<void>()
-    const runPostBuildScripts = vi
+    const patchLoadPackage = vi
       .fn<() => Promise<void>>()
       .mockImplementationOnce(() => firstRun.promise)
       .mockResolvedValueOnce(undefined)
-    const queuePostBuildRun =
-      createQueuedPostBuildRunner(runPostBuildScripts)
+    const queuePatchLoadPackageRun =
+      createQueuedPatchLoadPackageRunner(patchLoadPackage)
 
-    const firstPromise = queuePostBuildRun()
-    const secondPromise = queuePostBuildRun()
+    const firstPromise = queuePatchLoadPackageRun()
+    const secondPromise = queuePatchLoadPackageRun()
     await Promise.resolve()
 
-    expect(runPostBuildScripts).toHaveBeenCalledTimes(1)
+    expect(patchLoadPackage).toHaveBeenCalledTimes(1)
 
     firstRun.resolve()
     await firstPromise
     await secondPromise
 
-    expect(runPostBuildScripts).toHaveBeenCalledTimes(2)
+    expect(patchLoadPackage).toHaveBeenCalledTimes(2)
   })
 })
