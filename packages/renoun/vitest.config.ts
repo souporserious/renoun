@@ -1,17 +1,8 @@
 import { defineConfig } from 'vitest/config'
-import { fileURLToPath } from 'node:url'
 import mdx from '@mdx-js/rollup'
 
 export default defineConfig({
   plugins: [mdx()],
-  resolve: {
-    alias: {
-      '#analysis-client-server': fileURLToPath(
-        new URL('./src/analysis/client.server.ts', import.meta.url)
-      ),
-    },
-    conditions: ['source'],
-  },
   test: {
     testTimeout: 15_000,
     include: [

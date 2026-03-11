@@ -41,10 +41,16 @@ describe('bench site build invocation', () => {
         filter: DEFAULT_FILTER,
       })
     ).resolves.toEqual([
-      '.renoun',
+      '.renoun/cache/fs-cache.sqlite',
+      '.renoun/cache/fs-cache.sqlite-shm',
+      '.renoun/cache/fs-cache.sqlite-wal',
+      '.renoun/cache/fs-cache.sqlite-journal',
       'apps/site/.next',
       'apps/site/out',
-      'apps/site/.renoun',
+      'apps/site/.renoun/cache/fs-cache.sqlite',
+      'apps/site/.renoun/cache/fs-cache.sqlite-shm',
+      'apps/site/.renoun/cache/fs-cache.sqlite-wal',
+      'apps/site/.renoun/cache/fs-cache.sqlite-journal',
     ])
   })
 

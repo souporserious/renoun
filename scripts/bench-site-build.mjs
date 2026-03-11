@@ -13,8 +13,18 @@ import { createOutputParser } from './bench-site-build-output.mjs'
 export const DEFAULT_FILTER = '@apps/site'
 const DEFAULT_COLD_RUNS = 1
 const DEFAULT_WARM_RUNS = 2
-const DEFAULT_WORKSPACE_CLEAN_PATHS = ['.renoun']
-const DEFAULT_TARGET_CLEAN_PATHS = ['.next', 'out', '.renoun']
+const DEFAULT_SQLITE_CLEAN_PATHS = [
+  '.renoun/cache/fs-cache.sqlite',
+  '.renoun/cache/fs-cache.sqlite-shm',
+  '.renoun/cache/fs-cache.sqlite-wal',
+  '.renoun/cache/fs-cache.sqlite-journal',
+]
+const DEFAULT_WORKSPACE_CLEAN_PATHS = DEFAULT_SQLITE_CLEAN_PATHS
+const DEFAULT_TARGET_CLEAN_PATHS = [
+  '.next',
+  'out',
+  ...DEFAULT_SQLITE_CLEAN_PATHS,
+]
 
 function printHelp() {
   console.log(`Usage: node ./scripts/bench-site-build.mjs [options]

@@ -46,19 +46,7 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "imports": {
-    "#fixtures/*": "./fixtures/*",
-    "#analysis-client-server": {
-      "source": {
-        "browser": "./src/analysis/client.server.browser.ts",
-        "default": "./src/analysis/client.server.ts"
-      },
-      "browser": "./src/analysis/client.server.browser.ts",
-      "default": "./src/analysis/client.server.ts"
-    },
-    "#analysis-client-server-dist": {
-      "browser": "./dist/analysis/client.server.browser.js",
-      "default": "./dist/analysis/client.server.js"
-    }
+    "#fixtures/*": "./fixtures/*"
   },
   "exports": {
     ".": {

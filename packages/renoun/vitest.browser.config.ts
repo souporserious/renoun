@@ -1,18 +1,9 @@
 import { defineConfig } from 'vitest/config'
-import { fileURLToPath } from 'node:url'
 import mdx from '@mdx-js/rollup'
 import { playwright } from '@vitest/browser-playwright'
 
 export default defineConfig({
   plugins: [mdx()],
-  resolve: {
-    alias: {
-      '#analysis-client-server': fileURLToPath(
-        new URL('./src/analysis/client.server.browser.ts', import.meta.url)
-      ),
-    },
-    conditions: ['source'],
-  },
   optimizeDeps: {
     include: [
       '@renoun/mdx',

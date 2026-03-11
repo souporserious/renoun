@@ -20,7 +20,6 @@ runs:
           .renoun/cache/fs-cache.sqlite*
           apps/*/.renoun/cache/fs-cache.sqlite*
           examples/*/.renoun/cache/fs-cache.sqlite*
-        key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}-${{ github.workflow }}-${{ github.job }}
+        key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
         restore-keys: |
-          ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}-
           ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-

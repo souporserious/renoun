@@ -18,10 +18,6 @@
     "isolatedModules": true,
     "jsx": "react",
     "verbatimModuleSyntax": true,
-    "baseUrl": ".",
-    "paths": {
-      "#analysis-client-server": ["./src/analysis/client.server.ts"]
-    },
     "stripInternal": true,
     "rootDir": "./src",
     "outDir": "./dist",

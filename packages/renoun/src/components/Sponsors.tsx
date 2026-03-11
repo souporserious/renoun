@@ -1,6 +1,4 @@
 import React from 'react'
-import type { Session as RenounSession } from '../file-system/Session.ts'
-import { createPersistentCacheNodeKey } from '../file-system/cache-key.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { hashString } from '../utils/stable-serialization.ts'
 
@@ -31,36 +29,23 @@ interface PublicSponsor {
 
 interface FetchSponsorsOptions {
   amount: number
-  userName?: string
   cacheTtlMs?: number
 }
 
 const AVATAR_MIN = 64
 const AVATAR_MAX = 512
-const SPONSORS_CACHE_DOMAIN = 'component-sponsors'
-const SPONSORS_CACHE_VERSION = '2'
-const SPONSORS_CACHE_NAMESPACE = 'github-sponsors'
-const SPONSORS_CACHE_VERSION_DEP = 'component-sponsors-version'
-const SPONSORS_CACHE_TTL_BUCKET_DEP = 'component-sponsors-ttl-bucket'
-const SPONSORS_CACHE_TOKEN_DEP = 'component-sponsors-token'
 const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
-const sponsorsCacheSessionPromisesByProjectRoot = new Map<
-  string,
-  Promise<RenounSession | undefined>
->()
+type FetchSponsorsAndTierLinksResult = Awaited<
+  ReturnType<typeof fetchSponsorsAndTierLinksUncached>
+>
 
-function getTokenCacheKey(token: string): string {
-  return hashString(token)
+interface SponsorsCacheEntry {
+  expiresAt: number
+  value?: FetchSponsorsAndTierLinksResult
+  promise?: Promise<FetchSponsorsAndTierLinksResult>
 }
 
-function createSponsorsCacheNodeKey(payload: unknown): string {
-  return createPersistentCacheNodeKey({
-    domain: SPONSORS_CACHE_DOMAIN,
-    domainVersion: SPONSORS_CACHE_VERSION,
-    namespace: SPONSORS_CACHE_NAMESPACE,
-    payload,
-  })
-}
+const sponsorsCache = new Map<string, SponsorsCacheEntry>()
 
 function normalizeCacheTtlMs(value: number | undefined): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -79,44 +64,17 @@ function resolveSponsorsCacheTtlMs(cacheTtlMs?: number): number {
   return DEFAULT_SPONSORS_CACHE_TTL_MS
 }
 
-async function getSponsorsCacheSession(): Promise<RenounSession | undefined> {
-  try {
-    const [
-      { NodeFileSystem },
-      { Session },
-      { getRootDirectory },
-      { getDefaultCacheDatabasePath },
-    ] = await Promise.all([
-        import('../file-system/NodeFileSystem.ts'),
-        import('../file-system/Session.ts'),
-        import('../utils/get-root-directory.ts'),
-        import('../file-system/CacheSqlite.ts'),
-      ])
-    const projectRoot = getRootDirectory()
-    const cacheScopeKey = getDefaultCacheDatabasePath(projectRoot)
-    let sessionPromise =
-      sponsorsCacheSessionPromisesByProjectRoot.get(cacheScopeKey)
+function getTokenCacheKey(token: string): string {
+  return hashString(token)
+}
 
-    if (!sessionPromise) {
-      sessionPromise = (async () => {
-        try {
-          return Session.for(new NodeFileSystem())
-        } catch {
-          return undefined
-        }
-      })()
-      sponsorsCacheSessionPromisesByProjectRoot.set(cacheScopeKey, sessionPromise)
-    }
+function createSponsorsCacheKey(payload: unknown): string {
+  return hashString(JSON.stringify(payload))
+}
 
-    const session = await sessionPromise
-    if (!session) {
-      sponsorsCacheSessionPromisesByProjectRoot.delete(cacheScopeKey)
-    }
-
-    return session
-  } catch {
-    return undefined
-  }
+/** @internal */
+export function clearSponsorsCacheForTests(): void {
+  sponsorsCache.clear()
 }
 
 /** Clamp and sanitize avatar size. */
@@ -531,14 +489,12 @@ async function fetchSponsorsAndTierLinks(
     normalizedManualTierIds.length > 0
       ? new Map<string, string>(normalizedManualTierIds)
       : undefined
-  const normalizedUserName = options.userName?.trim().toLowerCase() || undefined
 
   const normalizedOptions = {
     ...options,
     amount: normalizedAmount,
     avatarSizes: normalizedAvatarSizes,
     manualTierIds: normalizedManualTierMap,
-    userName: normalizedUserName,
   }
 
   const ttlMs = resolveSponsorsCacheTtlMs(options.cacheTtlMs)
@@ -551,41 +507,44 @@ async function fetchSponsorsAndTierLinks(
     return fetchSponsorsAndTierLinksUncached(normalizedOptions)
   }
 
-  const cacheSession = await getSponsorsCacheSession()
-  if (!cacheSession) {
-    return fetchSponsorsAndTierLinksUncached(normalizedOptions)
-  }
-  const tokenCacheKey = getTokenCacheKey(token)
-
-  const nodeKey = createSponsorsCacheNodeKey({
+  const cacheKey = createSponsorsCacheKey({
     amount: normalizedAmount,
     avatarSizes: normalizedAvatarSizes,
     manualTierIds: normalizedManualTierIds,
-    token: tokenCacheKey,
-    userName: normalizedUserName,
+    token: getTokenCacheKey(token),
+  })
+  const now = Date.now()
+  const cachedEntry = sponsorsCache.get(cacheKey)
+
+  if (cachedEntry?.value && cachedEntry.expiresAt > now) {
+    return cachedEntry.value
+  }
+
+  if (cachedEntry?.promise) {
+    return cachedEntry.promise
+  }
+
+  const loadPromise = fetchSponsorsAndTierLinksUncached(normalizedOptions)
+    .then((result) => {
+      sponsorsCache.set(cacheKey, {
+        expiresAt: Date.now() + ttlMs,
+        value: result,
+      })
+      return result
+    })
+    .catch((error) => {
+      if (sponsorsCache.get(cacheKey)?.promise === loadPromise) {
+        sponsorsCache.delete(cacheKey)
+      }
+      throw error
+    })
+
+  sponsorsCache.set(cacheKey, {
+    expiresAt: now + ttlMs,
+    promise: loadPromise,
   })
 
-  return cacheSession.cache.getOrCompute(
-    nodeKey,
-    {
-      persist: true,
-      constDeps: [
-        {
-          name: SPONSORS_CACHE_VERSION_DEP,
-          version: SPONSORS_CACHE_VERSION,
-        },
-        {
-          name: SPONSORS_CACHE_TOKEN_DEP,
-          version: tokenCacheKey,
-        },
-        {
-          name: SPONSORS_CACHE_TTL_BUCKET_DEP,
-          version: String(Math.floor(Date.now() / ttlMs)),
-        },
-      ],
-    },
-    async () => fetchSponsorsAndTierLinksUncached(normalizedOptions)
-  )
+  return loadPromise
 }
 
 async function fetchSponsorTiers<const Data extends object>(
@@ -715,7 +674,7 @@ export interface SponsorsProps<Data extends object> {
 
   /**
    * Optional cache TTL override in milliseconds.
-   * When omitted, runtime configuration/env fallback is used.
+   * When omitted, the component's default TTL is used.
    */
   cacheTtlMs?: number
 

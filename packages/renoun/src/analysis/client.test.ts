@@ -68,7 +68,7 @@ vi.mock('./file-text-prefix-cache.ts', () => ({
     mocks.invalidateSharedFileTextPrefixCachePath,
 }))
 
-vi.mock('#analysis-client-server', () => ({
+vi.mock('./client.server.ts', () => ({
   configureAnalysisCacheRuntime: mocks.configureAnalysisCacheRuntime,
   createHighlighter: mocks.createHighlighter,
   getCachedFileExportMetadata: mocks.getCachedFileExportMetadata,

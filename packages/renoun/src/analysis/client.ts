@@ -106,7 +106,7 @@ import type { AnalysisOptions } from './types.ts'
 
 export type { AnalysisClientBrowserRefreshNotification } from './client-refresh-state.ts'
 
-type AnalysisClientServerModules = typeof import('#analysis-client-server')
+type AnalysisClientServerModules = typeof import('./client.server.ts')
 
 interface ActiveClientState {
   client: WebSocketClient
@@ -367,13 +367,38 @@ function applyAnalysisCacheRuntimeOptions(
   }
 }
 
+function isSourceAnalysisClientModule(): boolean {
+  return new URL(import.meta.url).pathname.endsWith('.ts')
+}
+
+function shouldLoadBrowserAnalysisClientServerModule(): boolean {
+  return typeof window !== 'undefined' && typeof document !== 'undefined'
+}
+
+async function importAnalysisClientServerModules():
+  Promise<AnalysisClientServerModules> {
+  if (shouldLoadBrowserAnalysisClientServerModule()) {
+    if (isSourceAnalysisClientModule()) {
+      return import('./client.server.browser.ts')
+    }
+
+    return import('./client.server.browser.js')
+  }
+
+  if (isSourceAnalysisClientModule()) {
+    return import('./client.server.ts')
+  }
+
+  return import('./client.server.js')
+}
+
 async function loadAnalysisClientServerModules(): Promise<AnalysisClientServerModules> {
   if (loadedAnalysisClientServerModules) {
     return loadedAnalysisClientServerModules
   }
 
   if (!analysisClientServerModulesPromise) {
-    const loadPromise = import('#analysis-client-server')
+    const loadPromise = importAnalysisClientServerModules()
       .then((modules) => {
         applyAnalysisCacheRuntimeOptions(modules)
         loadedAnalysisClientServerModules = modules
