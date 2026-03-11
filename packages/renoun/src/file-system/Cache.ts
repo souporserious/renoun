@@ -5,6 +5,10 @@ import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { raceAbort } from '../utils/concurrency.ts'
+import {
+  normalizeNonNegativeInteger,
+  normalizePositiveInteger,
+} from '../utils/normalize-number.ts'
 import { getContext, throwIfAborted } from '../utils/operation-context.ts'
 import { hashString } from '../utils/stable-serialization.ts'
 import {
@@ -3724,36 +3728,4 @@ function isComputeSlotTransientError(error: unknown): boolean {
     normalizedMessage.includes('database table is locked') ||
     normalizedMessage.includes('database is busy')
   )
-}
-
-function normalizePositiveInteger(
-  value: number | undefined,
-  fallback: number
-): number {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return fallback
-  }
-
-  const parsed = Math.floor(value)
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    return fallback
-  }
-
-  return parsed
-}
-
-function normalizeNonNegativeInteger(
-  value: number | undefined,
-  fallback: number
-): number {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return fallback
-  }
-
-  const parsed = Math.floor(value)
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return fallback
-  }
-
-  return parsed
 }

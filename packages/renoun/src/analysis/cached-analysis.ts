@@ -16,6 +16,7 @@ import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
+import { getHighlighterThemeNames } from '../utils/highlighter-options.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
@@ -191,11 +192,11 @@ const runtimeTypeScriptDependencyFingerprintInFlightByKey = new Map<
 >()
 const runtimeTypeScriptDependencySidecarHydrationInFlightByKey = new Map<
   string,
-  Promise<void>
+  Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined>
 >()
 const runtimeTypeScriptDependencySidecarHydrationQueue: Array<{
   dedupeKey: string
-  run: () => Promise<void>
+  run: () => Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined>
 }> = []
 let runtimeTypeScriptDependencySidecarHydrationActiveCount = 0
 const runtimeAnalysisBackgroundRefreshListeners = new Set<
@@ -1160,29 +1161,6 @@ function toSourceTextMetadataValueSignature(value: string): string {
 
 function toTokenValueSignature(value: string): string {
   return `${hashString(value)}:${value.length}`
-}
-
-function getThemeNamesForCache(
-  themeConfig: GetTokensOptions['theme']
-): string[] {
-  if (!themeConfig) {
-    return ['default']
-  }
-
-  if (typeof themeConfig === 'string') {
-    return [themeConfig]
-  }
-
-  if (Array.isArray(themeConfig)) {
-    const themeValue = themeConfig[0]
-    return [themeValue]
-  }
-
-  const resolvedThemeNames = Object.values(themeConfig).map((themeValue) =>
-    typeof themeValue === 'string' ? themeValue : themeValue[0]
-  )
-
-  return resolvedThemeNames.length > 0 ? resolvedThemeNames : ['default']
 }
 
 function getThemeSignature(themeConfig: GetTokensOptions['theme']): string {
@@ -3369,22 +3347,28 @@ function queueRuntimeTypeScriptDependencySidecarHydration(options: {
   runtimeCacheStore: RuntimeAnalysisCacheStore
   filePath: string
   compilerOptionsVersion: string
-}): void {
+}): Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined> {
   const dedupeKey = createRuntimeTypeScriptDependencyTrackingDedupeKey(
     options.runtimeCacheStore,
     options.filePath,
     options.compilerOptionsVersion
   )
 
-  if (
-    runtimeTypeScriptDependencySidecarHydrationInFlightByKey.has(dedupeKey)
-  ) {
-    return
+  const pending =
+    runtimeTypeScriptDependencySidecarHydrationInFlightByKey.get(dedupeKey)
+  if (pending) {
+    return pending
   }
 
-  let resolveHydration: () => void = () => {}
-  const hydration = new Promise<void>((resolve) => {
+  let resolveHydration:
+    | ((value: RuntimeTypeScriptDependencyAnalysisResult | undefined) => void)
+    | undefined
+  let rejectHydration: ((error: unknown) => void) | undefined
+  const hydration = new Promise<
+    RuntimeTypeScriptDependencyAnalysisResult | undefined
+  >((resolve, reject) => {
     resolveHydration = resolve
+    rejectHydration = reject
   }).finally(() => {
     if (
       runtimeTypeScriptDependencySidecarHydrationInFlightByKey.get(dedupeKey) ===
@@ -3402,18 +3386,23 @@ function queueRuntimeTypeScriptDependencySidecarHydration(options: {
     dedupeKey,
     run: async () => {
       try {
-        await getCachedRuntimeTypeScriptDependencyAnalysis(
-          options.project,
-          options.runtimeCacheStore,
-          options.filePath,
-          options.compilerOptionsVersion
-        )
-      } finally {
-        resolveHydration()
+        const dependencyAnalysis =
+          await getCachedRuntimeTypeScriptDependencyAnalysis(
+            options.project,
+            options.runtimeCacheStore,
+            options.filePath,
+            options.compilerOptionsVersion
+          )
+        resolveHydration?.(dependencyAnalysis)
+        return dependencyAnalysis
+      } catch (error) {
+        rejectHydration?.(error)
+        throw error
       }
     },
   })
   flushRuntimeTypeScriptDependencySidecarHydrationQueue()
+  return hydration
 }
 
 async function recordRuntimeTypeScriptDependencySidecar(
@@ -3427,32 +3416,37 @@ async function recordRuntimeTypeScriptDependencySidecar(
     return
   }
 
-  if (isTestEnvironment()) {
-    const dependencyAnalysis = await getCachedRuntimeTypeScriptDependencyAnalysis(
-      project,
-      runtimeCacheStore,
-      filePath,
-      compilerOptionsVersion
-    )
-    if (!dependencyAnalysis) {
-      return
-    }
-
-    await context.recordNodeDep(dependencyAnalysis.nodeKey)
-    return
-  }
-
   const nodeKey = createRuntimeTypeScriptDependencyAnalysisCacheNodeKey(
     filePath,
     compilerOptionsVersion
   )
-  await context.recordNodeDep(nodeKey)
-  queueRuntimeTypeScriptDependencySidecarHydration({
-    project,
-    runtimeCacheStore,
-    filePath,
-    compilerOptionsVersion,
-  })
+
+  // Probe the sidecar without auto-recording a dependency so persisted parent
+  // entries never capture a `node:<sidecar> = missing` edge.
+  const sidecarFingerprint = await runtimeCacheStore.store.getFingerprint(nodeKey)
+  if (sidecarFingerprint) {
+    context.recordDep(`node:${nodeKey}`, sidecarFingerprint)
+    return
+  }
+
+  const dependencyAnalysis = isTestEnvironment()
+    ? await getCachedRuntimeTypeScriptDependencyAnalysis(
+          project,
+          runtimeCacheStore,
+          filePath,
+          compilerOptionsVersion
+        )
+    : await queueRuntimeTypeScriptDependencySidecarHydration({
+        project,
+        runtimeCacheStore,
+        filePath,
+        compilerOptionsVersion,
+      })
+  if (!dependencyAnalysis) {
+    return
+  }
+
+  await context.recordNodeDep(dependencyAnalysis.nodeKey)
 }
 
 function createRuntimeFileExportsCacheNodeKey(
@@ -4443,7 +4437,7 @@ export async function getCachedTokens(
         : (options.sourcePath ?? null),
     language: options.language ?? 'plaintext',
     themeSignature: getThemeSignature(options.theme),
-    themeNames: getThemeNamesForCache(options.theme),
+    themeNames: getHighlighterThemeNames(options.theme),
     allowErrors: options.allowErrors ?? null,
     showErrors: options.showErrors ?? null,
     metadataCollectorKey: getMetadataCollectorCacheKey(options.metadataCollector),

@@ -734,6 +734,63 @@ describe('file-system cache integration', () => {
     }
   })
 
+  test('rebuilds against the new session when reset happens during a snapshot build', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      const fileSystem = new MutableTimestampFileSystem({
+        'index.ts': 'export const value = 1',
+      })
+      fileSystem.setLastModified('index.ts', 1)
+      const originalReadDirectory = fileSystem.readDirectory.bind(fileSystem)
+      const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectory')
+      const directory = new Directory({ fileSystem })
+
+      await directory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const blockRebuild = createDeferredPromise()
+      const continueRebuild = createDeferredPromise()
+      let shouldBlockRebuild = false
+
+      readDirectorySpy.mockImplementation(async (path) => {
+        const result = await originalReadDirectory(path)
+
+        if (shouldBlockRebuild) {
+          shouldBlockRebuild = false
+          blockRebuild.resolve()
+          await continueRebuild.promise
+        }
+
+        return result
+      })
+
+      fileSystem.setLastModified('index.ts', 2)
+      shouldBlockRebuild = true
+
+      const staleReload = directory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      await blockRebuild.promise
+      await fileSystem.writeFile('after-reset.ts', 'export const afterReset = 1')
+      Session.reset(fileSystem)
+      const freshSession = Session.for(fileSystem)
+
+      continueRebuild.resolve()
+      const refreshedEntries = await staleReload
+
+      expect(freshSession.directorySnapshots.size).toBe(1)
+      expect(
+        refreshedEntries.map((entry) => entry.workspacePath).sort()
+      ).toEqual(['after-reset.ts', 'index.ts'])
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
   test('invalidates root directory snapshots for path-scoped invalidations', async () => {
     const previousNodeEnv = process.env.NODE_ENV
     process.env.NODE_ENV = 'production'
@@ -2554,6 +2611,58 @@ updated content`
     expect(deleteByDependencyPathsSpy).toHaveBeenCalledWith(['src'])
   })
 
+  test('Session.reset lets queued persisted invalidations finish draining', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/first.ts': 'export const first = 1',
+      'src/second.ts': 'export const second = 1',
+    })
+    const cache = new Cache({
+      persistence: {
+        async load() {
+          return undefined
+        },
+        async save() {},
+        async delete() {},
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-reset-drain'),
+      cache
+    )
+    const firstBatchStarted = createDeferredPromise()
+    const releaseFirstBatch = createDeferredPromise()
+    let callCount = 0
+    const deleteByDependencyPathsSpy = vi
+      .spyOn(session.cache, 'deleteByDependencyPaths')
+      .mockImplementation(async (paths) => {
+        callCount += 1
+        if (callCount === 1) {
+          firstBatchStarted.resolve()
+          await releaseFirstBatch.promise
+        }
+
+        return {
+          deletedNodeKeys: [],
+          usedDependencyIndex: true,
+          hasMissingDependencyMetadata: false,
+        }
+      })
+
+    session.invalidatePaths(['/src/first.ts'])
+    await firstBatchStarted.promise
+    session.invalidatePaths(['/src/second.ts'])
+
+    Session.reset(fileSystem)
+    releaseFirstBatch.resolve()
+    await session.waitForPendingInvalidations()
+
+    expect(deleteByDependencyPathsSpy.mock.calls).toEqual([
+      [['src/first.ts']],
+      [['src/second.ts']],
+    ])
+  })
+
   test('Session.invalidatePaths prioritizes immediate persisted invalidations over queued background work', async () => {
     const fileSystem = new InMemoryFileSystem({
       'src/background-a.ts': 'export const value = "a"',
@@ -2725,6 +2834,99 @@ updated content`
       usedDependencyIndex: true,
       hasMissingDependencyMetadata: true,
       missingDependencyNodeKeys: ['analysis:missing-metadata'],
+    })
+    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
+
+    session.invalidatePaths(['/src/first.ts'])
+    await session.waitForPendingInvalidations()
+
+    expect(listNodeKeysByPrefixSpy).toHaveBeenCalledTimes(1)
+    expect(listNodeKeysByPrefixSpy).toHaveBeenCalledWith('')
+  })
+
+  test('Session.invalidatePaths waits for persisted snapshot key deletions', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/index.ts': 'export const value = 1',
+    })
+    const cache = new Cache({
+      persistence: {
+        async load() {
+          return undefined
+        },
+        async save() {},
+        async delete() {},
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-delete-many-wait'),
+      cache
+    )
+    const snapshotKey = session.createDirectorySnapshotKey({
+      directoryPath: 'src',
+      mask: 0,
+      filterSignature: 'all',
+      sortSignature: 'default',
+    })
+    session.directorySnapshots.set(snapshotKey, {} as never)
+
+    const deleteManyStarted = createDeferredPromise()
+    const releaseDeleteMany = createDeferredPromise()
+    vi.spyOn(session.cache, 'deleteByDependencyPaths').mockResolvedValue({
+      deletedNodeKeys: [],
+      usedDependencyIndex: true,
+      hasMissingDependencyMetadata: false,
+    })
+    const deleteManySpy = vi
+      .spyOn(session.cache, 'deleteMany')
+      .mockImplementation(async (nodeKeys) => {
+        deleteManyStarted.resolve()
+        await releaseDeleteMany.promise
+        return Array.from(nodeKeys).length
+      })
+
+    session.invalidatePaths(['/src'])
+    await deleteManyStarted.promise
+
+    let completed = false
+    const waitForInvalidations = session.waitForPendingInvalidations().then(() => {
+      completed = true
+    })
+    await Promise.resolve()
+
+    expect(completed).toBe(false)
+    releaseDeleteMany.resolve()
+    await waitForInvalidations
+
+    expect(deleteManySpy).toHaveBeenCalledWith([snapshotKey])
+    expect(completed).toBe(true)
+  })
+
+  test('Session.invalidatePaths scans all persisted keys when the dependency index is unavailable', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/first.ts': 'export const first = 1',
+    })
+    const cache = new Cache({
+      persistence: {
+        async load() {
+          return undefined
+        },
+        async save() {},
+        async delete() {},
+        async listNodeKeysByPrefix() {
+          return []
+        },
+      },
+    })
+    const session = Session.for(
+      fileSystem,
+      new FileSystemSnapshot(fileSystem, 'session-persisted-full-fallback'),
+      cache
+    )
+    vi.spyOn(session.cache, 'deleteByDependencyPaths').mockResolvedValue({
+      deletedNodeKeys: [],
+      usedDependencyIndex: false,
+      hasMissingDependencyMetadata: false,
     })
     const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
 

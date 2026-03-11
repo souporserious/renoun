@@ -1,25 +1,25 @@
 import { describe, expect, test, vi } from 'vitest'
 
-import { POST_BUILD_SCRIPT_PATHS, runPostBuildScripts } from './postbuild.ts'
+import { POST_BUILD_STEPS, runPostBuildScripts } from './postbuild.ts'
 
 describe('postbuild', () => {
-  test('runs every post-build patch script in order', async () => {
-    const runScript = vi.fn(async (_scriptPath: string) => undefined)
+  test('runs every post-build step in order', async () => {
+    const runStep = vi.fn(async (_step: () => Promise<void>) => undefined)
 
-    await runPostBuildScripts({ runScript })
+    await runPostBuildScripts({ runStep })
 
-    expect(runScript.mock.calls).toEqual(
-      POST_BUILD_SCRIPT_PATHS.map((scriptPath) => [scriptPath])
+    expect(runStep.mock.calls).toEqual(
+      POST_BUILD_STEPS.map((step) => [step])
     )
   })
 
-  test('stops after the first failed post-build patch script', async () => {
-    const runScript = vi
-      .fn<(scriptPath: string) => Promise<void>>()
+  test('stops after the first failed post-build step', async () => {
+    const runStep = vi
+      .fn<(step: () => Promise<void>) => Promise<void>>()
       .mockRejectedValueOnce(new Error('boom'))
 
-    await expect(runPostBuildScripts({ runScript })).rejects.toThrow('boom')
-    expect(runScript).toHaveBeenCalledTimes(1)
-    expect(runScript).toHaveBeenCalledWith(POST_BUILD_SCRIPT_PATHS[0])
+    await expect(runPostBuildScripts({ runStep })).rejects.toThrow('boom')
+    expect(runStep).toHaveBeenCalledTimes(1)
+    expect(runStep).toHaveBeenCalledWith(POST_BUILD_STEPS[0])
   })
 })

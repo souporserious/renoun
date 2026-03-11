@@ -154,6 +154,16 @@ const SERVER_RPC_READY_TIMEOUT_MS = 500
 const SERVER_RPC_UNAVAILABLE_BACKOFF_MS = 5_000
 const REFRESH_RESYNC_MAX_ATTEMPTS = 3
 const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
+const SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY =
+  '__renounAnalysisClientServerRuntimeEnvUnsubscribe' as const
+
+type AnalysisClientGlobalState = typeof globalThis & {
+  [SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY]?: () => void
+}
+
+function getAnalysisClientGlobalState(): AnalysisClientGlobalState {
+  return globalThis as AnalysisClientGlobalState
+}
 
 /**
  * A monotonic version that advances as refresh notifications invalidate client
@@ -1031,7 +1041,10 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
   }
 
   hasSubscribedToServerRuntimeEnvChanges = true
-  onServerRuntimeEnvChange((runtime) => {
+  const globalState = getAnalysisClientGlobalState()
+  globalState[SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY]?.()
+
+  const unsubscribe = onServerRuntimeEnvChange((runtime) => {
     if (!activeClientState) {
       return
     }
@@ -1051,6 +1064,19 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
       resyncImmediately: true,
     })
   })
+
+  const disposeSubscription = () => {
+    unsubscribe()
+    if (
+      globalState[SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY] ===
+      disposeSubscription
+    ) {
+      delete globalState[SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY]
+    }
+  }
+
+  globalState[SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY] =
+    disposeSubscription
 }
 
 function getClient(): WebSocketClient | undefined {
@@ -1794,6 +1820,9 @@ function setAnalysisClientRefreshVersionForTests(version: string): void {
 }
 
 function clearAnalysisClientStateForTests(): void {
+  const globalState = getAnalysisClientGlobalState()
+  globalState[SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY]?.()
+  hasSubscribedToServerRuntimeEnvChanges = false
   disposeActiveClient({
     invalidateClientRpcState: false,
   })

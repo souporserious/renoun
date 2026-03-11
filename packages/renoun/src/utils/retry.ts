@@ -5,6 +5,7 @@ import {
   isAbortError,
   isRetryableNetworkTypeError,
 } from './errors.ts'
+import { normalizeNonNegativeInteger } from './normalize-number.ts'
 import { getContext, throwIfAborted } from './operation-context.ts'
 import { emitTelemetryEvent } from './telemetry.ts'
 
@@ -54,16 +55,6 @@ interface ResolvedRetryOptions {
     nextAttempt: number
     delayMs: number
   }) => void
-}
-
-function normalizeNonNegativeInteger(
-  value: number | undefined,
-  fallback: number
-): number {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
-    return fallback
-  }
-  return Math.floor(value)
 }
 
 function normalizePositiveNumber(value: number | undefined, fallback: number) {

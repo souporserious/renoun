@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isRenounDebugEnabled } from '../utils/env.ts'
+import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
 
 type Framework = 'next' | 'vite' | 'waku'
 
@@ -177,20 +178,20 @@ if (firstArgument === 'validate') {
           shell: false,
           env: {
             ...process.env,
-            [PROCESS_ENV_KEYS.renounServerPort]: port,
-            [PROCESS_ENV_KEYS.renounServerId]: id,
-            ...(typeof serverHost === 'string' && serverHost.length > 0
-              ? {
-                  [PROCESS_ENV_KEYS.renounServerHost]: serverHost,
-                }
-              : {}),
-            ...(typeof serverRefreshNotificationsEffective === 'string' &&
-            serverRefreshNotificationsEffective.length > 0
-              ? {
-                  [PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]:
-                    serverRefreshNotificationsEffective,
-                }
-              : {}),
+            ...createServerRuntimeProcessEnv({
+              port,
+              id,
+              ...(typeof serverHost === 'string' && serverHost.length > 0
+                ? { host: serverHost }
+                : {}),
+              ...(typeof serverRefreshNotificationsEffective === 'string' &&
+              serverRefreshNotificationsEffective.length > 0
+                ? {
+                    emitRefreshNotifications:
+                      serverRefreshNotificationsEffective === '1',
+                  }
+                : {}),
+            }),
           },
         })
 

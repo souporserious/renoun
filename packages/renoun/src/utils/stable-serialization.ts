@@ -1,69 +1,55 @@
-import { createHash } from 'node:crypto'
+import type * as NodeCrypto from 'node:crypto'
 
 export const HASH_STRING_ALGORITHM = 'sha256' as const
 export const HASH_STRING_HEX_LENGTH = 64 as const
+export { stableStringify } from './stable-stringify.ts'
 
-export function stableStringify(value: unknown): string {
-  if (value === undefined) {
-    return 'undefined'
+function getNodeCrypto(): typeof NodeCrypto | undefined {
+  if (
+    typeof process === 'undefined' ||
+    typeof process.getBuiltinModule !== 'function'
+  ) {
+    return undefined
   }
 
-  if (typeof value === 'number') {
-    if (Number.isNaN(value)) {
-      return 'NaN'
+  return (
+    (process.getBuiltinModule('node:crypto') as typeof NodeCrypto | undefined) ??
+    (process.getBuiltinModule('crypto') as typeof NodeCrypto | undefined)
+  )
+}
+
+function hashStringInNonNodeRuntime(input: string): string {
+  const seeds = [
+    0x811c9dc5,
+    0x01000193,
+    0x9e3779b1,
+    0x85ebca77,
+  ]
+
+  const parts = seeds.map((seed, seedIndex) => {
+    let hash = (seed ^ seedIndex) >>> 0
+
+    for (let index = 0; index < input.length; index += 1) {
+      hash ^= input.charCodeAt(index)
+      hash = Math.imul(hash, 0x01000193) >>> 0
+      hash ^= hash >>> 13
     }
 
-    if (value === Number.POSITIVE_INFINITY) {
-      return 'Infinity'
-    }
+    return hash.toString(16).padStart(8, '0')
+  })
 
-    if (value === Number.NEGATIVE_INFINITY) {
-      return '-Infinity'
-    }
-  }
-
-  if (typeof value === 'bigint') {
-    return `bigint:${value.toString()}`
-  }
-
-  if (typeof value === 'symbol') {
-    return `symbol:${value.description ?? ''}`
-  }
-
-  if (typeof value === 'function') {
-    return `function:${value.name || 'anonymous'}`
-  }
-
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-
-  if (Array.isArray(value)) {
-    const entries: string[] = []
-
-    for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) {
-        entries.push('<hole>')
-        continue
-      }
-
-      entries.push(stableStringify(value[index]))
-    }
-
-    return `[${entries.join(',')}]`
-  }
-
-  const object = value as Record<string, unknown>
-  const keys = Object.keys(object).sort()
-  const entries: string[] = []
-
-  for (const key of keys) {
-    entries.push(`${JSON.stringify(key)}:${stableStringify(object[key])}`)
-  }
-
-  return `{${entries.join(',')}}`
+  return parts.join('').repeat(2)
 }
 
 export function hashString(input: string): string {
-  return createHash(HASH_STRING_ALGORITHM).update(input).digest('hex')
+  const nodeCrypto = getNodeCrypto()
+
+  if (nodeCrypto?.createHash) {
+    return nodeCrypto
+      .createHash(HASH_STRING_ALGORITHM)
+      .update(input)
+      .digest('hex')
+  }
+
+  return hashStringInNonNodeRuntime(input)
 }

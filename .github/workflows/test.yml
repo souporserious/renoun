@@ -79,30 +79,41 @@ jobs:
           # Count affected packages, excluding screenshot (handled by separate workflow)
           PACKAGE_COUNT=$(echo "$AFFECTED" | jq '[.packages.items[] | select(.name != "@renoun/screenshot")] | length')
           HAS_RENOUN=$(echo "$AFFECTED" | jq -r 'any(.packages.items[]?; (.name // "") == "renoun" or (.name // "") == "@renoun/mdx")')
-          if [[ "$HAS_RENOUN" != "true" ]]; then
-            if git diff --name-only "$TURBO_SCM_BASE"...HEAD | grep -Eq '^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|turbo\.json)$'; then
-              HAS_RENOUN=true
-            fi
+          RUN_ALL_PACKAGE_TESTS=false
+          if git diff --name-only "$TURBO_SCM_BASE"...HEAD | grep -Eq '^(package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|turbo\.json)$'; then
+            RUN_ALL_PACKAGE_TESTS=true
+            HAS_RENOUN=true
           fi
           echo "package_count=$PACKAGE_COUNT" >> $GITHUB_OUTPUT
           echo "has_renoun=$HAS_RENOUN" >> $GITHUB_OUTPUT
+          echo "run_all_package_tests=$RUN_ALL_PACKAGE_TESTS" >> $GITHUB_OUTPUT
           echo "turbo_scm_base=$TURBO_SCM_BASE" >> $GITHUB_OUTPUT
 
           if [[ "$PACKAGE_COUNT" -gt 0 ]]; then
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             echo "$AFFECTED" | jq -r '.packages.items[].name' >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          elif [[ "$RUN_ALL_PACKAGE_TESTS" == "true" ]]; then
+            echo "_No directly affected packages reported by Turbo_" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Root dependency/config files changed, so all package tests will run." >> $GITHUB_STEP_SUMMARY
           else
             echo "_No packages affected_" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "✅ No tests to run" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Run tests for affected packages
-        if: steps.affected.outputs.package_count != '0'
+      - name: Run package tests
+        if: steps.affected.outputs.package_count != '0' || steps.affected.outputs.run_all_package_tests == 'true'
         env:
           TURBO_SCM_BASE: ${{ steps.affected.outputs.turbo_scm_base }}
-        run: pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!//" --filter="!@renoun/screenshot"
+          RUN_ALL_PACKAGE_TESTS: ${{ steps.affected.outputs.run_all_package_tests }}
+        run: |
+          if [[ "$RUN_ALL_PACKAGE_TESTS" == "true" ]]; then
+            pnpm test --filter="!//" --filter="!@renoun/screenshot"
+          else
+            pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!//" --filter="!@renoun/screenshot"
+          fi
 
   renoun-browser:
     needs: test

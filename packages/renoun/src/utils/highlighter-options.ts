@@ -19,3 +19,25 @@ export interface HighlighterInitializationOptions {
   theme?: ThemeConfig
   languages?: Languages[]
 }
+
+export function getHighlighterThemeNames(
+  themeConfig?: ThemeConfig
+): ThemeName[] {
+  if (!themeConfig) {
+    return ['default']
+  }
+
+  if (typeof themeConfig === 'string') {
+    return [themeConfig]
+  }
+
+  if (Array.isArray(themeConfig)) {
+    return [themeConfig[0]]
+  }
+
+  const themeNames = Object.values(themeConfig).map((themeValue) =>
+    typeof themeValue === 'string' ? themeValue : themeValue[0]
+  )
+
+  return themeNames.length > 0 ? themeNames : ['default']
+}

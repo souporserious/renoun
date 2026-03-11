@@ -25,8 +25,9 @@ import { mapConcurrent } from '../utils/concurrency.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getFileExportTextResult } from '../utils/get-file-export-text.ts'
 import { getQuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
-import type {
-  HighlighterInitializationOptions,
+import {
+  getHighlighterThemeNames,
+  type HighlighterInitializationOptions,
 } from '../utils/highlighter-options.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
@@ -70,6 +71,7 @@ import {
   getSharedFileTextPrefix,
   invalidateSharedFileTextPrefixCachePath,
 } from './file-text-prefix-cache.ts'
+import { shouldIgnoreAnalysisPath } from './ignored-paths.ts'
 
 const { SyntaxKind } = getTsMorph()
 
@@ -94,16 +96,6 @@ const REFRESH_NOTIFICATION_PRIORITY_DELAY_MS: Record<
   background: 50,
 }
 const REFRESH_NOTIFICATION_HISTORY_LIMIT = 250
-const IGNORED_REFRESH_PATH_SEGMENTS = new Set([
-  '.next',
-  '.renoun',
-  '.git',
-  'node_modules',
-  'out',
-  'dist',
-  'build',
-  'coverage',
-])
 const CODE_FENCE_PREWARM_PRIORITY_DELAY_MS: Record<
   RefreshNotificationPriority,
   number
@@ -209,28 +201,6 @@ function toFileExportDependencyPaths(
   return Array.from(dependencyPaths.values())
 }
 
-function getThemeNamesForCodeFencePrewarm(
-  themeConfig: HighlighterInitializationOptions['theme']
-): string[] {
-  if (!themeConfig) {
-    return ['default']
-  }
-
-  if (typeof themeConfig === 'string') {
-    return [themeConfig]
-  }
-
-  if (Array.isArray(themeConfig)) {
-    return [themeConfig[0]]
-  }
-
-  const themeNames = Object.values(themeConfig).map((themeValue) =>
-    typeof themeValue === 'string' ? themeValue : themeValue[0]
-  )
-
-  return themeNames.length > 0 ? themeNames : ['default']
-}
-
 function normalizeCodeFencePrewarmPath(path: string): string {
   return resolve(path)
 }
@@ -330,7 +300,7 @@ async function collectMarkdownFilesUnderDirectory(
         continue
       }
 
-      if (IGNORED_REFRESH_PATH_SEGMENTS.has(entryName)) {
+      if (shouldIgnoreAnalysisPath(entryName)) {
         continue
       }
 
@@ -424,18 +394,7 @@ function getStartupRuntimeWarmupSourceText(language: string): string {
 }
 
 function shouldIgnoreRefreshPath(filePath: string): boolean {
-  if (typeof filePath !== 'string' || filePath.length === 0) {
-    return true
-  }
-
-  const pathSegments = filePath.split(/[/\\]+/)
-  for (const pathSegment of pathSegments) {
-    if (IGNORED_REFRESH_PATH_SEGMENTS.has(pathSegment)) {
-      return true
-    }
-  }
-
-  return false
+  return shouldIgnoreAnalysisPath(filePath)
 }
 
 function parseTypeFilter(filter?: TypeFilter | string): TypeFilter | undefined {
@@ -1415,9 +1374,7 @@ export async function createServer(options?: CreateServerOptions) {
       waitForWarmResult?: boolean
     }) {
       const project = getProgram(analysisOptions)
-      latestCodeFencePrewarmThemeNames = getThemeNamesForCodeFencePrewarm(
-        options.theme
-      )
+      latestCodeFencePrewarmThemeNames = getHighlighterThemeNames(options.theme)
       queueHighlighterInitialization({
         theme: options.theme,
         languages: options.languages,

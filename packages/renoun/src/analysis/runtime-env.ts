@@ -12,6 +12,26 @@ export interface AnalysisServerRuntime {
   emitRefreshNotifications?: boolean
 }
 
+export function createServerRuntimeProcessEnv(
+  runtime: AnalysisServerRuntime
+): Record<string, string> {
+  return {
+    [PROCESS_ENV_KEYS.renounServerPort]: String(runtime.port),
+    [PROCESS_ENV_KEYS.renounServerId]: String(runtime.id),
+    ...(typeof runtime.host === 'string' && runtime.host.length > 0
+      ? {
+          [PROCESS_ENV_KEYS.renounServerHost]: runtime.host,
+        }
+      : {}),
+    ...(typeof runtime.emitRefreshNotifications === 'boolean'
+      ? {
+          [PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]:
+            runtime.emitRefreshNotifications ? '1' : '0',
+        }
+      : {}),
+  }
+}
+
 const serverRuntimeEnvListeners = new Set<
   (runtime: AnalysisServerRuntime | undefined) => void
 >()

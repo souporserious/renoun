@@ -1,44 +1,27 @@
-import { spawn } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
 
-export const POST_BUILD_SCRIPT_PATHS = [
-  './scripts/patch-load-package.ts',
-  './scripts/patch-analysis-client-imports.ts',
-] as const
+import { patchAnalysisClientImports } from './patch-analysis-client-imports.ts'
+import { patchLoadPackage } from './patch-load-package.ts'
 
 interface RunPostBuildScriptsOptions {
-  runScript?: (scriptPath: string) => Promise<void>
+  runStep?: (step: () => Promise<void>) => Promise<void>
+  steps?: ReadonlyArray<() => Promise<void>>
 }
 
-export function runNodeScript(scriptPath: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [scriptPath], {
-      stdio: 'inherit',
-    })
-
-    child.on('error', reject)
-    child.on('close', (code) => {
-      if (code === 0) {
-        resolve()
-        return
-      }
-
-      reject(
-        new Error(
-          `[postbuild] ${scriptPath} exited with code ${code ?? 'unknown'}`
-        )
-      )
-    })
-  })
-}
+export const POST_BUILD_STEPS = [
+  patchLoadPackage,
+  patchAnalysisClientImports,
+] as const
 
 export async function runPostBuildScripts(
   options: RunPostBuildScriptsOptions = {}
 ): Promise<void> {
-  const runScript = options.runScript ?? runNodeScript
+  const runStep =
+    options.runStep ?? (async (step: () => Promise<void>) => step())
+  const steps = options.steps ?? POST_BUILD_STEPS
 
-  for (const scriptPath of POST_BUILD_SCRIPT_PATHS) {
-    await runScript(scriptPath)
+  for (const step of steps) {
+    await runStep(step)
   }
 }
 

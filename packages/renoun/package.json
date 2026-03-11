@@ -34,14 +34,9 @@
   ],
   "files": [
     "dist/**/*",
-    "src/**/*.ts",
-    "src/**/*.tsx",
     "!dist/**/*.test.*",
     "!dist/**/*.spec.*",
-    "!dist/**/*.bench.*",
-    "!src/**/*.test.*",
-    "!src/**/*.spec.*",
-    "!src/**/*.bench.*"
+    "!dist/**/*.bench.*"
   ],
   "sideEffects": false,
   "bin": {

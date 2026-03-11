@@ -2742,7 +2742,7 @@ describe('resolveType', () => {
         type Primitives = {
           /** a string */
           str: string;
-          
+
           /**
            * a number
            * @internal
@@ -11001,7 +11001,7 @@ describe('resolveType', () => {
         dedent`
           import * as React from 'react'
           import styled from 'styled-components'
-    
+
           export const Grid = styled.div<{
             $gridTemplateColumns: string
             $gridTemplateRows: string

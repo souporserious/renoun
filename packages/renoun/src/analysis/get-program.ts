@@ -31,6 +31,7 @@ import {
   clearProjectAnalysisScopeId,
   setProjectAnalysisScopeId,
 } from './project-scope.ts'
+import { shouldIgnoreAnalysisPath } from './ignored-paths.ts'
 import {
   activeRefreshingPrograms,
   completeRefreshingPrograms,
@@ -64,17 +65,6 @@ const ANALYSIS_WATCHER_INVALIDATION_PRIORITY_DELAY_MS: Record<
   background: 25,
 }
 const ANALYSIS_WATCHER_INVALIDATION_BATCH_WINDOW_MS = 25
-const IGNORED_ANALYSIS_WATCH_PATH_SEGMENTS = new Set([
-  '.next',
-  '.renoun',
-  '.git',
-  'node_modules',
-  'out',
-  'dist',
-  'build',
-  'coverage',
-])
-
 export interface AnalysisWatcherRuntimeOptions {
   enabled?: boolean
 }
@@ -187,18 +177,7 @@ export function getProgram(options?: AnalysisOptions) {
 }
 
 function shouldIgnoreAnalysisWatchPath(filePath: string): boolean {
-  if (typeof filePath !== 'string' || filePath.length === 0) {
-    return true
-  }
-
-  const pathSegments = filePath.split(/[/\\]+/)
-  for (const pathSegment of pathSegments) {
-    if (IGNORED_ANALYSIS_WATCH_PATH_SEGMENTS.has(pathSegment)) {
-      return true
-    }
-  }
-
-  return false
+  return shouldIgnoreAnalysisPath(filePath)
 }
 
 function ensureProgramDirectoryWatcher(workspaceDirectory: string): void {

@@ -132,6 +132,12 @@ function createFakeDirectoryEntry(
   const fileSystem = {
     getWorkspaceChangeToken: options?.getWorkspaceChangeToken,
   }
+  const session = {
+    invalidatePath: options?.invalidatePath ?? (() => {}),
+    snapshot: {
+      onInvalidate: options?.onInvalidate ?? (() => () => {}),
+    },
+  }
 
   return {
     kind: 'directory',
@@ -141,12 +147,7 @@ function createFakeDirectoryEntry(
     getPathname: () => pathname,
     getFilterPatternKind: options?.getFilterPatternKind ?? (() => 'recursive'),
     getFileSystem: () => fileSystem,
-    getSession: () => ({
-      invalidatePath: options?.invalidatePath ?? (() => {}),
-      snapshot: {
-        onInvalidate: options?.onInvalidate ?? (() => () => {}),
-      },
-    }),
+    getSession: () => session,
     getEntries: options?.getEntries ?? (async () => []),
     getParent: () => {
       if (options?.parent) {
@@ -509,6 +510,62 @@ describe('Navigation development SWR', () => {
     } finally {
       process.env.NODE_ENV = originalNodeEnv
     }
+  })
+
+  test('tracks invalidations for collection roots added after the initial render', async () => {
+    let firstInvalidateListener: ((path: string) => void) | undefined
+    let secondInvalidateListener: ((path: string) => void) | undefined
+    const firstOnInvalidate = vi.fn((listener: (path: string) => void) => {
+      firstInvalidateListener = listener
+      return () => {}
+    })
+    const secondOnInvalidate = vi.fn((listener: (path: string) => void) => {
+      secondInvalidateListener = listener
+      return () => {}
+    })
+
+    const firstRoot = createFakeDirectoryEntry('/guides', {
+      onInvalidate: firstOnInvalidate,
+    })
+    const secondRoot = createFakeDirectoryEntry('/api', {
+      onInvalidate: secondOnInvalidate,
+    })
+    let roots: readonly FakeDirectoryEntry[] = [firstRoot]
+    let currentEntries: readonly FakeFileEntry[] = [
+      createFakeFileEntry('Guide', '/guides/guide', firstRoot),
+    ]
+
+    const source: FakeCollectionSource = {
+      getRootEntries: () => roots,
+      getEntries: vi.fn(async () => currentEntries),
+    }
+
+    const { Navigation } = await import('./Navigation.tsx')
+
+    await Navigation({ source: source as any })
+
+    expect(firstOnInvalidate).toHaveBeenCalledTimes(1)
+    expect(secondOnInvalidate).not.toHaveBeenCalled()
+
+    roots = [firstRoot, secondRoot]
+    currentEntries = [
+      createFakeFileEntry('Guide', '/guides/guide', firstRoot),
+      createFakeFileEntry('Endpoint', '/api/endpoint', secondRoot),
+    ]
+
+    await Navigation({ source: source as any })
+
+    expect(secondOnInvalidate).toHaveBeenCalledTimes(1)
+    expect(secondInvalidateListener).toBeTypeOf('function')
+
+    secondInvalidateListener?.('/api/endpoint.mdx')
+
+    const updatedElement = await Navigation({ source: source as any })
+    const updatedMarkup = renderToStaticMarkup(<>{updatedElement}</>)
+
+    expect(source.getEntries).toHaveBeenCalledTimes(3)
+    expect(updatedMarkup).toContain('Endpoint')
+    expect(firstInvalidateListener).toBeTypeOf('function')
   })
 
   test('keeps synthesized predicate-filtered ancestors scoped to filtered children', async () => {

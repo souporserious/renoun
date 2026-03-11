@@ -8,6 +8,10 @@ import {
 } from '../utils/env.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
+  normalizeNonNegativeInteger,
+  normalizePositiveInteger,
+} from '../utils/normalize-number.ts'
+import {
   DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT,
   DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL,
   DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT,
@@ -155,6 +159,7 @@ export class Session {
   readonly #pendingPersistedInvalidationPathsBackground = new Set<string>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
   #persistedInvalidationDrainScheduled = false
+  #cacheDisposeScheduled = false
   #warnedAboutPersistedInvalidationFailure = false
   readonly #cacheMetricsEnabled: boolean
   readonly #cacheMetricsTopKeysLimit: number
@@ -590,7 +595,14 @@ export class Session {
   }
 
   async waitForPendingInvalidations(): Promise<void> {
-    await this.#persistedInvalidationQueue.catch(() => {})
+    while (true) {
+      const queue = this.#persistedInvalidationQueue
+      await queue.catch(() => {})
+
+      if (this.#persistedInvalidationQueue === queue) {
+        return
+      }
+    }
   }
 
   invalidatePath(
@@ -673,7 +685,7 @@ export class Session {
 
     if (expiredKeys.size > 0) {
       this.recordCacheMetric('invalidation_evictions_path', expiredKeys.size)
-      void this.cache.deleteMany(expiredKeys)
+      this.#enqueuePersistedNodeKeyDeletion(expiredKeys)
     }
 
     for (const normalizedPath of normalizedPaths) {
@@ -716,21 +728,45 @@ export class Session {
     this.#invalidatedDirectorySnapshotKeys.clear()
     this.#workspaceChangeLookupCache.clear()
     this.#recentlyInvalidatedPathTimestamps.clear()
-    this.#pendingPersistedInvalidationPathsImmediate.clear()
-    this.#pendingPersistedInvalidationPathsBackground.clear()
-    this.#persistedInvalidationQueue = Promise.resolve()
-    this.#persistedInvalidationDrainScheduled = false
     this.#directorySnapshotMetricsByKey.clear()
     this.#directorySnapshotRebuildReasonTotals.clear()
     this.#directorySnapshotRebuildReasonByKey.clear()
     this.#directorySnapshotRebuildEventsSinceLog = 0
-    this.cache.dispose()
+    this.#scheduleCacheDispose()
     if (typeof this.snapshot.invalidateAll === 'function') {
       this.snapshot.invalidateAll()
       return
     }
 
     this.snapshot.invalidatePath('.')
+  }
+
+  #enqueuePersistedInvalidationTask(task: () => Promise<void>): void {
+    this.#persistedInvalidationQueue = this.#persistedInvalidationQueue
+      .catch(() => {})
+      .then(() => task())
+  }
+
+  #enqueuePersistedNodeKeyDeletion(nodeKeys: Iterable<string>): void {
+    const uniqueNodeKeys = Array.from(new Set(nodeKeys))
+    if (uniqueNodeKeys.length === 0) {
+      return
+    }
+
+    this.#enqueuePersistedInvalidationTask(async () => {
+      await this.cache.deleteMany(uniqueNodeKeys)
+    })
+  }
+
+  #scheduleCacheDispose(): void {
+    if (this.#cacheDisposeScheduled) {
+      return
+    }
+
+    this.#cacheDisposeScheduled = true
+    void this.waitForPendingInvalidations().finally(() => {
+      this.cache.dispose()
+    })
   }
 
   #normalizeSignatureValue(
@@ -821,9 +857,9 @@ export class Session {
     }
 
     this.#persistedInvalidationDrainScheduled = true
-    this.#persistedInvalidationQueue = this.#persistedInvalidationQueue
-      .catch(() => {})
-      .then(() => this.#drainPersistedDependencyInvalidations())
+    this.#enqueuePersistedInvalidationTask(() =>
+      this.#drainPersistedDependencyInvalidations()
+    )
   }
 
   async #drainPersistedDependencyInvalidations(): Promise<void> {
@@ -899,6 +935,7 @@ export class Session {
           normalizedPaths,
           {
             includeNonDirectoryKeys:
+              !dependencyEviction.usedDependencyIndex ||
               dependencyEviction.hasMissingDependencyMetadata,
             missingDependencyNodeKeys:
               dependencyEviction.missingDependencyNodeKeys,
@@ -952,6 +989,7 @@ export class Session {
         })
         await this.#runBroadPersistedInvalidationFallback(normalizedPath, {
           includeNonDirectoryKeys:
+            !dependencyEviction.usedDependencyIndex ||
             dependencyEviction.hasMissingDependencyMetadata,
           missingDependencyNodeKeys:
             dependencyEviction.missingDependencyNodeKeys,
@@ -1564,26 +1602,4 @@ function shouldUseSessionCachePersistence(fileSystem: FileSystem): boolean {
   } catch {
     return false
   }
-}
-
-function normalizePositiveInteger(
-  value: number | undefined,
-  fallback: number
-): number {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return fallback
-  }
-  const parsed = Math.floor(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
-}
-
-function normalizeNonNegativeInteger(
-  value: number | undefined,
-  fallback: number
-): number {
-  if (typeof value !== 'number' || Number.isNaN(value)) {
-    return fallback
-  }
-  const parsed = Math.floor(value)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
 }

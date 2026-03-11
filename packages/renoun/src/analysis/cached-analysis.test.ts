@@ -3,6 +3,11 @@ import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import {
+  CacheStore,
+  type CacheStoreComputeContext,
+  type CacheStoreGetOrComputeOptions,
+} from '../file-system/Cache.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
 import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
 import { getFileExports } from '../utils/get-file-exports.ts'
@@ -24,6 +29,7 @@ import {
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 import { getProgram, invalidateProgramCachesByPath } from './get-program.ts'
+import { setProjectAnalysisScopeId } from './project-scope.ts'
 import { resetRuntimeAnalysisSessionsForTests } from './runtime-analysis-session.ts'
 
 const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget } =
@@ -2384,6 +2390,252 @@ describe('analysis cached analysis', () => {
           value: metadata.value,
           language: 'ts',
           filePath: metadata.filePath,
+          theme: 'default',
+          allowErrors: true,
+          highlighter,
+          metadataCollector,
+        })
+
+        expect(metadataCalls).toBe(2)
+      })
+    },
+    30_000
+  )
+
+  test(
+    'waits for the TypeScript dependency sidecar before persisting runtime-cached tokens across session resets',
+    async () => {
+      await withNodeEnv('production', async () => {
+        await using workspace = await createTemporaryWorkspace({
+          'package.json': JSON.stringify({
+            name: 'cached-analysis-test',
+            private: true,
+          }),
+          'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+              module: 'ESNext',
+              moduleResolution: 'Bundler',
+              target: 'ESNext',
+              strict: true,
+            },
+            include: ['src/**/*.ts'],
+          }),
+          'src/index.ts':
+            "import { middleValue } from './middle'\nexport const value = middleValue\n",
+          'src/middle.ts':
+            "import { leafValue } from './leaf'\nexport const middleValue = leafValue\n",
+          'src/leaf.ts': "export const leafValue = 'one'\n",
+        })
+
+        const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+        const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+        const transitiveDependencyPath = join(
+          workspace.workspacePath,
+          'src/leaf.ts'
+        )
+        const entrySource = await readFile(entryFilePath, 'utf8')
+        const analysisScopeId = `tokens-sidecar-${Date.now()}`
+        const createScopedProject = () => {
+          const project = new Project({
+            tsConfigFilePath,
+          })
+          setProjectAnalysisScopeId(project, analysisScopeId)
+          return project
+        }
+        const highlighter = createHighlighter()
+        await delay(1_100)
+
+        let metadataCalls = 0
+        const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+          ...args
+        ) => {
+          metadataCalls += 1
+          return collectTypeScriptMetadata(...args)
+        }
+        const tokenOptions = {
+          value: entrySource,
+          language: 'ts' as const,
+          filePath: entryFilePath,
+          theme: 'default' as const,
+          allowErrors: true,
+          highlighter,
+          metadataCollector,
+          waitForWarmResult: true,
+        }
+
+        let resolveBlockedSidecar: () => void = () => {}
+        let markBlockedSidecarStarted: () => void = () => {}
+        const blockedSidecarStarted = new Promise<void>((resolve) => {
+          markBlockedSidecarStarted = resolve
+        })
+        const blockedSidecarReleased = new Promise<void>((resolve) => {
+          resolveBlockedSidecar = resolve
+        })
+        let shouldBlockNextSidecarHydration = true
+        const originalGetOrCompute = CacheStore.prototype.getOrCompute
+        const getOrComputeSpy = vi
+          .spyOn(CacheStore.prototype, 'getOrCompute')
+          .mockImplementation(function (
+            this: CacheStore,
+            nodeKey: string,
+            options: CacheStoreGetOrComputeOptions,
+            compute: (
+              context: CacheStoreComputeContext
+            ) => Promise<unknown> | unknown
+          ) {
+            if (
+              shouldBlockNextSidecarHydration &&
+              nodeKey.includes('typeScriptDependencyAnalysis')
+            ) {
+              shouldBlockNextSidecarHydration = false
+              markBlockedSidecarStarted()
+              return blockedSidecarReleased.then(() =>
+                originalGetOrCompute.call(this, nodeKey, options, compute)
+              )
+            }
+
+            return originalGetOrCompute.call(this, nodeKey, options, compute)
+          })
+
+        try {
+          const project = createScopedProject()
+          const firstTokensPromise = getCachedTokens(project, tokenOptions)
+          await blockedSidecarStarted
+
+          let firstTokensResolved = false
+          void firstTokensPromise.then(() => {
+            firstTokensResolved = true
+          })
+          await delay(25)
+
+          expect(firstTokensResolved).toBe(false)
+
+          resolveBlockedSidecar()
+          await firstTokensPromise
+        } finally {
+          getOrComputeSpy.mockRestore()
+        }
+
+        expect(metadataCalls).toBe(1)
+
+        resetRuntimeAnalysisSessionsForTests()
+
+        await getCachedTokens(createScopedProject(), tokenOptions)
+
+        expect(metadataCalls).toBe(1)
+
+        resetRuntimeAnalysisSessionsForTests()
+
+        await writeFile(
+          transitiveDependencyPath,
+          "export const leafValue = 'two-updated'\n",
+          'utf8'
+        )
+
+        await getCachedTokens(createScopedProject(), tokenOptions)
+
+        expect(metadataCalls).toBe(2)
+      })
+    },
+    30_000
+  )
+
+  test(
+    'revalidates persisted cached tokens across runtime session restarts without waiting for TypeScript sidecar hydration',
+    async () => {
+      await withNodeEnv('production', async () => {
+        const chainLength = 24
+        const files: Record<string, string> = {
+          'package.json': JSON.stringify({
+            name: 'cached-analysis-test',
+            private: true,
+          }),
+          'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+              module: 'ESNext',
+              moduleResolution: 'Bundler',
+              target: 'ESNext',
+              strict: true,
+            },
+            include: ['src/**/*.ts'],
+          }),
+          'src/index.ts':
+            "import { value as depValue } from './deps/dep1'\nexport const value = depValue\n",
+        }
+
+        for (let index = 1; index <= chainLength; index += 1) {
+          const dependencyPath = `src/deps/dep${index}.ts`
+          if (index === chainLength) {
+            files[dependencyPath] = "export const value = 'one'\n"
+            continue
+          }
+
+          const nextIndex = index + 1
+          files[dependencyPath] =
+            `import { value as depValue } from './dep${nextIndex}'\n` +
+            'export const value = depValue\n'
+        }
+
+        await using workspace = await createTemporaryWorkspace(files)
+
+        const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+        const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+        const transitiveDependencyPath = join(
+          workspace.workspacePath,
+          `src/deps/dep${chainLength}.ts`
+        )
+        const entrySource = await readFile(entryFilePath, 'utf8')
+        const highlighter = createHighlighter()
+        let metadataCalls = 0
+        const metadataCollector: GetTokensOptions['metadataCollector'] = async (
+          ...args
+        ) => {
+          metadataCalls += 1
+          return collectTypeScriptMetadata(...args)
+        }
+
+        const firstProject = new Project({
+          tsConfigFilePath,
+        })
+        await delay(1_100)
+
+        await getCachedTokens(firstProject, {
+          value: entrySource,
+          language: 'ts',
+          filePath: entryFilePath,
+          theme: 'default',
+          allowErrors: true,
+          highlighter,
+          metadataCollector,
+        })
+
+        expect(metadataCalls).toBe(1)
+
+        resetRuntimeAnalysisSessionsForTests()
+
+        await writeFile(
+          transitiveDependencyPath,
+          "export const value = 'two-updated'\n",
+          'utf8'
+        )
+
+        const secondProject = new Project({
+          tsConfigFilePath,
+        })
+
+        await getCachedTokens(secondProject, {
+          value: entrySource,
+          language: 'ts',
+          filePath: entryFilePath,
+          theme: 'default',
+          allowErrors: true,
+          highlighter,
+          metadataCollector,
+        })
+        await getCachedTokens(secondProject, {
+          value: entrySource,
+          language: 'ts',
+          filePath: entryFilePath,
           theme: 'default',
           allowErrors: true,
           highlighter,

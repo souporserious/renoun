@@ -7253,10 +7253,12 @@ export class Directory<
                 options,
                 mask
               )
-              await directory.#persistDirectorySnapshot(
-                snapshotKey,
-                builtSnapshot.snapshot
-              )
+              if (directory.#getSession() === session) {
+                await directory.#persistDirectorySnapshot(
+                  snapshotKey,
+                  builtSnapshot.snapshot
+                )
+              }
               coordinatedResult = {
                 ...builtSnapshot,
                 skipPersist: true,
@@ -7288,6 +7290,9 @@ export class Directory<
     try {
       const { snapshot, skipPersist } = await build
       const activeSession = directory.#getSession()
+      if (registerInSession && activeSession !== session) {
+        return directory.#getDirectorySnapshot(directory, options, mask)
+      }
       if (registerInSession && canReuseCachedSnapshot) {
         activeSession.directorySnapshots.set(snapshotKey, snapshot)
       }

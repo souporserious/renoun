@@ -17,6 +17,7 @@ import { basename, dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
 
 import { createServer } from '../analysis/server.ts'
+import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
@@ -505,20 +506,20 @@ export async function runAppCommand({
       env: {
         ...process.env,
         RENOUN_RUNTIME_DIRECTORY: runtimeDirectory,
-        [PROCESS_ENV_KEYS.renounServerPort]: port,
-        [PROCESS_ENV_KEYS.renounServerId]: id,
-        ...(typeof serverHost === 'string' && serverHost.length > 0
-          ? {
-              [PROCESS_ENV_KEYS.renounServerHost]: serverHost,
-            }
-          : {}),
-        ...(typeof serverRefreshNotificationsEffective === 'string' &&
-        serverRefreshNotificationsEffective.length > 0
-          ? {
-              [PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]:
-                serverRefreshNotificationsEffective,
-            }
-          : {}),
+        ...createServerRuntimeProcessEnv({
+          port,
+          id,
+          ...(typeof serverHost === 'string' && serverHost.length > 0
+            ? { host: serverHost }
+            : {}),
+          ...(typeof serverRefreshNotificationsEffective === 'string' &&
+          serverRefreshNotificationsEffective.length > 0
+            ? {
+                emitRefreshNotifications:
+                  serverRefreshNotificationsEffective === '1',
+              }
+            : {}),
+        }),
       },
     })
 

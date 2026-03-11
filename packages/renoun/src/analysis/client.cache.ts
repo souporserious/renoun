@@ -8,11 +8,10 @@ import {
   trimLeadingDotSlash,
   trimLeadingSlashes,
   trimTrailingSlashes,
-} from '../utils/path.ts'
+} from '../utils/path-core.ts'
 import {
-  hashString,
   stableStringify,
-} from '../utils/stable-serialization.ts'
+} from '../utils/stable-stringify.ts'
 
 export type ClientCachedRpcMethod =
   | 'getQuickInfoAtPosition'
@@ -101,7 +100,7 @@ export function toClientRpcCacheKey(
   method: ClientCachedRpcMethod,
   params: unknown
 ): string {
-  return hashString(`${method}|${stableStringify(params)}`)
+  return `${method}|${stableStringify(params)}`
 }
 
 function toComparablePath(path: string): string {

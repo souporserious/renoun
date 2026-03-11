@@ -24,7 +24,10 @@ import {
   validateLanguageFileCompatibility,
   isJavaScriptTypeScriptFile,
 } from './validate-language-file-compatibility.ts'
-import type { HighlighterInitializationOptions } from './highlighter-options.ts'
+import {
+  getHighlighterThemeNames,
+  type HighlighterInitializationOptions,
+} from './highlighter-options.ts'
 
 const tsMorph = getTsMorph()
 const { Node, SyntaxKind } = tsMorph
@@ -263,22 +266,7 @@ export async function getTokens({
         telemetryTypeScriptFile = isTypeScriptFile
         const jsxOnly = isTypeScriptFile ? isJsxOnly(value) : false
 
-        let themeNames: string[] =
-          typeof themeConfig === 'string'
-            ? [themeConfig]
-            : themeConfig
-              ? (
-                  Object.values(themeConfig) as Array<string | [string, any]>
-                ).map((themeVariant) =>
-                  typeof themeVariant === 'string'
-                    ? themeVariant
-                    : themeVariant[0]
-                )
-              : []
-
-        if (themeNames.length === 0) {
-          themeNames = ['default']
-        }
+        const themeNames = getHighlighterThemeNames(themeConfig)
 
         const tsMetadataPromise = isTypeScriptFile
           ? metadataCollector(
