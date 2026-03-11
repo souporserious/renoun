@@ -22,17 +22,20 @@ import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-loca
 import type { HighlighterInitializationOptions } from '../utils/highlighter-options.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
-  getAnalysisClientBrowserRefreshVersion,
-  getAnalysisClientBrowserRefreshVersionRuntimeKey,
   getAnalysisClientBrowserRuntime as getSharedAnalysisClientBrowserRuntime,
   getAnalysisServerRuntimeKey,
   normalizeAnalysisServerRuntime,
-  parseAnalysisClientRefreshVersion,
-  onAnalysisClientBrowserRefreshVersionChange,
   onAnalysisClientBrowserRuntimeChange as onSharedAnalysisClientBrowserRuntimeChange,
-  setAnalysisClientBrowserRefreshVersion,
   setAnalysisClientBrowserRuntime as setSharedAnalysisClientBrowserRuntime,
 } from './browser-runtime.ts'
+import {
+  getAnalysisClientRetainedBrowserRuntimeActivationKey as getRetainedBrowserRuntimeActivationKey,
+  hasRetainedAnalysisClientBrowserRuntime as hasRetainedBrowserRuntime,
+  onAnalysisClientBrowserRuntimeRetentionChange as onBrowserRuntimeRetentionChange,
+  resetRequestedAnalysisClientBrowserRuntimeState,
+  retainRequestedAnalysisClientBrowserRuntime,
+  setRequestedAnalysisClientBrowserRuntime,
+} from './client-browser-runtime-retention.ts'
 import {
   CLIENT_CACHED_RPC_METHODS,
   type ClientCachedRpcMethod,
@@ -55,16 +58,34 @@ import {
   resetClientRpcCacheForRuntimeChange,
   setClientRpcCacheEntry,
   setClientRpcInFlightEntry,
-  setClientRpcInvalidationEpoch,
   shouldBypassClientRpcCache,
   toClientRpcCacheKey,
   toClientRpcResponseValue,
   toGetFileExportTextRpcValueText,
   trimClientRpcCache,
 } from './client.cache.ts'
+import {
+  type AnalysisClientBrowserRefreshNotification as ClientBrowserRefreshNotification,
+  bumpLatestRefreshCursorForRuntime,
+  emitAnalysisClientBrowserRefreshNotification,
+  getAnalysisClientRefreshVersion as getCurrentAnalysisClientRefreshVersion,
+  getLatestRefreshCursorForRuntime,
+  hasAnalysisClientBrowserRefreshListeners,
+  hasConnectedAnalysisServerClientRuntime,
+  hydrateRefreshStateFromSharedAnalysisBrowserVersion,
+  notifyAnalysisClientBrowserRefreshNotification,
+  notifyAnalysisClientRefreshVersionChanged,
+  onAnalysisClientBrowserRefreshNotification as subscribeAnalysisClientBrowserRefreshNotification,
+  onAnalysisClientRefreshVersionChange as subscribeAnalysisClientRefreshVersionChange,
+  rememberConnectedAnalysisServerClientRuntime,
+  resetAnalysisClientRefreshState,
+  resetLatestAnalysisClientRefreshCursor,
+  setAnalysisClientRefreshVersionForTests as setClientRefreshVersionForTests,
+  setLatestRefreshCursorForRuntime,
+  syncLatestRefreshCursorForRuntime,
+} from './client-refresh-state.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import {
-  type RefreshNotificationMessage,
   type RefreshInvalidationsSinceRequest,
   type RefreshInvalidationsSinceResponse,
   getRefreshInvalidationPaths,
@@ -82,6 +103,8 @@ import {
 } from './runtime-env.ts'
 import type { AnalysisServerRuntime } from './runtime-env.ts'
 import type { AnalysisOptions } from './types.ts'
+
+export type { AnalysisClientBrowserRefreshNotification } from './client-refresh-state.ts'
 
 type AnalysisClientServerModules = typeof import('#analysis-client-server')
 
@@ -102,11 +125,6 @@ interface RefreshSubscribedClientState {
   refreshSubscriptionsAttached: boolean
 }
 
-export interface AnalysisClientBrowserRefreshNotification extends RefreshNotificationMessage {
-  runtime: AnalysisServerRuntime
-  runtimeKey: string
-}
-
 interface BrowserRuntimeClientState {
   client: WebSocketClient
   runtime: AnalysisServerRuntime
@@ -125,23 +143,7 @@ const pendingRefreshInvalidationPathsByScope = new Map<
   Set<string>
 >()
 let isRefreshInvalidationFlushQueued = false
-const connectedAnalysisServerClientRuntimeKeys = new Set<string>()
-const refreshCursorByRuntimeKey = new Map<string, number>()
 let refreshResyncQueue: Promise<void> = Promise.resolve()
-let latestRefreshCursor = 0
-let latestRefreshCursorRuntimeKey: string | undefined
-let explicitBrowserRuntime: AnalysisServerRuntime | undefined
-const browserRuntimeRegistrations: Array<{
-  token: symbol
-  runtime: AnalysisServerRuntime
-}> = []
-let retainedBrowserRuntimeKeyAtActivation: string | undefined
-const browserRuntimeRetentionListeners = new Set<
-  (hasRetainedBrowserRuntime: boolean) => void
->()
-const browserRefreshNotificationListeners = new Set<
-  (message: AnalysisClientBrowserRefreshNotification) => void
->()
 let loadedAnalysisClientServerModules: AnalysisClientServerModules | undefined
 let analysisClientServerModulesPromise:
   | Promise<AnalysisClientServerModules>
@@ -160,21 +162,15 @@ const REFRESH_RESYNC_RETRY_BASE_DELAY_MS = 100
 export function getAnalysisClientRefreshVersion(
   runtime?: AnalysisServerRuntime
 ): string {
-  return `${getAnalysisClientRefreshCursor(runtime)}:${getClientRpcInvalidationEpoch()}`
+  return getCurrentAnalysisClientRefreshVersion(
+    getCurrentAnalysisClientRefreshVersionRuntimeKey(),
+    runtime
+  )
 }
 
-function getAnalysisClientRefreshCursor(
-  runtime?: AnalysisServerRuntime
-): number {
-  if (!runtime) {
-    return latestRefreshCursor
-  }
-
-  const runtimeKey = getAnalysisServerRuntimeKey(runtime)
-  return runtimeKey ? getLatestRefreshCursorForRuntime(runtimeKey) : 0
-}
-
-function getAnalysisClientRefreshVersionRuntimeKey(): string | undefined {
+function getCurrentAnalysisClientRefreshVersionRuntimeKey():
+  | string
+  | undefined {
   return (
     getAnalysisServerRuntimeKey(getSharedAnalysisClientBrowserRuntime()) ??
     activeClientState?.runtimeKey ??
@@ -182,141 +178,10 @@ function getAnalysisClientRefreshVersionRuntimeKey(): string | undefined {
   )
 }
 
-function notifyAnalysisClientRefreshVersionChanged(): void {
-  setAnalysisClientBrowserRefreshVersion(
-    getAnalysisClientRefreshVersion(),
-    getAnalysisClientRefreshVersionRuntimeKey()
-  )
-}
-
-function hydrateRefreshStateFromSharedAnalysisBrowserVersion(
-  runtimeKey: string | undefined = getAnalysisClientRefreshVersionRuntimeKey()
-): void {
-  if (
-    !runtimeKey ||
-    getAnalysisClientRefreshVersionRuntimeKey() !== runtimeKey
-  ) {
-    return
-  }
-
-  if (getAnalysisClientBrowserRefreshVersionRuntimeKey() !== runtimeKey) {
-    return
-  }
-
-  const sharedVersion = parseAnalysisClientRefreshVersion(
-    getAnalysisClientBrowserRefreshVersion()
-  )
-  const currentInvalidationEpoch = getClientRpcInvalidationEpoch()
-  const currentRefreshCursor =
-    refreshCursorByRuntimeKey.get(runtimeKey) ??
-    (latestRefreshCursorRuntimeKey === runtimeKey ? latestRefreshCursor : 0)
-  if (
-    sharedVersion.epoch > currentInvalidationEpoch ||
-    (currentInvalidationEpoch === 0 &&
-      currentRefreshCursor === 0 &&
-      (sharedVersion.epoch > 0 || sharedVersion.cursor > 0))
-  ) {
-    latestRefreshCursor = sharedVersion.cursor
-    latestRefreshCursorRuntimeKey = runtimeKey
-    setClientRpcInvalidationEpoch(sharedVersion.epoch)
-    refreshCursorByRuntimeKey.set(runtimeKey, sharedVersion.cursor)
-    return
-  }
-
-  if (
-    !refreshCursorByRuntimeKey.has(runtimeKey) &&
-    latestRefreshCursorRuntimeKey === undefined &&
-    currentInvalidationEpoch === sharedVersion.epoch &&
-    latestRefreshCursor === sharedVersion.cursor
-  ) {
-    latestRefreshCursorRuntimeKey = runtimeKey
-    refreshCursorByRuntimeKey.set(runtimeKey, latestRefreshCursor)
-  }
-}
-
-function setLatestRefreshCursor(
-  value: number,
-  options: {
-    notify?: boolean
-  } = {}
-): void {
-  const { notify = true } = options
-  const normalizedValue = Math.max(0, Math.floor(value))
-  const runtimeKey = getAnalysisClientRefreshVersionRuntimeKey()
-  if (runtimeKey) {
-    latestRefreshCursorRuntimeKey = runtimeKey
-    refreshCursorByRuntimeKey.set(runtimeKey, normalizedValue)
-  } else {
-    latestRefreshCursorRuntimeKey = undefined
-  }
-  if (latestRefreshCursor === normalizedValue) {
-    return
-  }
-
-  latestRefreshCursor = normalizedValue
-  if (notify) {
-    notifyAnalysisClientRefreshVersionChanged()
-  }
-}
-
-function getLatestRefreshCursorForRuntime(runtimeKey: string): number {
-  return (
-    refreshCursorByRuntimeKey.get(runtimeKey) ??
-    (latestRefreshCursorRuntimeKey === runtimeKey ? latestRefreshCursor : 0)
-  )
-}
-
-function syncLatestRefreshCursorForRuntime(
-  runtimeKey: string,
-  options?: {
-    notify?: boolean
-  }
-): void {
-  if (getAnalysisClientRefreshVersionRuntimeKey() !== runtimeKey) {
-    return
-  }
-
-  if (!refreshCursorByRuntimeKey.has(runtimeKey)) {
-    return
-  }
-
-  setLatestRefreshCursor(getLatestRefreshCursorForRuntime(runtimeKey), options)
-}
-
-function setLatestRefreshCursorForRuntime(
-  runtimeKey: string,
-  value: number,
-  options?: {
-    notify?: boolean
-  }
-): void {
-  const normalizedValue = Math.max(0, Math.floor(value))
-  refreshCursorByRuntimeKey.set(runtimeKey, normalizedValue)
-  syncLatestRefreshCursorForRuntime(runtimeKey, options)
-}
-
-function bumpLatestRefreshCursorForRuntime(
-  runtimeKey: string,
-  value: number,
-  options?: {
-    notify?: boolean
-  }
-): void {
-  if (!Number.isFinite(value) || value < 0) {
-    return
-  }
-
-  setLatestRefreshCursorForRuntime(
-    runtimeKey,
-    Math.max(getLatestRefreshCursorForRuntime(runtimeKey), Math.floor(value)),
-    options
-  )
-}
-
 export function onAnalysisClientRefreshVersionChange(
   listener: (version: string) => void
 ): () => void {
-  return onAnalysisClientBrowserRefreshVersionChange(listener)
+  return subscribeAnalysisClientRefreshVersionChange(listener)
 }
 
 export function getAnalysisClientBrowserRuntime():
@@ -334,57 +199,23 @@ export function onAnalysisClientBrowserRuntimeChange(
 export function onAnalysisClientBrowserRuntimeRetentionChange(
   listener: (hasRetainedBrowserRuntime: boolean) => void
 ): () => void {
-  browserRuntimeRetentionListeners.add(listener)
-  return () => {
-    browserRuntimeRetentionListeners.delete(listener)
-  }
+  return onBrowserRuntimeRetentionChange(listener)
 }
 
 export function getAnalysisClientRetainedBrowserRuntimeActivationKey():
   | string
   | undefined {
-  return retainedBrowserRuntimeKeyAtActivation
+  return getRetainedBrowserRuntimeActivationKey()
 }
 
 export function onAnalysisClientBrowserRefreshNotification(
-  listener: (message: AnalysisClientBrowserRefreshNotification) => void
+  listener: (message: ClientBrowserRefreshNotification) => void
 ): () => void {
-  browserRefreshNotificationListeners.add(listener)
+  const unsubscribe = subscribeAnalysisClientBrowserRefreshNotification(
+    listener
+  )
   ensureRefreshSubscriptionsForCurrentClients()
-  return () => {
-    browserRefreshNotificationListeners.delete(listener)
-  }
-}
-
-function notifyAnalysisClientBrowserRefreshNotification(
-  message: AnalysisClientBrowserRefreshNotification
-): void {
-  for (const listener of browserRefreshNotificationListeners) {
-    listener(message)
-  }
-}
-
-function emitAnalysisClientBrowserRefreshNotification(options: {
-  runtime: AnalysisServerRuntime
-  runtimeKey: string
-  refreshCursor?: number
-  invalidationPaths?: readonly string[]
-}): void {
-  const { runtime, runtimeKey, refreshCursor, invalidationPaths = [] } = options
-  notifyAnalysisClientBrowserRefreshNotification({
-    type: 'refresh',
-    runtime,
-    runtimeKey,
-    data: {
-      ...(refreshCursor !== undefined ? { refreshCursor } : {}),
-      ...(invalidationPaths.length > 0
-        ? {
-            filePath: invalidationPaths[0],
-            filePaths: [...invalidationPaths],
-          }
-        : {}),
-    },
-  })
+  return unsubscribe
 }
 
 function ensureRefreshSubscriptionsForCurrentClients(): void {
@@ -398,15 +229,6 @@ function ensureRefreshSubscriptionsForCurrentClients(): void {
       isCurrentState: () => isCurrentBrowserClientState(cachedState),
     })
   }
-}
-
-function getResolvedAnalysisClientBrowserRuntime():
-  | AnalysisServerRuntime
-  | undefined {
-  return (
-    browserRuntimeRegistrations[browserRuntimeRegistrations.length - 1]
-      ?.runtime ?? explicitBrowserRuntime
-  )
 }
 
 function isCurrentActiveClientState(
@@ -448,7 +270,10 @@ function applyAnalysisClientBrowserRuntime(
   if (didRuntimeChange) {
     if (!didSwitchFromExistingRuntime && nextRuntimeKey) {
       hydrateRefreshStateFromSharedAnalysisBrowserVersion(nextRuntimeKey)
-      syncLatestRefreshCursorForRuntime(nextRuntimeKey)
+      syncLatestRefreshCursorForRuntime(
+        getCurrentAnalysisClientRefreshVersionRuntimeKey(),
+        nextRuntimeKey
+      )
     }
   }
 
@@ -487,25 +312,13 @@ function applyAnalysisClientBrowserRuntime(
   attachClientRefreshSubscriptions(activeClientState)
 }
 
-function notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
-  previousHasRetainedBrowserRuntime: boolean
-): void {
-  const nextHasRetainedBrowserRuntime =
-    hasRetainedAnalysisClientBrowserRuntime()
-  if (nextHasRetainedBrowserRuntime === previousHasRetainedBrowserRuntime) {
-    return
-  }
-
-  for (const listener of browserRuntimeRetentionListeners) {
-    listener(nextHasRetainedBrowserRuntime)
-  }
-}
-
 export function setAnalysisClientBrowserRuntime(
   runtime?: AnalysisServerRuntime
 ): void {
-  explicitBrowserRuntime = normalizeAnalysisServerRuntime(runtime)
-  applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
+  setRequestedAnalysisClientBrowserRuntime(
+    runtime,
+    applyAnalysisClientBrowserRuntime
+  )
 }
 
 export function retainAnalysisClientBrowserRuntime(
@@ -514,54 +327,15 @@ export function retainAnalysisClientBrowserRuntime(
     preferCurrentRuntime?: boolean
   } = {}
 ): () => void {
-  const didHaveRetainedBrowserRuntime =
-    hasRetainedAnalysisClientBrowserRuntime()
-  const normalizedRuntime = normalizeAnalysisServerRuntime(
-    options.preferCurrentRuntime === true
-      ? (getSharedAnalysisClientBrowserRuntime() ?? runtime)
-      : runtime
+  return retainRequestedAnalysisClientBrowserRuntime(
+    runtime,
+    applyAnalysisClientBrowserRuntime,
+    options
   )
-  if (!normalizedRuntime) {
-    return () => {}
-  }
-
-  const token = Symbol('analysis-client-browser-runtime')
-  browserRuntimeRegistrations.push({
-    token,
-    runtime: normalizedRuntime,
-  })
-  if (!didHaveRetainedBrowserRuntime) {
-    retainedBrowserRuntimeKeyAtActivation =
-      getAnalysisServerRuntimeKey(normalizedRuntime)
-  }
-  applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
-  notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
-    didHaveRetainedBrowserRuntime
-  )
-
-  return () => {
-    const registrationIndex = browserRuntimeRegistrations.findIndex(
-      (registration) => registration.token === token
-    )
-    if (registrationIndex === -1) {
-      return
-    }
-
-    const didHaveRetainedBrowserRuntime =
-      hasRetainedAnalysisClientBrowserRuntime()
-    browserRuntimeRegistrations.splice(registrationIndex, 1)
-    if (browserRuntimeRegistrations.length === 0) {
-      retainedBrowserRuntimeKeyAtActivation = undefined
-    }
-    applyAnalysisClientBrowserRuntime(getResolvedAnalysisClientBrowserRuntime())
-    notifyAnalysisClientBrowserRuntimeRetentionChangeIfNeeded(
-      didHaveRetainedBrowserRuntime
-    )
-  }
 }
 
 export function hasRetainedAnalysisClientBrowserRuntime(): boolean {
-  return browserRuntimeRegistrations.length > 0
+  return hasRetainedBrowserRuntime()
 }
 
 export interface AnalysisClientRuntimeOptions {
@@ -714,27 +488,24 @@ function invalidateClientRpcStateByNormalizedPaths(
     normalizedPaths,
     invalidationScopeKey
   )
-  notifyAnalysisClientRefreshVersionChanged()
+  notifyAnalysisClientRefreshVersionChanged(
+    getCurrentAnalysisClientRefreshVersionRuntimeKey()
+  )
 }
 
 function invalidateAllClientRpcState(invalidationScopeKey?: string): void {
   invalidateAllClientRpcCache(invalidationScopeKey)
-  notifyAnalysisClientRefreshVersionChanged()
+  notifyAnalysisClientRefreshVersionChanged(
+    getCurrentAnalysisClientRefreshVersionRuntimeKey()
+  )
 }
 
 function resetClientRefreshStateForRuntimeChange(): void {
-  hydrateRefreshStateFromSharedAnalysisBrowserVersion()
+  const runtimeKey = getCurrentAnalysisClientRefreshVersionRuntimeKey()
+  hydrateRefreshStateFromSharedAnalysisBrowserVersion(runtimeKey)
   resetClientRpcCacheForRuntimeChange()
   pendingRefreshInvalidationPathsByScope.clear()
-  const runtimeKey = getAnalysisClientRefreshVersionRuntimeKey()
-  if (runtimeKey) {
-    setLatestRefreshCursorForRuntime(runtimeKey, 0)
-    return
-  }
-
-  latestRefreshCursor = 0
-  latestRefreshCursorRuntimeKey = undefined
-  notifyAnalysisClientRefreshVersionChanged()
+  resetLatestAnalysisClientRefreshCursor(runtimeKey)
 }
 
 function applyLoadedRuntimeRefreshInvalidations(runtimePaths: string[]): void {
@@ -919,6 +690,7 @@ function queueRefreshResync(
               }
             }
             setLatestRefreshCursorForRuntime(
+              getCurrentAnalysisClientRefreshVersionRuntimeKey(),
               state.runtimeKey,
               nextCursor ?? 0,
               {
@@ -935,9 +707,14 @@ function queueRefreshResync(
           }
 
           if (nextCursor !== undefined) {
-            bumpLatestRefreshCursorForRuntime(state.runtimeKey, nextCursor, {
-              notify: shouldConsumeNotifications,
-            })
+            bumpLatestRefreshCursorForRuntime(
+              getCurrentAnalysisClientRefreshVersionRuntimeKey(),
+              state.runtimeKey,
+              nextCursor,
+              {
+                notify: shouldConsumeNotifications,
+              }
+            )
           }
 
           if (shouldConsumeNotifications) {
@@ -964,9 +741,14 @@ function queueRefreshResync(
             if (shouldConsumeRefreshNotifications(state.runtime)) {
               applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
             }
-            setLatestRefreshCursorForRuntime(state.runtimeKey, 0, {
-              notify: shouldConsumeRefreshNotifications(state.runtime),
-            })
+            setLatestRefreshCursorForRuntime(
+              getCurrentAnalysisClientRefreshVersionRuntimeKey(),
+              state.runtimeKey,
+              0,
+              {
+                notify: shouldConsumeRefreshNotifications(state.runtime),
+              }
+            )
             emitAnalysisClientBrowserRefreshNotification({
               runtime: state.runtime,
               runtimeKey: state.runtimeKey,
@@ -979,7 +761,11 @@ function queueRefreshResync(
             // runtime/project caches for all observed project roots.
             const fallbackPaths = collectConservativeRefreshFallbackPaths()
             applyRefreshInvalidations(fallbackPaths, invalidationScopeKey)
-            setLatestRefreshCursorForRuntime(state.runtimeKey, 0)
+            setLatestRefreshCursorForRuntime(
+              getCurrentAnalysisClientRefreshVersionRuntimeKey(),
+              state.runtimeKey,
+              0
+            )
             emitAnalysisClientBrowserRefreshNotification({
               runtime: state.runtime,
               runtimeKey: state.runtimeKey,
@@ -1027,8 +813,8 @@ function attachClientRefreshSubscriptions(
 
     options.onConnected?.()
 
-    if (!connectedAnalysisServerClientRuntimeKeys.has(state.runtimeKey)) {
-      connectedAnalysisServerClientRuntimeKeys.add(state.runtimeKey)
+    if (!hasConnectedAnalysisServerClientRuntime(state.runtimeKey)) {
+      rememberConnectedAnalysisServerClientRuntime(state.runtimeKey)
       return
     }
 
@@ -1045,9 +831,14 @@ function attachClientRefreshSubscriptions(
 
     const refreshCursor = normalizeRefreshCursor(message.data.refreshCursor)
     if (refreshCursor !== undefined) {
-      bumpLatestRefreshCursorForRuntime(state.runtimeKey, refreshCursor, {
-        notify: shouldConsumeRefreshNotifications(state.runtime),
-      })
+      bumpLatestRefreshCursorForRuntime(
+        getCurrentAnalysisClientRefreshVersionRuntimeKey(),
+        state.runtimeKey,
+        refreshCursor,
+        {
+          notify: shouldConsumeRefreshNotifications(state.runtime),
+        }
+      )
     }
 
     const paths = getRefreshInvalidationPaths(message.data)
@@ -1065,7 +856,7 @@ function attachClientRefreshSubscriptions(
   })
 
   if (options.resyncImmediately) {
-    connectedAnalysisServerClientRuntimeKeys.add(state.runtimeKey)
+    rememberConnectedAnalysisServerClientRuntime(state.runtimeKey)
     queueRefreshResync(state, isCurrentState)
   }
 }
@@ -1485,7 +1276,7 @@ function shouldAttachRefreshTransport(
 ): boolean {
   return (
     shouldConsumeRefreshNotifications(runtime) ||
-    browserRefreshNotificationListeners.size > 0
+    hasAnalysisClientBrowserRefreshListeners()
   )
 }
 
@@ -1995,20 +1786,10 @@ export async function transpileSourceFile(
 }
 
 function setAnalysisClientRefreshVersionForTests(version: string): void {
-  const parsedVersion = parseAnalysisClientRefreshVersion(version)
-  refreshCursorByRuntimeKey.clear()
-  latestRefreshCursor = parsedVersion.cursor
-  latestRefreshCursorRuntimeKey = undefined
-  setClientRpcInvalidationEpoch(parsedVersion.epoch)
   pendingRefreshInvalidationPathsByScope.clear()
-  const runtimeKey = getAnalysisClientRefreshVersionRuntimeKey()
-  if (runtimeKey) {
-    refreshCursorByRuntimeKey.set(runtimeKey, parsedVersion.cursor)
-    latestRefreshCursorRuntimeKey = runtimeKey
-  }
-  setAnalysisClientBrowserRefreshVersion(
-    `${parsedVersion.cursor}:${parsedVersion.epoch}`,
-    runtimeKey
+  setClientRefreshVersionForTests(
+    version,
+    getCurrentAnalysisClientRefreshVersionRuntimeKey()
   )
 }
 
@@ -2016,21 +1797,16 @@ function clearAnalysisClientStateForTests(): void {
   disposeActiveClient({
     invalidateClientRpcState: false,
   })
-  explicitBrowserRuntime = undefined
-  browserRuntimeRegistrations.length = 0
-  retainedBrowserRuntimeKeyAtActivation = undefined
+  resetRequestedAnalysisClientBrowserRuntimeState()
   setSharedAnalysisClientBrowserRuntime(undefined)
   disposeAnalysisBrowserClient()
-  browserRuntimeRetentionListeners.clear()
-  browserRefreshNotificationListeners.clear()
   clearClientRpcCacheStateForTests()
   pendingRefreshInvalidationPathsByScope.clear()
-  connectedAnalysisServerClientRuntimeKeys.clear()
-  refreshCursorByRuntimeKey.clear()
-  latestRefreshCursor = 0
-  latestRefreshCursorRuntimeKey = undefined
   refreshResyncQueue = Promise.resolve()
-  setAnalysisClientBrowserRefreshVersion('0:0')
+  resetAnalysisClientRefreshState(undefined, {
+    clearListeners: true,
+    resetInvalidationEpoch: true,
+  })
 }
 
 export const __TEST_ONLY__ = {

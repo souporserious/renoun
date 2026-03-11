@@ -2,7 +2,7 @@
 
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, parse, relative, resolve, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
@@ -15,7 +15,6 @@ const DEFAULT_COLD_RUNS = 1
 const DEFAULT_WARM_RUNS = 2
 const DEFAULT_WORKSPACE_CLEAN_PATHS = ['.renoun']
 const DEFAULT_TARGET_CLEAN_PATHS = ['.next', 'out', '.renoun']
-const WORKSPACE_PACKAGE_DIRECTORIES = ['apps', 'examples', 'packages']
 
 function printHelp() {
   console.log(`Usage: node ./scripts/bench-site-build.mjs [options]
@@ -26,7 +25,7 @@ Options:
   --filter <name>        pnpm filter value (default: ${DEFAULT_FILTER})
   --cold-runs <n>        number of cold runs (default: ${DEFAULT_COLD_RUNS})
   --warm-runs <n>        number of warm runs after cold run(s) (default: ${DEFAULT_WARM_RUNS})
-  --clean-path <path>    additional path to remove before each cold run (repeatable)
+  --clean-path <path>    additional path to remove before each cold run (repeatable; required for non-default filters)
   --cache-stats          enable cache hit/miss parsing via RENOUN_DEBUG=debug (default)
   --no-cache-stats       disable cache hit/miss parsing
   --verbose              stream build output while running
@@ -135,89 +134,18 @@ function parseArgs(argv) {
   return parsed
 }
 
-function normalizeFilterPattern(filter) {
-  return filter.trim().replace(/^\.\.\.\^?/, '').replace(/\^?\.\.\.$/, '')
-}
-
-function createSimpleGlobRegExp(pattern) {
-  const escapedPattern = pattern.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
-  return new RegExp(`^${escapedPattern.replaceAll('*', '.*')}$`)
-}
-
-async function listWorkspacePackages(projectRoot) {
-  const workspacePackages = []
-
-  for (const workspaceDirectory of WORKSPACE_PACKAGE_DIRECTORIES) {
-    const absoluteWorkspaceDirectory = join(projectRoot, workspaceDirectory)
-    let entries = []
-
-    try {
-      entries = await readdir(absoluteWorkspaceDirectory, {
-        withFileTypes: true,
-      })
-    } catch {
-      continue
-    }
-
-    for (const entry of entries) {
-      if (!entry.isDirectory()) {
-        continue
-      }
-
-      const relativePackageDirectory = join(workspaceDirectory, entry.name)
-      const packageJsonPath = join(
-        projectRoot,
-        relativePackageDirectory,
-        'package.json'
-      )
-
-      try {
-        const packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'))
-
-        if (typeof packageJson.name === 'string' && packageJson.name.length > 0) {
-          workspacePackages.push({
-            name: packageJson.name,
-            directory: relativePackageDirectory,
-          })
-        }
-      } catch {
-        continue
-      }
-    }
-  }
-
-  return workspacePackages
-}
-
 export async function resolveDefaultCleanPaths({ projectRoot, filter }) {
-  const normalizedFilter = normalizeFilterPattern(filter)
-  const workspacePackages = await listWorkspacePackages(projectRoot)
-  const packageMatcher = normalizedFilter.includes('*')
-    ? createSimpleGlobRegExp(normalizedFilter)
-    : undefined
-  const matchingPackages = workspacePackages.filter((workspacePackage) =>
-    packageMatcher
-      ? packageMatcher.test(workspacePackage.name)
-      : workspacePackage.name === normalizedFilter
-  )
-
-  if (matchingPackages.length === 0) {
+  if (filter !== DEFAULT_FILTER) {
     throw new Error(
-      `Could not resolve default clean paths for filter "${filter}". ` +
-        'Pass a workspace package filter or add explicit --clean-path entries.'
+      `Default clean paths are only defined for "${DEFAULT_FILTER}". ` +
+        `Pass one or more --clean-path values for "${filter}".`
     )
   }
 
   return [
     ...DEFAULT_WORKSPACE_CLEAN_PATHS,
-    ...Array.from(
-      new Set(
-        matchingPackages.flatMap(({ directory }) =>
-          DEFAULT_TARGET_CLEAN_PATHS.map((cleanPath) =>
-            join(directory, cleanPath)
-          )
-        )
-      )
+    ...DEFAULT_TARGET_CLEAN_PATHS.map((cleanPath) =>
+      join('apps/site', cleanPath)
     ),
   ]
 }
@@ -465,12 +393,22 @@ function printFinalSummary(coldRuns, warmRuns) {
 async function main() {
   const options = parseArgs(process.argv.slice(2))
   const projectRoot = process.cwd()
+  const defaultCleanPaths =
+    options.filter === DEFAULT_FILTER
+      ? await resolveDefaultCleanPaths({
+          projectRoot,
+          filter: options.filter,
+        })
+      : []
+  if (options.filter !== DEFAULT_FILTER && options.cleanPaths.length === 0) {
+    throw new Error(
+      `Default clean paths are only defined for "${DEFAULT_FILTER}". ` +
+        `Pass one or more --clean-path values for "${options.filter}".`
+    )
+  }
   const resolvedCleanPaths = Array.from(
     new Set([
-      ...(await resolveDefaultCleanPaths({
-        projectRoot,
-        filter: options.filter,
-      })),
+      ...defaultCleanPaths,
       ...options.cleanPaths,
     ])
   )

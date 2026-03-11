@@ -1,4 +1,18 @@
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
+import {
+  directoryName,
+  isAbsolutePath,
+  joinPaths,
+  normalizePathKey,
+  normalizeSlashes,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
+} from '../utils/path.ts'
+import {
+  hashString,
+  stableStringify,
+} from '../utils/stable-serialization.ts'
 
 export type ClientCachedRpcMethod =
   | 'getQuickInfoAtPosition'
@@ -70,181 +84,28 @@ const clientRpcInFlightByKey = new Map<string, ClientRpcInFlightEntry>()
 const observedProjectRootCandidates = new Set<string>()
 let clientRpcInvalidationEpoch = 0
 
-function normalizeClientSlashes(path: string): string {
-  return path.replaceAll('\\', '/')
-}
-
-function trimLeadingDotSlash(path: string): string {
-  const normalized = normalizeClientSlashes(path)
-  if (
-    normalized.length >= 2 &&
-    normalized.charCodeAt(0) === 46 &&
-    normalized.charCodeAt(1) === 47
-  ) {
-    let start = 2
-    while (start < normalized.length && normalized.charCodeAt(start) === 47) {
-      start += 1
-    }
-    return normalized.slice(start)
-  }
-
-  return normalized
-}
-
-function trimLeadingSlashes(path: string): string {
-  let start = 0
-  while (start < path.length && path.charCodeAt(start) === 47) {
-    start += 1
-  }
-  return path.slice(start)
-}
-
-function trimTrailingSlashes(path: string): string {
-  let end = path.length
-  while (end > 0 && path.charCodeAt(end - 1) === 47) {
-    end -= 1
-  }
-  return path.slice(0, end)
-}
-
-function isAbsoluteClientPath(path: string): boolean {
-  const normalized = normalizeClientSlashes(path)
-  return (
-    normalized.startsWith('/') ||
-    /^[A-Za-z]:\//.test(normalized) ||
-    normalized.startsWith('//')
-  )
-}
-
-function normalizeClientPathKey(path: string): string {
-  const normalized = trimLeadingDotSlash(normalizeClientSlashes(path))
-  const key = trimTrailingSlashes(trimLeadingSlashes(normalized))
-  return key === '' ? '.' : key
-}
-
-function joinClientPaths(basePath: string, path: string): string {
-  const normalizedBasePath = trimTrailingSlashes(normalizeClientSlashes(basePath))
-  const normalizedPath = trimLeadingSlashes(trimLeadingDotSlash(path))
-
-  if (!normalizedBasePath) {
-    return normalizedPath
-  }
-
-  if (!normalizedPath) {
-    return normalizedBasePath
-  }
-
-  return `${normalizedBasePath}/${normalizedPath}`
-}
-
 function resolveClientPath(path: string): string {
-  const normalized = normalizeClientSlashes(path)
-  if (isAbsoluteClientPath(normalized)) {
+  const normalized = normalizeSlashes(path)
+  if (isAbsolutePath(normalized)) {
     return normalized
   }
 
   if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
-    return joinClientPaths(process.cwd(), normalized)
+    return joinPaths(process.cwd(), normalized)
   }
 
   return normalized
-}
-
-function dirnameClientPath(path: string): string {
-  const normalized = trimTrailingSlashes(normalizeClientSlashes(path))
-  const lastSlashIndex = normalized.lastIndexOf('/')
-  if (lastSlashIndex === -1) {
-    return '.'
-  }
-
-  if (lastSlashIndex === 0) {
-    return normalized.slice(0, 1)
-  }
-
-  return normalized.slice(0, lastSlashIndex)
-}
-
-function stableStringifyClient(value: unknown): string {
-  if (value === undefined) {
-    return 'undefined'
-  }
-
-  if (typeof value === 'number') {
-    if (Number.isNaN(value)) {
-      return 'NaN'
-    }
-
-    if (value === Number.POSITIVE_INFINITY) {
-      return 'Infinity'
-    }
-
-    if (value === Number.NEGATIVE_INFINITY) {
-      return '-Infinity'
-    }
-  }
-
-  if (typeof value === 'bigint') {
-    return `bigint:${value.toString()}`
-  }
-
-  if (typeof value === 'symbol') {
-    return `symbol:${value.description ?? ''}`
-  }
-
-  if (typeof value === 'function') {
-    return `function:${value.name || 'anonymous'}`
-  }
-
-  if (value === null || typeof value !== 'object') {
-    return JSON.stringify(value)
-  }
-
-  if (Array.isArray(value)) {
-    const entries: string[] = []
-
-    for (let index = 0; index < value.length; index += 1) {
-      if (!(index in value)) {
-        entries.push('<hole>')
-        continue
-      }
-
-      entries.push(stableStringifyClient(value[index]))
-    }
-
-    return `[${entries.join(',')}]`
-  }
-
-  const object = value as Record<string, unknown>
-  const keys = Object.keys(object).sort()
-  const entries: string[] = []
-
-  for (const key of keys) {
-    entries.push(`${JSON.stringify(key)}:${stableStringifyClient(object[key])}`)
-  }
-
-  return `{${entries.join(',')}}`
-}
-
-function hashClientString(input: string): string {
-  let hash = 14695981039346656037n
-
-  for (let index = 0; index < input.length; index += 1) {
-    hash ^= BigInt(input.charCodeAt(index))
-    hash = BigInt.asUintN(64, hash * 1099511628211n)
-  }
-
-  return hash.toString(16).padStart(16, '0')
 }
 
 export function toClientRpcCacheKey(
   method: ClientCachedRpcMethod,
   params: unknown
 ): string {
-  return hashClientString(`${method}|${stableStringifyClient(params)}`)
+  return hashString(`${method}|${stableStringify(params)}`)
 }
 
 function toComparablePath(path: string): string {
-  return normalizeClientPathKey(resolveClientPath(path))
+  return normalizePathKey(resolveClientPath(path))
 }
 
 function toRuntimeInvalidationPath(path: string): string {
@@ -277,7 +138,7 @@ function getProjectRootCandidates(params: unknown): readonly string[] {
   }
   const tsConfigFilePath = candidate.analysisOptions?.tsConfigFilePath
   if (typeof tsConfigFilePath === 'string' && tsConfigFilePath.length > 0) {
-    roots.add(resolveClientPath(dirnameClientPath(tsConfigFilePath)))
+    roots.add(resolveClientPath(directoryName(tsConfigFilePath)))
   }
 
   return Array.from(roots)
@@ -317,15 +178,15 @@ function getCandidatePaths(
     return []
   }
 
-  const normalized = normalizeClientSlashes(value)
-  if (isAbsoluteClientPath(normalized)) {
-    return [normalizeClientPathKey(normalized)]
+  const normalized = normalizeSlashes(value)
+  if (isAbsolutePath(normalized)) {
+    return [normalizePathKey(normalized)]
   }
 
   const resolvedCandidates = new Set<string>()
   for (const rootCandidate of rootCandidates) {
     resolvedCandidates.add(
-      normalizeClientPathKey(joinClientPaths(rootCandidate, normalized))
+      normalizePathKey(joinPaths(rootCandidate, normalized))
     )
   }
 
@@ -340,15 +201,15 @@ function getRuntimeCandidatePaths(
     return []
   }
 
-  const normalized = normalizeClientSlashes(value)
-  if (isAbsoluteClientPath(normalized)) {
+  const normalized = normalizeSlashes(value)
+  if (isAbsolutePath(normalized)) {
     return [normalized]
   }
 
   const resolvedCandidates = new Set<string>()
   for (const rootCandidate of rootCandidates) {
     resolvedCandidates.add(
-      normalizeClientSlashes(joinClientPaths(rootCandidate, normalized))
+      normalizeSlashes(joinPaths(rootCandidate, normalized))
     )
   }
 
@@ -368,8 +229,8 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
     return true
   }
 
-  const firstIsAbsolute = isAbsoluteClientPath(firstPath)
-  const secondIsAbsolute = isAbsoluteClientPath(secondPath)
+  const firstIsAbsolute = isAbsolutePath(firstPath)
+  const secondIsAbsolute = isAbsolutePath(secondPath)
   if (firstIsAbsolute === secondIsAbsolute) {
     return false
   }

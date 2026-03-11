@@ -48,17 +48,14 @@ describe('bench site build invocation', () => {
     ])
   })
 
-  test('scopes default cold-run cleanup to the selected benchmark target', async () => {
+  test('requires explicit clean paths for non-default benchmark targets', async () => {
     await expect(
       resolveDefaultCleanPaths({
         projectRoot: PROJECT_ROOT,
         filter: '@examples/docs',
       })
-    ).resolves.toEqual([
-      '.renoun',
-      'examples/docs/.next',
-      'examples/docs/out',
-      'examples/docs/.renoun',
-    ])
+    ).rejects.toThrow(
+      'Default clean paths are only defined for "@apps/site". Pass one or more --clean-path values for "@examples/docs".'
+    )
   })
 })

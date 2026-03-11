@@ -24,21 +24,24 @@ import { Cache, CacheStore } from './Cache.ts'
 import { getCacheStorePersistence } from './CacheSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
 import {
+  DirectorySnapshotPathIndex,
+  IndexedStringKeyMap,
+  extractDirectoryPathFromSnapshotKey,
+  getPathAncestors,
+  pathsIntersect,
+} from './directory-snapshot-path-index.ts'
+import {
+  SessionRegistry,
+  getCacheIdentity,
+} from './session-registry.ts'
+import {
   FileSystemSnapshot,
   type Snapshot,
-  type SnapshotContentIdOptions,
 } from './Snapshot.ts'
 import type { DirectorySnapshot } from './directory-snapshot.ts'
 import { WorkspaceChangeLookupCache } from './workspace-change-lookup-cache.ts'
 
-const sessionsByFileSystem = new WeakMap<
-  object,
-  Map<string, Map<string, Session>>
->()
-const cacheIdentityByCache = new WeakMap<object, string>()
-const snapshotGenerationByFileSystem = new WeakMap<object, number>()
-const snapshotParentByFileSystem = new WeakMap<object, Map<string, string>>()
-let cacheIdentity = 0
+const sessionRegistry = new SessionRegistry<Session>()
 
 type PersistedStaleReason =
   | 'token_changed'
@@ -96,375 +99,35 @@ function getDefaultPersistentWorkspaceChangedPathsTtlMs(): number {
   return SESSION_CACHE_DEFAULTS.persistentWorkspaceChangedPathsTtlMs
 }
 
-function collectSnapshotFamily(
-  snapshotId: string,
-  parentMap: Map<string, string>
-): Set<string> {
-  const family = new Set<string>()
-  const queue: string[] = [snapshotId]
-
-  while (queue.length > 0) {
-    const current = queue.shift()
-    if (!current || family.has(current)) {
-      continue
-    }
-
-    family.add(current)
-
-    const parent = parentMap.get(current)
-    if (parent) {
-      queue.push(parent)
-    }
-
-    for (const [childId, childParentId] of parentMap) {
-      if (childParentId === current) {
-        queue.push(childId)
-      }
-    }
-  }
-
-  return family
-}
-
-class IndexedStringKeyMap<Value> extends Map<string, Value> {
-  readonly #onAdd: (key: string) => void
-  readonly #onDelete: (key: string) => void
-  readonly #onClear: () => void
-
-  constructor(options: {
-    onAdd: (key: string) => void
-    onDelete: (key: string) => void
-    onClear: () => void
-  }) {
-    super()
-    this.#onAdd = options.onAdd
-    this.#onDelete = options.onDelete
-    this.#onClear = options.onClear
-  }
-
-  override set(key: string, value: Value): this {
-    const existed = super.has(key)
-    super.set(key, value)
-    if (!existed) {
-      this.#onAdd(key)
-    }
-    return this
-  }
-
-  override delete(key: string): boolean {
-    const deleted = super.delete(key)
-    if (deleted) {
-      this.#onDelete(key)
-    }
-    return deleted
-  }
-
-  override clear(): void {
-    if (this.size === 0) {
-      return
-    }
-    super.clear()
-    this.#onClear()
-  }
-}
-
-class DirectorySnapshotPathIndex {
-  readonly #maxPrefixKeys: number
-  readonly #snapshotPathByKey = new Map<string, string>()
-  readonly #keysByExactPath = new Map<string, Set<string>>()
-  readonly #keysByPrefixPath = new Map<string, Set<string>>()
-  #prefixIndexEnabled = true
-
-  constructor(maxPrefixKeys: number) {
-    this.#maxPrefixKeys = maxPrefixKeys
-  }
-
-  add(snapshotKey: string): void {
-    const snapshotPath = extractDirectoryPathFromSnapshotKey(snapshotKey)
-    if (!snapshotPath) {
-      return
-    }
-
-    const existingPath = this.#snapshotPathByKey.get(snapshotKey)
-    if (existingPath === snapshotPath) {
-      return
-    }
-    if (existingPath) {
-      this.remove(snapshotKey)
-    }
-
-    this.#snapshotPathByKey.set(snapshotKey, snapshotPath)
-    addToSetMap(this.#keysByExactPath, snapshotPath, snapshotKey)
-
-    if (snapshotPath === '.') {
-      return
-    }
-
-    if (!this.#prefixIndexEnabled) {
-      this.#maybeRebuildPrefixIndex()
-      return
-    }
-
-    for (const prefix of getPathPrefixes(snapshotPath)) {
-      addToSetMap(this.#keysByPrefixPath, prefix, snapshotKey)
-    }
-
-    this.#disablePrefixIndexIfOversized()
-  }
-
-  remove(snapshotKey: string): void {
-    const snapshotPath = this.#snapshotPathByKey.get(snapshotKey)
-    if (!snapshotPath) {
-      return
-    }
-
-    this.#snapshotPathByKey.delete(snapshotKey)
-    deleteFromSetMap(this.#keysByExactPath, snapshotPath, snapshotKey)
-
-    if (snapshotPath === '.') {
-      return
-    }
-
-    if (!this.#prefixIndexEnabled) {
-      this.#maybeRebuildPrefixIndex()
-      return
-    }
-
-    for (const prefix of getPathPrefixes(snapshotPath)) {
-      deleteFromSetMap(this.#keysByPrefixPath, prefix, snapshotKey)
-    }
-  }
-
-  clear(): void {
-    this.#snapshotPathByKey.clear()
-    this.#keysByExactPath.clear()
-    this.#keysByPrefixPath.clear()
-    this.#prefixIndexEnabled = true
-  }
-
-  getIntersectingKeys(path: string): Set<string> {
-    if (path === '.') {
-      return new Set(this.#snapshotPathByKey.keys())
-    }
-
-    if (!this.#prefixIndexEnabled) {
-      this.#maybeRebuildPrefixIndex()
-      if (!this.#prefixIndexEnabled) {
-        return this.#scanIntersectingKeys(path)
-      }
-    }
-
-    const intersectingKeys = new Set<string>()
-
-    const descendantKeys = this.#keysByPrefixPath.get(path)
-    if (descendantKeys) {
-      for (const key of descendantKeys) {
-        intersectingKeys.add(key)
-      }
-    }
-
-    for (const ancestorPath of getPathAncestors(path)) {
-      const ancestorKeys = this.#keysByExactPath.get(ancestorPath)
-      if (!ancestorKeys) {
-        continue
-      }
-      for (const key of ancestorKeys) {
-        intersectingKeys.add(key)
-      }
-    }
-
-    return intersectingKeys
-  }
-
-  #scanIntersectingKeys(path: string): Set<string> {
-    const intersectingKeys = new Set<string>()
-    for (const [snapshotKey, snapshotPath] of this.#snapshotPathByKey) {
-      if (pathsIntersect(snapshotPath, path)) {
-        intersectingKeys.add(snapshotKey)
-      }
-    }
-
-    return intersectingKeys
-  }
-
-  #disablePrefixIndexIfOversized(): void {
-    if (this.#keysByPrefixPath.size <= this.#maxPrefixKeys) {
-      return
-    }
-
-    this.#keysByPrefixPath.clear()
-    this.#prefixIndexEnabled = false
-  }
-
-  #maybeRebuildPrefixIndex(): void {
-    if (this.#prefixIndexEnabled) {
-      return
-    }
-
-    const rebuildThreshold = Math.floor(
-      this.#maxPrefixKeys *
-        SESSION_CACHE_DEFAULTS.directorySnapshotPrefixIndexReenableRatio
-    )
-    if (this.#snapshotPathByKey.size > rebuildThreshold) {
-      return
-    }
-
-    this.#keysByPrefixPath.clear()
-    for (const [snapshotKey, snapshotPath] of this.#snapshotPathByKey) {
-      if (snapshotPath === '.') {
-        continue
-      }
-
-      for (const prefix of getPathPrefixes(snapshotPath)) {
-        addToSetMap(this.#keysByPrefixPath, prefix, snapshotKey)
-      }
-
-      if (this.#keysByPrefixPath.size > this.#maxPrefixKeys) {
-        this.#keysByPrefixPath.clear()
-        this.#prefixIndexEnabled = false
-        return
-      }
-    }
-
-    this.#prefixIndexEnabled = true
-  }
-}
-
-function addToSetMap(
-  map: Map<string, Set<string>>,
-  key: string,
-  value: string
-): void {
-  let entries = map.get(key)
-  if (!entries) {
-    entries = new Set<string>()
-    map.set(key, entries)
-  }
-  entries.add(value)
-}
-
-function deleteFromSetMap(
-  map: Map<string, Set<string>>,
-  key: string,
-  value: string
-): void {
-  const entries = map.get(key)
-  if (!entries) {
-    return
-  }
-
-  entries.delete(value)
-  if (entries.size === 0) {
-    map.delete(key)
-  }
-}
-
 export class Session {
   static for(
     fileSystem: FileSystem,
     snapshot?: Snapshot,
     cache?: Cache
   ): Session {
-    const generation = snapshotGenerationByFileSystem.get(fileSystem) ?? 0
-    const baseSnapshot = snapshot ?? new FileSystemSnapshot(fileSystem)
-    const targetSnapshot =
-      generation > 0
-        ? new GeneratedSnapshot(baseSnapshot, generation)
-        : baseSnapshot
-    const cacheId = getCacheIdentity(cache)
-    const sessionMap =
-      sessionsByFileSystem.get(fileSystem) ??
-      new Map<string, Map<string, Session>>()
-    const parentMap =
-      snapshotParentByFileSystem.get(fileSystem) ?? new Map<string, string>()
-
-    if (!sessionsByFileSystem.has(fileSystem)) {
-      sessionsByFileSystem.set(fileSystem, sessionMap)
-    }
-    if (!snapshotParentByFileSystem.has(fileSystem)) {
-      snapshotParentByFileSystem.set(fileSystem, parentMap)
-    }
-
-    if (targetSnapshot instanceof GeneratedSnapshot) {
-      parentMap.set(targetSnapshot.id, targetSnapshot.baseSnapshotId)
-    }
-
-    const cacheSessions =
-      sessionMap.get(targetSnapshot.id) ?? new Map<string, Session>()
-    const existing = cacheSessions.get(cacheId)
-    if (existing) {
-      return existing
-    }
-
-    const created = new Session(fileSystem, targetSnapshot, cache)
-    cacheSessions.set(cacheId, created)
-    sessionMap.set(targetSnapshot.id, cacheSessions)
-    return created
+    return sessionRegistry.getOrCreate(fileSystem, {
+      snapshot,
+      cacheId: getCacheIdentity(cache),
+      createBaseSnapshot: () => new FileSystemSnapshot(fileSystem),
+      createSession: (targetSnapshot) =>
+        new Session(fileSystem, targetSnapshot, cache),
+    })
   }
 
   static reset(fileSystem: FileSystem, snapshotId?: string): void {
-    const sessionMap = sessionsByFileSystem.get(fileSystem)
-    const parentMap = snapshotParentByFileSystem.get(fileSystem)
-
-    if (snapshotId) {
-      if (!sessionMap) {
-        return
-      }
-      if (!parentMap) {
-        return
-      }
-
-      const family = collectSnapshotFamily(snapshotId, parentMap)
-      const familyEntries = Array.from(sessionMap.entries()).filter(([id]) =>
-        family.has(id)
-      )
-
-      if (familyEntries.length === 0) {
+    sessionRegistry.reset(fileSystem, {
+      snapshotId,
+      resetSession: (session) => {
+        session.reset()
+      },
+      onMissingSnapshotFamily: (missingSnapshotId) => {
         if (!isTestEnvironment()) {
           console.warn(
-            `[renoun] Session.reset(${String(snapshotId)}) did not match any active session family. No caches were invalidated.`
+            `[renoun] Session.reset(${String(missingSnapshotId)}) did not match any active session family. No caches were invalidated.`
           )
         }
-        return
-      }
-
-      const currentGeneration =
-        snapshotGenerationByFileSystem.get(fileSystem) ?? 0
-      snapshotGenerationByFileSystem.set(fileSystem, currentGeneration + 1)
-
-      for (const [id, cacheSessions] of familyEntries) {
-        for (const session of cacheSessions.values()) {
-          session.reset()
-        }
-        sessionMap.delete(id)
-        parentMap.delete(id)
-      }
-
-      if (sessionMap.size === 0) {
-        sessionsByFileSystem.delete(fileSystem)
-        snapshotParentByFileSystem.delete(fileSystem)
-      }
-
-      return
-    }
-
-    const currentGeneration =
-      snapshotGenerationByFileSystem.get(fileSystem) ?? 0
-    snapshotGenerationByFileSystem.set(fileSystem, currentGeneration + 1)
-
-    if (!sessionMap) {
-      return
-    }
-
-    for (const cacheSessions of sessionMap.values()) {
-      for (const session of cacheSessions.values()) {
-        session.reset()
-      }
-    }
-
-    sessionMap.clear()
-    sessionsByFileSystem.delete(fileSystem)
-    snapshotParentByFileSystem.delete(fileSystem)
+      },
+    })
   }
 
   readonly #fileSystem: FileSystem
@@ -547,12 +210,16 @@ export class Session {
       resolveDirectorySnapshotPrefixIndexMaxKeys(
         cache?.directorySnapshotPrefixIndexMaxKeys
       )
-    this.#directorySnapshotPathIndex = new DirectorySnapshotPathIndex(
-      directorySnapshotPrefixIndexMaxKeys
-    )
-    this.#directorySnapshotBuildPathIndex = new DirectorySnapshotPathIndex(
-      directorySnapshotPrefixIndexMaxKeys
-    )
+    this.#directorySnapshotPathIndex = new DirectorySnapshotPathIndex({
+      maxPrefixKeys: directorySnapshotPrefixIndexMaxKeys,
+      prefixIndexReenableRatio:
+        SESSION_CACHE_DEFAULTS.directorySnapshotPrefixIndexReenableRatio,
+    })
+    this.#directorySnapshotBuildPathIndex = new DirectorySnapshotPathIndex({
+      maxPrefixKeys: directorySnapshotPrefixIndexMaxKeys,
+      prefixIndexReenableRatio:
+        SESSION_CACHE_DEFAULTS.directorySnapshotPrefixIndexReenableRatio,
+    })
     this.directorySnapshots = new IndexedStringKeyMap<
       DirectorySnapshot<any, any>
     >({
@@ -1764,139 +1431,6 @@ export class Session {
   }
 }
 
-function getCacheIdentity(cache?: Cache): string {
-  if (!cache) {
-    return 'default'
-  }
-
-  const cached = cacheIdentityByCache.get(cache)
-  if (cached) {
-    return cached
-  }
-
-  const identity = `cache-${cacheIdentity + 1}`
-  cacheIdentityByCache.set(cache, identity)
-  cacheIdentity += 1
-
-  return identity
-}
-
-class GeneratedSnapshot implements Snapshot {
-  readonly #base: Snapshot
-  readonly id: string
-
-  constructor(base: Snapshot, generation: number) {
-    this.#base = base
-    this.id = `${base.id}:g${generation}`
-  }
-
-  get baseSnapshotId(): string {
-    return this.#base.id
-  }
-
-  readDirectory(path?: string) {
-    return this.#base.readDirectory(path)
-  }
-
-  readFile(path: string) {
-    return this.#base.readFile(path)
-  }
-
-  readFileBinary(path: string) {
-    return this.#base.readFileBinary(path)
-  }
-
-  readFileStream(path: string) {
-    return this.#base.readFileStream(path)
-  }
-
-  fileExists(path: string) {
-    return this.#base.fileExists(path)
-  }
-
-  getFileLastModifiedMs(path: string) {
-    return this.#base.getFileLastModifiedMs(path)
-  }
-
-  getFileByteLength(path: string) {
-    return this.#base.getFileByteLength(path)
-  }
-
-  isFilePathGitIgnored(path: string) {
-    return this.#base.isFilePathGitIgnored(path)
-  }
-
-  isFilePathExcludedFromTsConfigAsync(path: string, isDirectory?: boolean) {
-    return this.#base.isFilePathExcludedFromTsConfigAsync(path, isDirectory)
-  }
-
-  getRelativePathToWorkspace(path: string): string {
-    return this.#base.getRelativePathToWorkspace(path)
-  }
-
-  contentId(path: string, options?: SnapshotContentIdOptions) {
-    return this.#base.contentId(path, options)
-  }
-
-  getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
-    const getter = this.#base.getWorkspaceChangeToken
-    if (typeof getter !== 'function') {
-      return Promise.resolve(null)
-    }
-
-    return getter.call(this.#base, rootPath)
-  }
-
-  getWorkspaceChangedPathsSinceToken(
-    rootPath: string,
-    previousToken: string
-  ): Promise<ReadonlySet<string> | null> {
-    const getter = this.#base.getWorkspaceChangedPathsSinceToken
-    if (typeof getter !== 'function') {
-      return Promise.resolve(null)
-    }
-
-    return getter.call(this.#base, rootPath, previousToken)
-  }
-
-  getRecentlyInvalidatedPaths(): ReadonlySet<string> | undefined {
-    const getter = this.#base.getRecentlyInvalidatedPaths
-    if (typeof getter !== 'function') {
-      return undefined
-    }
-
-    return getter.call(this.#base)
-  }
-
-  invalidatePath(path: string) {
-    this.#base.invalidatePath(path)
-  }
-
-  invalidatePaths(paths: Iterable<string>) {
-    if (typeof this.#base.invalidatePaths === 'function') {
-      this.#base.invalidatePaths(paths)
-      return
-    }
-
-    for (const path of paths) {
-      this.#base.invalidatePath(path)
-    }
-  }
-
-  invalidateAll() {
-    if (typeof this.#base.invalidateAll === 'function') {
-      this.#base.invalidateAll()
-      return
-    }
-
-    this.#base.invalidatePath('.')
-  }
-
-  onInvalidate(listener: (path: string) => void): () => void {
-    return this.#base.onInvalidate(listener)
-  }
-}
-
 function normalizeSessionPath(fileSystem: FileSystem, path: string): string {
   const relativePath = fileSystem.getRelativePathToWorkspace(path)
   return normalizePathKey(relativePath)
@@ -1912,81 +1446,6 @@ function getTelemetryPathDepth(path: string): number {
   }
 
   return path.split('/').filter((segment) => segment.length > 0).length
-}
-
-function extractDirectoryPathFromSnapshotKey(key: string): string | undefined {
-  if (!key.startsWith('dir:')) {
-    return undefined
-  }
-
-  const delimiterIndex = key.indexOf('|')
-  const rawPath =
-    delimiterIndex === -1
-      ? key.slice('dir:'.length)
-      : key.slice('dir:'.length, delimiterIndex)
-  if (!rawPath) {
-    return undefined
-  }
-
-  return normalizePathKey(rawPath)
-}
-
-function pathsIntersect(firstPath: string, secondPath: string): boolean {
-  if (firstPath === '.' || secondPath === '.') {
-    return true
-  }
-
-  return (
-    firstPath === secondPath ||
-    firstPath.startsWith(`${secondPath}/`) ||
-    secondPath.startsWith(`${firstPath}/`)
-  )
-}
-
-function getPathPrefixes(path: string): string[] {
-  if (path === '.' || path.length === 0) {
-    return []
-  }
-
-  const segments = path.split('/').filter((segment) => segment.length > 0)
-  if (segments.length === 0) {
-    return []
-  }
-
-  const prefixes: string[] = []
-  let current = ''
-  for (const segment of segments) {
-    current = current.length > 0 ? `${current}/${segment}` : segment
-    prefixes.push(current)
-  }
-
-  return prefixes
-}
-
-function getPathAncestors(path: string): string[] {
-  if (path === '.' || path.length === 0) {
-    return ['.']
-  }
-
-  const ancestors: string[] = []
-  let current = path
-
-  while (true) {
-    ancestors.push(current)
-    if (current === '.') {
-      break
-    }
-
-    const separatorIndex = current.lastIndexOf('/')
-    if (separatorIndex <= 0) {
-      current = '.'
-      continue
-    }
-
-    current = current.slice(0, separatorIndex)
-  }
-
-  return ancestors
 }
 
 function getPersistedFallbackDirectorySnapshotPrefixes(path: string): string[] {
