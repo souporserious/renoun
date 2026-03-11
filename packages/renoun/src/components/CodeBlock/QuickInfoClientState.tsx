@@ -219,14 +219,26 @@ export function useResolvedQuickInfoClientState({
     }
 
     setIsLoading(true)
-    void getQuickInfoForRequest(effectiveRequest).then((value) => {
-      if (isDisposed) {
-        return
-      }
+    void (async () => {
+      try {
+        const value = await getQuickInfoForRequest(effectiveRequest)
+        if (isDisposed) {
+          return
+        }
 
-      setResolvedQuickInfo(value)
-      setIsLoading(false)
-    })
+        setResolvedQuickInfo(value)
+      } catch {
+        if (isDisposed) {
+          return
+        }
+
+        setResolvedQuickInfo(null)
+      } finally {
+        if (!isDisposed) {
+          setIsLoading(false)
+        }
+      }
+    })()
 
     return () => {
       isDisposed = true
@@ -242,15 +254,22 @@ export function useResolvedQuickInfoClientState({
     }
 
     setResolvedDisplayTokens(null)
-    void getQuickInfoDisplayTokens({
-      displayText,
-      runtime: effectiveRequest.runtime,
-      tokenThemeConfig,
-    }).then((value) => {
-      if (!isDisposed) {
-        setResolvedDisplayTokens(value)
+    void (async () => {
+      try {
+        const value = await getQuickInfoDisplayTokens({
+          displayText,
+          runtime: effectiveRequest.runtime,
+          tokenThemeConfig,
+        })
+        if (!isDisposed) {
+          setResolvedDisplayTokens(value)
+        }
+      } catch {
+        if (!isDisposed) {
+          setResolvedDisplayTokens(null)
+        }
       }
-    })
+    })()
 
     return () => {
       isDisposed = true

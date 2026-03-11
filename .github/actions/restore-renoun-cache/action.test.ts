@@ -88,23 +88,23 @@ describe('restore-renoun-cache action', () => {
     expect(cachePaths).toContain('examples/*/.renoun/cache/fs-cache.sqlite*')
   })
 
-  test('uses a shared commit-scoped save key', () => {
+  test('scopes save keys to the workflow job for the current commit', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
     )
     const key = getPrimaryKey(actionSource)
 
+    expect(key).toContain('${{ github.workflow }}')
+    expect(key).toContain('${{ github.job }}')
     expect(key).toContain("${{ steps.renoun-cache-token.outputs.token }}")
     expect(key).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
     expect(key).toContain('${{ github.sha }}')
-    expect(key).not.toContain('${{ github.workflow }}')
-    expect(key).not.toContain('${{ github.job }}')
     expect(key).not.toContain('github.run_id')
     expect(key).not.toContain('github.run_attempt')
   })
 
-  test('keeps restore keys scoped to the lockfile hash prefix', () => {
+  test('keeps restore keys scoped to the workflow job lockfile hash prefix', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
@@ -115,6 +115,8 @@ describe('restore-renoun-cache action', () => {
     expect(restoreKeys.length).toBeGreaterThan(0)
 
     for (const restoreKey of restoreKeys) {
+      expect(restoreKey).toContain('${{ github.workflow }}')
+      expect(restoreKey).toContain('${{ github.job }}')
       expect(restoreKey).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
       expect(restoreKey.endsWith('-')).toBe(true)
       expect(key.startsWith(restoreKey)).toBe(true)

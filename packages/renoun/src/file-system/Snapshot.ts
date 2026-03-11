@@ -15,7 +15,10 @@ import { reportBestEffortError } from '../utils/best-effort.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import type { FileReadableStream, FileSystem } from './FileSystem.ts'
 import type { DirectoryEntry } from './types.ts'
-import { WorkspaceChangeLookupCache } from './workspace-change-lookup-cache.ts'
+import {
+  WorkspaceChangeLookupCache,
+  createFileSystemWorkspaceChangeLookupCache,
+} from './workspace-change-lookup-cache.ts'
 
 const SNAPSHOT_VERSION = 1
 const METADATA_CONTENT_ID_MAX_AGE_MS = 250
@@ -105,7 +108,8 @@ export class FileSystemSnapshot implements Snapshot {
 
   constructor(fileSystem: FileSystem, providedId?: string) {
     this.#fileSystem = fileSystem
-    this.#workspaceChangeLookupCache = new WorkspaceChangeLookupCache({
+    this.#workspaceChangeLookupCache = createFileSystemWorkspaceChangeLookupCache({
+      fileSystem: this.#fileSystem,
       getWorkspaceTokenTtlMs: () => resolveWorkspaceTokenLookupCacheTtlMs(),
       getWorkspaceChangedPathsTtlMs: () =>
         resolveWorkspaceChangedPathsLookupCacheTtlMs(),
@@ -115,37 +119,6 @@ export class FileSystemSnapshot implements Snapshot {
         return isAbsolutePath(changedPath)
           ? this.#normalizeSnapshotPath(changedPath)
           : normalizePathKey(changedPath)
-      },
-      lookupWorkspaceToken: async (rootPath) => {
-        const tokenGetter = this.#fileSystem.getWorkspaceChangeToken
-        if (typeof tokenGetter !== 'function') {
-          return null
-        }
-
-        try {
-          const token = await tokenGetter.call(this.#fileSystem, rootPath)
-          return typeof token === 'string' ? token : null
-        } catch {
-          return null
-        }
-      },
-      lookupWorkspaceChangedPaths: async (rootPath, previousToken) => {
-        const changedPathsGetter =
-          this.#fileSystem.getWorkspaceChangedPathsSinceToken
-        if (typeof changedPathsGetter !== 'function') {
-          return null
-        }
-
-        try {
-          const changedPaths = await changedPathsGetter.call(
-            this.#fileSystem,
-            rootPath,
-            previousToken
-          )
-          return Array.isArray(changedPaths) ? changedPaths : null
-        } catch {
-          return null
-        }
       },
       clearChangedPathsWhenTtlDisabled: true,
     })

@@ -132,7 +132,7 @@ describe('runPrewarmSafely', () => {
     })
   })
 
-  test('processes queued distinct requests in FIFO order', async () => {
+  test('keeps only the latest pending distinct request', async () => {
     const calls: string[] = []
     const pendingCalls: Array<Deferred<void>> = []
     const prewarmMock = vi.fn(
@@ -163,13 +163,7 @@ describe('runPrewarmSafely', () => {
     await vi.waitFor(() => {
       expect(prewarmMock).toHaveBeenCalledTimes(2)
     })
-    expect(calls).toEqual(['a.json', 'b.json'])
-
-    pendingCalls.shift()!.resolve()
-    await vi.waitFor(() => {
-      expect(prewarmMock).toHaveBeenCalledTimes(3)
-    })
-    expect(calls).toEqual(['a.json', 'b.json', 'c.json'])
+    expect(calls).toEqual(['a.json', 'c.json'])
 
     pendingCalls.shift()!.resolve()
     await Promise.resolve()
@@ -208,13 +202,7 @@ describe('runPrewarmSafely', () => {
     await vi.waitFor(() => {
       expect(prewarmMock).toHaveBeenCalledTimes(2)
     })
-    expect(calls).toEqual(['a.json', 'b.json'])
-
-    pendingCalls.shift()!.resolve()
-    await vi.waitFor(() => {
-      expect(prewarmMock).toHaveBeenCalledTimes(3)
-    })
-    expect(calls).toEqual(['a.json', 'b.json', 'c.json'])
+    expect(calls).toEqual(['a.json', 'c.json'])
 
     pendingCalls.shift()!.resolve()
     await Promise.resolve()

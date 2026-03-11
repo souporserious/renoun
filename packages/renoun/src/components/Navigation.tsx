@@ -7,10 +7,8 @@ import {
   type Directory,
   type FileSystemEntry,
 } from '../file-system/index.tsx'
-import { reportBestEffortError } from '../utils/best-effort.ts'
 import {
   buildNavigationTree,
-  getNavigationEntriesWithDevSWR,
   mergeNavigationEntries,
 } from './navigation-entries.ts'
 
@@ -92,50 +90,21 @@ async function NavigationAsync({
     const canUseRecursiveTree = source.getFilterPatternKind() === null
 
     if (!canUseRecursiveTree) {
-      entries = await getNavigationEntriesWithDevSWR({
-        source,
-        cacheKey: 'entries:direct',
-        readEntries: () => source.getEntries(),
-      })
+      entries = await source.getEntries()
     } else {
-      const directEntriesPromise = getNavigationEntriesWithDevSWR({
-        source,
-        cacheKey: 'entries:direct',
-        readEntries: () => source.getEntries(),
-      })
-
-      try {
-        const [directEntries, recursiveEntries] = await Promise.all([
-          directEntriesPromise,
-          getNavigationEntriesWithDevSWR({
-            source,
-            cacheKey: 'entries:recursive',
-            readEntries: () => source.getEntries({ recursive: true }),
-          }),
-        ])
-        const tree = buildNavigationTree(source.getPathname(), recursiveEntries)
-        entries = mergeNavigationEntries(directEntries, tree.rootEntries)
-        childrenByPath = tree.childrenByPath
-        rootDirectEntryPathnames = new Set(
-          directEntries.map((entry) => entry.getPathname())
-        )
-      } catch (error) {
-        entries = await directEntriesPromise.catch(() =>
-          getNavigationEntriesWithDevSWR({
-            source,
-            cacheKey: 'entries:direct',
-            readEntries: () => source.getEntries(),
-          })
-        )
-        reportBestEffortError('components/navigation', error)
-      }
+      const [directEntries, recursiveEntries] = await Promise.all([
+        source.getEntries(),
+        source.getEntries({ recursive: true }),
+      ])
+      const tree = buildNavigationTree(source.getPathname(), recursiveEntries)
+      entries = mergeNavigationEntries(directEntries, tree.rootEntries)
+      childrenByPath = tree.childrenByPath
+      rootDirectEntryPathnames = new Set(
+        directEntries.map((entry) => entry.getPathname())
+      )
     }
   } else {
-    entries = await getNavigationEntriesWithDevSWR({
-      source,
-      cacheKey: 'entries:direct',
-      readEntries: () => source.getEntries(),
-    })
+    entries = await source.getEntries()
   }
 
   const components: NavigationComponents = {

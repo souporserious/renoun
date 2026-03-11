@@ -204,7 +204,7 @@ function parsePrewarmWorkerPriority(
 }
 
 let activePrewarmRequest: PrewarmRequest | undefined
-const pendingPrewarmRequests: PrewarmRequest[] = []
+let pendingPrewarmRequest: PrewarmRequest | undefined
 let nextPrewarmRequestId = 0
 
 function finalizeActivePrewarmRequest(requestId: number): void {
@@ -214,7 +214,8 @@ function finalizeActivePrewarmRequest(requestId: number): void {
 
   activePrewarmRequest = undefined
 
-  const nextPrewarmRequest = pendingPrewarmRequests.shift()
+  const nextPrewarmRequest = pendingPrewarmRequest
+  pendingPrewarmRequest = undefined
 
   if (nextPrewarmRequest) {
     startPrewarmRequest(nextPrewarmRequest)
@@ -233,20 +234,20 @@ function queueOrSkipPrewarmRequest(request: PrewarmRequest): boolean {
     return true
   }
 
-  if (
-    pendingPrewarmRequests.some(
-      (pendingRequest) => pendingRequest.signature === request.signature
-    )
-  ) {
+  if (pendingPrewarmRequest?.signature === request.signature) {
     getDebugLogger().debug(
       'Skipping prewarm request because matching prewarm is already queued'
     )
     return true
   }
 
-  pendingPrewarmRequests.push(request)
+  const replacedPendingRequest = pendingPrewarmRequest !== undefined
+  pendingPrewarmRequest = request
   getDebugLogger().info('Queued Renoun RPC cache prewarm request', () => ({
-    data: { status: 'queued', queueLength: pendingPrewarmRequests.length },
+    data: {
+      status: 'queued',
+      replacedPendingRequest,
+    },
   }))
   return true
 }

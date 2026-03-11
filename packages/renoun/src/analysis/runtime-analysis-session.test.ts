@@ -1,24 +1,17 @@
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test } from 'vitest'
 
-import { disposeDefaultCacheStorePersistence } from '../file-system/CacheSqlite.ts'
-
-async function loadRuntimeAnalysisSessionModule() {
-  vi.resetModules()
-  return import('./runtime-analysis-session.ts')
-}
+import {
+  getRuntimeAnalysisSession,
+  getRuntimeAnalysisSessions,
+  resetRuntimeAnalysisSessionsForTests,
+} from './runtime-analysis-session.ts'
 
 describe('runtime analysis session', () => {
-  afterEach(async () => {
-    const { resetRuntimeAnalysisSessionsForTests } = await import(
-      './runtime-analysis-session.ts'
-    )
+  afterEach(() => {
     resetRuntimeAnalysisSessionsForTests()
-    disposeDefaultCacheStorePersistence()
-    await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
   test('reuses the same session for identical scope paths', async () => {
-    const { getRuntimeAnalysisSession } = await loadRuntimeAnalysisSessionModule()
     const scopePath = `${process.cwd()}/.cache/runtime-analysis/session-same-scope`
 
     const first = await getRuntimeAnalysisSession(undefined, scopePath)
@@ -28,7 +21,6 @@ describe('runtime analysis session', () => {
   })
 
   test('isolates sessions between different scope paths', async () => {
-    const { getRuntimeAnalysisSession } = await loadRuntimeAnalysisSessionModule()
     const basePath = `${process.cwd()}/.cache/runtime-analysis/session-isolation-${Date.now()}`
     const firstScopePath = `${basePath}/first`
     const secondScopePath = `${basePath}/second`
@@ -40,7 +32,6 @@ describe('runtime analysis session', () => {
   })
 
   test('isolates sessions between different analysis scopes for the same path', async () => {
-    const { getRuntimeAnalysisSession } = await loadRuntimeAnalysisSessionModule()
     const scopePath = `${process.cwd()}/.cache/runtime-analysis/session-analysis-scope-${Date.now()}`
 
     const first = await getRuntimeAnalysisSession(
@@ -58,8 +49,6 @@ describe('runtime analysis session', () => {
   })
 
   test('returns only intersecting sessions when filtering by paths', async () => {
-    const { getRuntimeAnalysisSession, getRuntimeAnalysisSessions } =
-      await loadRuntimeAnalysisSessionModule()
     const basePath = `${process.cwd()}/.cache/runtime-analysis/session-filter-${Date.now()}`
     const firstScopePath = `${basePath}/first`
     const secondScopePath = `${basePath}/second`
@@ -79,8 +68,6 @@ describe('runtime analysis session', () => {
   })
 
   test('does not include the default session when filtering by paths', async () => {
-    const { getRuntimeAnalysisSession, getRuntimeAnalysisSessions } =
-      await loadRuntimeAnalysisSessionModule()
     const basePath = `${process.cwd()}/.cache/runtime-analysis/session-default-filter-${Date.now()}`
     const scopedPath = `${basePath}/scoped`
 
@@ -96,5 +83,29 @@ describe('runtime analysis session', () => {
     expect(
       selected.some((session) => session.session === scopedSession?.session)
     ).toBe(true)
+  })
+
+  test('evicts least recently used scoped sessions when the cache grows too large', async () => {
+    const basePath = `${process.cwd()}/.cache/runtime-analysis/session-eviction-${Date.now()}`
+
+    const firstScopePath = `${basePath}/scope-0`
+    const firstSession = await getRuntimeAnalysisSession(
+      undefined,
+      firstScopePath
+    )
+
+    for (let index = 1; index < 80; ++index) {
+      await getRuntimeAnalysisSession(
+        undefined,
+        `${basePath}/scope-${index}`
+      )
+    }
+
+    const refreshedFirstSession = await getRuntimeAnalysisSession(
+      undefined,
+      firstScopePath
+    )
+
+    expect(refreshedFirstSession?.session).not.toBe(firstSession?.session)
   })
 })

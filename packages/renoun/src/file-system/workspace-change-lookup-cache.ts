@@ -1,3 +1,4 @@
+import type { FileSystem } from './FileSystem.ts'
 import { createWorkspaceChangedPathsCacheKey } from './workspace-cache-key.ts'
 
 interface CachedWorkspaceChangeToken {
@@ -26,6 +27,78 @@ export interface WorkspaceChangeLookupCacheOptions {
   changedPathsCleanupIntervalMs?: number
   changedPathsMaxEntries?: number
   clearChangedPathsWhenTtlDisabled?: boolean
+}
+
+export interface FileSystemWorkspaceChangeLookupCacheOptions {
+  fileSystem: Pick<
+    FileSystem,
+    'getWorkspaceChangeToken' | 'getWorkspaceChangedPathsSinceToken'
+  >
+  getWorkspaceTokenTtlMs: () => number
+  getWorkspaceChangedPathsTtlMs: () => number
+  normalizeRootPath: (rootPath: string) => string
+  normalizeChangedPath: (changedPath: string) => string | null | undefined
+  serveStaleWhileRevalidate?: boolean
+  changedPathsCleanupIntervalMs?: number
+  changedPathsMaxEntries?: number
+  clearChangedPathsWhenTtlDisabled?: boolean
+}
+
+export function createFileSystemWorkspaceChangeLookupCache(
+  options: FileSystemWorkspaceChangeLookupCacheOptions
+): WorkspaceChangeLookupCache {
+  const {
+    fileSystem,
+    getWorkspaceTokenTtlMs,
+    getWorkspaceChangedPathsTtlMs,
+    normalizeRootPath,
+    normalizeChangedPath,
+    serveStaleWhileRevalidate,
+    changedPathsCleanupIntervalMs,
+    changedPathsMaxEntries,
+    clearChangedPathsWhenTtlDisabled,
+  } = options
+
+  return new WorkspaceChangeLookupCache({
+    getWorkspaceTokenTtlMs,
+    getWorkspaceChangedPathsTtlMs,
+    normalizeRootPath,
+    normalizeChangedPath,
+    lookupWorkspaceToken: async (rootPath) => {
+      const tokenGetter = fileSystem.getWorkspaceChangeToken
+      if (typeof tokenGetter !== 'function') {
+        return null
+      }
+
+      try {
+        const token = await tokenGetter.call(fileSystem, rootPath)
+        return typeof token === 'string' ? token : null
+      } catch {
+        return null
+      }
+    },
+    lookupWorkspaceChangedPaths: async (rootPath, previousToken) => {
+      const changedPathsGetter = fileSystem.getWorkspaceChangedPathsSinceToken
+      if (typeof changedPathsGetter !== 'function') {
+        return null
+      }
+
+      try {
+        const changedPaths = await changedPathsGetter.call(
+          fileSystem,
+          rootPath,
+          previousToken
+        )
+        return Array.isArray(changedPaths) ? changedPaths : null
+      } catch {
+        return null
+      }
+    },
+    serveStaleWhileRevalidate,
+    changedPathsCleanupIntervalMs,
+    changedPathsMaxEntries,
+    clearChangedPathsWhenTtlDisabled,
+  })
 }
 
 export class WorkspaceChangeLookupCache {

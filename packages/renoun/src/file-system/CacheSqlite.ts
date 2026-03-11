@@ -180,15 +180,7 @@ function logSessionRootDebug(
   data: Record<string, unknown>
 ): void {
   const debugLogger = getDebugLogger()
-  const message = `[renoun-debug] ${operation}`
-
-  if (debugLogger.isEnabled('debug')) {
-    debugLogger.debug(message, () => ({ data }))
-    return
-  }
-
-  // eslint-disable-next-line no-console
-  console.log(message, data)
+  debugLogger.debug(`[renoun-debug] ${operation}`, () => ({ data }))
 }
 
 function resolveCanonicalProjectRootPath(pathToResolve: string): string {

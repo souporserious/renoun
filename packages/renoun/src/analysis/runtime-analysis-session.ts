@@ -24,6 +24,7 @@ let runtimeAnalysisFileSystemPromise:
   | undefined
 let runtimeAnalysisNonPersistentCache: Cache | undefined
 const runtimeAnalysisSessionByScopeKey = new Map<string, RuntimeAnalysisSession>()
+const RUNTIME_ANALYSIS_SESSION_MAX_ENTRIES = 64
 
 function toRuntimeAnalysisScopePathKey(
   fileSystem: RuntimeAnalysisFileSystem,
@@ -117,6 +118,52 @@ function getRuntimeAnalysisCache(cache?: Cache): Cache | undefined {
   return runtimeAnalysisNonPersistentCache
 }
 
+function touchRuntimeAnalysisSession(
+  scopeKey: string,
+  runtimeAnalysisSession: RuntimeAnalysisSession
+): RuntimeAnalysisSession {
+  runtimeAnalysisSessionByScopeKey.delete(scopeKey)
+  runtimeAnalysisSessionByScopeKey.set(scopeKey, runtimeAnalysisSession)
+  return runtimeAnalysisSession
+}
+
+function shouldRetainRuntimeAnalysisSession(scopeKey: string): boolean {
+  return scopeKey === 'default'
+}
+
+function pruneRuntimeAnalysisSessions(): void {
+  if (
+    runtimeAnalysisSessionByScopeKey.size <=
+    RUNTIME_ANALYSIS_SESSION_MAX_ENTRIES
+  ) {
+    return
+  }
+
+  for (const [scopeKey, runtimeAnalysisSession] of runtimeAnalysisSessionByScopeKey) {
+    if (
+      runtimeAnalysisSessionByScopeKey.size <=
+      RUNTIME_ANALYSIS_SESSION_MAX_ENTRIES
+    ) {
+      return
+    }
+
+    if (shouldRetainRuntimeAnalysisSession(scopeKey)) {
+      continue
+    }
+
+    if (runtimeAnalysisSession.session.inflight.size > 0) {
+      touchRuntimeAnalysisSession(scopeKey, runtimeAnalysisSession)
+      continue
+    }
+
+    runtimeAnalysisSessionByScopeKey.delete(scopeKey)
+    Session.reset(
+      runtimeAnalysisSession.fileSystem,
+      runtimeAnalysisSession.session.snapshot.id
+    )
+  }
+}
+
 export async function getRuntimeAnalysisSession(
   cache?: Cache,
   scopePath?: string,
@@ -131,7 +178,7 @@ export async function getRuntimeAnalysisSession(
   const scopeKey = toRuntimeAnalysisScopeKey(scopePathKey, analysisScopeId)
   const existing = runtimeAnalysisSessionByScopeKey.get(scopeKey)
   if (existing) {
-    return existing
+    return touchRuntimeAnalysisSession(scopeKey, existing)
   }
 
   const runtimeAnalysisCache = getRuntimeAnalysisCache(cache)
@@ -150,6 +197,7 @@ export async function getRuntimeAnalysisSession(
     analysisScopeId: analysisScopeId ?? null,
   } satisfies RuntimeAnalysisSession
   runtimeAnalysisSessionByScopeKey.set(scopeKey, created)
+  pruneRuntimeAnalysisSessions()
 
   return created
 }
@@ -162,8 +210,13 @@ export async function getRuntimeAnalysisSessions(
     return []
   }
 
+  pruneRuntimeAnalysisSessions()
+
   if (!paths) {
-    return Array.from(runtimeAnalysisSessionByScopeKey.values())
+    return Array.from(runtimeAnalysisSessionByScopeKey.entries()).map(
+      ([scopeKey, runtimeAnalysisSession]) =>
+        touchRuntimeAnalysisSession(scopeKey, runtimeAnalysisSession)
+    )
   }
 
   const normalizedPaths = new Set<string>()
@@ -179,10 +232,10 @@ export async function getRuntimeAnalysisSessions(
   }
 
   const sessions: RuntimeAnalysisSession[] = []
-  for (const runtimeSession of runtimeAnalysisSessionByScopeKey.values()) {
+  for (const [scopeKey, runtimeSession] of runtimeAnalysisSessionByScopeKey) {
     for (const normalizedPath of normalizedPaths) {
       if (pathsIntersect(runtimeSession.scopePathKey, normalizedPath)) {
-        sessions.push(runtimeSession)
+        sessions.push(touchRuntimeAnalysisSession(scopeKey, runtimeSession))
         break
       }
     }
@@ -192,13 +245,6 @@ export async function getRuntimeAnalysisSessions(
 }
 
 export function resetRuntimeAnalysisSessionsForTests(): void {
-  for (const runtimeSession of runtimeAnalysisSessionByScopeKey.values()) {
-    Session.reset(
-      runtimeSession.fileSystem,
-      runtimeSession.session.snapshot.id
-    )
-  }
-
   runtimeAnalysisSessionByScopeKey.clear()
   runtimeAnalysisFileSystem = undefined
   runtimeAnalysisFileSystemPromise = undefined

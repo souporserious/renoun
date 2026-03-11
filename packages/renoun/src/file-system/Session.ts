@@ -43,7 +43,10 @@ import {
   type Snapshot,
 } from './Snapshot.ts'
 import type { DirectorySnapshot } from './directory-snapshot.ts'
-import { WorkspaceChangeLookupCache } from './workspace-change-lookup-cache.ts'
+import {
+  WorkspaceChangeLookupCache,
+  createFileSystemWorkspaceChangeLookupCache,
+} from './workspace-change-lookup-cache.ts'
 
 const sessionRegistry = new SessionRegistry<Session>()
 
@@ -300,7 +303,8 @@ export class Session {
         cache?.targetedMissingDependencyFallback
       )
     this.#telemetry = cache?.telemetry
-    this.#workspaceChangeLookupCache = new WorkspaceChangeLookupCache({
+    this.#workspaceChangeLookupCache = createFileSystemWorkspaceChangeLookupCache({
+      fileSystem: this.#fileSystem,
       getWorkspaceTokenTtlMs: () => this.#resolveWorkspaceChangeTokenTtlMs(),
       getWorkspaceChangedPathsTtlMs: () =>
         this.#resolveWorkspaceChangedPathsTtlMs(),
@@ -311,37 +315,6 @@ export class Session {
         return isAbsolutePath(changedPath)
           ? normalizeSessionPath(this.#fileSystem, changedPath)
           : normalizePathKey(changedPath)
-      },
-      lookupWorkspaceToken: async (rootPath) => {
-        const tokenGetter = this.#fileSystem.getWorkspaceChangeToken
-        if (typeof tokenGetter !== 'function') {
-          return null
-        }
-
-        try {
-          const token = await tokenGetter.call(this.#fileSystem, rootPath)
-          return typeof token === 'string' ? token : null
-        } catch {
-          return null
-        }
-      },
-      lookupWorkspaceChangedPaths: async (rootPath, previousToken) => {
-        const changedPathsGetter =
-          this.#fileSystem.getWorkspaceChangedPathsSinceToken
-        if (typeof changedPathsGetter !== 'function') {
-          return null
-        }
-
-        try {
-          const changedPaths = await changedPathsGetter.call(
-            this.#fileSystem,
-            rootPath,
-            previousToken
-          )
-          return Array.isArray(changedPaths) ? changedPaths : null
-        } catch {
-          return null
-        }
       },
       changedPathsCleanupIntervalMs:
         SESSION_CACHE_DEFAULTS.workspaceChangedPathsCleanupIntervalMs,

@@ -510,6 +510,7 @@ async function fetchSponsorsAndTierLinks(
   const cacheKey = createSponsorsCacheKey({
     amount: normalizedAmount,
     avatarSizes: normalizedAvatarSizes,
+    cacheTtlMs: ttlMs,
     manualTierIds: normalizedManualTierIds,
     token: getTokenCacheKey(token),
   })

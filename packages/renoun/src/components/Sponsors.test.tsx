@@ -327,4 +327,44 @@ describe('Sponsors cache', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(4)
   })
+
+  it('partitions cached sponsor responses by resolved ttl', async () => {
+    const { Sponsors } = await import('./Sponsors.tsx')
+    process.env['GITHUB_SPONSORS_TOKEN'] = `token-${Date.now()}`
+    let now = 10_000
+    vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL): Promise<Response> => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url === 'https://api.github.com/graphql') {
+          return createGraphqlResponse()
+        }
+
+        if (url === 'https://github.com/sponsors/renoun') {
+          return createSponsorsPageResponse('renoun')
+        }
+
+        throw new Error(`Unexpected fetch URL: ${url}`)
+      }
+    )
+
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const tiers = [{ amount: 100, title: 'Bronze' }] as const
+
+    await Sponsors({
+      tiers,
+      children: () => <></>,
+    })
+
+    now += 1_500
+    await Sponsors({
+      tiers,
+      cacheTtlMs: 1_000,
+      children: () => <></>,
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
 })
