@@ -37,7 +37,11 @@ import {
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
-import { pathLikeToString, type PathLike } from '../../utils/path.ts'
+import {
+  isAbsolutePath,
+  pathLikeToString,
+  type PathLike,
+} from '../../utils/path.ts'
 import {
   getServerRuntimeFromProcessEnv,
   type AnalysisServerRuntime,
@@ -351,6 +355,15 @@ async function TokensAsync({
     const isFormattingExplicit =
       shouldFormatProp !== undefined || context?.shouldFormat !== undefined
     const hasExplicitSourceValue = children !== undefined && children !== null
+    const shouldPreferInMemoryAnalysis =
+      hasExplicitSourceValue &&
+      resolvedBaseDirectory === undefined &&
+      (resolvedPath === undefined || !isAbsolutePath(resolvedPath))
+    const analysisOptions = shouldPreferInMemoryAnalysis
+      ? {
+          useInMemoryFileSystem: true as const,
+        }
+      : undefined
     const metadata: SourceTextMetadata = {} as SourceTextMetadata
     const supportsSourceFormattingInCurrentContext =
       typeof language === 'string'
@@ -376,6 +389,7 @@ async function TokensAsync({
         language,
         shouldFormat,
         isFormattingExplicit,
+        analysisOptions,
         virtualizeFilePath: hasExplicitSourceValue && resolvedPath !== undefined,
       })
       metadata.value = result.value
@@ -429,6 +443,7 @@ async function TokensAsync({
       showErrors,
       theme: themeConfiguration,
       languages: config.languages,
+      analysisOptions,
       deferQuickInfoUntilHover: quickInfoRuntime !== undefined,
       // During development we render a suspense fallback immediately and wait
       // for highlighted tokens so the final stream updates this block.

@@ -126,10 +126,15 @@ const Code = styled('code', {
  * Displays syntax-highlighted source code with optional line numbers, toolbar,
  * copy-to-clipboard button, and error diagnostics.
  */
-export const CodeBlock =
-  process.env.NODE_ENV === 'development'
-    ? CodeBlockWithFallback
-    : CodeBlockAsync
+export function CodeBlock(
+  props: CodeBlockProps | React.ComponentProps<'pre'>
+) {
+  if (process.env.NODE_ENV === 'development') {
+    return <CodeBlockWithFallback {...props} />
+  }
+
+  return <CodeBlockAsync {...props} />
+}
 
 const defaultComponents: CodeBlockComponents = {
   Container: StyledContainer,
@@ -490,19 +495,15 @@ async function CodeBlockAsync(
     (_, index) => index + 1
   ).join('\n')
   const lineNumbersNode = showLineNumbers ? (
-    shouldUseDevelopmentSubtreeSuspense ? (
-      <Suspense
-        fallback={
-          <FallbackLineNumbers {...lineNumbersProps}>
-            {fallbackLineNumbers}
-          </FallbackLineNumbers>
-        }
-      >
-        <components.LineNumbers {...lineNumbersProps} />
-      </Suspense>
-    ) : (
+    <Suspense
+      fallback={
+        <FallbackLineNumbers {...lineNumbersProps}>
+          {fallbackLineNumbers}
+        </FallbackLineNumbers>
+      }
+    >
       <components.LineNumbers {...lineNumbersProps} />
-    )
+    </Suspense>
   ) : null
   const tokensNode = (
     <components.Tokens
@@ -528,20 +529,19 @@ async function CodeBlockAsync(
     tokensNode
   )
   const toolbarNode = shouldRenderToolbar ? (
-    shouldUseDevelopmentSubtreeSuspense ? (
-      <Suspense fallback={<FallbackToolbar {...toolbarProps} />}>
-        <components.Toolbar
-          allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
-          {...toolbarProps}
-        />
-      </Suspense>
-    ) : (
+    <Suspense fallback={<FallbackToolbar {...toolbarProps} />}>
       <components.Toolbar
         allowCopy={allowCopy === undefined ? Boolean(path) : allowCopy}
         {...toolbarProps}
       />
-    )
+    </Suspense>
   ) : null
+  const standaloneCopyButtonNode =
+    allowCopy !== false && !shouldRenderToolbar ? (
+      <Suspense fallback={null}>
+        <components.CopyButton {...copyButtonProps} />
+      </Suspense>
+    ) : null
 
   return (
     <Context value={contextValue}>
@@ -573,9 +573,7 @@ async function CodeBlockAsync(
               {tokensWithFallbackNode}
             </components.Code>
           )}
-          {allowCopy !== false && !shouldRenderToolbar ? (
-            <components.CopyButton {...copyButtonProps} />
-          ) : null}
+          {standaloneCopyButtonNode}
         </components.Pre>
       </Container>
     </Context>

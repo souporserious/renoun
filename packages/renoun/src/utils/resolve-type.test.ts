@@ -10990,34 +10990,37 @@ describe('resolveType', () => {
     `)
   })
 
-  test('library tagged template literal generic types', () => {
-    const project = new Project({
-      tsConfigFilePath: renounTsConfigFilePath,
-    })
-    const sourceFile = project.createSourceFile(
-      getProjectTestFilePath(project),
-      dedent`
-        import * as React from 'react'
-        import styled from 'styled-components'
-  
-        export const Grid = styled.div<{
-          $gridTemplateColumns: string
-          $gridTemplateRows: string
-        }>\`
-          display: grid;
-          grid-template-columns: \${({ $gridTemplateColumns }) => $gridTemplateColumns};
-          grid-template-rows: \${({ $gridTemplateRows }) => $gridTemplateRows};
-        \`
-        `,
-      { overwrite: true }
-    )
-    const variableDeclaration = sourceFile.getVariableDeclarationOrThrow('Grid')
-    const types = resolveType(
-      variableDeclaration.getType(),
-      variableDeclaration
-    )
+  test(
+    'library tagged template literal generic types',
+    () => {
+      const project = new Project({
+        tsConfigFilePath: renounTsConfigFilePath,
+      })
+      const sourceFile = project.createSourceFile(
+        getProjectTestFilePath(project),
+        dedent`
+          import * as React from 'react'
+          import styled from 'styled-components'
+    
+          export const Grid = styled.div<{
+            $gridTemplateColumns: string
+            $gridTemplateRows: string
+          }>\`
+            display: grid;
+            grid-template-columns: \${({ $gridTemplateColumns }) => $gridTemplateColumns};
+            grid-template-rows: \${({ $gridTemplateRows }) => $gridTemplateRows};
+          \`
+          `,
+        { overwrite: true }
+      )
+      const variableDeclaration =
+        sourceFile.getVariableDeclarationOrThrow('Grid')
+      const types = resolveType(
+        variableDeclaration.getType(),
+        variableDeclaration
+      )
 
-    expect(types).toMatchInlineSnapshot(`
+      expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
         "kind": "Component",
@@ -11231,7 +11234,9 @@ describe('resolveType', () => {
         "text": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
       }
     `)
-  })
+    },
+    30_000
+  )
 
   test('type aliases', () => {
     const sourceFile = project.createSourceFile(

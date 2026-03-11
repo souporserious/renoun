@@ -3,12 +3,11 @@ import { extname, isAbsolute, join, posix } from 'node:path'
 import type { Project, SourceFile } from '../utils/ts-morph.ts'
 import { getLanguage, type Languages } from '../utils/get-language.ts'
 import { isJsxOnly } from '../utils/is-jsx-only.ts'
+import { getAnalysisDocumentStableFilePathFromVirtualFilePath } from './document-paths.ts'
 import { isTrackedVirtualSnippetStableFilePath } from './query/snippet-registry.ts'
 
 const GENERATED_DOCUMENT_SCOPE = '_renoun'
 const RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS = '__renoun_source'
-const VIRTUAL_ANALYSIS_DOCUMENT_FILE_PATH_PATTERN =
-  /\.__renoun_snippet_[A-Za-z0-9_-]+(?=(\.[^./\\]+)?$)/
 const MAX_RESOLVED_VIRTUALIZED_STABLE_FILE_PATHS_PER_PROJECT = 512
 const resolvedVirtualizedStableFilePathsByProject = new WeakMap<
   Project,
@@ -304,17 +303,6 @@ export function getAnalysisDocumentStableFilePath(
   return document.kind === 'snippet'
     ? document.basePath ?? document.filePath
     : document.filePath
-}
-
-export function getAnalysisDocumentStableFilePathFromVirtualFilePath(
-  filePath: string
-): string | undefined {
-  const stableFilePath = filePath.replace(
-    VIRTUAL_ANALYSIS_DOCUMENT_FILE_PATH_PATTERN,
-    ''
-  )
-
-  return stableFilePath === filePath ? undefined : stableFilePath
 }
 
 export function getOriginalAnalysisDocumentFilePathFromStableFilePath(

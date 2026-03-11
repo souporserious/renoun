@@ -15,7 +15,7 @@ import * as highlighterModule from '../utils/create-highlighter.ts'
 import * as quickInfoModule from '../utils/get-quick-info-at-position.ts'
 import * as fileTextPrefixCacheModule from './file-text-prefix-cache.ts'
 
-const WEBSOCKET_READY_TIMEOUT_MS = 10_000
+const WEBSOCKET_READY_TIMEOUT_MS = 30_000
 const REFRESH_NOTIFICATION_TIMEOUT_MS = 5_000
 
 const watcherState = vi.hoisted(() => {

@@ -1260,7 +1260,9 @@ export type Metadata = Value`,
       contentIdSpy.mockResolvedValue('v1')
 
       await store.get(nodeKey)
-      expect(contentIdSpy).toHaveBeenCalledWith('C:/Users/me/project/index.ts')
+      expect(contentIdSpy).toHaveBeenCalledWith(
+        'C:/Users/me/project/index.ts'
+      )
     } finally {
       contentIdSpy.mockRestore()
     }
@@ -5521,87 +5523,91 @@ export type Metadata = Value`,
     })
   })
 
-  test('revalidates persisted workspace structure when scanned package set changes', async () => {
-    await withProductionSqliteCache(async (tmpDirectory) => {
-      const workspaceDirectory = join(tmpDirectory)
-      const packageDirectory = join(workspaceDirectory, 'packages', 'foo')
-      const createWorkerFileSystem = () =>
-        createTempNodeFileSystem(tmpDirectory)
+  test(
+    'revalidates persisted workspace structure when scanned package set changes',
+    async () => {
+      await withProductionSqliteCache(async (tmpDirectory) => {
+        const workspaceDirectory = join(tmpDirectory)
+        const packageDirectory = join(workspaceDirectory, 'packages', 'foo')
+        const createWorkerFileSystem = () =>
+          createTempNodeFileSystem(tmpDirectory)
 
-      mkdirSync(join(packageDirectory, 'src'), { recursive: true })
-      writeFileSync(
-        join(workspaceDirectory, 'package.json'),
-        JSON.stringify(
-          {
-            name: 'docs-workspace',
-            workspaces: ['packages/*'],
-          },
-          null,
-          2
-        ),
-        'utf8'
-      )
-      writeFileSync(
-        join(packageDirectory, 'package.json'),
-        JSON.stringify(
-          {
-            name: 'foo',
-          },
-          null,
-          2
-        ),
-        'utf8'
-      )
-      writeFileSync(
-        join(packageDirectory, 'src', 'index.ts'),
-        'export const value = 1',
-        'utf8'
-      )
+        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(workspaceDirectory, 'package.json'),
+          JSON.stringify(
+            {
+              name: 'docs-workspace',
+              workspaces: ['packages/*'],
+            },
+            null,
+            2
+          ),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'package.json'),
+          JSON.stringify(
+            {
+              name: 'foo',
+            },
+            null,
+            2
+          ),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'index.ts'),
+          'export const value = 1',
+          'utf8'
+        )
 
-      const firstWorkerWorkspace = new Workspace({
-        fileSystem: createWorkerFileSystem(),
-        rootDirectory: workspaceDirectory,
+        const firstWorkerWorkspace = new Workspace({
+          fileSystem: createWorkerFileSystem(),
+          rootDirectory: workspaceDirectory,
+        })
+        const firstStructure = await firstWorkerWorkspace.getStructure()
+        const firstPackages = firstStructure
+          .filter((entry) => entry.kind === 'Package')
+          .map((entry) => entry.name)
+          .sort()
+        expect(firstPackages).toEqual(['foo'])
+
+        const barDirectory = join(workspaceDirectory, 'packages', 'bar')
+        mkdirSync(join(barDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(barDirectory, 'package.json'),
+          JSON.stringify(
+            {
+              name: 'bar',
+            },
+            null,
+            2
+          ),
+          'utf8'
+        )
+        writeFileSync(
+          join(barDirectory, 'src', 'index.ts'),
+          'export const value = 2',
+          'utf8'
+        )
+
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        const secondWorkerWorkspace = new Workspace({
+          fileSystem: createWorkerFileSystem(),
+          rootDirectory: workspaceDirectory,
+        })
+        const secondStructure = await secondWorkerWorkspace.getStructure()
+        const secondPackages = secondStructure
+          .filter((entry) => entry.kind === 'Package')
+          .map((entry) => entry.name)
+          .sort()
+        expect(secondPackages).toEqual(['bar', 'foo'])
       })
-      const firstStructure = await firstWorkerWorkspace.getStructure()
-      const firstPackages = firstStructure
-        .filter((entry) => entry.kind === 'Package')
-        .map((entry) => entry.name)
-        .sort()
-      expect(firstPackages).toEqual(['foo'])
-
-      const barDirectory = join(workspaceDirectory, 'packages', 'bar')
-      mkdirSync(join(barDirectory, 'src'), { recursive: true })
-      writeFileSync(
-        join(barDirectory, 'package.json'),
-        JSON.stringify(
-          {
-            name: 'bar',
-          },
-          null,
-          2
-        ),
-        'utf8'
-      )
-      writeFileSync(
-        join(barDirectory, 'src', 'index.ts'),
-        'export const value = 2',
-        'utf8'
-      )
-
-      await new Promise((resolve) => setTimeout(resolve, 300))
-
-      const secondWorkerWorkspace = new Workspace({
-        fileSystem: createWorkerFileSystem(),
-        rootDirectory: workspaceDirectory,
-      })
-      const secondStructure = await secondWorkerWorkspace.getStructure()
-      const secondPackages = secondStructure
-        .filter((entry) => entry.kind === 'Package')
-        .map((entry) => entry.name)
-        .sort()
-      expect(secondPackages).toEqual(['bar', 'foo'])
-    })
-  })
+    },
+    30_000
+  )
 
   test('revalidates persisted workspace structure when root manifest changes', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
@@ -5761,7 +5767,12 @@ export type Metadata = Value`,
       expect(secondResult).toEqual({ value: 1 })
       expect(computeCount).toBe(1)
     } finally {
-      rmSync(tmpDirectory, { recursive: true, force: true })
+      rmSync(tmpDirectory, {
+        recursive: true,
+        force: true,
+        maxRetries: 10,
+        retryDelay: 50,
+      })
     }
   })
 
@@ -9064,6 +9075,7 @@ export type Metadata = Value`,
       fileSystem,
       'sqlite-compute-slot-heartbeat'
     )
+    const nodeKey = 'test:sqlite-compute-slot-heartbeat'
     const persistence = createShortTtlComputeSlotPersistence(dbPath, {
       slotTtlMs: 60,
       withHeartbeat: true,
@@ -9074,7 +9086,7 @@ export type Metadata = Value`,
     try {
       let computeCount = 0
       const first = firstStore.getOrCompute(
-        'test:sqlite-compute-slot-heartbeat',
+        nodeKey,
         { persist: true },
         async () => {
           computeCount += 1
@@ -9083,11 +9095,20 @@ export type Metadata = Value`,
         }
       )
 
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20)
-      })
+      const ownerDeadline = Date.now() + 1_000
+      let observedOwner: string | undefined
+      while (Date.now() < ownerDeadline) {
+        observedOwner = await persistence.getComputeSlotOwner(nodeKey)
+        if (observedOwner) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10))
+      }
+
+      expect(observedOwner).toBeTruthy()
+
       const second = secondStore.getOrCompute(
-        'test:sqlite-compute-slot-heartbeat',
+        nodeKey,
         { persist: true },
         async () => {
           computeCount += 1

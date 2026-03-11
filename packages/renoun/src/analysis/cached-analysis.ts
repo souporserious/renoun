@@ -246,6 +246,10 @@ const RUNTIME_ANALYSIS_DEV_COLD_FALLBACK_MAX_VALUE_LENGTH = 250_000
 const RUNTIME_ANALYSIS_DEV_COLD_RESPONSE_BUDGET_MS = 25
 const runtimeAnalysisBootstrappedScopeKeys = new Set<string>()
 const pendingRuntimeAnalysisColdStartTaskKeys = new Set<string>()
+const pendingRuntimeAnalysisColdStartTaskPromises = new Map<
+  string,
+  Promise<void>
+>()
 
 function getRuntimeAnalysisSWRReadOptions(options?: {
   maxStaleAgeMs?: number
@@ -811,13 +815,33 @@ function queueRuntimeAnalysisColdStartTask(options: {
   }
 
   pendingRuntimeAnalysisColdStartTaskKeys.add(options.taskKey)
-  const timer = setTimeout(() => {
-    pendingRuntimeAnalysisColdStartTaskKeys.delete(options.taskKey)
-    void options.run().catch((error) => {
-      reportBestEffortError('analysis/cached-analysis', error)
+  let taskPromise!: Promise<void>
+  taskPromise = new Promise<void>((resolve) => {
+    queueMicrotask(() => {
+      pendingRuntimeAnalysisColdStartTaskKeys.delete(options.taskKey)
+      void options
+        .run()
+        .catch((error) => {
+          reportBestEffortError('analysis/cached-analysis', error)
+        })
+        .finally(() => {
+          if (
+            pendingRuntimeAnalysisColdStartTaskPromises.get(options.taskKey) ===
+            taskPromise
+          ) {
+            pendingRuntimeAnalysisColdStartTaskPromises.delete(options.taskKey)
+          }
+          resolve()
+        })
     })
-  }, 0)
-  timer.unref?.()
+  })
+  pendingRuntimeAnalysisColdStartTaskPromises.set(options.taskKey, taskPromise)
+}
+
+function getPendingRuntimeAnalysisColdStartTask(
+  taskKey: string
+): Promise<void> | undefined {
+  return pendingRuntimeAnalysisColdStartTaskPromises.get(taskKey)
 }
 
 export function onRuntimeAnalysisBackgroundRefresh(
@@ -4297,6 +4321,17 @@ export async function getCachedSourceTextMetadata(
         })
       ) {
         if (!runtimeCacheStore.store.hasSync(nodeKey)) {
+          if (runtimeCacheStore.store.hasInFlight(nodeKey)) {
+            return finalizeSourceTextMetadata(
+              await getOrComputeRuntimeAnalysisCacheValue(
+                runtimeCacheStore,
+                nodeKey,
+                cacheOptions,
+                computeSourceTextMetadata
+              )
+            )
+          }
+
           queueRuntimeAnalysisImmediateRefresh({
             dependencyPaths: prewarmDependencyPaths,
             scopePath,
@@ -4352,6 +4387,7 @@ export async function getCachedSourceTextMetadata(
     shouldServeSourceTextColdFallback &&
     !isRuntimeAnalysisScopeBootstrapped(runtimeScope)
   ) {
+    markRuntimeAnalysisScopeBootstrapped(runtimeScope)
     queueRuntimeAnalysisColdStartTask({
       taskKey: `source-text:${nodeKey}`,
       run: async () => {
@@ -4574,6 +4610,15 @@ export async function getCachedTokens(
 
     if (shouldServeColdFallbackForRequest) {
       if (!runtimeCacheStore.store.hasSync(nodeKey)) {
+        if (runtimeCacheStore.store.hasInFlight(nodeKey)) {
+          return getOrComputeRuntimeAnalysisCacheValue(
+            runtimeCacheStore,
+            nodeKey,
+            cacheOptions,
+            computeTokens
+          )
+        }
+
         queueRuntimeAnalysisImmediateRefresh({
           dependencyPaths: prewarmDependencyPaths,
           scopePath,
@@ -4615,13 +4660,15 @@ export async function getCachedTokens(
     shouldServeRuntimeAnalysisColdFallback({
       value: options.value,
     })
+  const coldStartTaskKey = `tokens:${nodeKey}`
 
   if (
     shouldServeTokensColdFallback &&
     !isRuntimeAnalysisScopeBootstrapped(runtimeScope)
   ) {
+    markRuntimeAnalysisScopeBootstrapped(runtimeScope)
     queueRuntimeAnalysisColdStartTask({
-      taskKey: `tokens:${nodeKey}`,
+      taskKey: coldStartTaskKey,
       run: async () => {
         await resolveTokensFromRuntimeCache({
           waitForWarmResult: true,
@@ -4630,6 +4677,13 @@ export async function getCachedTokens(
     })
 
     return createPlainTextTokenizedLines(options.value)
+  }
+
+  const pendingColdStartTask = shouldServeTokensColdFallback
+    ? getPendingRuntimeAnalysisColdStartTask(coldStartTaskKey)
+    : undefined
+  if (pendingColdStartTask) {
+    await pendingColdStartTask
   }
 
   if (shouldServeTokensColdFallback) {

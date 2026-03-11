@@ -7,13 +7,13 @@ import {
   coerceAnalysisDocumentSourceFileToModule,
   generatedFilenames,
   getAnalysisDocumentStableFilePath,
-  getAnalysisDocumentStableFilePathFromVirtualFilePath,
   getSourceTextValueSignature,
   resolveAnalysisDocument,
   toSourceTextMetadata,
   updateAnalysisDocumentValue,
   hydrateAnalysisDocumentSourceFile,
 } from '../document.ts'
+import { getAnalysisDocumentStableFilePathFromVirtualFilePath } from '../document-paths.ts'
 import { formatSourceText } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
 import {

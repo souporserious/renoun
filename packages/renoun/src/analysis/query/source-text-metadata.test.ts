@@ -210,9 +210,7 @@ describe('getSourceTextMetadata', () => {
       shouldFormat: false,
     })
 
-    expect(sourceModule.filePath).toContain(
-      '_renoun/posts.__renoun_snippet_'
-    )
+    expect(sourceModule.filePath).toContain('_renoun/posts.__renoun_snippet_')
     expect(project.getSourceFile('_renoun/posts.ts')).toBeDefined()
 
     await getSourceTextMetadata({
@@ -234,9 +232,13 @@ describe('getSourceTextMetadata', () => {
       useInMemoryFileSystem: true,
     })
 
-    project.createSourceFile('/workspace/src/dep.ts', 'export const dep = 1\n', {
-      overwrite: true,
-    })
+    project.createSourceFile(
+      '/workspace/src/dep.ts',
+      'export const dep = 1\n',
+      {
+        overwrite: true,
+      }
+    )
     project.createSourceFile(
       '/workspace/src/foo.ts',
       'export const real = 1\n',
@@ -261,7 +263,9 @@ describe('getSourceTextMetadata', () => {
       'export const real = 1\n'
     )
     expect(
-      project.getSourceFile('/workspace/src/foo.__renoun_source.ts')?.getFullText()
+      project
+        .getSourceFile('/workspace/src/foo.__renoun_source.ts')
+        ?.getFullText()
     ).toBe(result.value)
     expect(
       project
@@ -323,7 +327,9 @@ describe('getSourceTextMetadata', () => {
       'export const real = 1\n'
     )
     expect(
-      project.getSourceFile(join(workspace.workspacePath, 'src/foo.__renoun_source.ts'))
+      project.getSourceFile(
+        join(workspace.workspacePath, 'src/foo.__renoun_source.ts')
+      )
     ).toBeDefined()
   })
 
@@ -364,7 +370,53 @@ describe('getSourceTextMetadata', () => {
       'export const real = 1\n'
     )
     expect(
-      project.getSourceFile('/workspace/src/foo.__renoun_source.ts')?.getFullText()
+      project
+        .getSourceFile('/workspace/src/foo.__renoun_source.ts')
+        ?.getFullText()
+    ).toBe(second.value)
+  })
+
+  test('promotes cached anchored snippets to the protected stable alias when an in-memory project later adds an identical real source file', async () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+    })
+    const filePath = '/workspace/src/foo.ts'
+    const initialSnippetValue = 'export const snippet = 1\n'
+
+    const first = await getSourceTextMetadata({
+      project,
+      value: initialSnippetValue,
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(first.filePath).toContain('/workspace/src/foo.__renoun_snippet_')
+
+    project.createSourceFile(filePath, initialSnippetValue, {
+      overwrite: true,
+    })
+
+    const second = await getSourceTextMetadata({
+      project,
+      value: 'export const snippet = 2\n',
+      language: 'ts',
+      filePath,
+      virtualizeFilePath: true,
+      shouldFormat: false,
+    })
+
+    expect(second.filePath).toContain(
+      '/workspace/src/foo.__renoun_source.__renoun_snippet_'
+    )
+    expect(project.getSourceFile(filePath)?.getFullText()).toBe(
+      initialSnippetValue
+    )
+    expect(
+      project
+        .getSourceFile('/workspace/src/foo.__renoun_source.ts')
+        ?.getFullText()
     ).toBe(second.value)
   })
 

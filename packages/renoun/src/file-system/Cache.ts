@@ -204,7 +204,7 @@ const CACHE_STORE_DEFAULTS = {
   computeSlotTtlMs: 20_000,
   computeSlotPollMs: 25,
   computeSlotOwnerGraceMaxMs: 5_000,
-  computeSlotOwnerGraceTtlMultiplier: 4,
+  computeSlotOwnerGraceTtlMultiplier: 8,
   staleRetentionTtlMs: 5_000,
   persistedVerificationAttempts: 3,
   memoryOnlyCacheStoreId: 'memory-only-cache-store',
@@ -483,7 +483,7 @@ function getComputeSlotTtlMs(
 }
 
 function getComputeSlotHeartbeatMs(slotTtlMs: number): number {
-  return Math.min(1000, Math.max(1, Math.floor(slotTtlMs / 2)))
+  return Math.min(1000, Math.max(1, Math.floor(slotTtlMs / 4)))
 }
 
 function getComputeSlotOwnerGraceMs(slotTtlMs: number): number {
@@ -1852,7 +1852,7 @@ export class CacheStore {
       return NO_COMPUTE_SLOT_SHARED_VALUE
     }
     const ownerGraceMs = getComputeSlotOwnerGraceMs(slotTtlMs)
-    let firstObservedOwnerAt: number | undefined
+    let lastObservedOwnerAt: number | undefined
 
     while (true) {
       throwIfAborted(signal)
@@ -1871,13 +1871,11 @@ export class CacheStore {
       const now = Date.now()
 
       if (inFlightOwner) {
-        if (firstObservedOwnerAt === undefined) {
-          firstObservedOwnerAt = now
-        }
+        lastObservedOwnerAt = now
       } else if (
-        firstObservedOwnerAt === undefined ||
+        lastObservedOwnerAt === undefined ||
         ownerGraceMs <= 0 ||
-        now - firstObservedOwnerAt >= ownerGraceMs
+        now - lastObservedOwnerAt >= ownerGraceMs
       ) {
         const settledEntry = await this.#getFreshEntry(nodeKey)
         if (settledEntry) {
@@ -1888,13 +1886,13 @@ export class CacheStore {
       }
 
       const sleep =
-        firstObservedOwnerAt === undefined || ownerGraceMs <= 0
+        lastObservedOwnerAt === undefined || ownerGraceMs <= 0
           ? this.#computeSlotPollMs
           : Math.max(
               1,
               Math.min(
                 this.#computeSlotPollMs,
-                ownerGraceMs - Math.max(0, now - firstObservedOwnerAt)
+                ownerGraceMs - Math.max(0, now - lastObservedOwnerAt)
               )
             )
       if (sleep > 0) {
@@ -1939,6 +1937,11 @@ export class CacheStore {
   hasSync(nodeKey: string): boolean {
     this.#assertNotDisposed('hasSync')
     return this.#entries.has(nodeKey)
+  }
+
+  hasInFlight(nodeKey: string): boolean {
+    this.#assertNotDisposed('hasInFlight')
+    return this.#inflight.has(nodeKey)
   }
 
   getSync<Value>(nodeKey: string): Value | undefined {
@@ -2616,6 +2619,13 @@ export class CacheStore {
       dependencyPathKeys.pathKeys.size === 0 ||
       dependencyPathKeys.depKeys.size === 0 ||
       !workspaceTokenRootPath
+    ) {
+      return undefined
+    }
+
+    if (
+      hasWorkspaceTokenUnsafePathKey(dependencyPathKeys.pathKeys) ||
+      hasWorkspaceTokenUnsafeDependency(entry.deps)
     ) {
       return undefined
     }
@@ -3462,6 +3472,28 @@ function toWorkspaceTokenScopePath(depKey: string): string | undefined {
   }
 
   return undefined
+}
+
+function hasWorkspaceTokenUnsafePathKey(pathKeys: Iterable<string>): boolean {
+  for (const pathKey of pathKeys) {
+    if (pathKey.includes('.__renoun_snippet_')) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function hasWorkspaceTokenUnsafeDependency(
+  dependencies: Iterable<CacheDependency>
+): boolean {
+  for (const dependency of dependencies) {
+    if (dependency.depKey.includes('.__renoun_snippet_')) {
+      return true
+    }
+  }
+
+  return false
 }
 
 function resolveWorkspaceTokenRootPath(

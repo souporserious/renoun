@@ -1,7 +1,11 @@
-import type { Cache } from '../file-system/Cache.ts'
+import { Cache } from '../file-system/Cache.ts'
 import type { FileSystem } from '../file-system/FileSystem.ts'
-import { FileSystemSnapshot } from '../file-system/Snapshot.ts'
+import {
+  FileSystemSnapshot,
+  type SnapshotContentIdOptions,
+} from '../file-system/Snapshot.ts'
 import { Session } from '../file-system/Session.ts'
+import { isProductionEnvironment } from '../utils/env.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
@@ -18,6 +22,7 @@ let runtimeAnalysisFileSystem: RuntimeAnalysisFileSystem | null | undefined
 let runtimeAnalysisFileSystemPromise:
   | Promise<RuntimeAnalysisFileSystem | null>
   | undefined
+let runtimeAnalysisNonPersistentCache: Cache | undefined
 const runtimeAnalysisSessionByScopeKey = new Map<string, RuntimeAnalysisSession>()
 
 function toRuntimeAnalysisScopePathKey(
@@ -62,6 +67,18 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
   )
 }
 
+class RuntimeAnalysisSnapshot extends FileSystemSnapshot {
+  override contentId(
+    path: string,
+    options: SnapshotContentIdOptions = {}
+  ): Promise<string> {
+    return super.contentId(path, {
+      ...options,
+      strictHermetic: options.strictHermetic ?? false,
+    })
+  }
+}
+
 async function getRuntimeAnalysisFileSystem(): Promise<
   RuntimeAnalysisFileSystem | undefined
 > {
@@ -85,6 +102,21 @@ async function getRuntimeAnalysisFileSystem(): Promise<
   return runtimeAnalysisFileSystem ?? undefined
 }
 
+function getRuntimeAnalysisCache(cache?: Cache): Cache | undefined {
+  if (cache) {
+    return cache
+  }
+
+  if (isProductionEnvironment()) {
+    return undefined
+  }
+
+  runtimeAnalysisNonPersistentCache ??= new Cache({
+    persistence: undefined,
+  })
+  return runtimeAnalysisNonPersistentCache
+}
+
 export async function getRuntimeAnalysisSession(
   cache?: Cache,
   scopePath?: string,
@@ -102,14 +134,15 @@ export async function getRuntimeAnalysisSession(
     return existing
   }
 
-  const snapshot = new FileSystemSnapshot(
+  const runtimeAnalysisCache = getRuntimeAnalysisCache(cache)
+  const snapshot = new RuntimeAnalysisSnapshot(
     fileSystem,
     toRuntimeAnalysisSnapshotId({
       scopePathKey,
       analysisScopeId,
     })
   )
-  const session = Session.for(fileSystem, snapshot, cache)
+  const session = Session.for(fileSystem, snapshot, runtimeAnalysisCache)
   const created = {
     session,
     fileSystem,
@@ -169,4 +202,5 @@ export function resetRuntimeAnalysisSessionsForTests(): void {
   runtimeAnalysisSessionByScopeKey.clear()
   runtimeAnalysisFileSystem = undefined
   runtimeAnalysisFileSystemPromise = undefined
+  runtimeAnalysisNonPersistentCache = undefined
 }

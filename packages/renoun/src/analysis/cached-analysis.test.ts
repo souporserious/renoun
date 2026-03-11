@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { describe, expect, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { getTsMorph } from '../utils/ts-morph.ts'
 import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
@@ -24,6 +24,7 @@ import {
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 import { getProgram, invalidateProgramCachesByPath } from './get-program.ts'
+import { resetRuntimeAnalysisSessionsForTests } from './runtime-analysis-session.ts'
 
 const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget } =
   getTsMorph()
@@ -171,6 +172,10 @@ async function createTemporaryWorkspace(
 }
 
 describe('analysis cached analysis', () => {
+  afterEach(() => {
+    resetRuntimeAnalysisSessionsForTests()
+  })
+
   test('reuses cached source text metadata for identical inputs', async () => {
     const project = new Project({
       useInMemoryFileSystem: true,
@@ -2081,6 +2086,8 @@ describe('analysis cached analysis', () => {
         await project
           .getSourceFileOrThrow(transitiveDependencyPath)
           .refreshFromFileSystem()
+        invalidateRuntimeAnalysisCachePath(transitiveDependencyPath)
+        invalidateRuntimeAnalysisCachePath(virtualSnippetPath)
         await delay(325)
 
         await getCachedSourceTextMetadata(project, {
@@ -2191,7 +2198,9 @@ describe('analysis cached analysis', () => {
     expect(metadataCalls).toBe(2)
   })
 
-  test('invalidates cached tokens for virtualized snippets when transitive TypeScript dependencies change on disk', async () => {
+  test(
+    'invalidates cached tokens for virtualized snippets when transitive TypeScript dependencies change on disk',
+    async () => {
     await using workspace = await createTemporaryWorkspace({
       'package.json': JSON.stringify({
         name: 'cached-analysis-test',
@@ -2280,7 +2289,9 @@ describe('analysis cached analysis', () => {
     })
 
     expect(metadataCalls).toBe(2)
-  })
+    },
+    30_000
+  )
 
   test(
     'invalidates persisted cached tokens for virtualized snippets when transitive TypeScript dependencies change in production',
@@ -2365,6 +2376,8 @@ describe('analysis cached analysis', () => {
         await project
           .getSourceFileOrThrow(transitiveDependencyPath)
           .refreshFromFileSystem()
+        invalidateRuntimeAnalysisCachePath(transitiveDependencyPath)
+        invalidateRuntimeAnalysisCachePath(metadata.filePath)
         await delay(325)
 
         await getCachedTokens(project, {

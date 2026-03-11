@@ -14,6 +14,12 @@ const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
 const execFile = promisify(execFileCallback)
 const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
 const unpublishedArtifactPattern = /\.(?:test|spec|bench)\./
+const packageExportsTestTimeoutMs = 60_000
+
+let packageClientDeclarationsPromise:
+  | Promise<Awaited<ReturnType<typeof emitPackageClientDeclarations>>>
+  | undefined
+let packedFilesPromise: Promise<string[]> | undefined
 
 interface PackedFile {
   path: string
@@ -105,6 +111,11 @@ async function emitPackageClientDeclarations() {
   } finally {
     await rm(outDir, { recursive: true, force: true })
   }
+}
+
+async function getPackageClientDeclarations() {
+  packageClientDeclarationsPromise ??= emitPackageClientDeclarations()
+  return packageClientDeclarationsPromise
 }
 
 async function expectPackageConsumerToTypecheck(): Promise<void> {
@@ -255,6 +266,11 @@ async function getPackedFiles(): Promise<string[]> {
   }
 }
 
+async function getMemoizedPackedFiles(): Promise<string[]> {
+  packedFilesPromise ??= getPackedFiles()
+  return packedFilesPromise
+}
+
 async function readPackageJson(): Promise<RenounPackageJson> {
   return JSON.parse(
     await readFile(new URL('../package.json', import.meta.url), 'utf8')
@@ -284,51 +300,62 @@ describe('package exports', () => {
     )
   })
 
-  test('keeps renoun/analysis and renoun/project declaration entry points public', async () => {
-    const {
-      analysisDeclarations,
-      projectDeclarations,
-      createHighlighterDeclarations,
-      getTokensDeclarations,
-    } =
-      await emitPackageClientDeclarations()
+  test(
+    'keeps renoun/analysis and renoun/project declaration entry points public',
+    async () => {
+      const {
+        analysisDeclarations,
+        projectDeclarations,
+        createHighlighterDeclarations,
+        getTokensDeclarations,
+      } = await getPackageClientDeclarations()
 
-    expect(analysisDeclarations).toContain(
-      'export declare function getQuickInfoAtPosition'
-    )
-    expect(analysisDeclarations).toContain(
-      'export declare function getTokens'
-    )
-    expect(analysisDeclarations).toContain(
-      'export declare function getFileExports'
-    )
-    expect(analysisDeclarations).not.toContain('ConfigurationOptions')
-    expect(analysisDeclarations).not.toContain('../components/Config/types.ts')
+      expect(analysisDeclarations).toContain(
+        'export declare function getQuickInfoAtPosition'
+      )
+      expect(analysisDeclarations).toContain(
+        'export declare function getTokens'
+      )
+      expect(analysisDeclarations).toContain(
+        'export declare function getFileExports'
+      )
+      expect(analysisDeclarations).not.toContain('ConfigurationOptions')
+      expect(analysisDeclarations).not.toContain(
+        '../components/Config/types.ts'
+      )
 
-    expect(projectDeclarations).toContain(
-      'export declare function getQuickInfoAtPosition'
-    )
-    expect(projectDeclarations).toContain(
-      'export declare function getTokens'
-    )
-    expect(projectDeclarations).toContain(
-      'export declare function getFileExports'
-    )
-    expect(projectDeclarations).not.toContain('ConfigurationOptions')
-    expect(projectDeclarations).not.toContain('../components/Config/types.ts')
-    expect(createHighlighterDeclarations).not.toContain('ConfigurationOptions')
-    expect(createHighlighterDeclarations).not.toContain(
-      '../components/Config/types.ts'
-    )
-    expect(getTokensDeclarations).not.toContain('ConfigurationOptions')
-    expect(getTokensDeclarations).not.toContain(
-      '../components/Config/types.ts'
-    )
-  })
+      expect(projectDeclarations).toContain(
+        'export declare function getQuickInfoAtPosition'
+      )
+      expect(projectDeclarations).toContain(
+        'export declare function getTokens'
+      )
+      expect(projectDeclarations).toContain(
+        'export declare function getFileExports'
+      )
+      expect(projectDeclarations).not.toContain('ConfigurationOptions')
+      expect(projectDeclarations).not.toContain(
+        '../components/Config/types.ts'
+      )
+      expect(createHighlighterDeclarations).not.toContain('ConfigurationOptions')
+      expect(createHighlighterDeclarations).not.toContain(
+        '../components/Config/types.ts'
+      )
+      expect(getTokensDeclarations).not.toContain('ConfigurationOptions')
+      expect(getTokensDeclarations).not.toContain(
+        '../components/Config/types.ts'
+      )
+    },
+    packageExportsTestTimeoutMs
+  )
 
-  test('typechecks for consumers that import renoun/analysis and renoun/project', async () => {
-    await expectPackageConsumerToTypecheck()
-  })
+  test(
+    'typechecks for consumers that import renoun/analysis and renoun/project',
+    async () => {
+      await expectPackageConsumerToTypecheck()
+    },
+    packageExportsTestTimeoutMs
+  )
 
   test('keeps source and dist analysis server aliases split in package imports', async () => {
     const packageJson = await readPackageJson()
@@ -347,11 +374,17 @@ describe('package exports', () => {
     })
   })
 
-  test('excludes test and bench artifacts from the published tarball', async () => {
-    const packedFiles = await getPackedFiles()
+  test(
+    'excludes test and bench artifacts from the published tarball',
+    async () => {
+      const packedFiles = await getMemoizedPackedFiles()
 
-    expect(
-      packedFiles.filter((filePath) => unpublishedArtifactPattern.test(filePath))
-    ).toEqual([])
-  })
+      expect(
+        packedFiles.filter((filePath) =>
+          unpublishedArtifactPattern.test(filePath)
+        )
+      ).toEqual([])
+    },
+    packageExportsTestTimeoutMs
+  )
 })

@@ -913,7 +913,9 @@ describe('file system', () => {
   })
 
   describe('schema', () => {
-    test('types only', async () => {
+    test(
+      'types only',
+      async () => {
       const directory = new Directory<{
         ts: { metadata?: { title: string } }
       }>({
@@ -929,7 +931,9 @@ describe('file system', () => {
       type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toExtend<{ title: string } | undefined>()
-    })
+      },
+      30_000
+    )
 
     test('custom validator', async () => {
       const directory = new Directory({

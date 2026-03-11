@@ -1,6 +1,6 @@
 import { extname, isAbsolute } from 'node:path'
 
-import type { Project } from '../../utils/ts-morph.ts'
+import type { Project, SourceFile } from '../../utils/ts-morph.ts'
 
 import {
   coerceAnalysisDocumentSourceFileToModule,
@@ -12,6 +12,7 @@ import {
 interface SnippetRegistration {
   stableFilePath: string
   currentVirtualFilePath: string
+  syntheticStableSourceFileVersion?: string
   valueSignature: string
   lastUsedAt: number
 }
@@ -84,22 +85,18 @@ function shouldRemoveStableSnippetSourceFile(
     return false
   }
 
-  const stableSourceText = stableSourceFile.getFullText()
-  const currentVirtualSourceText = project
-    .getSourceFile(registration.currentVirtualFilePath)
-    ?.getFullText()
-
-  if (
-    currentVirtualSourceText !== undefined &&
-    stableSourceText !== currentVirtualSourceText
-  ) {
+  if (!ownsTrackedVirtualSnippetStableFilePath(project, registration)) {
     return false
   }
 
+  const stableSourceText = stableSourceFile.getFullText()
   const fileSystem = project.getFileSystem()
   if (fileSystem.fileExistsSync(registration.stableFilePath)) {
     try {
-      if (fileSystem.readFileSync(registration.stableFilePath) === stableSourceText) {
+      if (
+        fileSystem.readFileSync(registration.stableFilePath) ===
+        stableSourceText
+      ) {
         return false
       }
     } catch {
@@ -164,6 +161,44 @@ function setSnippetRegistration(
   registrations.set(registration.stableFilePath, registration)
 }
 
+// ts-morph increments compiler source file versions on overwrite, even when text is identical.
+function getProgramSourceFileVersion(
+  sourceFile: SourceFile | undefined
+): string | undefined {
+  const compilerSourceFile = sourceFile?.compilerNode as
+    | { version?: string }
+    | undefined
+
+  return typeof compilerSourceFile?.version === 'string'
+    ? compilerSourceFile.version
+    : undefined
+}
+
+function ownsTrackedVirtualSnippetStableFilePath(
+  project: Project,
+  registration: SnippetRegistration,
+  options?: {
+    requireVirtualSourceFile?: boolean
+  }
+): boolean {
+  if (
+    options?.requireVirtualSourceFile &&
+    !project.getSourceFile(registration.currentVirtualFilePath)
+  ) {
+    return false
+  }
+
+  const stableSourceFileVersion = getProgramSourceFileVersion(
+    project.getSourceFile(registration.stableFilePath)
+  )
+
+  return (
+    stableSourceFileVersion !== undefined &&
+    registration.syntheticStableSourceFileVersion !== undefined &&
+    stableSourceFileVersion === registration.syntheticStableSourceFileVersion
+  )
+}
+
 export function isTrackedVirtualSnippetStableFilePath(
   project: Project,
   stableFilePath: string
@@ -174,18 +209,9 @@ export function isTrackedVirtualSnippetStableFilePath(
     return false
   }
 
-  const stableSourceText = project
-    .getSourceFile(registration.stableFilePath)
-    ?.getFullText()
-  const currentVirtualSourceText = project
-    .getSourceFile(registration.currentVirtualFilePath)
-    ?.getFullText()
-
-  return (
-    stableSourceText !== undefined &&
-    currentVirtualSourceText !== undefined &&
-    stableSourceText === currentVirtualSourceText
-  )
+  return ownsTrackedVirtualSnippetStableFilePath(project, registration, {
+    requireVirtualSourceFile: true,
+  })
 }
 
 export function removeVirtualSnippetRegistration(
@@ -209,7 +235,10 @@ export function removeVirtualSnippetRegistration(
     existingRegistration.currentVirtualFilePath
   )
   if (shouldRemoveStableSourceFile) {
-    removeProgramSourceFileIfPresent(project, existingRegistration.stableFilePath)
+    removeProgramSourceFileIfPresent(
+      project,
+      existingRegistration.stableFilePath
+    )
   }
 }
 
@@ -230,6 +259,9 @@ export function touchVirtualSnippetRegistration(
   setSnippetRegistration(registrations, {
     stableFilePath,
     currentVirtualFilePath: document.filePath,
+    syntheticStableSourceFileVersion: getProgramSourceFileVersion(
+      project.getSourceFile(stableFilePath)
+    ),
     valueSignature: document.valueSignature,
     lastUsedAt: Date.now(),
   })
@@ -293,6 +325,8 @@ export function syncVirtualSnippetSourceFiles(
   setSnippetRegistration(registrations, {
     stableFilePath,
     currentVirtualFilePath: document.filePath,
+    syntheticStableSourceFileVersion:
+      getProgramSourceFileVersion(stableSourceFile),
     valueSignature: document.valueSignature,
     lastUsedAt: Date.now(),
   })
