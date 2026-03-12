@@ -64,10 +64,15 @@ function resolveWebSocketAuthority(
       ? location.hostname.trim()
       : undefined
 
-  // Keep the exported runtime host when available. The analysis websocket
-  // server binds to loopback-only hosts, so rewriting an explicit loopback
-  // runtime to the page hostname breaks LAN/custom-host dev sessions.
-  const resolvedHost = runtimeHost ?? browserHost ?? 'localhost'
+  // Exported runtime hosts are usually loopback bind addresses. Reuse them for
+  // loopback pages, but fall back to the page host for proxied/LAN sessions.
+  const resolvedHost =
+    runtimeHost &&
+    (!browserHost ||
+      !isLoopbackHost(runtimeHost) ||
+      isLoopbackHost(browserHost))
+      ? runtimeHost
+      : browserHost ?? 'localhost'
 
   return {
     host: resolvedHost,

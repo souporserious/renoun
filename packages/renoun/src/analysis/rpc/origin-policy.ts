@@ -39,19 +39,6 @@ function isLoopbackHostname(hostname: string | undefined): boolean {
   return LOOPBACK_HOSTNAMES.has(normalizedHostname)
 }
 
-function isLoopbackRequestHost(hostHeader: string | undefined): boolean {
-  if (!hostHeader) {
-    return false
-  }
-
-  try {
-    const requestUrl = new URL(`http://${hostHeader.trim()}`)
-    return isLoopbackHostname(requestUrl.hostname)
-  } catch {
-    return false
-  }
-}
-
 function readHeader(
   request: IncomingMessage,
   name: string
@@ -94,14 +81,6 @@ export function isAllowedAnalysisServerOrigin(
   try {
     const originUrl = new URL(normalizedOrigin)
     if (loopbackClient && isLoopbackHostname(originUrl.hostname)) {
-      return true
-    }
-
-    if (
-      loopbackClient &&
-      isLoopbackRequestHost(hostHeader) &&
-      (originUrl.protocol === 'http:' || originUrl.protocol === 'https:')
-    ) {
       return true
     }
   } catch {

@@ -24,7 +24,7 @@ function createRequest(options: {
 }
 
 describe('isAllowedAnalysisServerOrigin', () => {
-  test('allows custom local page origins when the websocket request still targets loopback', () => {
+  test('rejects custom page origins even when the websocket request still targets loopback', () => {
     const request = createRequest({
       host: '127.0.0.1:43123',
       origin: 'https://preview.example.dev',
@@ -37,7 +37,7 @@ describe('isAllowedAnalysisServerOrigin', () => {
         'https://preview.example.dev',
         request
       )
-    ).toBe(true)
+    ).toBe(false)
   })
 
   test('allows loopback origins from loopback clients without the fallback protocol path', () => {
