@@ -2,6 +2,7 @@ import { extname, isAbsolute, join, posix } from 'node:path'
 
 import type { Project, SourceFile } from '../utils/ts-morph.ts'
 import { getLanguage, type Languages } from '../utils/get-language.ts'
+import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import { isJsxOnly } from '../utils/is-jsx-only.ts'
 import { getAnalysisDocumentStableFilePathFromVirtualFilePath } from './document-paths.ts'
 import { isTrackedVirtualSnippetStableFilePath } from './query/snippet-registry.ts'
@@ -129,7 +130,7 @@ function isJavaScriptLikeAnalysisDocument(options: {
     return false
   }
 
-  return ['js', 'jsx', 'ts', 'tsx'].includes(getLanguage(language))
+  return isJavaScriptLikeExtension(getLanguage(language))
 }
 
 function isGeneratedAnalysisDocumentFilePath(filePath: string): boolean {
@@ -350,9 +351,7 @@ export function resolveAnalysisDocument({
 
   language = getLanguage(language)
 
-  const isJavaScriptLikeLanguage = ['js', 'jsx', 'ts', 'tsx'].includes(
-    language
-  )
+  const isJavaScriptLikeLanguage = isJavaScriptLikeExtension(language)
   const jsxOnly = isJavaScriptLikeLanguage ? isJsxOnly(value) : false
   let filePath = filePathProp
 
