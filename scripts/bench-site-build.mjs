@@ -306,44 +306,56 @@ async function runBuild({
   const startedAt = performance.now()
   let spawnError
 
-  const result = await new Promise((resolvePromise) => {
-    const child = spawn(command, args, {
-      cwd: projectRoot,
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
+  let result
 
-    child.stdout.on('data', (chunk) => {
-      const text = chunk.toString()
-      parser.write(text)
-      logStream.write(text)
-      if (verbose) {
-        process.stdout.write(text)
-      }
-    })
+  try {
+    result = await new Promise((resolvePromise, rejectPromise) => {
+      const child = spawn(command, args, {
+        cwd: projectRoot,
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      })
 
-    child.stderr.on('data', (chunk) => {
-      const text = chunk.toString()
-      parser.write(text)
-      logStream.write(text)
-      if (verbose) {
-        process.stderr.write(text)
-      }
-    })
+      child.stdout.on('data', (chunk) => {
+        const text = chunk.toString()
+        parser.write(text)
+        logStream.write(text)
+        if (verbose) {
+          process.stdout.write(text)
+        }
+      })
 
-    child.on('error', (error) => {
-      spawnError = error
-    })
+      child.stderr.on('data', (chunk) => {
+        const text = chunk.toString()
+        parser.write(text)
+        logStream.write(text)
+        if (verbose) {
+          process.stderr.write(text)
+        }
+      })
 
-    child.on('close', (code, signal) => {
-      resolvePromise({
-        code: code ?? 1,
-        signal: signal ?? null,
+      child.on('error', (error) => {
+        spawnError = error
+        rejectPromise(error)
+      })
+
+      child.on('close', (code, signal) => {
+        resolvePromise({
+          code: code ?? 1,
+          signal: signal ?? null,
+        })
       })
     })
-  })
-
-  logStream.end()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(
+      `${runName} failed to start build command "${command} ${args.join(
+        ' '
+      )}": ${message}\nLog: ${logPath}`
+    )
+  } finally {
+    logStream.end()
+  }
 
   const wallSeconds = (performance.now() - startedAt) / 1000
   const parsed = parser.finish()
