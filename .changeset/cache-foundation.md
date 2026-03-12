@@ -7,3 +7,4 @@ Introduces a new snapshot/session-based cache layer for `renoun` with optional S
 ### Breaking Changes
 
 - Keeps the analysis and project client entrypoints internal by removing the public `renoun/analysis` and `renoun/project` subpath exports
+- Requires `react` and `react-dom` 19 or newer. `renoun` now relies on React 19 client APIs when rendering quick info documentation, so React 18 and below are no longer supported.
