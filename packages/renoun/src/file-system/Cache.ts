@@ -437,6 +437,8 @@ const snapshotInvalidationUnsubscribeBySnapshot = new WeakMap<
   () => void
 >()
 const CONST_DEPENDENCY_PREFIX = 'const:'
+const WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX =
+  'workspace-token-unsafe:'
 
 interface CacheStorePersistenceComputeSlot {
   acquireComputeSlot(
@@ -589,6 +591,12 @@ function toConstDependencyKey(name: string): string {
   return `${CONST_DEPENDENCY_PREFIX}${encodeURIComponent(name)}`
 }
 
+function toWorkspaceTokenUnsafeConstDependencyKey(path: string): string {
+  return toConstDependencyKey(
+    `${WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX}${normalizeCachePathKey(path)}`
+  )
+}
+
 function parseConstDependencyKey(
   depKey: string
 ): { name: string; legacyVersion?: string } | undefined {
@@ -620,6 +628,23 @@ function parseConstDependencyKey(
       name: payload,
     }
   }
+}
+
+function isWorkspaceTokenUnsafeSnapshotPath(
+  snapshot: Snapshot,
+  candidatePaths: Iterable<string>
+): boolean {
+  for (const candidatePath of candidatePaths) {
+    try {
+      if (snapshot.isFilePathGitIgnored(candidatePath)) {
+        return true
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return false
 }
 
 export class CacheStore {
@@ -2055,6 +2080,12 @@ export class CacheStore {
     const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)
     const dependencyVersions = new Map<string, string>()
     const computeSignal = options.signal ?? getContext()?.signal
+    const recordWorkspaceTokenUnsafeDependency = (path: string) => {
+      dependencyVersions.set(
+        toWorkspaceTokenUnsafeConstDependencyKey(path),
+        '1'
+      )
+    }
     const context: CacheStoreComputeContext = {
       snapshot: this.#snapshot,
       signal: computeSignal,
@@ -2070,6 +2101,14 @@ export class CacheStore {
         const normalizedPath = normalizeDepPath(relativePath)
         const depVersion = await this.#snapshot.contentId(normalizedPath)
         dependencyVersions.set(`file:${normalizedPath}`, depVersion)
+        if (
+          isWorkspaceTokenUnsafeSnapshotPath(this.#snapshot, [
+            path,
+            normalizedPath,
+          ])
+        ) {
+          recordWorkspaceTokenUnsafeDependency(normalizedPath)
+        }
         return depVersion
       },
       recordDirectoryDep: async (path: string) => {
@@ -2077,6 +2116,14 @@ export class CacheStore {
         const normalizedPath = normalizeDepPath(relativePath)
         const depVersion = await this.#snapshot.contentId(normalizedPath)
         dependencyVersions.set(`dir:${normalizedPath}`, depVersion)
+        if (
+          isWorkspaceTokenUnsafeSnapshotPath(this.#snapshot, [
+            path,
+            normalizedPath,
+          ])
+        ) {
+          recordWorkspaceTokenUnsafeDependency(normalizedPath)
+        }
         return depVersion
       },
       recordNodeDep: async (childNodeKey: string) => {
@@ -3496,7 +3543,12 @@ function hasWorkspaceTokenUnsafeDependency(
   dependencies: Iterable<CacheDependency>
 ): boolean {
   for (const dependency of dependencies) {
-    if (dependency.depKey.includes('.__renoun_snippet_')) {
+    if (
+      dependency.depKey.includes('.__renoun_snippet_') ||
+      parseConstDependencyKey(dependency.depKey)?.name.startsWith(
+        WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX
+      )
+    ) {
       return true
     }
   }

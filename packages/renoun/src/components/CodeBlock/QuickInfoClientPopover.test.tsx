@@ -116,7 +116,7 @@ describe('QuickInfoClientPopover cache behavior', () => {
       42,
       undefined,
       runtime,
-      '["quick-info-cache-test:runtime","quick-info-cache-test-secondary:::1:43124","","/tmp/history.ts",42]',
+      '["quick-info-cache-test:runtime","quick-info-cache-test-secondary:::1:43124","","","/tmp/history.ts",42]',
       undefined
     )
   })
@@ -143,11 +143,49 @@ describe('QuickInfoClientPopover cache behavior', () => {
       42,
       undefined,
       BASE_REQUEST.runtime,
-      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","sig-1","/tmp/history.__renoun_snippet_sig_1.ts",42]',
+      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","sig-1","ts","/tmp/history.__renoun_snippet_sig_1.ts",42]',
       {
         value: 'History',
         language: 'ts',
       }
+    )
+  })
+
+  it('separates deferred quick info cache keys by snippet language overrides', async () => {
+    mockGetQuickInfoAtPosition.mockReset()
+    mockGetQuickInfoAtPosition.mockResolvedValue({
+      displayText: 'runtime-specific',
+      documentationText: 'Runtime specific docs',
+    })
+
+    await __TEST_ONLY__.getQuickInfoForRequest({
+      ...BASE_REQUEST,
+      filePath: '/tmp/history.__renoun_snippet_sig_1.ts',
+      valueSignature: 'sig-1',
+      sourceMetadata: {
+        value: 'History',
+        language: 'ts',
+      },
+    })
+    await __TEST_ONLY__.getQuickInfoForRequest({
+      ...BASE_REQUEST,
+      filePath: '/tmp/history.__renoun_snippet_sig_1.ts',
+      valueSignature: 'sig-1',
+      sourceMetadata: {
+        value: 'History',
+        language: 'tsx',
+      },
+    })
+
+    expect(mockGetQuickInfoAtPosition).toHaveBeenCalledTimes(2)
+    expect(mockGetQuickInfoAtPosition.mock.calls[0]?.[4]).toBe(
+      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","sig-1","ts","/tmp/history.__renoun_snippet_sig_1.ts",42]'
+    )
+    expect(mockGetQuickInfoAtPosition.mock.calls[1]?.[4]).toBe(
+      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","sig-1","tsx","/tmp/history.__renoun_snippet_sig_1.ts",42]'
+    )
+    expect(mockGetQuickInfoAtPosition.mock.calls[0]?.[4]).not.toBe(
+      mockGetQuickInfoAtPosition.mock.calls[1]?.[4]
     )
   })
 
@@ -170,10 +208,10 @@ describe('QuickInfoClientPopover cache behavior', () => {
 
     expect(mockGetQuickInfoAtPosition).toHaveBeenCalledTimes(2)
     expect(mockGetQuickInfoAtPosition.mock.calls[0]?.[4]).toBe(
-      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","","/tmp/history.ts",42]'
+      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","","","/tmp/history.ts",42]'
     )
     expect(mockGetQuickInfoAtPosition.mock.calls[1]?.[4]).toBe(
-      '["quick-info-cache-test:0:0","quick-info-cache-test:::1:43124","","/tmp/history.ts",42]'
+      '["quick-info-cache-test:0:0","quick-info-cache-test:::1:43124","","","/tmp/history.ts",42]'
     )
     expect(mockGetQuickInfoAtPosition.mock.calls[0]?.[4]).not.toBe(
       mockGetQuickInfoAtPosition.mock.calls[1]?.[4]

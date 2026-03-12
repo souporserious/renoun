@@ -19,7 +19,25 @@ const DEFAULT_SQLITE_CLEAN_PATHS = [
   '.renoun/cache/fs-cache.sqlite-wal',
   '.renoun/cache/fs-cache.sqlite-journal',
 ]
-const DEFAULT_WORKSPACE_CLEAN_PATHS = DEFAULT_SQLITE_CLEAN_PATHS
+const DEFAULT_TURBO_REMOTE_CACHE_ENV_KEYS = [
+  'TURBO_API',
+  'TURBO_CACHE',
+  'TURBO_CACHE_DIR',
+  'TURBO_LOGIN',
+  'TURBO_PREFLIGHT',
+  'TURBO_REMOTE_CACHE_READ_ONLY',
+  'TURBO_REMOTE_CACHE_SIGNATURE_KEY',
+  'TURBO_REMOTE_CACHE_TIMEOUT',
+  'TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT',
+  'TURBO_REMOTE_ONLY',
+  'TURBO_TEAM',
+  'TURBO_TEAMID',
+  'TURBO_TOKEN',
+]
+const DEFAULT_WORKSPACE_CLEAN_PATHS = [
+  '.turbo',
+  ...DEFAULT_SQLITE_CLEAN_PATHS,
+]
 const DEFAULT_TARGET_CLEAN_PATHS = [
   '.next',
   'out',
@@ -258,6 +276,26 @@ export function resolveBuildInvocation({
   }
 }
 
+export function createBuildEnvironment({
+  cacheStats,
+  parentEnv = process.env,
+}) {
+  const env = { ...parentEnv }
+
+  for (const envKey of DEFAULT_TURBO_REMOTE_CACHE_ENV_KEYS) {
+    delete env[envKey]
+  }
+
+  return {
+    ...env,
+    NEXT_TELEMETRY_DISABLED: '1',
+    FORCE_COLOR: '0',
+    NO_COLOR: '1',
+    RENOUN_DEBUG: cacheStats ? 'debug' : '0',
+    TURBO_CACHE: 'local:rw',
+  }
+}
+
 async function runBuild({
   projectRoot,
   filter,
@@ -270,13 +308,7 @@ async function runBuild({
   const logPath = join(logsDirectory, `${runName}.log`)
   const logStream = createWriteStream(logPath, { encoding: 'utf8' })
   const { command, args } = resolveBuildInvocation({ projectRoot, filter })
-  const env = {
-    ...process.env,
-    NEXT_TELEMETRY_DISABLED: '1',
-    FORCE_COLOR: '0',
-    NO_COLOR: '1',
-    RENOUN_DEBUG: cacheStats ? 'debug' : '0',
-  }
+  const env = createBuildEnvironment({ cacheStats })
 
   const startedAt = performance.now()
   let spawnError

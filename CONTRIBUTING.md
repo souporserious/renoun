@@ -111,7 +111,7 @@ pnpm bench:site -- --warm-runs 3 --json tmp/site-benchmark.json
 pnpm bench:site -- --no-cache-stats
 ```
 
-The command clears cold-state cache paths before each cold run, then runs warm builds back-to-back and prints a summary delta.
+The command clears root `.turbo` plus other cold-state cache paths before each cold run, forces Turbo into local-only cache mode for benchmark subprocesses, then runs warm builds back-to-back and prints a summary delta.
 
 ---
 

@@ -64,6 +64,7 @@ describe('RefreshClient browser lifecycle', () => {
     ANALYSIS_CLIENT_TEST_ONLY__.clearAnalysisClientRpcState()
     ANALYSIS_CLIENT_TEST_ONLY__.disposeAnalysisBrowserClient()
     delete (window as any).nd
+    delete (globalThis as any).__WAKU_RSC_RELOAD_LISTENERS__
     ;(globalThis as any).WebSocket = originalWebSocket
   })
 
@@ -189,6 +190,40 @@ describe('RefreshClient browser lifecycle', () => {
     })
 
     await waitFor(() => hmrRefresh.mock.calls.length === 1, 1_000)
+  })
+
+  it('notifies Waku reload listeners when Next dev router is unavailable', async () => {
+    const reloadListener = vi.fn()
+    ;(globalThis as any).__WAKU_RSC_RELOAD_LISTENERS__ = [reloadListener]
+
+    root?.render(
+      <RefreshClient
+        port="43123"
+        id="refresh-browser-test"
+        host="127.0.0.1"
+      />
+    )
+
+    await waitFor(
+      () => getAnalysisClientBrowserRuntime()?.id === 'refresh-browser-test',
+      1_000
+    )
+    await waitFor(() => counters.sockets.length === 1, 1_000)
+
+    const socket = counters.sockets[0]
+    if (!socket) {
+      throw new Error('[renoun] expected refresh socket')
+    }
+
+    socket.emitMessage({
+      type: 'refresh',
+      data: {
+        refreshCursor: 1,
+        filePaths: ['/docs/page.mdx'],
+      },
+    })
+
+    await waitFor(() => reloadListener.mock.calls.length === 1, 1_000)
   })
 
   it('ignores refresh notifications from explicit runtimes while a retained page runtime is active', async () => {

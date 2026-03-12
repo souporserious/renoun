@@ -4,6 +4,7 @@ import type { Project, SourceFile } from '../utils/ts-morph.ts'
 import { getLanguage, type Languages } from '../utils/get-language.ts'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import { isJsxOnly } from '../utils/is-jsx-only.ts'
+import { normalizePathKey, normalizeSlashes } from '../utils/path.ts'
 import { getAnalysisDocumentStableFilePathFromVirtualFilePath } from './document-paths.ts'
 import { isTrackedVirtualSnippetStableFilePath } from './query/snippet-registry.ts'
 
@@ -134,10 +135,25 @@ function isJavaScriptLikeAnalysisDocument(options: {
 }
 
 function isGeneratedAnalysisDocumentFilePath(filePath: string): boolean {
+  const normalizedFilePath = normalizeSlashes(filePath)
+
   return (
-    filePath === GENERATED_DOCUMENT_SCOPE ||
-    filePath.startsWith(`${GENERATED_DOCUMENT_SCOPE}/`) ||
-    filePath.includes(`/${GENERATED_DOCUMENT_SCOPE}/`)
+    normalizedFilePath === GENERATED_DOCUMENT_SCOPE ||
+    normalizedFilePath.startsWith(`${GENERATED_DOCUMENT_SCOPE}/`) ||
+    normalizedFilePath.includes(`/${GENERATED_DOCUMENT_SCOPE}/`)
+  )
+}
+
+function matchesRelativeProgramSourceFilePath(
+  sourceFilePath: string,
+  filePath: string
+): boolean {
+  const normalizedSourceFilePath = normalizePathKey(sourceFilePath)
+  const normalizedFilePath = normalizePathKey(filePath)
+
+  return (
+    normalizedSourceFilePath === normalizedFilePath ||
+    normalizedSourceFilePath.endsWith(`/${normalizedFilePath}`)
   )
 }
 
@@ -196,7 +212,9 @@ function hasProgramSourceFile(project: Project, filePath: string): boolean {
 
   return project
     .getSourceFiles()
-    .some((sourceFile) => sourceFile.getFilePath().endsWith(`/${filePath}`))
+    .some((sourceFile) =>
+      matchesRelativeProgramSourceFilePath(sourceFile.getFilePath(), filePath)
+    )
 }
 
 function hasRealProgramSourceFile(project: Project, filePath: string): boolean {

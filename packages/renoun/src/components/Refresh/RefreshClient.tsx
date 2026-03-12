@@ -53,21 +53,19 @@ export function RefreshClient({
 }
 
 function refreshDevelopmentRouter(): void {
-  if (!('nd' in window)) {
-    return
-  }
+  if ('nd' in window) {
+    // @ts-ignore - private Next.js API
+    const router = window.nd.router
 
-  // @ts-ignore - private Next.js API
-  const router = window.nd.router
+    if ('hmrRefresh' in router) {
+      router.hmrRefresh()
+      return
+    }
 
-  if ('hmrRefresh' in router) {
-    router.hmrRefresh()
-    return
-  }
-
-  if ('fastRefresh' in router) {
-    router.fastRefresh()
-    return
+    if ('fastRefresh' in router) {
+      router.fastRefresh()
+      return
+    }
   }
 
   if ('__WAKU_RSC_RELOAD_LISTENERS__' in globalThis) {

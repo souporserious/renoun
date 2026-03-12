@@ -6204,6 +6204,76 @@ export type Metadata = Value`,
     })
   })
 
+  test('falls back to dependency content checks for ignored file dependencies when workspace token is unchanged', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const sourceFilePath = join(tmpDirectory, 'docs', 'ignored.ts')
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      mkdirSync(dirname(sourceFilePath), { recursive: true })
+      writeFileSync(sourceFilePath, 'export const value = 1', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:workspace-token-fast-path-ignored-file'
+
+      const createWorkerFileSystem = () => {
+        const fileSystem = new TokenAwareNodeFileSystem(
+          getRootDirectory(),
+          tsConfigPath,
+          'stable-token'
+        )
+        vi.spyOn(fileSystem, 'isFilePathGitIgnored').mockImplementation(
+          (filePath) =>
+            normalizePathKey(filePath).endsWith('docs/ignored.ts')
+        )
+        return fileSystem
+      }
+
+      const firstFileSystem = createWorkerFileSystem()
+      const firstSnapshot = new FileSystemSnapshot(
+        firstFileSystem,
+        'workspace-token-ignored-first'
+      )
+      const firstStore = new CacheStore({ snapshot: firstSnapshot, persistence })
+      await firstStore.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (context) => {
+          await context.recordFileDep(sourceFilePath)
+          return { value: 1 }
+        }
+      )
+
+      writeFileSync(sourceFilePath, 'export const value = 2', 'utf8')
+
+      const secondFileSystem = createWorkerFileSystem()
+      const secondReadBinary = vi.spyOn(secondFileSystem, 'readFileBinary')
+      const secondSnapshot = new FileSystemSnapshot(
+        secondFileSystem,
+        'workspace-token-ignored-second'
+      )
+      const secondStore = new CacheStore({
+        snapshot: secondSnapshot,
+        persistence,
+      })
+
+      let computeCount = 0
+      const value = await secondStore.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (context) => {
+          computeCount += 1
+          await context.recordFileDep(sourceFilePath)
+          return { value: 2 }
+        }
+      )
+
+      expect(value).toEqual({ value: 2 })
+      expect(computeCount).toBe(1)
+      expect(secondReadBinary.mock.calls.length).toBeGreaterThan(0)
+    })
+  })
+
   test('falls back to dependency freshness checks when workspace token changes on intersecting paths', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const sourceFilePath = join(tmpDirectory, 'docs', 'index.ts')

@@ -364,6 +364,7 @@ function toQuickInfoCacheKey(request: ResolvedQuickInfoRequest): string {
     analysisVersion,
     toAnalysisServerRuntimeKey(request.runtime) ?? '',
     valueSignature,
+    request.sourceMetadata?.language ?? '',
     request.filePath,
     request.position,
   ])
