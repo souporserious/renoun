@@ -997,13 +997,13 @@ function disposeBrowserClientState(
   try {
     state.client.removeAllListeners?.()
   } catch (error) {
-    reportBestEffortError('analysis/client', error)
+    reportBestEffortError('analysis/node-client', error)
   }
 
   try {
     state.client.close?.()
   } catch (error) {
-    reportBestEffortError('analysis/client', error)
+    reportBestEffortError('analysis/node-client', error)
   }
 }
 
@@ -1073,13 +1073,13 @@ function disposeActiveClient(
   try {
     state.client.removeAllListeners?.()
   } catch (error) {
-    reportBestEffortError('analysis/client', error)
+    reportBestEffortError('analysis/node-client', error)
   }
 
   try {
     state.client.close?.()
   } catch (error) {
-    reportBestEffortError('analysis/client', error)
+    reportBestEffortError('analysis/node-client', error)
   }
 }
 
@@ -1518,7 +1518,7 @@ function ensureHighlighterLoaded(
     })
     .catch((error) => {
       highlighterPromise = null
-      reportBestEffortError('analysis/client', error)
+      reportBestEffortError('analysis/node-client', error)
       return null
     })
 

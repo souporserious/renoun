@@ -3,19 +3,22 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test, vi } from 'vitest'
 
 import { parseAnnotations } from '../../utils/annotations.ts'
-import { getSourceTextMetadata } from '../../analysis/client.ts'
+import { getSourceTextMetadata } from '../../analysis/node-client.ts'
 
 const mockTokens = vi.fn()
 const symbolMock = vi.fn(({ children }: { children: React.ReactNode }) => (
   <>{children}</>
 ))
 
-vi.mock('../../analysis/client.ts', () => ({
+vi.mock('../../analysis/node-client.ts', () => ({
+  getSourceTextMetadata: vi.fn(),
+  getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
+}))
+
+vi.mock('../../analysis/browser-client.ts', () => ({
   getAnalysisClientBrowserRuntime: () => undefined,
   getAnalysisClientRefreshVersion: () => '0:0',
   getQuickInfoAtPosition: vi.fn(),
-  getSourceTextMetadata: vi.fn(),
-  getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
   hasRetainedAnalysisClientBrowserRuntime: () => false,
   onAnalysisClientBrowserRuntimeRetentionChange: () => () => {},
   onAnalysisClientBrowserRefreshNotification: () => () => {},

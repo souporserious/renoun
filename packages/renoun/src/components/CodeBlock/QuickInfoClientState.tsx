@@ -12,7 +12,7 @@ import {
   onAnalysisClientBrowserRefreshNotification,
   onAnalysisClientBrowserRuntimeChange,
   onAnalysisClientRefreshVersionChange,
-} from '../../analysis/client.ts'
+} from '../../analysis/browser-client.ts'
 import type { SourceTextHydrationMetadata } from '../../analysis/query/source-text-metadata.ts'
 import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'

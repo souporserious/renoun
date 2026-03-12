@@ -11,7 +11,7 @@ import {
   type FrontmatterParseResult,
 } from '@renoun/mdx/utils'
 
-import { getFileExportMetadata } from '../analysis/client.ts'
+import { getFileExportMetadata } from '../analysis/node-client.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {

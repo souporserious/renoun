@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 const mockGetQuickInfoAtPosition = vi.fn()
 const mockGetTokens = vi.fn()
 
-vi.mock('../../analysis/client.ts', () => ({
+vi.mock('../../analysis/browser-client.ts', () => ({
   getAnalysisClientBrowserRuntime: () => undefined,
   getAnalysisClientRefreshVersion: () => '0:0',
   getAnalysisClientRetainedBrowserRuntimeActivationKey: () => undefined,

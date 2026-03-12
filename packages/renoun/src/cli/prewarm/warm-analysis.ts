@@ -17,7 +17,7 @@ import {
 } from '../../file-system/cache-key.ts'
 import { NodeFileSystem } from '../../file-system/NodeFileSystem.ts'
 import { FileSystemSnapshot } from '../../file-system/Snapshot.ts'
-import { getFileExports, getOutlineRanges } from '../../analysis/client.ts'
+import { getFileExports, getOutlineRanges } from '../../analysis/node-client.ts'
 import type { AnalysisOptions } from '../../analysis/types.ts'
 import { getRootDirectory } from '../../utils/get-root-directory.ts'
 import { forEachConcurrent } from '../../utils/concurrency.ts'

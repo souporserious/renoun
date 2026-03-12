@@ -72,7 +72,7 @@ import {
   getAnalysisClientBrowserRuntime,
   retainAnalysisClientBrowserRuntime,
   setAnalysisClientBrowserRuntime,
-} from '../../analysis/client.ts'
+} from '../../analysis/browser-client.ts'
 import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'

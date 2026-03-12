@@ -8,7 +8,7 @@ import {
   getQuickInfoAtPosition,
   resetAnalysisClientRuntimeConfiguration,
   setAnalysisClientBrowserRuntime,
-} from '../../analysis/client.ts'
+} from '../../analysis/browser-client.ts'
 import { getAnalysisClientBrowserRuntime } from '../../analysis/browser-runtime.ts'
 import { RefreshClient } from './RefreshClient.tsx'
 

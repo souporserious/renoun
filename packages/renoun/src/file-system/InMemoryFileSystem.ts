@@ -2,7 +2,10 @@ import ignore from 'fast-ignore'
 import { randomUUID } from 'node:crypto'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
-import { createSourceFile, transpileSourceFile } from '../analysis/client.ts'
+import {
+  createSourceFile,
+  transpileSourceFile,
+} from '../analysis/node-client.ts'
 import type { AnalysisOptions } from '../analysis/types.ts'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
 import {

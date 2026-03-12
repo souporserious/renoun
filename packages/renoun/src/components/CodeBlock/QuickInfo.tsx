@@ -3,7 +3,7 @@ import { styled, type CSSObject } from 'restyle'
 import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 
-import { getTokens } from '../../analysis/client.ts'
+import { getTokens } from '../../analysis/node-client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
 import { createConcurrentQueue } from '../../utils/concurrency.ts'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'

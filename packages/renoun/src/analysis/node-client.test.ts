@@ -94,7 +94,7 @@ vi.mock('./client.server.ts', () => ({
   transpileCachedSourceFile: mocks.transpileCachedSourceFile,
 }))
 
-describe('analysis client transport guards', () => {
+describe('analysis node client transport guards', () => {
   const originalEnvironment = captureProcessEnv([
     'RENOUN_SERVER_PORT',
     'RENOUN_SERVER_HOST',
@@ -129,7 +129,7 @@ describe('analysis client transport guards', () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     delete process.env['RENOUN_SERVER_ID']
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const result = await module.getSourceTextMetadata({
       value: 'const answer = 42',
       language: 'txt',
@@ -145,7 +145,7 @@ describe('analysis client transport guards', () => {
   })
 
   test('retries loading server modules after a preload failure', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const transientError = new Error('transient preload failure')
 
     mocks.configureAnalysisCacheRuntime
@@ -203,7 +203,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     module.configureAnalysisClientRuntime({
       analysisCacheMaxEntries: 32,
     })
@@ -244,7 +244,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     module.configureAnalysisClientRuntime({
       analysisCacheMaxEntries: 32,
     })
@@ -288,7 +288,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const first = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -330,7 +330,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const result = await module.resolveTypeAtLocation(
       '/project/src/a.ts',
       0,
@@ -381,7 +381,7 @@ describe('analysis client transport guards', () => {
     )
 
     try {
-      const module = await import('./client.ts')
+      const module = await import('./node-client.ts')
       const result = await module.resolveTypeAtLocationWithDependencies(
         '/project/src/a.ts',
         0,
@@ -431,7 +431,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
 
     await module.getOutlineRanges('/project/src/a.ts')
     expect(on).not.toHaveBeenCalled()
@@ -510,7 +510,7 @@ describe('analysis client transport guards', () => {
       return nextClient
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const runtimeEnvModule = await import('./runtime-env.ts')
 
     const firstResult = await module.getOutlineRanges('/project/src/a.ts')
@@ -578,7 +578,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const runtimeEnvModule = await import('./runtime-env.ts')
 
     const firstResult = await module.getSourceTextMetadata({
@@ -633,7 +633,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const first = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -684,7 +684,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     module.configureAnalysisClientRuntime({
       analysisCacheMaxEntries: 32,
     })
@@ -743,7 +743,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
@@ -809,7 +809,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
@@ -901,7 +901,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
@@ -993,7 +993,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
@@ -1051,7 +1051,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
@@ -1126,7 +1126,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const analysisOptions = {
       tsConfigFilePath: '/project/tsconfig.json',
     }
@@ -1212,7 +1212,7 @@ describe('analysis client transport guards', () => {
     )
 
     try {
-      const module = await import('./client.ts')
+      const module = await import('./node-client.ts')
       const first = await module.getQuickInfoAtPosition('/project/src/a.ts', 0)
       const second = await module.getQuickInfoAtPosition('/project/src/a.ts', 0)
 
@@ -1285,7 +1285,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const request = {
       value: '<Button />',
       language: 'tsx' as const,
@@ -1359,7 +1359,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const firstRequest = {
       value: 'dKpCCVlY',
       language: 'txt' as const,
@@ -1413,7 +1413,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const first = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -1468,7 +1468,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     await preloadLocalAnalysisRuntime(module)
     const first = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
@@ -1554,7 +1554,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     module.configureAnalysisClientRuntime({
       analysisCacheMaxEntries: 32,
     })
@@ -1647,7 +1647,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const options = {
       value: 'const value = helper()',
       language: 'ts' as const,
@@ -1766,7 +1766,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const firstExports = await module.getFileExports('/project/src/a.ts')
     const secondExports = await module.getFileExports('/project/src/a.ts')
     const firstMetadata = await module.getFileExportMetadata(
@@ -1910,7 +1910,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const firstPending = module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -1986,7 +1986,7 @@ describe('analysis client transport guards', () => {
       }
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     await preloadLocalAnalysisRuntime(module)
     const firstA = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
@@ -2082,7 +2082,7 @@ describe('analysis client transport guards', () => {
         }
       })
 
-      const module = await import('./client.ts')
+      const module = await import('./node-client.ts')
       await preloadLocalAnalysisRuntime(module)
 
       await module.resolveTypeAtLocationWithDependencies(
@@ -2195,7 +2195,7 @@ describe('analysis client transport guards', () => {
       return nextClient
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const runtimeEnvModule = await import('./runtime-env.ts')
     await preloadLocalAnalysisRuntime(module)
 
@@ -2289,7 +2289,7 @@ describe('analysis client transport guards', () => {
       return nextClient
     })
 
-    const module = await import('./client.ts')
+    const module = await import('./node-client.ts')
     const runtimeEnvModule = await import('./runtime-env.ts')
 
     const firstRequest = module.getOutlineRanges('/project/src/a.ts')
@@ -2347,7 +2347,7 @@ describe('analysis client transport guards', () => {
         }
       })
 
-      const module = await import('./client.ts')
+      const module = await import('./node-client.ts')
       const externalProjectRoot = resolve('/tmp/renoun-external-project')
       await preloadLocalAnalysisRuntime(module)
 
@@ -2383,7 +2383,7 @@ describe('analysis client transport guards', () => {
 })
 
 async function preloadLocalAnalysisRuntime(
-  module: typeof import('./client.ts')
+  module: typeof import('./node-client.ts')
 ): Promise<void> {
   const serverPort = process.env['RENOUN_SERVER_PORT']
   const serverHost = process.env['RENOUN_SERVER_HOST']

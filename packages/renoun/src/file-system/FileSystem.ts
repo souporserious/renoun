@@ -9,7 +9,7 @@ import {
   getOutlineRanges,
   resolveTypeAtLocation,
   resolveTypeAtLocationWithDependencies,
-} from '../analysis/client.ts'
+} from '../analysis/node-client.ts'
 import type { AnalysisOptions } from '../analysis/types.ts'
 import {
   directoryName,

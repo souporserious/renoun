@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 
 import {
   subscribeToAnalysisClientBrowserRuntimeRefresh,
-} from '../../analysis/client.ts'
+} from '../../analysis/browser-client.ts'
 import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 
 declare global {

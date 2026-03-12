@@ -20,7 +20,7 @@ const moduleSpecifierExtension =
 
 const getProgramModuleSpecifier = `../analysis/get-program${moduleSpecifierExtension}`
 const nodeFileSystemModuleSpecifier = `../file-system/NodeFileSystem${moduleSpecifierExtension}`
-const projectClientModuleSpecifier = `../analysis/client${moduleSpecifierExtension}`
+const nodeClientModuleSpecifier = `../analysis/node-client${moduleSpecifierExtension}`
 const gitIgnoredModuleSpecifier = `../utils/is-file-path-git-ignored${moduleSpecifierExtension}`
 const prewarmModuleSpecifier = `./prewarm${moduleSpecifierExtension}`
 
@@ -118,7 +118,7 @@ beforeAll(async () => {
     NodeFileSystem: MockNodeFileSystem,
   }))
 
-  vi.doMock(projectClientModuleSpecifier, () => ({
+  vi.doMock(nodeClientModuleSpecifier, () => ({
     getFileExports: getFileExportsMock,
     getOutlineRanges: getOutlineRangesMock,
   }))

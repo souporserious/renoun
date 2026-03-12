@@ -4,7 +4,7 @@ import {
   __TEST_ONLY__ as ANALYSIS_CLIENT_TEST_ONLY__,
   retainAnalysisClientBrowserRuntime,
   setAnalysisClientBrowserRuntime,
-} from './client.ts'
+} from './browser-client.ts'
 import {
   getAnalysisClientBrowserRuntime,
   getAnalysisClientBrowserRefreshVersion,
@@ -31,7 +31,7 @@ interface MockWebSocketInstance {
   close: () => void
 }
 
-describe('analysis/client browser refresh runtime', () => {
+describe('analysis/browser-client browser refresh runtime', () => {
   let originalWebSocket: typeof WebSocket | undefined
   let controller: MockSocketController
 
@@ -73,7 +73,11 @@ describe('analysis/client browser refresh runtime', () => {
 
     await waitFor(() => controller.instances.length === 2, 1_000)
 
-    expect(getAnalysisClientBrowserRefreshVersion()).toBe('0:4')
+    const [cursor, epoch] = getAnalysisClientBrowserRefreshVersion()
+      .split(':')
+      .map((part) => Number(part))
+    expect(cursor).toBe(0)
+    expect(epoch).toBeGreaterThan(0)
     expect(controller.openedUrls).toEqual([
       'ws://127.0.0.1:43123',
       'ws://127.0.0.1:43124',

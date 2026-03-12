@@ -76,14 +76,14 @@ describe('browser-client runtime transport', () => {
   })
 
   afterEach(async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     module.setAnalysisClientBrowserRuntime(undefined)
     module.__TEST_ONLY__.clearAnalysisClientRpcState()
     module.__TEST_ONLY__.disposeAnalysisBrowserClient()
   })
 
   it('reuses the same client for repeated requests to the same runtime', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const runtime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -118,7 +118,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('replaces an idle client when a later request targets a different runtime', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const primaryRuntime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -162,7 +162,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('invalidates cached explicit-runtime requests on relative refresh notifications', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const runtime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -215,7 +215,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('sends synthetic snippet source metadata with deferred quick info RPC requests', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const runtime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -253,7 +253,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('disables browser RPC caching when the runtime cannot emit refresh notifications', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const runtime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -288,7 +288,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('scopes refresh invalidations to the runtime that emitted them', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const retainedRuntime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -399,7 +399,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('keeps explicit-runtime hover cache versions stable when the retained runtime refreshes', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const retainedRuntime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -490,7 +490,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('treats a secondary runtime first connection as fresh', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const retainedRuntime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',
@@ -555,7 +555,7 @@ describe('browser-client runtime transport', () => {
   })
 
   it('resyncs a secondary runtime from its own cursor on reconnect', async () => {
-    const module = await import('./client.ts')
+    const module = await import('./browser-client.ts')
     const retainedRuntime: AnalysisServerRuntime = {
       id: 'runtime-a',
       port: '43123',

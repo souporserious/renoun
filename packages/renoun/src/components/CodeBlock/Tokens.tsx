@@ -2,7 +2,10 @@ import React, { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getSourceTextMetadata, getTokens } from '../../analysis/client.ts'
+import {
+  getSourceTextMetadata,
+  getTokens,
+} from '../../analysis/node-client.ts'
 import { isSyntheticAnalysisDocumentFilePath } from '../../analysis/document-paths.ts'
 import {
   isProductionEnvironment,
