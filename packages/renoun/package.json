@@ -46,6 +46,13 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "imports": {
+    "#internal/analysis-client-server": {
+      "types": "./dist/analysis/client.server.d.ts",
+      "react-server": "./dist/analysis/client.server.js",
+      "browser": "./dist/analysis/client.server.browser.js",
+      "node": "./dist/analysis/client.server.js",
+      "default": "./dist/analysis/client.server.js"
+    },
     "#fixtures/*": "./fixtures/*"
   },
   "exports": {
@@ -90,13 +97,6 @@
       "types": "./dist/hooks/*.d.ts",
       "import": "./dist/hooks/*.js",
       "default": "./dist/hooks/*.js"
-    },
-    "./internal/analysis-client-server": {
-      "types": "./dist/analysis/client.server.d.ts",
-      "react-server": "./dist/analysis/client.server.js",
-      "browser": "./dist/analysis/client.server.browser.js",
-      "node": "./dist/analysis/client.server.js",
-      "default": "./dist/analysis/client.server.js"
     },
     "./mdx": {
       "types": "./dist/mdx/index.d.ts",

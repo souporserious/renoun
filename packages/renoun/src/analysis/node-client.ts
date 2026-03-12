@@ -393,10 +393,6 @@ function shouldLoadBrowserAnalysisClientServerModule(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined'
 }
 
-async function importAnalysisClientServerModuleAtRuntime(): Promise<AnalysisClientServerModules> {
-  return import('renoun/internal/analysis-client-server')
-}
-
 async function importAnalysisClientServerModules(): Promise<AnalysisClientServerModules> {
   if (shouldLoadBrowserAnalysisClientServerModule()) {
     if (isSourceAnalysisClientModule()) {
@@ -410,7 +406,7 @@ async function importAnalysisClientServerModules(): Promise<AnalysisClientServer
     return import('./client.server.ts')
   }
 
-  return importAnalysisClientServerModuleAtRuntime()
+  return import('#internal/analysis-client-server')
 }
 
 async function loadAnalysisClientServerModules(): Promise<AnalysisClientServerModules> {
