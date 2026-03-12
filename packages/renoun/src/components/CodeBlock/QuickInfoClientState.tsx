@@ -53,6 +53,8 @@ export interface ResolvedQuickInfoClientState {
   isLoading: boolean
   resolvedQuickInfo: QuickInfoData | null
   resolvedDisplayTokens: QuickInfoTokenizedDisplayText | null
+  selectedRuntime: AnalysisServerRuntime | undefined
+  refreshVersion: string
 }
 
 function useAnalysisClientBrowserRuntimeSnapshot(
@@ -325,6 +327,8 @@ export function useResolvedQuickInfoClientState({
     isLoading,
     resolvedQuickInfo,
     resolvedDisplayTokens,
+    selectedRuntime,
+    refreshVersion,
   }
 }
 

@@ -1170,6 +1170,45 @@ export async function getQuickInfoAtPosition(
 }
 
 /**
+ * Read source text for a CodeBlock path through the active analysis runtime.
+ */
+export async function getCodeBlockSourceText(options: {
+  filePath: string
+  baseDirectory?: string
+  runtime?: AnalysisServerRuntime
+}): Promise<string> {
+  const { runtime, ...params } = options
+  if (runtime) {
+    return callBrowserRuntimeClientMethod<
+      {
+        filePath: string
+        baseDirectory?: string
+      },
+      string
+    >('getCodeBlockSourceText', params, runtime, {
+      disableRpcCache: true,
+    })
+  }
+
+  const client = await getReadyClient()
+  if (client) {
+    return callClientMethod<
+      {
+        filePath: string
+        baseDirectory?: string
+      },
+      string
+    >(client, 'getCodeBlockSourceText', params, {
+      disableRpcCache: true,
+    })
+  }
+
+  throw new Error(
+    '[renoun] Missing active browser analysis runtime for CodeBlock source.'
+  )
+}
+
+/**
  * Tokenize source text based on a language and return highlighted tokens.
  */
 export async function getTokens(

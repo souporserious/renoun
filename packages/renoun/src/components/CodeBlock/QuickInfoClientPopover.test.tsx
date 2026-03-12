@@ -4,10 +4,14 @@ import { renderToPipeableStream } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGetQuickInfoAtPosition = vi.fn()
+const mockGetCodeBlockSourceText = vi.fn()
 const mockGetTokens = vi.fn()
 
 vi.mock('../../analysis/browser-client.ts', () => ({
   getAnalysisClientBrowserRuntime: () => undefined,
+  getCodeBlockSourceText: (
+    ...args: Parameters<typeof mockGetCodeBlockSourceText>
+  ) => mockGetCodeBlockSourceText(...args),
   getAnalysisClientRefreshVersion: () => '0:0',
   getAnalysisClientRetainedBrowserRuntimeActivationKey: () => undefined,
   getQuickInfoAtPosition: (
@@ -88,6 +92,9 @@ async function renderToStringAsync(
 }
 
 beforeEach(() => {
+  mockGetQuickInfoAtPosition.mockReset()
+  mockGetCodeBlockSourceText.mockReset()
+  mockGetTokens.mockReset()
   QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.clearQuickInfoDocumentationContentCache()
 })
 
@@ -410,6 +417,56 @@ describe('QuickInfoClientPopover documentation markdown', () => {
     expect(html).toContain('<pre')
     expect(html).toContain('createHistory')
     expect(html).not.toContain('<codeblock')
+  }, 60_000)
+
+  it('loads path-backed fenced code blocks through the selected runtime', async () => {
+    mockGetCodeBlockSourceText.mockResolvedValueOnce(
+      'const history = createHistory()'
+    )
+    mockGetTokens.mockResolvedValueOnce([
+      [
+        {
+          value: 'const history = createHistory()',
+          start: 0,
+          end: 31,
+          hasTextStyles: true,
+          isBaseColor: false,
+          isDeprecated: false,
+          isSymbol: false,
+          isWhiteSpace: false,
+          style: {
+            color: 'rgb(255, 0, 0)',
+          },
+        },
+      ],
+    ])
+
+    const content =
+      await QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.getQuickInfoDocumentationContent(
+        {
+          documentationText: '```ts path="history.ts"\n```',
+          runtime: BASE_REQUEST.runtime,
+          refreshVersion: '0:0',
+        }
+      )
+    const html = await renderToStringAsync(<>{content}</>)
+
+    expect(mockGetCodeBlockSourceText).toHaveBeenCalledWith({
+      filePath: 'history.ts',
+      baseDirectory: undefined,
+      runtime: BASE_REQUEST.runtime,
+    })
+    expect(mockGetTokens).toHaveBeenCalledWith({
+      value: 'const history = createHistory()',
+      filePath: 'history.ts',
+      language: 'ts',
+      theme: undefined,
+      waitForWarmResult: true,
+      runtime: BASE_REQUEST.runtime,
+    })
+    expect(html).toContain('history.ts')
+    expect(html).toContain('createHistory')
+    expect(html).toContain('color:rgb(255, 0, 0)')
   }, 60_000)
 
   it('bounds cached documentation content and evicts the least recently used entry', async () => {

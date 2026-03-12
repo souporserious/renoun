@@ -33,6 +33,7 @@ import {
   getHighlighterThemeNames,
   type HighlighterInitializationOptions,
 } from '../utils/highlighter-options.ts'
+import { readCodeFromPath } from '../utils/read-code-from-path.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
 import {
@@ -1413,6 +1414,22 @@ export async function createServer(options?: CreateServerOptions) {
       // Keep development hover data fresh after edits while preserving production performance.
       memoize: getProductionRpcMemoizeOptions(),
       concurrency: 24,
+    }
+  )
+
+  server.registerMethod(
+    'getCodeBlockSourceText',
+    async function getCodeBlockSourceText({
+      filePath,
+      baseDirectory,
+    }: {
+      filePath: string
+      baseDirectory?: string
+    }) {
+      return readCodeFromPath(filePath, baseDirectory)
+    },
+    {
+      concurrency: 32,
     }
   )
 

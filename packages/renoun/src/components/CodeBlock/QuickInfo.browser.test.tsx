@@ -297,6 +297,7 @@ interface JsonRpcRequest {
   id: number
   method: string
   params?: {
+    baseDirectory?: string
     filePath?: string
     position?: number
     value?: string
@@ -377,6 +378,9 @@ const QUICK_INFO_BY_POSITION = new Map<number, QuickInfoFixture>([
         'between hover transitions without keeping stale dimensions.',
     },
   ],
+])
+const CODE_BLOCK_SOURCE_BY_PATH = new Map<string, string>([
+  ['history.ts', 'const history = createHistory()'],
 ])
 
 describe('QuickInfo browser regression', () => {
@@ -565,9 +569,7 @@ describe('QuickInfo browser regression', () => {
         '| Name | Value |\n' +
         '| --- | --- |\n' +
         '| Alpha | 1 |\n\n' +
-        '```ts path="history.ts"\n' +
-        'const history = createHistory()\n' +
-        '```',
+        '```ts path="history.ts"\n```',
     })
     renderQuickInfoFixture(root, 'markdown-documentation')
 
@@ -1666,6 +1668,15 @@ function resolveMockRpcResponse(
           },
         ]
       }),
+    }
+  }
+
+  if (request.method === 'getCodeBlockSourceText') {
+    const filePath = String(request.params?.filePath ?? '')
+
+    return {
+      id: request.id,
+      result: CODE_BLOCK_SOURCE_BY_PATH.get(filePath) ?? '',
     }
   }
 

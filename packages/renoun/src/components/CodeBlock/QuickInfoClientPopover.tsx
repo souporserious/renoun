@@ -6,7 +6,19 @@ import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 import { Fragment as JsxFragment, jsx, jsxs } from 'react/jsx-runtime'
 
-import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
+import {
+  getCodeBlockSourceText as getAnalysisClientCodeBlockSourceText,
+  getTokens as getAnalysisClientTokens,
+} from '../../analysis/browser-client.ts'
+import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
+import {
+  stableStringify,
+} from '../../utils/stable-serialization.ts'
+import type {
+  Token,
+  TokenDiagnostic,
+  TokenizedLines,
+} from '../../utils/get-tokens.ts'
 import {
   QuickInfoContent,
   QuickInfoDisplayText,
@@ -72,6 +84,7 @@ const QUICK_INFO_TOKEN_PATTERN =
   /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[\r\n]+|[ \t]+|[^\sA-Za-z0-9_$]+)/g
 const QUICK_INFO_TEST_IDS_ENABLED = process.env.NODE_ENV === 'test'
 const MAX_QUICK_INFO_DOCUMENTATION_CACHE_ENTRIES = 64
+const MAX_QUICK_INFO_MARKDOWN_CODE_BLOCK_CACHE_ENTRIES = 64
 
 const Paragraph = styled('p', {
   fontFamily: 'sans-serif',
@@ -156,6 +169,10 @@ const quickInfoDocumentationContentCache = new Map<
   string,
   Promise<React.ReactNode>
 >()
+const quickInfoMarkdownCodeBlockContentCache = new Map<
+  string,
+  Promise<React.ReactNode>
+>()
 
 function getQuickInfoTestId(
   id: 'content' | 'divider' | 'display'
@@ -200,7 +217,13 @@ export function QuickInfoClientPopover({
       activeThemeName
     )
   }, [activeThemeName, request?.themeConfig])
-  const { isLoading, resolvedQuickInfo, resolvedDisplayTokens } =
+  const {
+    isLoading,
+    resolvedQuickInfo,
+    resolvedDisplayTokens,
+    selectedRuntime,
+    refreshVersion,
+  } =
     useResolvedQuickInfoClientState({
       quickInfo,
       request,
@@ -228,6 +251,9 @@ export function QuickInfoClientPopover({
             <QuickInfoDocumentationMarkdown
               documentationText={documentationText}
               theme={theme}
+              runtime={selectedRuntime}
+              tokenThemeConfig={tokenThemeConfig}
+              refreshVersion={refreshVersion}
             />
           </React.Suspense>
         ) : undefined
@@ -419,11 +445,24 @@ function readActiveThemeName(anchorId: string | undefined): string | undefined {
 function QuickInfoDocumentationMarkdown({
   documentationText,
   theme,
+  runtime,
+  tokenThemeConfig,
+  refreshVersion,
 }: {
   documentationText: string
   theme: QuickInfoTheme
+  runtime: AnalysisServerRuntime | undefined
+  tokenThemeConfig: QuickInfoRequest['themeConfig']
+  refreshVersion: string
 }) {
-  const content = React.use(getQuickInfoDocumentationContent(documentationText))
+  const content = React.use(
+    getQuickInfoDocumentationContent({
+      documentationText,
+      runtime,
+      tokenThemeConfig,
+      refreshVersion,
+    })
+  )
 
   return (
     <QuickInfoMarkdown
@@ -437,19 +476,35 @@ function QuickInfoDocumentationMarkdown({
   )
 }
 
-function getQuickInfoDocumentationContent(
+interface QuickInfoDocumentationContentOptions {
   documentationText: string
+  runtime?: AnalysisServerRuntime
+  tokenThemeConfig?: QuickInfoRequest['themeConfig']
+  refreshVersion?: string
+}
+
+function getQuickInfoDocumentationContent(
+  options: QuickInfoDocumentationContentOptions | string
 ): Promise<React.ReactNode> {
-  const cached = readQuickInfoDocumentationContentFromCache(documentationText)
+  const normalizedOptions = normalizeQuickInfoDocumentationContentOptions(options)
+  const cacheKey = toQuickInfoDocumentationContentCacheKey(normalizedOptions)
+  const cached = readQuickInfoDocumentationContentFromCache(cacheKey)
   if (cached) {
     return cached
   }
 
   const contentPromise = getMarkdownContent({
-    source: documentationText,
+    source: normalizedOptions.documentationText,
     components: {
       CodeBlock: (props) => {
-        return <QuickInfoMarkdownCodeBlock {...props} />
+        return (
+          <QuickInfoMarkdownCodeBlock
+            {...props}
+            runtime={normalizedOptions.runtime}
+            tokenThemeConfig={normalizedOptions.tokenThemeConfig}
+            refreshVersion={normalizedOptions.refreshVersion}
+          />
+        )
       },
       p: Paragraph,
       table: Table,
@@ -462,37 +517,64 @@ function getQuickInfoDocumentationContent(
       jsxs,
     },
   }).catch((error) => {
-    if (
-      quickInfoDocumentationContentCache.get(documentationText) === contentPromise
-    ) {
-      quickInfoDocumentationContentCache.delete(documentationText)
+    if (quickInfoDocumentationContentCache.get(cacheKey) === contentPromise) {
+      quickInfoDocumentationContentCache.delete(cacheKey)
     }
     throw error
   })
 
-  setQuickInfoDocumentationContentCache(documentationText, contentPromise)
+  setQuickInfoDocumentationContentCache(cacheKey, contentPromise)
   return contentPromise
 }
 
+function normalizeQuickInfoDocumentationContentOptions(
+  options: QuickInfoDocumentationContentOptions | string
+): QuickInfoDocumentationContentOptions {
+  if (typeof options === 'string') {
+    return {
+      documentationText: options,
+    }
+  }
+
+  return options
+}
+
+function toQuickInfoDocumentationContentCacheKey(
+  options: QuickInfoDocumentationContentOptions
+): string {
+  return stableStringify([
+    options.documentationText,
+    options.runtime
+      ? {
+          id: options.runtime.id,
+          host: options.runtime.host,
+          port: options.runtime.port,
+        }
+      : null,
+    options.tokenThemeConfig ?? null,
+    options.refreshVersion ?? null,
+  ])
+}
+
 function readQuickInfoDocumentationContentFromCache(
-  documentationText: string
+  cacheKey: string
 ): Promise<React.ReactNode> | undefined {
-  const cached = quickInfoDocumentationContentCache.get(documentationText)
+  const cached = quickInfoDocumentationContentCache.get(cacheKey)
   if (!cached) {
     return undefined
   }
 
-  quickInfoDocumentationContentCache.delete(documentationText)
-  quickInfoDocumentationContentCache.set(documentationText, cached)
+  quickInfoDocumentationContentCache.delete(cacheKey)
+  quickInfoDocumentationContentCache.set(cacheKey, cached)
   return cached
 }
 
 function setQuickInfoDocumentationContentCache(
-  documentationText: string,
+  cacheKey: string,
   contentPromise: Promise<React.ReactNode>
 ): void {
-  quickInfoDocumentationContentCache.delete(documentationText)
-  quickInfoDocumentationContentCache.set(documentationText, contentPromise)
+  quickInfoDocumentationContentCache.delete(cacheKey)
+  quickInfoDocumentationContentCache.set(cacheKey, contentPromise)
 
   // Keep this cache small because rendered markdown trees can be large and are cheap to rebuild.
   while (
@@ -510,6 +592,7 @@ function setQuickInfoDocumentationContentCache(
 
 function QuickInfoMarkdownCodeBlock({
   path,
+  baseDirectory,
   language,
   allowCopy,
   showLineNumbers = false,
@@ -517,8 +600,12 @@ function QuickInfoMarkdownCodeBlock({
   children,
   className,
   style,
+  runtime,
+  tokenThemeConfig,
+  refreshVersion,
 }: {
   path?: string
+  baseDirectory?: string
   language?: string
   allowCopy?: boolean | string
   showLineNumbers?: boolean
@@ -526,26 +613,166 @@ function QuickInfoMarkdownCodeBlock({
   children?: React.ReactNode
   className?: string
   style?: React.CSSProperties
+  runtime?: AnalysisServerRuntime
+  tokenThemeConfig?: QuickInfoRequest['themeConfig']
+  refreshVersion?: string
 }) {
-  const value = resolveQuickInfoMarkdownCodeValue(children)
-  const shouldRenderToolbar = Boolean(
-    showToolbar === undefined ? path || allowCopy : showToolbar
+  const content = React.use(
+    getQuickInfoMarkdownCodeBlockContent({
+      path,
+      baseDirectory,
+      language,
+      allowCopy,
+      showLineNumbers,
+      showToolbar,
+      codeValue: resolveQuickInfoMarkdownCodeValue(children),
+      className,
+      style,
+      runtime,
+      tokenThemeConfig,
+      refreshVersion,
+    })
   )
-  const copyValue = typeof allowCopy === 'string' ? allowCopy : value
+
+  return content
+}
+
+interface QuickInfoMarkdownCodeBlockContentOptions {
+  path?: string
+  baseDirectory?: string
+  language?: string
+  allowCopy?: boolean | string
+  showLineNumbers?: boolean
+  showToolbar?: boolean
+  codeValue?: string
+  className?: string
+  style?: React.CSSProperties
+  runtime?: AnalysisServerRuntime
+  tokenThemeConfig?: QuickInfoRequest['themeConfig']
+  refreshVersion?: string
+}
+
+function getQuickInfoMarkdownCodeBlockContent(
+  options: QuickInfoMarkdownCodeBlockContentOptions
+): Promise<React.ReactNode> {
+  const cacheKey = toQuickInfoMarkdownCodeBlockContentCacheKey(options)
+  const cached = readQuickInfoMarkdownCodeBlockContentFromCache(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  const contentPromise = resolveQuickInfoMarkdownCodeBlockContent(
+    options
+  ).catch((error) => {
+    if (
+      quickInfoMarkdownCodeBlockContentCache.get(cacheKey) === contentPromise
+    ) {
+      quickInfoMarkdownCodeBlockContentCache.delete(cacheKey)
+    }
+    throw error
+  })
+
+  setQuickInfoMarkdownCodeBlockContentCache(cacheKey, contentPromise)
+  return contentPromise
+}
+
+function toQuickInfoMarkdownCodeBlockContentCacheKey(
+  options: QuickInfoMarkdownCodeBlockContentOptions
+): string {
+  return stableStringify([
+    options.path ?? null,
+    options.baseDirectory ?? null,
+    options.language ?? null,
+    options.allowCopy ?? null,
+    options.showLineNumbers ?? false,
+    options.showToolbar ?? null,
+    options.codeValue ?? null,
+    options.className ?? null,
+    options.style ?? null,
+    options.runtime
+      ? {
+          id: options.runtime.id,
+          host: options.runtime.host,
+          port: options.runtime.port,
+        }
+      : null,
+    options.tokenThemeConfig ?? null,
+    options.refreshVersion ?? null,
+  ])
+}
+
+function readQuickInfoMarkdownCodeBlockContentFromCache(
+  cacheKey: string
+): Promise<React.ReactNode> | undefined {
+  const cached = quickInfoMarkdownCodeBlockContentCache.get(cacheKey)
+  if (!cached) {
+    return undefined
+  }
+
+  quickInfoMarkdownCodeBlockContentCache.delete(cacheKey)
+  quickInfoMarkdownCodeBlockContentCache.set(cacheKey, cached)
+  return cached
+}
+
+function setQuickInfoMarkdownCodeBlockContentCache(
+  cacheKey: string,
+  contentPromise: Promise<React.ReactNode>
+): void {
+  quickInfoMarkdownCodeBlockContentCache.delete(cacheKey)
+  quickInfoMarkdownCodeBlockContentCache.set(cacheKey, contentPromise)
+
+  while (
+    quickInfoMarkdownCodeBlockContentCache.size >
+    MAX_QUICK_INFO_MARKDOWN_CODE_BLOCK_CACHE_ENTRIES
+  ) {
+    const oldestKey =
+      quickInfoMarkdownCodeBlockContentCache.keys().next().value
+    if (typeof oldestKey !== 'string') {
+      return
+    }
+
+    quickInfoMarkdownCodeBlockContentCache.delete(oldestKey)
+  }
+}
+
+async function resolveQuickInfoMarkdownCodeBlockContent(
+  options: QuickInfoMarkdownCodeBlockContentOptions
+): Promise<React.ReactNode> {
+  const value = await resolveQuickInfoMarkdownCodeSource(options)
+  const tokenizedLines = await requestQuickInfoMarkdownCodeTokens({
+    value,
+    path: options.path,
+    language: options.language,
+    runtime: options.runtime,
+    tokenThemeConfig: options.tokenThemeConfig,
+  })
+  const shouldRenderToolbar = Boolean(
+    options.showToolbar === undefined
+      ? options.path || options.allowCopy
+      : options.showToolbar
+  )
+  const copyValue =
+    typeof options.allowCopy === 'string' ? options.allowCopy : value
   const shouldRenderCopyButton =
-    allowCopy !== false && typeof copyValue === 'string' && copyValue.length > 0
+    options.allowCopy !== false &&
+    typeof copyValue === 'string' &&
+    copyValue.length > 0
   const lineCount = Math.max(1, value.split('\n').length)
   const lineNumbers = Array.from({ length: lineCount }, (_, index) => {
     return index + 1
   }).join('\n')
   const codeClassName =
-    language && language.length > 0 ? `language-${language}` : undefined
+    options.language && options.language.length > 0
+      ? `language-${options.language}`
+      : undefined
 
   return (
     <MarkdownCodeBlockContainer>
       {shouldRenderToolbar ? (
         <MarkdownCodeBlockToolbar>
-          {path ? <MarkdownCodeBlockPath>{path}</MarkdownCodeBlockPath> : null}
+          {options.path ? (
+            <MarkdownCodeBlockPath>{options.path}</MarkdownCodeBlockPath>
+          ) : null}
           {shouldRenderCopyButton ? (
             <CopyButtonClient
               value={copyValue}
@@ -559,24 +786,26 @@ function QuickInfoMarkdownCodeBlock({
         </MarkdownCodeBlockToolbar>
       ) : null}
       <MarkdownCodeBlockPre
-        className={className}
-        style={style}
+        className={options.className}
+        style={options.style}
         css={{
-          gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
+          gridTemplateColumns: options.showLineNumbers ? 'auto 1fr' : undefined,
         }}
       >
-        {showLineNumbers ? (
+        {options.showLineNumbers ? (
           <MarkdownCodeBlockLineNumbers>{lineNumbers}</MarkdownCodeBlockLineNumbers>
         ) : null}
         <MarkdownCodeBlockCode
           className={codeClassName}
           css={{
-            gridColumn: showLineNumbers ? 2 : 1,
+            gridColumn: options.showLineNumbers ? 2 : 1,
             paddingRight:
               !shouldRenderToolbar && shouldRenderCopyButton ? '2rem' : undefined,
           }}
         >
-          {value}
+          {tokenizedLines
+            ? renderQuickInfoMarkdownTokenizedLines(tokenizedLines)
+            : value}
         </MarkdownCodeBlockCode>
         {!shouldRenderToolbar && shouldRenderCopyButton ? (
           <CopyButtonClient
@@ -596,7 +825,106 @@ function QuickInfoMarkdownCodeBlock({
   )
 }
 
-function resolveQuickInfoMarkdownCodeValue(children: React.ReactNode): string {
+async function resolveQuickInfoMarkdownCodeSource(
+  options: QuickInfoMarkdownCodeBlockContentOptions
+): Promise<string> {
+  if (typeof options.codeValue === 'string' && options.codeValue.length > 0) {
+    return options.codeValue
+  }
+
+  if (typeof options.path === 'string' && options.path.length > 0) {
+    try {
+      return await getAnalysisClientCodeBlockSourceText({
+        filePath: options.path,
+        baseDirectory: options.baseDirectory,
+        runtime: options.runtime,
+      })
+    } catch {
+      return options.codeValue ?? ''
+    }
+  }
+
+  return options.codeValue ?? ''
+}
+
+async function requestQuickInfoMarkdownCodeTokens(options: {
+  value: string
+  path?: string
+  language?: string
+  runtime?: AnalysisServerRuntime
+  tokenThemeConfig?: QuickInfoRequest['themeConfig']
+}): Promise<TokenizedLines | null> {
+  if (options.value.length === 0) {
+    return null
+  }
+
+  try {
+    return await getAnalysisClientTokens({
+      value: options.value,
+      filePath: options.path,
+      language: options.language,
+      theme: options.tokenThemeConfig,
+      waitForWarmResult: true,
+      runtime: options.runtime,
+    })
+  } catch {
+    return null
+  }
+}
+
+function renderQuickInfoMarkdownTokenizedLines(
+  lines: TokenizedLines
+): React.ReactNode {
+  return lines.map((line, lineIndex) => {
+    return (
+      <Fragment key={lineIndex}>
+        {lineIndex === 0 ? null : '\n'}
+        {line.map((token, tokenIndex) => {
+          return renderQuickInfoMarkdownToken(token, `${lineIndex}-${tokenIndex}`)
+        })}
+      </Fragment>
+    )
+  })
+}
+
+function renderQuickInfoMarkdownToken(
+  token: Token,
+  key: string
+): React.ReactNode {
+  if (
+    token.isWhiteSpace ||
+    (!token.hasTextStyles && token.isBaseColor && !token.isDeprecated)
+  ) {
+    return token.value
+  }
+
+  const style = resolveQuickInfoMarkdownTokenStyle(token)
+  if (!style) {
+    return token.value
+  }
+
+  return (
+    <span key={key} style={style}>
+      {token.value}
+    </span>
+  )
+}
+
+function resolveQuickInfoMarkdownTokenStyle(
+  token: Token
+): React.CSSProperties | undefined {
+  const resolvedStyle = resolveDisplayTokenStyle(token.style)
+
+  if (token.isDeprecated && resolvedStyle.textDecoration === undefined) {
+    resolvedStyle.textDecoration = 'line-through'
+  }
+
+  return Object.keys(resolvedStyle).length > 0 ? resolvedStyle : undefined
+}
+
+function resolveQuickInfoMarkdownCodeValue(
+  children: React.ReactNode
+): string | undefined {
   if (typeof children === 'string' || typeof children === 'number') {
     return String(children)
   }
@@ -609,7 +937,7 @@ function resolveQuickInfoMarkdownCodeValue(children: React.ReactNode): string {
     return resolveQuickInfoMarkdownCodeValue(children.props.children)
   }
 
-  return ''
+  return undefined
 }
 
 function subscribeToQuickInfoThemeChanges(
@@ -663,9 +991,14 @@ export const __TEST_ONLY__ = {
   getQuickInfoDocumentationContentCacheSize: () =>
     quickInfoDocumentationContentCache.size,
   hasQuickInfoDocumentationContent: (documentationText: string) =>
-    quickInfoDocumentationContentCache.has(documentationText),
+    quickInfoDocumentationContentCache.has(
+      toQuickInfoDocumentationContentCacheKey({
+        documentationText,
+      })
+    ),
   clearQuickInfoDocumentationContentCache: () => {
     quickInfoDocumentationContentCache.clear()
+    quickInfoMarkdownCodeBlockContentCache.clear()
   },
   MAX_QUICK_INFO_DOCUMENTATION_CACHE_ENTRIES,
 }
