@@ -20,8 +20,13 @@ interface PrewarmWorkerMessage {
 
 interface PrewarmRequest {
   id: number
+  allowInlineFallback: boolean
   options?: { analysisOptions?: AnalysisOptions }
   signature: string
+}
+
+interface RunPrewarmSafelyExecutionOptions {
+  allowInlineFallback?: boolean
 }
 
 type PrewarmWorkerExecArgvResolverOptions = {
@@ -135,9 +140,14 @@ export function resolvePrewarmWorkerEntryFilePath(
 
 function getPrewarmRequestSignature(options?: {
   analysisOptions?: AnalysisOptions
-}): string {
+}, executionOptions?: RunPrewarmSafelyExecutionOptions): string {
   try {
-    return JSON.stringify(options ?? null) ?? 'null'
+    return (
+      JSON.stringify({
+        allowInlineFallback: executionOptions?.allowInlineFallback ?? true,
+        options: options ?? null,
+      }) ?? 'null'
+    )
   } catch {
     return options?.analysisOptions?.tsConfigFilePath ?? 'unknown'
   }
@@ -277,6 +287,14 @@ function startPrewarmRequest(request: PrewarmRequest): void {
 
   const runInlineFallback = () => {
     if (didStartInlineFallback) {
+      return
+    }
+
+    if (!request.allowInlineFallback) {
+      getDebugLogger().debug(
+        'Skipping inline Renoun RPC cache prewarm fallback'
+      )
+      finalizeRequest()
       return
     }
 
@@ -436,13 +454,15 @@ function startPrewarmRequest(request: PrewarmRequest): void {
   }
 }
 
-export function runPrewarmSafely(options?: {
-  analysisOptions?: AnalysisOptions
-}): void {
+export function runPrewarmSafely(
+  options?: { analysisOptions?: AnalysisOptions },
+  executionOptions?: RunPrewarmSafelyExecutionOptions
+): void {
   const request: PrewarmRequest = {
     id: ++nextPrewarmRequestId,
+    allowInlineFallback: executionOptions?.allowInlineFallback ?? true,
     options,
-    signature: getPrewarmRequestSignature(options),
+    signature: getPrewarmRequestSignature(options, executionOptions),
   }
 
   if (queueOrSkipPrewarmRequest(request)) {

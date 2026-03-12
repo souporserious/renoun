@@ -15,6 +15,7 @@ describe('bench site build invocation', () => {
       resolveBuildInvocation({
         projectRoot: '/workspace/renoun',
         filter: DEFAULT_FILTER,
+        platform: 'darwin',
       })
     ).toEqual({
       command: 'pnpm',
@@ -27,10 +28,24 @@ describe('bench site build invocation', () => {
       resolveBuildInvocation({
         projectRoot: '/workspace/renoun',
         filter: '@examples/docs',
+        platform: 'linux',
       })
     ).toEqual({
       command: 'pnpm',
       args: ['--filter', '@examples/docs', 'build'],
+    })
+  })
+
+  test('uses the Windows pnpm shim when spawning benchmark builds', () => {
+    expect(
+      resolveBuildInvocation({
+        projectRoot: 'C:\\workspace\\renoun',
+        filter: DEFAULT_FILTER,
+        platform: 'win32',
+      })
+    ).toEqual({
+      command: 'pnpm.cmd',
+      args: ['build', '--filter=@apps/site'],
     })
   })
 

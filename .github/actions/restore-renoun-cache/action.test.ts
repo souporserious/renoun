@@ -57,7 +57,7 @@ describe('restore-renoun-cache action', () => {
     )
 
     expect(actionSource).toContain(
-      'node packages/renoun/src/cli/index.ts cache-token'
+      'node --experimental-strip-types packages/renoun/src/cli/index.ts cache-token'
     )
     expect(actionSource).not.toContain('node packages/renoun/src/cli/cache-token.ts')
   })

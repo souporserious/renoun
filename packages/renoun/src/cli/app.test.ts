@@ -75,10 +75,15 @@ vi.mock('./framework.ts', () => ({
   resolveFrameworkBinFile: resolveFrameworkBinFileMock,
 }))
 
-const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
+const runPrewarmSafelyMock = vi.fn(async () => undefined)
 
-vi.mock('./prewarm.ts', () => ({
-  prewarmRenounRpcServerCache: prewarmRenounRpcServerCacheMock,
+vi.mock('./prewarm-runner.ts', () => ({
+  createDefaultPrewarmOptions: (rootPath = process.cwd()) => ({
+    analysisOptions: {
+      tsConfigFilePath: join(rootPath, 'tsconfig.json'),
+    },
+  }),
+  runPrewarmSafely: runPrewarmSafelyMock,
 }))
 
 let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
@@ -230,13 +235,18 @@ describe('runAppCommand integration', () => {
 
       expect(createServerMock).toHaveBeenCalledTimes(1)
       await waitForAssertion(() => {
-        expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+        expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
       })
-      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
-        analysisOptions: {
-          tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
+      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+        {
+          analysisOptions: {
+            tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
+          },
         },
-      })
+        {
+          allowInlineFallback: false,
+        }
+      )
       expect(getPortMock).toHaveBeenCalled()
       expect(getIdMock).toHaveBeenCalled()
       expect(serverCleanupMock).toHaveBeenCalledTimes(1)

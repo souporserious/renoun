@@ -150,12 +150,15 @@ interface GetOrCreateSessionOptions<SessionType> {
   snapshot?: Snapshot
   cacheId: string
   createBaseSnapshot: () => Snapshot
-  createSession: (snapshot: Snapshot) => SessionType
+  createSession: (
+    snapshot: Snapshot,
+    options: { resetBarrier?: Promise<void> }
+  ) => SessionType
 }
 
 interface ResetSessionsOptions<SessionType> {
   snapshotId?: string
-  resetSession: (session: SessionType) => void
+  resetSession: (session: SessionType) => void | Promise<void>
   onMissingSnapshotFamily?: (snapshotId: string) => void
 }
 
@@ -169,6 +172,7 @@ export class SessionRegistry<SessionType> {
     object,
     Map<string, string>
   >()
+  readonly #pendingResetBarrierByFileSystem = new WeakMap<object, Promise<void>>()
 
   getOrCreate(
     fileSystem: object,
@@ -204,7 +208,9 @@ export class SessionRegistry<SessionType> {
       return existing
     }
 
-    const created = options.createSession(targetSnapshot)
+    const created = options.createSession(targetSnapshot, {
+      resetBarrier: this.#pendingResetBarrierByFileSystem.get(fileSystem),
+    })
     cacheSessions.set(options.cacheId, created)
     sessionMap.set(targetSnapshot.id, cacheSessions)
     return created
@@ -232,13 +238,16 @@ export class SessionRegistry<SessionType> {
         return
       }
 
+      const pendingResetOperations: Promise<void>[] = []
       for (const [id, cacheSessions] of familyEntries) {
         for (const session of cacheSessions.values()) {
-          options.resetSession(session)
+          pendingResetOperations.push(Promise.resolve(options.resetSession(session)))
         }
         sessionMap.delete(id)
         parentMap.delete(id)
       }
+
+      this.#setPendingResetBarrier(fileSystem, pendingResetOperations)
 
       if (sessionMap.size === 0) {
         this.#sessionsByFileSystem.delete(fileSystem)
@@ -254,15 +263,35 @@ export class SessionRegistry<SessionType> {
       return
     }
 
+    const pendingResetOperations: Promise<void>[] = []
     for (const cacheSessions of sessionMap.values()) {
       for (const session of cacheSessions.values()) {
-        options.resetSession(session)
+        pendingResetOperations.push(Promise.resolve(options.resetSession(session)))
       }
     }
+    this.#setPendingResetBarrier(fileSystem, pendingResetOperations)
 
     sessionMap.clear()
     this.#sessionsByFileSystem.delete(fileSystem)
     this.#snapshotParentByFileSystem.delete(fileSystem)
+  }
+
+  #setPendingResetBarrier(
+    fileSystem: object,
+    resetOperations: ReadonlyArray<Promise<void>>
+  ): void {
+    const nextBarrier = Promise.allSettled(resetOperations).then(() => {})
+    const existingBarrier = this.#pendingResetBarrierByFileSystem.get(fileSystem)
+    const combinedBarrier = existingBarrier
+      ? Promise.allSettled([existingBarrier, nextBarrier]).then(() => {})
+      : nextBarrier
+
+    this.#pendingResetBarrierByFileSystem.set(fileSystem, combinedBarrier)
+    void combinedBarrier.finally(() => {
+      if (this.#pendingResetBarrierByFileSystem.get(fileSystem) === combinedBarrier) {
+        this.#pendingResetBarrierByFileSystem.delete(fileSystem)
+      }
+    })
   }
 
   #incrementGeneration(fileSystem: object): void {

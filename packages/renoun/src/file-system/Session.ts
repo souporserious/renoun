@@ -24,7 +24,7 @@ import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { emitTelemetryEvent } from '../utils/telemetry.ts'
 import type { Telemetry } from '../utils/telemetry.ts'
-import { Cache, CacheStore } from './Cache.ts'
+import { Cache, CacheStore, type CacheStorePersistence } from './Cache.ts'
 import { getCacheStorePersistence } from './CacheSqlite.ts'
 import type { FileSystem } from './FileSystem.ts'
 import {
@@ -106,6 +106,141 @@ function getDefaultPersistentWorkspaceChangedPathsTtlMs(): number {
   return SESSION_CACHE_DEFAULTS.persistentWorkspaceChangedPathsTtlMs
 }
 
+type CacheStorePersistenceWithComputeSlots = CacheStorePersistence & {
+  acquireComputeSlot?(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number
+  ): Promise<boolean>
+  refreshComputeSlot?(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number
+  ): Promise<boolean>
+  releaseComputeSlot?(nodeKey: string, owner: string): Promise<void>
+  getComputeSlotOwner?(nodeKey: string): Promise<string | undefined>
+  computeSlotTtlMs?: number
+}
+
+function gatePersistedOperation<Arguments extends unknown[], Result>(
+  ready: Promise<void>,
+  operation: ((...args: Arguments) => Promise<Result>) | undefined
+): ((...args: Arguments) => Promise<Result>) | undefined {
+  if (!operation) {
+    return undefined
+  }
+
+  return async (...args: Arguments) => {
+    await ready
+    return operation(...args)
+  }
+}
+
+function createResetBarrierPersistence(
+  persistence: CacheStorePersistence | undefined,
+  resetBarrier?: Promise<void>
+): CacheStorePersistence | undefined {
+  if (!persistence || !resetBarrier) {
+    return persistence
+  }
+
+  const ready = resetBarrier.catch(() => {})
+  const persistenceWithComputeSlots =
+    persistence as CacheStorePersistenceWithComputeSlots
+  const gatedPersistence: CacheStorePersistenceWithComputeSlots = {
+    load: gatePersistedOperation(ready, persistence.load.bind(persistence))!,
+    save: gatePersistedOperation(ready, persistence.save.bind(persistence))!,
+    delete: gatePersistedOperation(ready, persistence.delete.bind(persistence))!,
+    isAvailable: persistence.isAvailable?.bind(persistence),
+  }
+
+  const saveWithRevision = gatePersistedOperation(
+    ready,
+    persistence.saveWithRevision?.bind(persistence)
+  )
+  if (saveWithRevision) {
+    gatedPersistence.saveWithRevision = saveWithRevision
+  }
+
+  const saveWithRevisionGuarded = gatePersistedOperation(
+    ready,
+    persistence.saveWithRevisionGuarded?.bind(persistence)
+  )
+  if (saveWithRevisionGuarded) {
+    gatedPersistence.saveWithRevisionGuarded = saveWithRevisionGuarded
+  }
+
+  const deleteMany = gatePersistedOperation(
+    ready,
+    persistence.deleteMany?.bind(persistence)
+  )
+  if (deleteMany) {
+    gatedPersistence.deleteMany = deleteMany
+  }
+
+  const deleteByDependencyPath = gatePersistedOperation(
+    ready,
+    persistence.deleteByDependencyPath?.bind(persistence)
+  )
+  if (deleteByDependencyPath) {
+    gatedPersistence.deleteByDependencyPath = deleteByDependencyPath
+  }
+
+  const deleteByDependencyPaths = gatePersistedOperation(
+    ready,
+    persistence.deleteByDependencyPaths?.bind(persistence)
+  )
+  if (deleteByDependencyPaths) {
+    gatedPersistence.deleteByDependencyPaths = deleteByDependencyPaths
+  }
+
+  const listNodeKeysByPrefix = gatePersistedOperation(
+    ready,
+    persistence.listNodeKeysByPrefix?.bind(persistence)
+  )
+  if (listNodeKeysByPrefix) {
+    gatedPersistence.listNodeKeysByPrefix = listNodeKeysByPrefix
+  }
+
+  const acquireComputeSlot = gatePersistedOperation(
+    ready,
+    persistenceWithComputeSlots.acquireComputeSlot?.bind(persistenceWithComputeSlots)
+  )
+  if (acquireComputeSlot) {
+    gatedPersistence.acquireComputeSlot = acquireComputeSlot
+  }
+
+  const refreshComputeSlot = gatePersistedOperation(
+    ready,
+    persistenceWithComputeSlots.refreshComputeSlot?.bind(persistenceWithComputeSlots)
+  )
+  if (refreshComputeSlot) {
+    gatedPersistence.refreshComputeSlot = refreshComputeSlot
+  }
+
+  const releaseComputeSlot = gatePersistedOperation(
+    ready,
+    persistenceWithComputeSlots.releaseComputeSlot?.bind(persistenceWithComputeSlots)
+  )
+  if (releaseComputeSlot) {
+    gatedPersistence.releaseComputeSlot = releaseComputeSlot
+  }
+
+  const getComputeSlotOwner = gatePersistedOperation(
+    ready,
+    persistenceWithComputeSlots.getComputeSlotOwner?.bind(persistenceWithComputeSlots)
+  )
+  if (getComputeSlotOwner) {
+    gatedPersistence.getComputeSlotOwner = getComputeSlotOwner
+  }
+
+  if (typeof persistenceWithComputeSlots.computeSlotTtlMs === 'number') {
+    gatedPersistence.computeSlotTtlMs = persistenceWithComputeSlots.computeSlotTtlMs
+  }
+
+  return gatedPersistence
+}
+
 export class Session {
   static for(
     fileSystem: FileSystem,
@@ -116,8 +251,8 @@ export class Session {
       snapshot,
       cacheId: getCacheIdentity(cache),
       createBaseSnapshot: () => new FileSystemSnapshot(fileSystem),
-      createSession: (targetSnapshot) =>
-        new Session(fileSystem, targetSnapshot, cache),
+      createSession: (targetSnapshot, options) =>
+        new Session(fileSystem, targetSnapshot, cache, options.resetBarrier),
     })
   }
 
@@ -162,7 +297,7 @@ export class Session {
   readonly #pendingPersistedInvalidationPathsBackground = new Set<string>()
   #persistedInvalidationQueue: Promise<void> = Promise.resolve()
   #persistedInvalidationDrainScheduled = false
-  #cacheDisposeScheduled = false
+  #cacheDisposePromise?: Promise<void>
   #warnedAboutPersistedInvalidationFailure = false
   readonly #cacheMetricsEnabled: boolean
   readonly #cacheMetricsTopKeysLimit: number
@@ -210,7 +345,8 @@ export class Session {
   private constructor(
     fileSystem: FileSystem,
     snapshot: Snapshot,
-    cache?: Cache
+    cache?: Cache,
+    resetBarrier?: Promise<void>
   ) {
     this.#fileSystem = fileSystem
     this.snapshot = snapshot
@@ -333,17 +469,19 @@ export class Session {
             debugCachePersistence: cache?.debugCachePersistence === true,
           })
         : undefined)
+    const readyPersistence = createResetBarrierPersistence(persistence, resetBarrier)
 
     this.cache =
       cache?.createStore({
         snapshot: this.snapshot,
+        persistence: readyPersistence,
         inflight: this.inflight,
         telemetry: this.#telemetry,
         debugPersistenceFailure: this.#cacheDebugPersistence,
       }) ??
       new CacheStore({
         snapshot: this.snapshot,
-        persistence,
+        persistence: readyPersistence,
         inflight: this.inflight,
         telemetry: this.#telemetry,
         debugPersistenceFailure: this.#cacheDebugPersistence,
@@ -693,7 +831,7 @@ export class Session {
     return intersectingKeys
   }
 
-  reset(): void {
+  reset(): Promise<void> {
     this.#maybeEmitDirectorySnapshotMetrics(true, 'reset')
     this.inflight.clear()
     this.directorySnapshots.clear()
@@ -705,13 +843,14 @@ export class Session {
     this.#directorySnapshotRebuildReasonTotals.clear()
     this.#directorySnapshotRebuildReasonByKey.clear()
     this.#directorySnapshotRebuildEventsSinceLog = 0
-    this.#scheduleCacheDispose()
+    const cacheDisposePromise = this.#scheduleCacheDispose()
     if (typeof this.snapshot.invalidateAll === 'function') {
       this.snapshot.invalidateAll()
-      return
+      return cacheDisposePromise
     }
 
     this.snapshot.invalidatePath('.')
+    return cacheDisposePromise
   }
 
   #enqueuePersistedInvalidationTask(task: () => Promise<void>): void {
@@ -731,15 +870,15 @@ export class Session {
     })
   }
 
-  #scheduleCacheDispose(): void {
-    if (this.#cacheDisposeScheduled) {
-      return
+  #scheduleCacheDispose(): Promise<void> {
+    if (this.#cacheDisposePromise) {
+      return this.#cacheDisposePromise
     }
 
-    this.#cacheDisposeScheduled = true
-    void this.waitForPendingInvalidations().finally(() => {
+    this.#cacheDisposePromise = this.waitForPendingInvalidations().finally(() => {
       this.cache.dispose()
     })
+    return this.#cacheDisposePromise
   }
 
   #normalizeSignatureValue(

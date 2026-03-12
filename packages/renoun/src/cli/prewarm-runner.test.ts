@@ -132,6 +132,57 @@ describe('runPrewarmSafely', () => {
     })
   })
 
+  test('skips inline fallback when background prewarm disables it', async () => {
+    const spawnMock = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        killed: boolean
+        kill: ReturnType<typeof vi.fn>
+        unref: ReturnType<typeof vi.fn>
+      }
+
+      child.killed = false
+      child.kill = vi.fn(() => {
+        child.killed = true
+      })
+      child.unref = vi.fn()
+
+      setTimeout(() => {
+        child.emit('exit', 1, null)
+      }, 0)
+
+      return child
+    })
+    const prewarmMock = vi.fn(async () => undefined)
+
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnMock,
+    }))
+    vi.doMock('../utils/env.ts', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../utils/env.ts')>()
+      return {
+        ...actual,
+        isVitestRuntime: () => false,
+      }
+    })
+    vi.doMock('./prewarm.ts', () => ({
+      prewarmRenounRpcServerCache: prewarmMock,
+    }))
+
+    const { runPrewarmSafely } = await import('./prewarm-runner.ts')
+
+    runPrewarmSafely(
+      { analysisOptions: { tsConfigFilePath: 'node20.json' } },
+      { allowInlineFallback: false }
+    )
+
+    await vi.waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(prewarmMock).not.toHaveBeenCalled()
+  })
+
   test('keeps only the latest pending distinct request', async () => {
     const calls: string[] = []
     const pendingCalls: Array<Deferred<void>> = []

@@ -201,11 +201,16 @@ describe('renoun CLI index integration', () => {
     await waitForAssertion(() => {
       expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
     })
-    expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
-      analysisOptions: {
-        tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
+    expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith(
+      {
+        analysisOptions: {
+          tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
+        },
       },
-    })
+      {
+        allowInlineFallback: false,
+      }
+    )
   })
 
   test('forwards the effective refresh env to direct framework subprocesses', async () => {

@@ -182,7 +182,9 @@ if (firstArgument === 'validate') {
         }))
 
         if (!isProduction) {
-          void runPrewarmSafely(createDefaultPrewarmOptions())
+          void runPrewarmSafely(createDefaultPrewarmOptions(), {
+            allowInlineFallback: false,
+          })
         }
 
         const frameworkBinPath = resolveFrameworkBinFile(
@@ -388,7 +390,9 @@ if (firstArgument === 'validate') {
         }))
       }
 
-      void runPrewarmSafely(createDefaultPrewarmOptions())
+      void runPrewarmSafely(createDefaultPrewarmOptions(), {
+        allowInlineFallback: false,
+      })
 
       return server
     },

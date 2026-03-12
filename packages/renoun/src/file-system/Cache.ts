@@ -224,6 +224,7 @@ const CACHE_STORE_SENTINELS = {
 
 interface CacheStoreFactoryOptions {
   snapshot: Snapshot
+  persistence?: CacheStorePersistence
   inflight?: Map<string, Promise<unknown>>
   telemetry?: Telemetry
   computeSlotTtlMs?: number
@@ -406,7 +407,7 @@ export class Cache {
   createStore(options: CacheStoreFactoryOptions): CacheStore {
     return new CacheStore({
       snapshot: options.snapshot,
-      persistence: this.persistence,
+      persistence: options.persistence ?? this.persistence,
       inflight: options.inflight,
       telemetry: options.telemetry ?? this.telemetry,
       computeSlotTtlMs: options.computeSlotTtlMs ?? this.computeSlotTtlMs,

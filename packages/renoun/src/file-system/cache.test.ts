@@ -2112,6 +2112,56 @@ updated content`
     expect(nextSession.snapshot.id).toBe(firstSnapshotId)
   })
 
+  test('gates replacement session persistence until reset invalidations drain', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'src/index.ts': 'export const value = 1',
+    })
+    const deleteByDependencyPathsStarted = createDeferredPromise()
+    const releaseDeleteByDependencyPaths = createDeferredPromise()
+    const loadSpy = vi.fn(async () => undefined)
+    const saveSpy = vi.fn(async () => {})
+    const cache = new Cache({
+      persistence: {
+        load: loadSpy,
+        save: saveSpy,
+        async delete() {},
+        async deleteByDependencyPaths() {
+          deleteByDependencyPathsStarted.resolve()
+          await releaseDeleteByDependencyPaths.promise
+          return {
+            deletedNodeKeys: [],
+            usedDependencyIndex: true,
+            hasMissingDependencyMetadata: false,
+          }
+        },
+      },
+    })
+    const firstSession = Session.for(fileSystem, undefined, cache)
+
+    firstSession.invalidatePath('src')
+    await deleteByDependencyPathsStarted.promise
+    Session.reset(fileSystem, firstSession.snapshot.id)
+
+    const nextSession = Session.for(fileSystem, undefined, cache)
+    const putPromise = nextSession.cache.put(
+      'test:targeted-reset-persistence-gate',
+      { value: 1 },
+      { persist: true }
+    )
+
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(loadSpy).not.toHaveBeenCalled()
+    expect(saveSpy).not.toHaveBeenCalled()
+
+    releaseDeleteByDependencyPaths.resolve()
+    await putPromise
+
+    expect(loadSpy).toHaveBeenCalled()
+    expect(saveSpy).toHaveBeenCalled()
+  })
+
   test('does not rotate snapshot identity when resetting an unknown snapshot id', () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
@@ -2127,7 +2177,7 @@ updated content`
     expect(secondSession.snapshot.id).toBe(firstSnapshotId)
   })
 
-  test('disposes cache stores during session reset', () => {
+  test('disposes cache stores during session reset', async () => {
     const fileSystem = new InMemoryFileSystem({
       'index.ts': 'export const value = 1',
     })
@@ -2135,6 +2185,8 @@ updated content`
     const disposeSpy = vi.spyOn(session.cache, 'dispose')
 
     Session.reset(fileSystem, session.snapshot.id)
+    await session.waitForPendingInvalidations()
+    await Promise.resolve()
 
     expect(disposeSpy).toHaveBeenCalledTimes(1)
   })

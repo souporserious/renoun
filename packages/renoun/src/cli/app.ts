@@ -435,7 +435,9 @@ export async function runAppCommand({
     const id = server.getId()
 
     if (command === 'dev') {
-      void runPrewarmSafely(createDefaultPrewarmOptions(runtimeDirectory))
+      void runPrewarmSafely(createDefaultPrewarmOptions(runtimeDirectory), {
+        allowInlineFallback: false,
+      })
     }
 
     if (resolvedExample.framework === 'next') {

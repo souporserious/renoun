@@ -218,16 +218,22 @@ async function cleanPaths(projectRoot, cleanPaths) {
   }
 }
 
-export function resolveBuildInvocation({ projectRoot, filter }) {
+export function resolveBuildInvocation({
+  projectRoot,
+  filter,
+  platform = process.platform,
+}) {
+  const pnpmCommand = platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+
   if (filter === DEFAULT_FILTER) {
     return {
-      command: 'pnpm',
+      command: pnpmCommand,
       args: ['build', `--filter=${filter}`],
     }
   }
 
   return {
-    command: 'pnpm',
+    command: pnpmCommand,
     args: ['--filter', filter, 'build'],
   }
 }
