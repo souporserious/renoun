@@ -31,6 +31,7 @@ import {
   writeFile,
   stat,
 } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
@@ -263,20 +264,17 @@ function supportsGitBackfillSync(): boolean {
 }
 
 function resolveDefaultGitCacheDirectory(): string {
-  let rootDirectory: string
   try {
-    rootDirectory = resolve(getRootDirectory())
+    const rootDirectory = resolve(getRootDirectory())
+    if (rootDirectory !== resolve('/')) {
+      return resolve(rootDirectory, '.renoun', 'cache', 'git')
+    }
   } catch {
-    rootDirectory = resolve(process.cwd())
+    // Preserve the long-standing home-cache fallback for scripts and tests
+    // that run outside a package-manager workspace.
   }
 
-  if (rootDirectory === resolve('/')) {
-    throw new Error(
-      '[renoun] Refusing to write Git clone cache at filesystem root "/". Run from a workspace directory or pass `cacheDirectory` explicitly.'
-    )
-  }
-
-  return resolve(rootDirectory, '.renoun', 'cache', 'git')
+  return resolve(homedir(), '.cache', 'renoun-git')
 }
 
 function sanitizeRepositorySpecifierForStorage(specifier: string): string {

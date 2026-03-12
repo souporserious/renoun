@@ -1,5 +1,5 @@
 // GitFileSystem.test.ts
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   mkdirSync,
   writeFileSync,
@@ -19,6 +19,7 @@ import {
   ensureCacheCloneSync,
 } from './GitFileSystem'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import * as rootDirectoryModule from '../utils/get-root-directory.ts'
 import { Directory, File } from './index.tsx'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key'
 import { CacheStore } from './Cache.ts'
@@ -197,6 +198,33 @@ function test(name: string, fn: (ctx: TestContext) => Promise<void>): void {
   )
 }
 
+function withTemporaryHomeDirectory(fn: (homeDirectory: string) => void) {
+  const previousHome = process.env.HOME
+  const previousUserProfile = process.env.USERPROFILE
+  const homeDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-home-'))
+
+  process.env.HOME = homeDirectory
+  process.env.USERPROFILE = homeDirectory
+
+  try {
+    fn(homeDirectory)
+  } finally {
+    if (previousHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = previousHome
+    }
+
+    if (previousUserProfile === undefined) {
+      delete process.env.USERPROFILE
+    } else {
+      process.env.USERPROFILE = previousUserProfile
+    }
+
+    rmSync(homeDirectory, { recursive: true, force: true })
+  }
+}
+
 describe('GitFileSystem', () => {
   it('defaults clone cacheDirectory to the workspace .renoun/cache/git path', () => {
     const store = new GitFileSystem({ repository: '.' })
@@ -207,6 +235,44 @@ describe('GitFileSystem', () => {
     } finally {
       store.close()
     }
+  })
+
+  it('falls back to the user cache directory when workspace discovery fails', () => {
+    withTemporaryHomeDirectory((homeDirectory) => {
+      const rootDirectorySpy = vi
+        .spyOn(rootDirectoryModule, 'getRootDirectory')
+        .mockImplementation(() => {
+          throw new Error('workspace not found')
+        })
+
+      const store = new GitFileSystem({ repository: '.' })
+      try {
+        expect(store.cacheDirectory).toBe(
+          resolve(homeDirectory, '.cache', 'renoun-git')
+        )
+      } finally {
+        store.close()
+        rootDirectorySpy.mockRestore()
+      }
+    })
+  })
+
+  it('falls back to the user cache directory when workspace discovery resolves to filesystem root', () => {
+    withTemporaryHomeDirectory((homeDirectory) => {
+      const rootDirectorySpy = vi
+        .spyOn(rootDirectoryModule, 'getRootDirectory')
+        .mockReturnValue(resolve('/'))
+
+      const store = new GitFileSystem({ repository: '.' })
+      try {
+        expect(store.cacheDirectory).toBe(
+          resolve(homeDirectory, '.cache', 'renoun-git')
+        )
+      } finally {
+        store.close()
+        rootDirectorySpy.mockRestore()
+      }
+    })
   })
 
   test('returns a stable workspace change token when tree state is unchanged', async ({

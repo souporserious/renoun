@@ -336,7 +336,7 @@ describe('QuickInfoClientPopover runtime selection', () => {
 })
 
 describe('QuickInfoClientPopover documentation markdown', () => {
-  it('renders fenced code blocks with the CodeBlock component', async () => {
+  it('renders fenced code blocks with the client-safe code block renderer', async () => {
     const content =
       await QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.getQuickInfoDocumentationContent(
         '```ts path="history.ts"\nconst history = createHistory()\n```'
@@ -344,6 +344,7 @@ describe('QuickInfoClientPopover documentation markdown', () => {
     const html = await renderToStringAsync(<>{content}</>)
 
     expect(html).toContain('Copy code to clipboard')
+    expect(html).toContain('history.ts')
     expect(html).toContain('<pre')
     expect(html).toContain('createHistory')
     expect(html).not.toContain('<codeblock')

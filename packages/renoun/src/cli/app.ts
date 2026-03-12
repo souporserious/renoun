@@ -1232,7 +1232,9 @@ class OverrideManager {
   #runtimeRoot: string
   #overriddenPaths: Set<string> = new Set()
   #watchers: Map<string, ReturnType<typeof watch>> = new Map()
+  #stopped = false
   #syncScheduled = false
+  #syncTimer: ReturnType<typeof setTimeout> | undefined
   #isSyncing = false
   #pendingSync = false
 
@@ -1248,10 +1250,18 @@ class OverrideManager {
   }
 
   async start() {
+    this.#stopped = false
     await this.#syncOverrides()
   }
 
   stop() {
+    this.#stopped = true
+    this.#pendingSync = false
+    this.#syncScheduled = false
+    if (this.#syncTimer) {
+      clearTimeout(this.#syncTimer)
+      this.#syncTimer = undefined
+    }
     for (const watcher of this.#watchers.values()) {
       watcher.close()
     }
@@ -1263,14 +1273,24 @@ class OverrideManager {
   }
 
   #scheduleSync() {
+    if (this.#stopped) {
+      return
+    }
+
     if (this.#syncScheduled) {
       this.#pendingSync = true
       return
     }
 
     this.#syncScheduled = true
-    setTimeout(() => {
+    this.#syncTimer = setTimeout(() => {
+      this.#syncTimer = undefined
       this.#syncScheduled = false
+      if (this.#stopped) {
+        this.#pendingSync = false
+        return
+      }
+
       this.#syncOverrides().catch((error) => {
         getDebugLogger().error('Failed to synchronize app overrides', () => ({
           data: {
@@ -1282,6 +1302,11 @@ class OverrideManager {
   }
 
   async #syncOverrides() {
+    if (this.#stopped) {
+      this.#pendingSync = false
+      return
+    }
+
     if (this.#isSyncing) {
       this.#pendingSync = true
       return
@@ -1301,12 +1326,23 @@ class OverrideManager {
         directoryOverrides,
         fileOverrides
       )
+      if (this.#stopped) {
+        return
+      }
 
       const validOverrides = await this.#applyOverrides(fileOverrides)
+      if (this.#stopped) {
+        return
+      }
       this.#cleanupObsoleteOverrides(validOverrides)
       this.#cleanupObsoleteWatchers(absoluteDirectories)
     } finally {
       this.#isSyncing = false
+
+      if (this.#stopped) {
+        this.#pendingSync = false
+        return
+      }
 
       if (this.#pendingSync) {
         this.#pendingSync = false
@@ -1321,6 +1357,10 @@ class OverrideManager {
     directoryOverrides: Set<string>,
     fileOverrides: Set<string>
   ) {
+    if (this.#stopped) {
+      return
+    }
+
     const absoluteDirectory = join(this.#projectRoot, relativeDirectory)
     absoluteDirectories.add(absoluteDirectory)
 
@@ -1329,6 +1369,10 @@ class OverrideManager {
     const entries = await readdir(absoluteDirectory, { withFileTypes: true })
 
     for (const entry of entries) {
+      if (this.#stopped) {
+        return
+      }
+
       const entryRelativePath =
         relativeDirectory === '.'
           ? entry.name
@@ -1382,12 +1426,15 @@ class OverrideManager {
   }
 
   #ensureWatcher(directory: string) {
-    if (this.#watchers.has(directory)) {
+    if (this.#stopped || this.#watchers.has(directory)) {
       return
     }
 
     try {
       const watcher = watch(directory, { persistent: false }, () => {
+        if (this.#stopped) {
+          return
+        }
         this.#scheduleSync()
       })
       this.#watchers.set(directory, watcher)
@@ -1414,6 +1461,9 @@ class OverrideManager {
     )
 
     for (const relativePath of sortedFiles) {
+      if (this.#stopped) {
+        break
+      }
       await this.#ensureFileOverride(relativePath)
       validPaths.add(relativePath)
     }

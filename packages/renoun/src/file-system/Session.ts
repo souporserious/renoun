@@ -843,6 +843,7 @@ export class Session {
     this.#directorySnapshotRebuildReasonTotals.clear()
     this.#directorySnapshotRebuildReasonByKey.clear()
     this.#directorySnapshotRebuildEventsSinceLog = 0
+    this.cache.clearMemory()
     const cacheDisposePromise = this.#scheduleCacheDispose()
     if (typeof this.snapshot.invalidateAll === 'function') {
       this.snapshot.invalidateAll()
@@ -876,7 +877,7 @@ export class Session {
     }
 
     this.#cacheDisposePromise = this.waitForPendingInvalidations().finally(() => {
-      this.cache.dispose()
+      this.cache.dispose({ skipClearMemory: true })
     })
     return this.#cacheDisposePromise
   }

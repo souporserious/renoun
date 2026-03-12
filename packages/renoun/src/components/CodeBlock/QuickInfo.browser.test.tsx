@@ -97,6 +97,12 @@ vi.mock('@renoun/mdx', async () => {
         }
 
         if (line.startsWith('```')) {
+          const info = line.slice(3).trim()
+          const [languageToken, ...metaTokens] =
+            info.length > 0 ? info.split(/\s+/) : []
+          const pathMatch = metaTokens
+            .join(' ')
+            .match(/\bpath=(['"])(.*?)\1/)
           const codeLines: string[] = []
           index += 1
           while (index < lines.length && !lines[index]!.startsWith('```')) {
@@ -106,11 +112,28 @@ vi.mock('@renoun/mdx', async () => {
           if (index < lines.length) {
             index += 1
           }
+          const CodeBlockComponent = components?.CodeBlock
+          const codeValue = codeLines.join('\n')
+          if (CodeBlockComponent) {
+            blocks.push(
+              React.createElement(
+                CodeBlockComponent,
+                {
+                  key: `code-block:${blocks.length}`,
+                  language: languageToken || undefined,
+                  path: pathMatch?.[2],
+                  shouldFormat: false,
+                },
+                codeValue
+              )
+            )
+            continue
+          }
           blocks.push(
             React.createElement(
               'pre',
               { key: `pre:${blocks.length}` },
-              React.createElement('code', null, codeLines.join('\n'))
+              React.createElement('code', null, codeValue)
             )
           )
           continue
@@ -542,7 +565,7 @@ describe('QuickInfo browser regression', () => {
         '| Name | Value |\n' +
         '| --- | --- |\n' +
         '| Alpha | 1 |\n\n' +
-        '```ts\n' +
+        '```ts path="history.ts"\n' +
         'const history = createHistory()\n' +
         '```',
     })
@@ -559,6 +582,13 @@ describe('QuickInfo browser regression', () => {
         () => Boolean(getPopover()?.querySelector('pre code')),
         1_000
       )
+      await waitFor(
+        () =>
+          Boolean(
+            getPopover()?.querySelector('button[title="Copy code to clipboard"]')
+          ),
+        1_000
+      )
 
       expect(getPopover()?.querySelectorAll('p')).toHaveLength(1)
       expect(getPopover()?.querySelectorAll('ul li')).toHaveLength(2)
@@ -567,6 +597,7 @@ describe('QuickInfo browser regression', () => {
       )
       expect(getPopover()?.querySelector('table td')?.textContent).toBe('Alpha')
       expect(getPopover()?.querySelector('codeblock')).toBeNull()
+      expect(getPopover()?.textContent).toContain('history.ts')
       expect(getPopover()?.querySelector('pre code')?.textContent).toContain(
         'const history = createHistory()'
       )

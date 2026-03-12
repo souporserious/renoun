@@ -1845,6 +1845,32 @@ export async function getFileExportText(
 /**
  * Create a source file in the project.
  */
+function synchronizeLocalCreatedSourceFile(
+  serverModules: AnalysisClientServerModules,
+  filePath: string,
+  sourceText: string,
+  analysisOptions?: AnalysisOptions,
+  options: {
+    invalidateTrackedPrograms?: boolean
+    notifyRefresh?: boolean
+  } = {}
+): void {
+  const project = serverModules.getProgram(analysisOptions) as TsMorphProject
+  project.createSourceFile(filePath, sourceText, { overwrite: true })
+  serverModules.invalidateProgramFileCache(project, filePath)
+
+  if (options.invalidateTrackedPrograms) {
+    serverModules.invalidateProgramCachesByPaths([filePath])
+  }
+
+  serverModules.invalidateRuntimeAnalysisCachePath(filePath)
+  serverModules.invalidateSharedFileTextPrefixCachePath(filePath)
+
+  if (options.notifyRefresh) {
+    notifyLocalSourceFileRefresh(filePath)
+  }
+}
+
 export async function createSourceFile(
   filePath: string,
   sourceText: string,
@@ -1868,20 +1894,31 @@ export async function createSourceFile(
     // Clear client-side RPC state so stale dependent entries are not reused.
     invalidateAllClientRpcState()
     const loadedServerModules = getLoadedAnalysisClientServerModules()
-    loadedServerModules?.invalidateProgramCachesByPaths([filePath])
-    loadedServerModules?.invalidateRuntimeAnalysisCachePath(filePath)
-    loadedServerModules?.invalidateSharedFileTextPrefixCachePath(filePath)
+    if (loadedServerModules) {
+      synchronizeLocalCreatedSourceFile(
+        loadedServerModules,
+        filePath,
+        sourceText,
+        analysisOptions,
+        {
+          invalidateTrackedPrograms: true,
+        }
+      )
+    }
     return
   }
 
   const serverModules = await loadAnalysisClientServerModules()
-  const project = serverModules.getProgram(analysisOptions) as TsMorphProject
-  project.createSourceFile(filePath, sourceText, { overwrite: true })
-  serverModules.invalidateProgramFileCache(project, filePath)
-  serverModules.invalidateRuntimeAnalysisCachePath(filePath)
-  serverModules.invalidateSharedFileTextPrefixCachePath(filePath)
+  synchronizeLocalCreatedSourceFile(
+    serverModules,
+    filePath,
+    sourceText,
+    analysisOptions,
+    {
+      notifyRefresh: true,
+    }
+  )
   invalidateAllClientRpcState()
-  notifyLocalSourceFileRefresh(filePath)
 }
 
 /**

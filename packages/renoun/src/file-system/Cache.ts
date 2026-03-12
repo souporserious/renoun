@@ -710,7 +710,7 @@ export class CacheStore {
     return this.#persistence
   }
 
-  dispose(): void {
+  dispose(options: { skipClearMemory?: boolean } = {}): void {
     if (this.#disposed) {
       return
     }
@@ -737,7 +737,9 @@ export class CacheStore {
       }
     }
 
-    this.clearMemory()
+    if (options.skipClearMemory !== true) {
+      this.clearMemory()
+    }
   }
 
   #assertNotDisposed(operation: string): void {

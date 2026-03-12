@@ -115,6 +115,7 @@ describe('analysis node client transport guards', () => {
     mocks.invalidateRuntimeAnalysisCachePaths.mockClear()
     mocks.invalidateRuntimeAnalysisCachePath.mockClear()
     mocks.invalidateProgramCachesByPaths.mockClear()
+    mocks.invalidateProgramFileCache.mockClear()
     mocks.invalidateSharedFileTextPrefixCachePath.mockClear()
     mocks.createHighlighter.mockClear()
     mocks.configureAnalysisCacheRuntime.mockClear()
@@ -689,6 +690,10 @@ describe('analysis node client transport guards', () => {
       analysisCacheMaxEntries: 32,
     })
     await preloadLocalAnalysisRuntime(module)
+    const project = {
+      createSourceFile: vi.fn(),
+    }
+    mocks.getProgram.mockReturnValue(project as never)
     const first = await module.resolveTypeAtLocationWithDependencies(
       '/project/src/a.ts',
       0,
@@ -705,6 +710,15 @@ describe('analysis node client transport guards', () => {
 
     expect(first).toMatchObject({ resolveTypeCallCount: 1 })
     expect(second).toMatchObject({ resolveTypeCallCount: 2 })
+    expect(project.createSourceFile).toHaveBeenCalledWith(
+      '/project/src/b.ts',
+      'export const b = 2',
+      { overwrite: true }
+    )
+    expect(mocks.invalidateProgramFileCache).toHaveBeenCalledWith(
+      project,
+      '/project/src/b.ts'
+    )
     expect(mocks.invalidateProgramCachesByPaths).toHaveBeenCalledWith([
       '/project/src/b.ts',
     ])
@@ -2448,6 +2462,7 @@ async function preloadLocalAnalysisRuntime(
 
   mocks.getProgram.mockClear()
   mocks.getCachedSourceTextMetadata.mockClear()
+  mocks.invalidateProgramFileCache.mockClear()
   mocks.invalidateProgramCachesByPaths.mockClear()
   mocks.invalidateRuntimeAnalysisCachePath.mockClear()
   mocks.invalidateRuntimeAnalysisCachePaths.mockClear()

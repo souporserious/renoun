@@ -14,7 +14,7 @@ import {
   QuickInfoMarkdown,
   type QuickInfoTheme,
 } from './QuickInfoContent.tsx'
-import { CodeBlock } from './CodeBlock.tsx'
+import { CopyButtonClient } from '../CopyButton/CopyButtonClient.tsx'
 import { useQuickInfoContext } from './QuickInfoProvider.tsx'
 import {
   type QuickInfoData,
@@ -87,6 +87,70 @@ const Table = styled('table', {
     border: '1px solid var(--border)',
   },
 })
+
+const MarkdownCodeBlockContainer = styled('div', {
+  position: 'relative',
+  marginBlock: '0.35rem',
+  borderRadius: 5,
+  boxShadow: 'inset 0 0 0 1px var(--border)',
+  overflow: 'hidden',
+  backgroundColor: 'rgba(127, 127, 127, 0.08)',
+})
+
+const MarkdownCodeBlockToolbar = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.25rem',
+  minHeight: '1.8rem',
+  padding: '0.35rem 0.5rem',
+  boxShadow: 'inset 0 -1px 0 0 var(--border)',
+})
+
+const MarkdownCodeBlockPath = styled('span', {
+  minWidth: 0,
+  fontFamily: 'monospace',
+  fontSize: '0.75rem',
+  lineHeight: 1.2,
+  opacity: 0.8,
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+})
+
+const MarkdownCodeBlockPre = styled('pre', {
+  position: 'relative',
+  display: 'grid',
+  gridAutoRows: 'max-content',
+  margin: 0,
+  whiteSpace: 'pre-wrap',
+  wordWrap: 'break-word',
+})
+
+const MarkdownCodeBlockLineNumbers = styled('span', {
+  padding: '0.4rem 0.5rem',
+  borderRight: '1px solid var(--border)',
+  fontFamily: 'monospace',
+  fontSize: '0.75rem',
+  lineHeight: 1.5,
+  textAlign: 'right',
+  userSelect: 'none',
+  whiteSpace: 'pre',
+  opacity: 0.55,
+})
+
+const MarkdownCodeBlockCode = styled('code', {
+  display: 'block',
+  minWidth: 0,
+  padding: '0.4rem 0.5rem',
+  fontFamily: 'monospace',
+  fontSize: '0.78rem',
+  lineHeight: 1.5,
+  color: 'inherit',
+  backgroundColor: 'transparent',
+  whiteSpace: 'pre-wrap',
+  overflowWrap: 'anywhere',
+})
+
 const quickInfoDocumentationContentCache = new Map<
   string,
   Promise<React.ReactNode>
@@ -384,7 +448,7 @@ function getQuickInfoDocumentationContent(
     source: documentationText,
     components: {
       CodeBlock: (props) => {
-        return <CodeBlock {...props} shouldAnalyze={false} />
+        return <QuickInfoMarkdownCodeBlock {...props} />
       },
       p: Paragraph,
       table: Table,
@@ -403,6 +467,110 @@ function getQuickInfoDocumentationContent(
 
   quickInfoDocumentationContentCache.set(documentationText, contentPromise)
   return contentPromise
+}
+
+function QuickInfoMarkdownCodeBlock({
+  path,
+  language,
+  allowCopy,
+  showLineNumbers = false,
+  showToolbar,
+  children,
+  className,
+  style,
+}: {
+  path?: string
+  language?: string
+  allowCopy?: boolean | string
+  showLineNumbers?: boolean
+  showToolbar?: boolean
+  children?: React.ReactNode
+  className?: string
+  style?: React.CSSProperties
+}) {
+  const value = resolveQuickInfoMarkdownCodeValue(children)
+  const shouldRenderToolbar = Boolean(
+    showToolbar === undefined ? path || allowCopy : showToolbar
+  )
+  const copyValue = typeof allowCopy === 'string' ? allowCopy : value
+  const shouldRenderCopyButton =
+    allowCopy !== false && typeof copyValue === 'string' && copyValue.length > 0
+  const lineCount = Math.max(1, value.split('\n').length)
+  const lineNumbers = Array.from({ length: lineCount }, (_, index) => {
+    return index + 1
+  }).join('\n')
+  const codeClassName =
+    language && language.length > 0 ? `language-${language}` : undefined
+
+  return (
+    <MarkdownCodeBlockContainer>
+      {shouldRenderToolbar ? (
+        <MarkdownCodeBlockToolbar>
+          {path ? <MarkdownCodeBlockPath>{path}</MarkdownCodeBlockPath> : null}
+          {shouldRenderCopyButton ? (
+            <CopyButtonClient
+              value={copyValue}
+              css={{
+                marginLeft: 'auto',
+                color: 'inherit',
+                opacity: 0.75,
+              }}
+            />
+          ) : null}
+        </MarkdownCodeBlockToolbar>
+      ) : null}
+      <MarkdownCodeBlockPre
+        className={className}
+        style={style}
+        css={{
+          gridTemplateColumns: showLineNumbers ? 'auto 1fr' : undefined,
+        }}
+      >
+        {showLineNumbers ? (
+          <MarkdownCodeBlockLineNumbers>{lineNumbers}</MarkdownCodeBlockLineNumbers>
+        ) : null}
+        <MarkdownCodeBlockCode
+          className={codeClassName}
+          css={{
+            gridColumn: showLineNumbers ? 2 : 1,
+            paddingRight:
+              !shouldRenderToolbar && shouldRenderCopyButton ? '2rem' : undefined,
+          }}
+        >
+          {value}
+        </MarkdownCodeBlockCode>
+        {!shouldRenderToolbar && shouldRenderCopyButton ? (
+          <CopyButtonClient
+            value={copyValue}
+            css={{
+              position: 'absolute',
+              top: '0.4rem',
+              right: '0.4rem',
+              color: 'inherit',
+              backgroundColor: 'rgba(0, 0, 0, 0.18)',
+              borderRadius: 4,
+            }}
+          />
+        ) : null}
+      </MarkdownCodeBlockPre>
+    </MarkdownCodeBlockContainer>
+  )
+}
+
+function resolveQuickInfoMarkdownCodeValue(children: React.ReactNode): string {
+  if (typeof children === 'string' || typeof children === 'number') {
+    return String(children)
+  }
+
+  if (Array.isArray(children)) {
+    return children.map(resolveQuickInfoMarkdownCodeValue).join('')
+  }
+
+  if (React.isValidElement<{ children?: React.ReactNode }>(children)) {
+    return resolveQuickInfoMarkdownCodeValue(children.props.children)
+  }
+
+  return ''
 }
 
 function subscribeToQuickInfoThemeChanges(

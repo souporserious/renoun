@@ -31,6 +31,44 @@ const BLOG_APP_PATH = fileURLToPath(
   new URL('../../../../apps/blog', import.meta.url)
 )
 
+type WatchRegistration = {
+  directory: string
+  listener: (eventType: string, fileName: string | Buffer | null) => void
+  watcher: {
+    close: ReturnType<typeof vi.fn>
+  }
+}
+
+const watchRegistrations: WatchRegistration[] = []
+const watchMock = vi.fn(
+  (
+    directory: string | Buffer | URL,
+    options: unknown,
+    listener?: (eventType: string, fileName: string | Buffer | null) => void
+  ) => {
+    const resolvedListener =
+      typeof options === 'function'
+        ? options
+        : listener
+
+    if (!resolvedListener) {
+      throw new Error('Expected fs.watch listener in test mock')
+    }
+
+    const watcher = {
+      close: vi.fn(),
+    }
+
+    watchRegistrations.push({
+      directory: String(directory),
+      listener: resolvedListener,
+      watcher,
+    })
+
+    return watcher
+  }
+)
+
 const spawnMock = vi.fn(
   (command: string, args: string[], options?: Record<string, unknown>) => {
     const child = new EventEmitter() as EventEmitter & {
@@ -115,7 +153,38 @@ async function waitForAssertion(
   }
 }
 
+async function waitForOverrideCleanup(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 75))
+}
+
+async function assertNoWatchersRecreatedAfterCleanup(): Promise<void> {
+  const watcherCountBeforeLateEvents = watchMock.mock.calls.length
+  expect(watcherCountBeforeLateEvents).toBeGreaterThan(0)
+
+  const initialRegistrations = watchRegistrations.slice(
+    0,
+    watcherCountBeforeLateEvents
+  )
+  for (const registration of initialRegistrations) {
+    registration.listener('change', 'posts/hello-from-override.mdx')
+  }
+
+  await waitForOverrideCleanup()
+
+  expect(watchMock).toHaveBeenCalledTimes(watcherCountBeforeLateEvents)
+  for (const registration of initialRegistrations) {
+    expect(registration.watcher.close).toHaveBeenCalledTimes(1)
+  }
+}
+
 beforeAll(async () => {
+  vi.doMock('node:fs', async () => {
+    const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+    return {
+      ...actual,
+      watch: watchMock,
+    }
+  })
   ;({ runAppCommand: runAppCommand } = await import('./app.ts'))
 })
 
@@ -124,6 +193,7 @@ let originalCwd: string
 beforeEach(() => {
   originalCwd = process.cwd()
   vi.clearAllMocks()
+  watchRegistrations.length = 0
 })
 
 afterEach(() => {
@@ -230,6 +300,8 @@ describe('runAppCommand integration', () => {
       await runAppCommand({ command: 'dev', args: ['--port', '4000'] })
       const exitCode = await exitPromise
       expect(exitCode).toBe(0)
+      await waitForOverrideCleanup()
+      await assertNoWatchersRecreatedAfterCleanup()
 
       const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
 
@@ -401,6 +473,8 @@ describe('runAppCommand integration', () => {
       await runAppCommand({ command: 'dev', args: [] })
       const exitCode = await exitPromise
       expect(exitCode).toBe(0)
+      await waitForOverrideCleanup()
+      await assertNoWatchersRecreatedAfterCleanup()
 
       const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
       await expect(
