@@ -125,6 +125,11 @@ const SECOND_RUNTIME: AnalysisServerRuntime = {
   port: '43124',
   host: '127.0.0.1',
 }
+const SAME_ID_UPDATED_RUNTIME: AnalysisServerRuntime = {
+  id: 'quick-info-browser-test',
+  port: '43124',
+  host: '::1',
+}
 const THEME_CONFIG: ConfigurationOptions['theme'] = {
   light: 'github-light',
   dark: 'github-dark',
@@ -286,6 +291,41 @@ describe('QuickInfo browser regression', () => {
 
     expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBe(1)
     expect(counters.tokensByValue.get(shortDisplayText)).toBe(1)
+  })
+
+  it('renders only safe documentation links in the quick info popover', async () => {
+    const originalQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)
+    if (!originalQuickInfo) {
+      throw new Error('Expected initial quick info fixture to exist.')
+    }
+
+    QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
+      ...originalQuickInfo,
+      documentationText:
+        'Unsafe [open](javascript:open) and safe ' +
+        '[source](https://renoun.dev/docs).',
+    })
+    renderQuickInfoFixture(root, 'safe-documentation-links')
+
+    try {
+      await waitFor(
+        () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+        1_000
+      )
+      const symbol = getSymbolAnchor('symbol-short')
+
+      hoverSymbol(symbol)
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes('Unsafe open and safe source.')
+      }, 1_000)
+
+      const links = Array.from(getPopover()?.querySelectorAll('a') ?? [])
+      expect(links).toHaveLength(1)
+      expect(links[0]?.textContent).toBe('source')
+      expect(links[0]?.getAttribute('href')).toBe('https://renoun.dev/docs')
+    } finally {
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, originalQuickInfo)
+    }
   })
 
   it('reuses the shared analysis client socket for follow-up token requests', async () => {
@@ -590,6 +630,56 @@ describe('QuickInfo browser regression', () => {
       await waitFor(() => {
         return getPopover()?.textContent?.includes(
           'Refetched quick info after runtime change.'
+        )
+      }, 1_000)
+    } finally {
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, originalQuickInfo)
+    }
+  })
+
+  it('re-fetches hydrated quick info after the selected runtime endpoint changes without a new runtime id', async () => {
+    const originalQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)
+    if (!originalQuickInfo) {
+      throw new Error('Expected initial quick info fixture to exist.')
+    }
+
+    renderHydratedQuickInfoFixture(root, 'hydrated-runtime-endpoint', {
+      displayText: '(alias) const History',
+      documentationText: 'Server rendered quick info snapshot.',
+    })
+
+    try {
+      await waitFor(
+        () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+        1_000
+      )
+      const symbol = getSymbolAnchor('symbol-short')
+
+      hoverSymbol(symbol)
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes(
+          'Server rendered quick info snapshot.'
+        )
+      }, 1_000)
+      expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBeUndefined()
+
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
+        ...originalQuickInfo,
+        documentationText: 'Refetched quick info after runtime endpoint change.',
+      })
+
+      setAnalysisClientBrowserRuntime(SAME_ID_UPDATED_RUNTIME)
+
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test@ws://[::1]:43124'
+          ) === 1,
+        1_000
+      )
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes(
+          'Refetched quick info after runtime endpoint change.'
         )
       }, 1_000)
     } finally {

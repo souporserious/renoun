@@ -4,6 +4,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const originalFetch = globalThis.fetch
 const originalSponsorsToken = process.env['GITHUB_SPONSORS_TOKEN']
 
+function createDeferred<Value>() {
+  let resolvePromise!: (value: Value | PromiseLike<Value>) => void
+  const promise = new Promise<Value>((resolve) => {
+    resolvePromise = resolve
+  })
+
+  return {
+    promise,
+    resolve: resolvePromise,
+  }
+}
+
 function createGraphqlResponse(options?: {
   username?: string
   viewerLogin?: string
@@ -325,6 +337,49 @@ describe('Sponsors cache', () => {
 
     expect(getSponsorsCacheSizeForTests()).toBe(1)
     expect(fetchMock).toHaveBeenCalledTimes(4)
+  })
+
+  it('keeps the sponsors cache capped while distinct loads are still pending', async () => {
+    const { Sponsors, getSponsorsCacheSizeForTests } = await import(
+      './Sponsors.tsx'
+    )
+    process.env['GITHUB_SPONSORS_TOKEN'] = 'token-concurrent'
+
+    const fetchGate = createDeferred<void>()
+    const fetchMock = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+      await fetchGate.promise
+
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url === 'https://api.github.com/graphql') {
+        return createGraphqlResponse()
+      }
+
+      if (url === 'https://github.com/sponsors/renoun') {
+        return createSponsorsPageResponse('renoun')
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`)
+    })
+
+    globalThis.fetch = fetchMock as typeof fetch
+
+    const renders = Array.from({ length: 40 }, (_, index) =>
+      Sponsors({
+        tiers: [{ amount: 100, title: 'Bronze', avatarSize: 64 + index }],
+        children: () => <></>,
+      })
+    )
+
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(40)
+    })
+
+    expect(getSponsorsCacheSizeForTests()).toBeLessThanOrEqual(32)
+
+    fetchGate.resolve()
+    await Promise.all(renders)
+
+    expect(getSponsorsCacheSizeForTests()).toBeLessThanOrEqual(32)
   })
 
   it('expires cached sponsor responses after the ttl window', async () => {

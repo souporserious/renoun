@@ -132,6 +132,97 @@ describe('runPrewarmSafely', () => {
     })
   })
 
+  test('falls back to inline prewarm after a worker timeout before continuing queued work', async () => {
+    vi.useFakeTimers()
+
+    try {
+      const children: Array<
+        EventEmitter & {
+          killed: boolean
+          kill: ReturnType<typeof vi.fn>
+          unref: ReturnType<typeof vi.fn>
+        }
+      > = []
+      const spawnMock = vi.fn(() => {
+        const child = new EventEmitter() as EventEmitter & {
+          killed: boolean
+          kill: ReturnType<typeof vi.fn>
+          unref: ReturnType<typeof vi.fn>
+        }
+
+        child.killed = false
+        child.kill = vi.fn(() => {
+          child.killed = true
+          child.emit('exit', null, 'SIGKILL')
+        })
+        child.unref = vi.fn()
+        children.push(child)
+
+        return child
+      })
+      const firstInlineFallback = createDeferred<void>()
+      const inlineCalls: string[] = []
+      const prewarmMock = vi.fn(
+        (options?: { analysisOptions?: { tsConfigFilePath?: string } }) => {
+          inlineCalls.push(options?.analysisOptions?.tsConfigFilePath ?? 'default')
+
+          if (inlineCalls.length === 1) {
+            return firstInlineFallback.promise
+          }
+
+          return Promise.resolve()
+        }
+      )
+
+      vi.doMock('node:child_process', () => ({
+        spawn: spawnMock,
+      }))
+      vi.doMock('../utils/env.ts', async (importOriginal) => {
+        const actual = await importOriginal<typeof import('../utils/env.ts')>()
+        return {
+          ...actual,
+          isVitestRuntime: () => false,
+        }
+      })
+      vi.doMock('./prewarm.ts', () => ({
+        prewarmRenounRpcServerCache: prewarmMock,
+      }))
+
+      const [{ runPrewarmSafely }, { PREWARM_REQUEST_TIMEOUT_MS }] =
+        await Promise.all([
+          import('./prewarm-runner.ts'),
+          import('./prewarm/constants.ts'),
+        ])
+
+      runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
+      runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
+
+      await vi.waitFor(() => {
+        expect(spawnMock).toHaveBeenCalledTimes(1)
+      })
+
+      await vi.advanceTimersByTimeAsync(PREWARM_REQUEST_TIMEOUT_MS)
+      await vi.waitFor(() => {
+        expect(children[0]?.kill).toHaveBeenCalledWith('SIGKILL')
+        expect(prewarmMock).toHaveBeenCalledTimes(1)
+      })
+
+      expect(inlineCalls).toEqual(['a.json'])
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+
+      firstInlineFallback.resolve()
+
+      await vi.waitFor(() => {
+        expect(spawnMock).toHaveBeenCalledTimes(2)
+      })
+
+      children[1]?.emit('exit', 0, null)
+      await Promise.resolve()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   test('skips inline fallback when background prewarm disables it', async () => {
     const spawnMock = vi.fn(() => {
       const child = new EventEmitter() as EventEmitter & {

@@ -67,6 +67,12 @@ const QUICK_INFO_TOKEN_PATTERN =
   /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[\r\n]+|[ \t]+|[^\sA-Za-z0-9_$]+)/g
 const QUICK_INFO_DOCUMENTATION_TOKEN_PATTERN =
   /(\[[^\]]+\]\([^)]+\)|`[^`]+`)/g
+const SAFE_QUICK_INFO_DOCUMENTATION_PROTOCOLS = new Set([
+  'http:',
+  'https:',
+  'mailto:',
+  'tel:',
+])
 const QUICK_INFO_TEST_IDS_ENABLED = process.env.NODE_ENV === 'test'
 
 function getQuickInfoTestId(
@@ -390,16 +396,21 @@ function renderQuickInfoDocumentationInline(
     if (token.startsWith('[')) {
       const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
       if (linkMatch) {
-        inlineNodes.push(
-          <DocumentationLink
-            href={linkMatch[2]}
-            key={`link:${matchIndex}:${linkMatch[2]}`}
-            rel="noreferrer"
-            target="_blank"
-          >
-            {linkMatch[1]}
-          </DocumentationLink>
-        )
+        const sanitizedHref = sanitizeQuickInfoDocumentationHref(linkMatch[2])
+        if (sanitizedHref) {
+          inlineNodes.push(
+            <DocumentationLink
+              href={sanitizedHref}
+              key={`link:${matchIndex}:${sanitizedHref}`}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {linkMatch[1]}
+            </DocumentationLink>
+          )
+        } else {
+          pushQuickInfoDocumentationText(linkMatch[1], inlineNodes)
+        }
       } else {
         pushQuickInfoDocumentationText(token, inlineNodes)
       }
@@ -419,6 +430,29 @@ function renderQuickInfoDocumentationInline(
   }
 
   return inlineNodes
+}
+
+function sanitizeQuickInfoDocumentationHref(value: string): string | null {
+  const href = value.trim()
+  if (href.length === 0) {
+    return null
+  }
+
+  const normalizedHref = href.replace(/[\u0000-\u0020]+/g, '')
+  if (normalizedHref.startsWith('//')) {
+    return href
+  }
+
+  const protocolMatch = normalizedHref.match(/^([A-Za-z][A-Za-z0-9+.-]*:)/)
+  if (!protocolMatch) {
+    return href
+  }
+
+  return SAFE_QUICK_INFO_DOCUMENTATION_PROTOCOLS.has(
+    protocolMatch[1].toLowerCase()
+  )
+    ? href
+    : null
 }
 
 function pushQuickInfoDocumentationText(

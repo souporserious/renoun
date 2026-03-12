@@ -110,6 +110,18 @@ function pruneSponsorsCache(
       return
     }
   }
+
+  // Keep the cap hard even when the cache is saturated with in-flight loads.
+  for (const [cacheKey] of sponsorsCache) {
+    if (cacheKey === protectedCacheKey) {
+      continue
+    }
+
+    sponsorsCache.delete(cacheKey)
+    if (sponsorsCache.size <= SPONSORS_CACHE_MAX_ENTRIES) {
+      return
+    }
+  }
 }
 
 /** @internal */

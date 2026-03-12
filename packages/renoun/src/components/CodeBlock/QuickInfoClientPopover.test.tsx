@@ -60,7 +60,7 @@ describe('QuickInfoClientPopover cache behavior', () => {
       42,
       undefined,
       runtime,
-      'quick-info-cache-test:runtime::/tmp/history.ts:42',
+      '["quick-info-cache-test:runtime","quick-info-cache-test-secondary:::1:43124","","/tmp/history.ts",42]',
       undefined
     )
   })
@@ -87,11 +87,40 @@ describe('QuickInfoClientPopover cache behavior', () => {
       42,
       undefined,
       BASE_REQUEST.runtime,
-      'quick-info-cache-test:0:0:sig-1:/tmp/history.__renoun_snippet_sig_1.ts:42',
+      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","sig-1","/tmp/history.__renoun_snippet_sig_1.ts",42]',
       {
         value: 'History',
         language: 'ts',
       }
+    )
+  })
+
+  it('scopes deferred quick info request keys to the full runtime endpoint', async () => {
+    mockGetQuickInfoAtPosition.mockReset()
+    mockGetQuickInfoAtPosition.mockResolvedValue({
+      displayText: 'runtime-specific',
+      documentationText: 'Runtime specific docs',
+    })
+
+    await __TEST_ONLY__.getQuickInfoForRequest(BASE_REQUEST)
+    await __TEST_ONLY__.getQuickInfoForRequest({
+      ...BASE_REQUEST,
+      runtime: {
+        ...BASE_REQUEST.runtime,
+        port: '43124',
+        host: '::1',
+      },
+    })
+
+    expect(mockGetQuickInfoAtPosition).toHaveBeenCalledTimes(2)
+    expect(mockGetQuickInfoAtPosition.mock.calls[0]?.[4]).toBe(
+      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","","/tmp/history.ts",42]'
+    )
+    expect(mockGetQuickInfoAtPosition.mock.calls[1]?.[4]).toBe(
+      '["quick-info-cache-test:0:0","quick-info-cache-test:::1:43124","","/tmp/history.ts",42]'
+    )
+    expect(mockGetQuickInfoAtPosition.mock.calls[0]?.[4]).not.toBe(
+      mockGetQuickInfoAtPosition.mock.calls[1]?.[4]
     )
   })
 })
@@ -215,8 +244,10 @@ describe('QuickInfoClientPopover runtime selection', () => {
           documentationText: 'Server rendered quick info',
         },
         canRequestQuickInfo: true,
-        requestKey: 'quick-info-request-runtime:0:0::/tmp/history.ts:42',
-        hydratedRequestKey: 'quick-info-request-runtime:0:0::/tmp/history.ts:42',
+        requestKey:
+          '["quick-info-request-runtime:0:0","quick-info-request-runtime:127.0.0.1:43123","","/tmp/history.ts",42]',
+        hydratedRequestKey:
+          '["quick-info-request-runtime:0:0","quick-info-request-runtime:127.0.0.1:43123","","/tmp/history.ts",42]',
       })
     ).toBe(true)
 
@@ -227,8 +258,26 @@ describe('QuickInfoClientPopover runtime selection', () => {
           documentationText: 'Server rendered quick info',
         },
         canRequestQuickInfo: true,
-        requestKey: 'quick-info-request-runtime:1:0::/tmp/history.ts:42',
-        hydratedRequestKey: 'quick-info-request-runtime:0:0::/tmp/history.ts:42',
+        requestKey:
+          '["quick-info-request-runtime:1:0","quick-info-request-runtime:127.0.0.1:43123","","/tmp/history.ts",42]',
+        hydratedRequestKey:
+          '["quick-info-request-runtime:0:0","quick-info-request-runtime:127.0.0.1:43123","","/tmp/history.ts",42]',
+      })
+    ).toBe(false)
+  })
+
+  it('drops hydrated quick info when the runtime endpoint changes without a new runtime id', () => {
+    expect(
+      __TEST_ONLY__.shouldReuseHydratedQuickInfo({
+        quickInfo: {
+          displayText: 'History',
+          documentationText: 'Server rendered quick info',
+        },
+        canRequestQuickInfo: true,
+        requestKey:
+          '["quick-info-request-runtime:0:0","quick-info-request-runtime:::1:43124","","/tmp/history.ts",42]',
+        hydratedRequestKey:
+          '["quick-info-request-runtime:0:0","quick-info-request-runtime:127.0.0.1:43123","","/tmp/history.ts",42]',
       })
     ).toBe(false)
   })

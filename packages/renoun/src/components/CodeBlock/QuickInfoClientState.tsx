@@ -360,7 +360,13 @@ function toAnalysisServerRuntimeKey(
 function toQuickInfoCacheKey(request: ResolvedQuickInfoRequest): string {
   const analysisVersion = request.analysisVersion ?? `${request.runtime.id}:0:0`
   const valueSignature = request.valueSignature ?? ''
-  return `${analysisVersion}:${valueSignature}:${request.filePath}:${request.position}`
+  return serializeQuickInfoKey([
+    analysisVersion,
+    toAnalysisServerRuntimeKey(request.runtime) ?? '',
+    valueSignature,
+    request.filePath,
+    request.position,
+  ])
 }
 
 function toQuickInfoHydrationIdentityKey(
@@ -370,7 +376,7 @@ function toQuickInfoHydrationIdentityKey(
     return ''
   }
 
-  return [
+  return serializeQuickInfoKey([
     request.analysisVersion ?? '',
     request.valueSignature ?? '',
     request.filePath,
@@ -378,7 +384,11 @@ function toQuickInfoHydrationIdentityKey(
     toAnalysisServerRuntimeKey(request.runtime) ?? '',
     request.sourceMetadata?.language ?? '',
     request.sourceMetadata?.value ?? '',
-  ].join(':')
+  ])
+}
+
+function serializeQuickInfoKey(parts: readonly Array<string | number>): string {
+  return JSON.stringify(parts)
 }
 
 function shouldReuseHydratedQuickInfo(options: {

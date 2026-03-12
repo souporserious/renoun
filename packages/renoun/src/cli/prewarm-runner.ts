@@ -273,7 +273,18 @@ function startPrewarmRequest(request: PrewarmRequest): void {
   let didHandleTerminalMessage = false
   let didFinalize = false
   let didStartInlineFallback = false
+  let isAwaitingInlineFallbackCompletion = false
   let prewarmWorkerProcess: ReturnType<typeof spawn> | undefined
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined
+
+  const clearRequestTimeout = () => {
+    if (!timeoutHandle) {
+      return
+    }
+
+    clearTimeout(timeoutHandle)
+    timeoutHandle = undefined
+  }
 
   const finalizeRequest = () => {
     if (didFinalize) {
@@ -281,8 +292,36 @@ function startPrewarmRequest(request: PrewarmRequest): void {
     }
 
     didFinalize = true
-    clearTimeout(timeoutHandle)
+    clearRequestTimeout()
     finalizeActivePrewarmRequest(request.id)
+  }
+
+  const scheduleRequestTimeout = (execution: 'inline' | 'worker') => {
+    clearRequestTimeout()
+    timeoutHandle = setTimeout(() => {
+      getDebugLogger().warn('Renoun RPC cache prewarm timed out', () => ({
+        data: {
+          durationMs: Date.now() - startedAt,
+          timeoutMs: PREWARM_REQUEST_TIMEOUT_MS,
+          execution,
+        },
+      }))
+
+      if (execution === 'worker' && !didHandleTerminalMessage) {
+        didHandleTerminalMessage = true
+        isAwaitingInlineFallbackCompletion = request.allowInlineFallback
+
+        if (prewarmWorkerProcess && !prewarmWorkerProcess.killed) {
+          prewarmWorkerProcess.kill('SIGKILL')
+        }
+
+        runInlineFallback()
+        return
+      }
+
+      finalizeRequest()
+    }, PREWARM_REQUEST_TIMEOUT_MS)
+    timeoutHandle.unref()
   }
 
   const runInlineFallback = () => {
@@ -299,29 +338,13 @@ function startPrewarmRequest(request: PrewarmRequest): void {
     }
 
     didStartInlineFallback = true
+    isAwaitingInlineFallbackCompletion = true
+    scheduleRequestTimeout('inline')
     void runPrewarmInline(request.options, startedAt).finally(() => {
+      isAwaitingInlineFallbackCompletion = false
       finalizeRequest()
     })
   }
-
-  const timeoutHandle = setTimeout(() => {
-    didHandleTerminalMessage = true
-
-    getDebugLogger().warn('Renoun RPC cache prewarm timed out', () => ({
-      data: {
-        durationMs: Date.now() - startedAt,
-        timeoutMs: PREWARM_REQUEST_TIMEOUT_MS,
-        execution: prewarmWorkerProcess ? 'worker' : 'inline',
-      },
-    }))
-
-    if (prewarmWorkerProcess && !prewarmWorkerProcess.killed) {
-      prewarmWorkerProcess.kill('SIGKILL')
-    }
-
-    finalizeRequest()
-  }, PREWARM_REQUEST_TIMEOUT_MS)
-  timeoutHandle.unref()
 
   const workerLaunchConfig = resolvePrewarmWorkerLaunchConfig()
   if (isVitestRuntime() || !workerLaunchConfig) {
@@ -344,6 +367,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
         },
       }
     )
+    scheduleRequestTimeout('worker')
     prewarmWorkerProcess.on('message', (message) => {
       if (!isValidPrewarmWorkerMessage(message)) {
         return
@@ -436,6 +460,10 @@ function startPrewarmRequest(request: PrewarmRequest): void {
           runInlineFallback()
           return
         }
+      }
+
+      if (isAwaitingInlineFallbackCompletion) {
+        return
       }
 
       finalizeRequest()
