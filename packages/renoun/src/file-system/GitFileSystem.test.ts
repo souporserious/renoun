@@ -18,7 +18,10 @@ import {
   ensureCacheClone,
   ensureCacheCloneSync,
 } from './GitFileSystem'
-import { getRootDirectory } from '../utils/get-root-directory.ts'
+import {
+  getRootDirectory,
+  resolvePersistentProjectRootDirectory,
+} from '../utils/get-root-directory.ts'
 import * as rootDirectoryModule from '../utils/get-root-directory.ts'
 import { Directory, File } from './index.tsx'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key'
@@ -234,6 +237,48 @@ describe('GitFileSystem', () => {
       )
     } finally {
       store.close()
+    }
+  })
+
+  it('stores app-mode clone cache under the project root instead of the runtime directory', () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-git-cache-app-runtime-')
+    )
+    const projectRoot = join(tmpDirectory, 'project')
+    const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
+    const previousRuntimeDirectory = process.env.RENOUN_RUNTIME_DIRECTORY
+
+    mkdirSync(runtimeRoot, { recursive: true })
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ name: 'git-cache-app-runtime-root-test', private: true }),
+      'utf8'
+    )
+
+    try {
+      process.env.RENOUN_RUNTIME_DIRECTORY = runtimeRoot
+
+      const store = new GitFileSystem({ repository: '.' })
+      try {
+        expect(store.cacheDirectory).toBe(
+          resolve(
+            resolvePersistentProjectRootDirectory(projectRoot),
+            '.renoun',
+            'cache',
+            'git'
+          )
+        )
+      } finally {
+        store.close()
+      }
+    } finally {
+      if (previousRuntimeDirectory === undefined) {
+        delete process.env.RENOUN_RUNTIME_DIRECTORY
+      } else {
+        process.env.RENOUN_RUNTIME_DIRECTORY = previousRuntimeDirectory
+      }
+
+      rmSync(tmpDirectory, { recursive: true, force: true })
     }
   })
 

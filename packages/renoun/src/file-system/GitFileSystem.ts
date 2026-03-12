@@ -46,7 +46,10 @@ import {
   trimTrailingSlashes,
 } from '../utils/path.ts'
 import { createConcurrentQueue, mapConcurrent } from '../utils/concurrency.ts'
-import { getRootDirectory } from '../utils/get-root-directory.ts'
+import {
+  getRootDirectory,
+  resolvePersistentProjectRootDirectory,
+} from '../utils/get-root-directory.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -265,7 +268,9 @@ function supportsGitBackfillSync(): boolean {
 
 function resolveDefaultGitCacheDirectory(): string {
   try {
-    const rootDirectory = resolve(getRootDirectory())
+    const rootDirectory = resolvePersistentProjectRootDirectory(
+      getRootDirectory()
+    )
     if (rootDirectory !== resolve('/')) {
       return resolve(rootDirectory, '.renoun', 'cache', 'git')
     }

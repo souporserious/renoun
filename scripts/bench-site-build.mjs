@@ -263,16 +263,9 @@ export function resolveBuildInvocation({
 }) {
   const pnpmCommand = platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
 
-  if (filter === DEFAULT_FILTER) {
-    return {
-      command: pnpmCommand,
-      args: ['build', `--filter=${filter}`],
-    }
-  }
-
   return {
     command: pnpmCommand,
-    args: ['--filter', filter, 'build'],
+    args: ['build', `--filter=${filter}`],
   }
 }
 

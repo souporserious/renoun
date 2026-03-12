@@ -25,7 +25,7 @@ describe('bench site build invocation', () => {
     })
   })
 
-  test('keeps pnpm filter mode for non-site benchmark targets', () => {
+  test('routes non-site benchmark targets through the turbo-backed root build entrypoint', () => {
     expect(
       resolveBuildInvocation({
         projectRoot: '/workspace/renoun',
@@ -34,7 +34,7 @@ describe('bench site build invocation', () => {
       })
     ).toEqual({
       command: 'pnpm',
-      args: ['--filter', '@examples/docs', 'build'],
+      args: ['build', '--filter=@examples/docs'],
     })
   })
 

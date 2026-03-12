@@ -49,6 +49,44 @@ function getCurrentWorkingDirectory(): string {
   throw new Error('[renoun] Workspace root resolution requires a Node.js runtime.')
 }
 
+export function resolveCanonicalPath(pathToResolve: string): string {
+  const { realpathSync } = getNodeFs()
+  const { resolve } = getNodePath()
+
+  try {
+    return realpathSync(pathToResolve)
+  } catch {
+    return resolve(pathToResolve)
+  }
+}
+
+export function resolvePersistentProjectRootDirectory(
+  pathToResolve: string
+): string {
+  const { existsSync } = getNodeFs()
+  const { basename, dirname, join } = getNodePath()
+  const canonicalPath = resolveCanonicalPath(pathToResolve)
+  const appDirectory = dirname(canonicalPath)
+  const renounDirectory = dirname(appDirectory)
+
+  if (
+    basename(appDirectory) !== 'app' ||
+    basename(renounDirectory) !== '.renoun'
+  ) {
+    return canonicalPath
+  }
+
+  const projectRoot = dirname(renounDirectory)
+  if (
+    !existsSync(join(projectRoot, 'package.json')) &&
+    !existsSync(join(projectRoot, 'pnpm-workspace.yaml'))
+  ) {
+    return canonicalPath
+  }
+
+  return resolveCanonicalPath(projectRoot)
+}
+
 /**
  * Validate that a runtime directory path is safe to use.
  *
