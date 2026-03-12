@@ -222,9 +222,8 @@ export function getAnalysisClientRetainedBrowserRuntimeActivationKey():
 export function onAnalysisClientBrowserRefreshNotification(
   listener: (message: ClientBrowserRefreshNotification) => void
 ): () => void {
-  const unsubscribe = subscribeAnalysisClientBrowserRefreshNotification(
-    listener
-  )
+  const unsubscribe =
+    subscribeAnalysisClientBrowserRefreshNotification(listener)
   ensureRefreshSubscriptionsForCurrentClients()
   return unsubscribe
 }
@@ -394,30 +393,11 @@ function shouldLoadBrowserAnalysisClientServerModule(): boolean {
   return typeof window !== 'undefined' && typeof document !== 'undefined'
 }
 
-async function importAnalysisClientServerModuleAtRuntime():
-  Promise<AnalysisClientServerModules> {
-  const runtimeImport = Function(
-    'specifier',
-    'return import(specifier)'
-  ) as (specifier: string) => Promise<unknown>
-  const [{ createRequire }, { dirname, join }, { pathToFileURL }] =
-    await Promise.all([
-      runtimeImport('node:module') as Promise<typeof import('node:module')>,
-      runtimeImport('node:path') as Promise<typeof import('node:path')>,
-      runtimeImport('node:url') as Promise<typeof import('node:url')>,
-    ])
-
-  const require = createRequire(import.meta.url)
-  const packageEntryPath = require.resolve('renoun')
-  const serverModuleUrl = pathToFileURL(
-    join(dirname(packageEntryPath), 'analysis', 'client.server.js')
-  ).href
-
-  return runtimeImport(serverModuleUrl) as Promise<AnalysisClientServerModules>
+async function importAnalysisClientServerModuleAtRuntime(): Promise<AnalysisClientServerModules> {
+  return import('renoun/internal/analysis-client-server')
 }
 
-async function importAnalysisClientServerModules():
-  Promise<AnalysisClientServerModules> {
+async function importAnalysisClientServerModules(): Promise<AnalysisClientServerModules> {
   if (shouldLoadBrowserAnalysisClientServerModule()) {
     if (isSourceAnalysisClientModule()) {
       return import('./client.server.browser.ts')
@@ -1159,8 +1139,7 @@ function ensureServerRuntimeEnvChangeSubscription(): void {
     }
   }
 
-  globalState[SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY] =
-    disposeSubscription
+  globalState[SERVER_RUNTIME_ENV_SUBSCRIPTION_DISPOSE_KEY] = disposeSubscription
 }
 
 function getClient(): WebSocketClient | undefined {
