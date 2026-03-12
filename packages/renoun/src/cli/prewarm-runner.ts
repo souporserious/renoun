@@ -11,6 +11,8 @@ import {
   PREWARM_WORKER_PAYLOAD_ENV_KEY,
 } from './prewarm/constants.ts'
 
+const PREWARM_FORCE_WORKER_ENV_KEY = 'RENOUN_PREWARM_FORCE_WORKER'
+
 interface PrewarmWorkerMessage {
   type?: unknown
   durationMs?: unknown
@@ -151,6 +153,12 @@ function getPrewarmRequestSignature(options?: {
   } catch {
     return options?.analysisOptions?.tsConfigFilePath ?? 'unknown'
   }
+}
+
+function shouldUsePrewarmWorker(): boolean {
+  return (
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] === '1' || !isVitestRuntime()
+  )
 }
 
 async function runPrewarmInline(
@@ -347,7 +355,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
   }
 
   const workerLaunchConfig = resolvePrewarmWorkerLaunchConfig()
-  if (isVitestRuntime() || !workerLaunchConfig) {
+  if (!shouldUsePrewarmWorker() || !workerLaunchConfig) {
     runInlineFallback()
     return
   }

@@ -378,26 +378,30 @@ if (firstArgument === 'validate') {
     },
   }))
 
-  getDebugLogger().trackOperation(
-    'cli.watch',
-    async () => {
-      const server = await createServer()
+  try {
+    await getDebugLogger().trackOperation(
+      'cli.watch',
+      async () => {
+        const server = await createServer()
 
-      if (getDebugLogger().isEnabled('info')) {
-        const port = await server.getPort()
-        getDebugLogger().info('Watch server created', () => ({
-          data: { port },
-        }))
-      }
+        if (getDebugLogger().isEnabled('info')) {
+          const port = await server.getPort()
+          getDebugLogger().info('Watch server created', () => ({
+            data: { port },
+          }))
+        }
 
-      void runPrewarmSafely(createDefaultPrewarmOptions(), {
-        allowInlineFallback: false,
-      })
+        void runPrewarmSafely(createDefaultPrewarmOptions(), {
+          allowInlineFallback: false,
+        })
 
-      return server
-    },
-    { data: { mode: 'watch' } }
-  )
+        return server
+      },
+      { data: { mode: 'watch' } }
+    )
+  } catch (error) {
+    exitWithCommandError(error)
+  }
 } else {
   if (firstArgument) {
     console.error(`[renoun] Unknown command "${firstArgument}".\n${usageMessage}`)

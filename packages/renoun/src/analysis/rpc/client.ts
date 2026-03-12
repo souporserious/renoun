@@ -14,6 +14,12 @@ type Request = {
   reject: (reason?: any) => void
 }
 
+type StreamRequest = {
+  onChunk: (value: any) => void
+  onDone: () => void
+  onError: (reason: unknown) => void
+}
+
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'failed'
 
 type WebSocketClientErrorType =
@@ -224,10 +230,7 @@ export class WebSocketClient extends EventEmitter {
   #requests: Record<number, Request> = {}
 
   // streaming request routing
-  #streams: Record<
-    number,
-    { onChunk: (value: any) => void; onDone: () => void }
-  > = {}
+  #streams: Record<number, StreamRequest> = {}
 
   // frames not yet sent (offline or backpressure)
   #pendingRequests: { ids: number[]; payload: string }[] = []
@@ -347,6 +350,81 @@ export class WebSocketClient extends EventEmitter {
     this.#flush()
   }
 
+  #createPendingQueueFullError(): WebSocketClientError {
+    return new WebSocketClientError(
+      '[renoun] Client offline and pending queue is full',
+      'UNKNOWN_ERROR',
+      {
+        connectionState: this.#connectionState,
+        connectionTime: formatConnectionTime(this.#connectionStartTime),
+        port: this.#getConnectionPortForLogging(),
+        host: this.#getConnectionHostForLogging(),
+      }
+    )
+  }
+
+  #rejectQueuedIds(ids: number[], error: WebSocketClientError): void {
+    for (const id of ids) {
+      const request = this.#requests[id]
+      if (request) {
+        request.reject(error)
+        delete this.#requests[id]
+        continue
+      }
+
+      const stream = this.#streams[id]
+      if (stream) {
+        stream.onError(error)
+        delete this.#streams[id]
+      }
+    }
+  }
+
+  #removePendingRequestId(id: number): boolean {
+    const index = this.#pendingRequests.findIndex((frame) =>
+      frame.ids.includes(id)
+    )
+    if (index === -1) {
+      return false
+    }
+
+    const frame = this.#pendingRequests[index]!
+
+    try {
+      const parsed = JSON.parse(frame.payload)
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter((request: any) => request?.id !== id)
+        if (filtered.length === parsed.length) {
+          return false
+        }
+
+        const oldBytes = getPayloadByteLength(frame.payload)
+        frame.payload = JSON.stringify(filtered)
+        frame.ids = frame.ids.filter((requestId) => requestId !== id)
+        const newBytes = getPayloadByteLength(frame.payload)
+        this.#pendingBytes = Math.max(0, this.#pendingBytes - (oldBytes - newBytes))
+
+        if (frame.ids.length === 0) {
+          this.#pendingBytes = Math.max(0, this.#pendingBytes - newBytes)
+          this.#pendingRequests.splice(index, 1)
+        }
+
+        return true
+      }
+
+      if ((parsed && parsed.id) === id) {
+        const bytes = getPayloadByteLength(frame.payload)
+        this.#pendingBytes = Math.max(0, this.#pendingBytes - bytes)
+        this.#pendingRequests.splice(index, 1)
+        return true
+      }
+    } catch {
+      // best-effort: leave pending frame as-is
+    }
+
+    return false
+  }
+
   #sendOrQueueFrame(ids: number[], payload: string): boolean {
     if (this.#isConnected && this.#ws.readyState === WebSocket.OPEN) {
       this.#sendFrame(ids, payload)
@@ -357,21 +435,8 @@ export class WebSocketClient extends EventEmitter {
       this.#pendingRequests.length >= PENDING_LIMIT ||
       this.#pendingBytes + bytes > PENDING_BYTES_LIMIT
     ) {
-      const error = new WebSocketClientError(
-        '[renoun] Client offline and pending queue is full',
-        'UNKNOWN_ERROR',
-        {
-          connectionState: this.#connectionState,
-          connectionTime: formatConnectionTime(this.#connectionStartTime),
-          port: this.#getConnectionPortForLogging(),
-          host: this.#getConnectionHostForLogging(),
-        }
-      )
-      // reject all ids that would have been part of this frame
-      for (const id of ids) {
-        this.#requests[id]?.reject(error)
-        delete this.#requests[id]
-      }
+      const error = this.#createPendingQueueFullError()
+      this.#rejectQueuedIds(ids, error)
       return false
     }
     this.#pendingRequests.push({ ids, payload })
@@ -772,41 +837,7 @@ export class WebSocketClient extends EventEmitter {
         })
 
         // If still pending (unsent), try to surgically remove this id from its frame.
-        const index = this.#pendingRequests.findIndex((frame) =>
-          frame.ids.includes(id)
-        )
-        if (index !== -1) {
-          const frame = this.#pendingRequests[index]!
-          try {
-            const parsed = JSON.parse(frame.payload)
-            if (Array.isArray(parsed)) {
-              const filtered = parsed.filter((r: any) => r?.id !== id)
-              if (filtered.length !== parsed.length) {
-                const oldBytes = getPayloadByteLength(frame.payload)
-                frame.payload = JSON.stringify(filtered)
-                frame.ids = frame.ids.filter((n) => n !== id)
-                const newBytes = getPayloadByteLength(frame.payload)
-                this.#pendingBytes = Math.max(
-                  0,
-                  this.#pendingBytes - (oldBytes - newBytes)
-                )
-                if (frame.ids.length === 0) {
-                  this.#pendingBytes = Math.max(
-                    0,
-                    this.#pendingBytes - newBytes
-                  )
-                  this.#pendingRequests.splice(index, 1)
-                }
-              }
-            } else if ((parsed && parsed.id) === id) {
-              const bytes = getPayloadByteLength(frame.payload)
-              this.#pendingBytes = Math.max(0, this.#pendingBytes - bytes)
-              this.#pendingRequests.splice(index, 1)
-            }
-          } catch {
-            // best-effort: leave pending frame as-is
-          }
-        }
+        this.#removePendingRequestId(id)
 
         reject(error)
         delete this.#requests[id]
@@ -864,7 +895,9 @@ export class WebSocketClient extends EventEmitter {
     const id = this.#nextId++
     const payload = JSON.stringify({ method, params, id })
     let nextResolve: ((result: IteratorResult<Value>) => void) | null = null
+    let nextReject: ((reason?: any) => void) | null = null
     let ended = false
+    let pendingError: unknown = undefined
     let idleTimeout: ReturnType<typeof setTimeout> | undefined
     const resetIdleTimeout = () => {
       if (idleTimeout) {
@@ -876,6 +909,7 @@ export class WebSocketClient extends EventEmitter {
         if (nextResolve) {
           const resolve = nextResolve
           nextResolve = null
+          nextReject = null
           resolve({ value: undefined, done: true })
         }
         self.emit('streamError', { id, error: 'Client idle timeout' })
@@ -889,6 +923,7 @@ export class WebSocketClient extends EventEmitter {
         if (nextResolve) {
           const resolve = nextResolve
           nextResolve = null
+          nextReject = null
           resolve({ value, done: false })
         } else {
           queue.push(value)
@@ -899,10 +934,27 @@ export class WebSocketClient extends EventEmitter {
           clearTimeout(idleTimeout)
         }
         ended = true
+        pendingError = undefined
         if (nextResolve) {
           const resolve = nextResolve
           nextResolve = null
+          nextReject = null
           resolve({ value: undefined, done: true })
+        }
+      },
+      onError: (reason: unknown) => {
+        if (idleTimeout) {
+          clearTimeout(idleTimeout)
+        }
+        ended = true
+        pendingError = reason
+        if (nextReject) {
+          const reject = nextReject
+          nextResolve = null
+          nextReject = null
+          const error = pendingError
+          pendingError = undefined
+          reject(error)
         }
       },
     }
@@ -918,18 +970,30 @@ export class WebSocketClient extends EventEmitter {
         if (queue.length) {
           return { value: queue.shift()!, done: false }
         }
+        if (pendingError !== undefined) {
+          const error = pendingError
+          pendingError = undefined
+          throw error instanceof Error ? error : new Error(String(error))
+        }
         if (ended) {
           return { value: undefined, done: true }
         }
-        return new Promise<IteratorResult<Value>>((res) => {
-          nextResolve = res
+        return new Promise<IteratorResult<Value>>((resolve, reject) => {
+          nextResolve = resolve
+          nextReject = reject
         })
       },
       async return() {
         ended = true
+        pendingError = undefined
+        if (idleTimeout) {
+          clearTimeout(idleTimeout)
+        }
         try {
           if (self.#isConnected && self.#ws.readyState === WebSocket.OPEN) {
             self.#sendFrame([id], JSON.stringify({ type: 'cancel', id }))
+          } else {
+            self.#removePendingRequestId(id)
           }
         } catch {
           getDebugLogger().logWebSocketClientEvent('cancel_failed', { id })
@@ -940,6 +1004,7 @@ export class WebSocketClient extends EventEmitter {
         if (nextResolve) {
           const resolve = nextResolve
           nextResolve = null
+          nextReject = null
           resolve({ value: undefined, done: true })
         }
         return { value: undefined, done: true }

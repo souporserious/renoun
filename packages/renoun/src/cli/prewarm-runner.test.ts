@@ -3,6 +3,9 @@ import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+const PREWARM_FORCE_WORKER_ENV_KEY = 'RENOUN_PREWARM_FORCE_WORKER'
+const previousForceWorkerEnv = process.env[PREWARM_FORCE_WORKER_ENV_KEY]
+
 type Deferred<Value> = {
   promise: Promise<Value>
   resolve: (value: Value) => void
@@ -25,6 +28,11 @@ afterEach(() => {
   vi.doUnmock('./prewarm.ts')
   vi.doUnmock('../utils/env.ts')
   vi.doUnmock('node:child_process')
+  if (previousForceWorkerEnv === undefined) {
+    delete process.env[PREWARM_FORCE_WORKER_ENV_KEY]
+  } else {
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] = previousForceWorkerEnv
+  }
   vi.resetModules()
   vi.clearAllMocks()
 })
@@ -87,6 +95,7 @@ describe('resolvePrewarmWorkerEntryFilePath', () => {
 
 describe('runPrewarmSafely', () => {
   test('falls back to inline prewarm when the worker exits before completing', async () => {
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
     const spawnMock = vi.fn(() => {
       const child = new EventEmitter() as EventEmitter & {
         killed: boolean
@@ -111,13 +120,6 @@ describe('runPrewarmSafely', () => {
     vi.doMock('node:child_process', () => ({
       spawn: spawnMock,
     }))
-    vi.doMock('../utils/env.ts', async (importOriginal) => {
-      const actual = await importOriginal<typeof import('../utils/env.ts')>()
-      return {
-        ...actual,
-        isVitestRuntime: () => false,
-      }
-    })
     vi.doMock('./prewarm.ts', () => ({
       prewarmRenounRpcServerCache: prewarmMock,
     }))
@@ -133,6 +135,7 @@ describe('runPrewarmSafely', () => {
   })
 
   test('falls back to inline prewarm when the worker reports an error', async () => {
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
     const spawnMock = vi.fn(() => {
       const child = new EventEmitter() as EventEmitter & {
         killed: boolean
@@ -162,13 +165,6 @@ describe('runPrewarmSafely', () => {
     vi.doMock('node:child_process', () => ({
       spawn: spawnMock,
     }))
-    vi.doMock('../utils/env.ts', async (importOriginal) => {
-      const actual = await importOriginal<typeof import('../utils/env.ts')>()
-      return {
-        ...actual,
-        isVitestRuntime: () => false,
-      }
-    })
     vi.doMock('./prewarm.ts', () => ({
       prewarmRenounRpcServerCache: prewarmMock,
     }))
@@ -184,9 +180,8 @@ describe('runPrewarmSafely', () => {
   })
 
   test('falls back to inline prewarm after a worker timeout before continuing queued work', async () => {
-    vi.useFakeTimers()
-
     try {
+      process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
       const children: Array<
         EventEmitter & {
           killed: boolean
@@ -228,13 +223,6 @@ describe('runPrewarmSafely', () => {
       vi.doMock('node:child_process', () => ({
         spawn: spawnMock,
       }))
-      vi.doMock('../utils/env.ts', async (importOriginal) => {
-        const actual = await importOriginal<typeof import('../utils/env.ts')>()
-        return {
-          ...actual,
-          isVitestRuntime: () => false,
-        }
-      })
       vi.doMock('./prewarm.ts', () => ({
         prewarmRenounRpcServerCache: prewarmMock,
       }))
@@ -244,6 +232,7 @@ describe('runPrewarmSafely', () => {
           import('./prewarm-runner.ts'),
           import('./prewarm/constants.ts'),
         ])
+      vi.useFakeTimers()
 
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
@@ -275,6 +264,7 @@ describe('runPrewarmSafely', () => {
   })
 
   test('skips inline fallback when background prewarm disables it', async () => {
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
     const spawnMock = vi.fn(() => {
       const child = new EventEmitter() as EventEmitter & {
         killed: boolean
@@ -299,13 +289,6 @@ describe('runPrewarmSafely', () => {
     vi.doMock('node:child_process', () => ({
       spawn: spawnMock,
     }))
-    vi.doMock('../utils/env.ts', async (importOriginal) => {
-      const actual = await importOriginal<typeof import('../utils/env.ts')>()
-      return {
-        ...actual,
-        isVitestRuntime: () => false,
-      }
-    })
     vi.doMock('./prewarm.ts', () => ({
       prewarmRenounRpcServerCache: prewarmMock,
     }))
@@ -402,8 +385,6 @@ describe('runPrewarmSafely', () => {
   })
 
   test('times out stalled prewarm requests and continues queued work', async () => {
-    vi.useFakeTimers()
-
     try {
       const calls: string[] = []
       const pendingCalls: Array<Deferred<void>> = []
@@ -425,6 +406,7 @@ describe('runPrewarmSafely', () => {
           import('./prewarm-runner.ts'),
           import('./prewarm/constants.ts'),
         ])
+      vi.useFakeTimers()
 
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })

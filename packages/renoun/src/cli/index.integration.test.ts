@@ -213,6 +213,22 @@ describe('renoun CLI index integration', () => {
     )
   })
 
+  test('exits through the normal command-error path when watch startup fails', async () => {
+    process.argv = ['node', 'renoun', 'watch']
+
+    createServerMock.mockRejectedValueOnce(new Error('watch boot failed'))
+
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit)
+
+    await import('./index.ts')
+
+    expect(errorSpy).toHaveBeenCalledWith('watch boot failed')
+    expect(exitSpy).toHaveBeenCalledWith(1)
+  })
+
   test('forwards the effective refresh env to direct framework subprocesses', async () => {
     process.argv = ['node', 'renoun', 'next', 'dev']
 
