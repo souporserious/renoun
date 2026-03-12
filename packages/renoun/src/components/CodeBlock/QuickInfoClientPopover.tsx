@@ -10,10 +10,10 @@ import {
   getCodeBlockSourceText as getAnalysisClientCodeBlockSourceText,
   getTokens as getAnalysisClientTokens,
 } from '../../analysis/browser-client.ts'
+import { grammars } from '../../grammars/index.ts'
 import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
-import {
-  stableStringify,
-} from '../../utils/stable-serialization.ts'
+import type { Languages } from '../../utils/get-language.ts'
+import { stableStringify } from '../../utils/stable-serialization.ts'
 import type {
   Token,
   TokenDiagnostic,
@@ -85,6 +85,12 @@ const QUICK_INFO_TOKEN_PATTERN =
 const QUICK_INFO_TEST_IDS_ENABLED = process.env.NODE_ENV === 'test'
 const MAX_QUICK_INFO_DOCUMENTATION_CACHE_ENTRIES = 64
 const MAX_QUICK_INFO_MARKDOWN_CODE_BLOCK_CACHE_ENTRIES = 64
+const QUICK_INFO_MARKDOWN_LANGUAGES = new Set<Languages>([
+  'plaintext',
+  'text',
+  'txt',
+  ...Object.values(grammars).flat(),
+])
 
 const Paragraph = styled('p', {
   fontFamily: 'sans-serif',
@@ -223,12 +229,11 @@ export function QuickInfoClientPopover({
     resolvedDisplayTokens,
     selectedRuntime,
     refreshVersion,
-  } =
-    useResolvedQuickInfoClientState({
-      quickInfo,
-      request,
-      tokenThemeConfig,
-    })
+  } = useResolvedQuickInfoClientState({
+    quickInfo,
+    request,
+    tokenThemeConfig,
+  })
   const displayText = resolvedQuickInfo?.displayText || ''
   const documentationText = resolvedQuickInfo?.documentationText || ''
 
@@ -486,7 +491,8 @@ interface QuickInfoDocumentationContentOptions {
 function getQuickInfoDocumentationContent(
   options: QuickInfoDocumentationContentOptions | string
 ): Promise<React.ReactNode> {
-  const normalizedOptions = normalizeQuickInfoDocumentationContentOptions(options)
+  const normalizedOptions =
+    normalizeQuickInfoDocumentationContentOptions(options)
   const cacheKey = toQuickInfoDocumentationContentCacheKey(normalizedOptions)
   const cached = readQuickInfoDocumentationContentFromCache(cacheKey)
   if (cached) {
@@ -725,8 +731,7 @@ function setQuickInfoMarkdownCodeBlockContentCache(
     quickInfoMarkdownCodeBlockContentCache.size >
     MAX_QUICK_INFO_MARKDOWN_CODE_BLOCK_CACHE_ENTRIES
   ) {
-    const oldestKey =
-      quickInfoMarkdownCodeBlockContentCache.keys().next().value
+    const oldestKey = quickInfoMarkdownCodeBlockContentCache.keys().next().value
     if (typeof oldestKey !== 'string') {
       return
     }
@@ -793,14 +798,18 @@ async function resolveQuickInfoMarkdownCodeBlockContent(
         }}
       >
         {options.showLineNumbers ? (
-          <MarkdownCodeBlockLineNumbers>{lineNumbers}</MarkdownCodeBlockLineNumbers>
+          <MarkdownCodeBlockLineNumbers>
+            {lineNumbers}
+          </MarkdownCodeBlockLineNumbers>
         ) : null}
         <MarkdownCodeBlockCode
           className={codeClassName}
           css={{
             gridColumn: options.showLineNumbers ? 2 : 1,
             paddingRight:
-              !shouldRenderToolbar && shouldRenderCopyButton ? '2rem' : undefined,
+              !shouldRenderToolbar && shouldRenderCopyButton
+                ? '2rem'
+                : undefined,
           }}
         >
           {tokenizedLines
@@ -847,6 +856,34 @@ async function resolveQuickInfoMarkdownCodeSource(
   return options.codeValue ?? ''
 }
 
+function resolveQuickInfoMarkdownCodeLanguage(
+  language: string | undefined
+): Languages | undefined {
+  if (typeof language !== 'string' || language.length === 0) {
+    return undefined
+  }
+
+  const normalizedLanguage = language
+    .trim()
+    .replace(/^[{(]+/, '')
+    .replace(/[})]+$/, '')
+    .replace(/^\./, '')
+    .replace(/^language-/, '')
+    .replace(/[,:;]+$/, '')
+    .trim()
+    .toLowerCase()
+
+  if (normalizedLanguage.length === 0) {
+    return undefined
+  }
+
+  if (QUICK_INFO_MARKDOWN_LANGUAGES.has(normalizedLanguage as Languages)) {
+    return normalizedLanguage as Languages
+  }
+
+  return undefined
+}
+
 async function requestQuickInfoMarkdownCodeTokens(options: {
   value: string
   path?: string
@@ -858,11 +895,13 @@ async function requestQuickInfoMarkdownCodeTokens(options: {
     return null
   }
 
+  const language = resolveQuickInfoMarkdownCodeLanguage(options.language)
+
   try {
     return await getAnalysisClientTokens({
       value: options.value,
       filePath: options.path,
-      language: options.language,
+      language,
       theme: options.tokenThemeConfig,
       waitForWarmResult: true,
       runtime: options.runtime,
@@ -880,7 +919,10 @@ function renderQuickInfoMarkdownTokenizedLines(
       <Fragment key={lineIndex}>
         {lineIndex === 0 ? null : '\n'}
         {line.map((token, tokenIndex) => {
-          return renderQuickInfoMarkdownToken(token, `${lineIndex}-${tokenIndex}`)
+          return renderQuickInfoMarkdownToken(
+            token,
+            `${lineIndex}-${tokenIndex}`
+          )
         })}
       </Fragment>
     )
