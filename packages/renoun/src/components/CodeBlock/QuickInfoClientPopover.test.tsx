@@ -1,7 +1,7 @@
 import React from 'react'
 import { PassThrough } from 'node:stream'
 import { renderToPipeableStream } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockGetQuickInfoAtPosition = vi.fn()
 const mockGetTokens = vi.fn()
@@ -86,6 +86,10 @@ async function renderToStringAsync(
     }, timeoutMs)
   })
 }
+
+beforeEach(() => {
+  QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.clearQuickInfoDocumentationContentCache()
+})
 
 describe('QuickInfoClientPopover cache behavior', () => {
   it('routes quick info requests through the runtime carried on the request', async () => {
@@ -349,4 +353,45 @@ describe('QuickInfoClientPopover documentation markdown', () => {
     expect(html).toContain('createHistory')
     expect(html).not.toContain('<codeblock')
   }, 60_000)
+
+  it('bounds cached documentation content and evicts the least recently used entry', async () => {
+    const maxEntries =
+      QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.MAX_QUICK_INFO_DOCUMENTATION_CACHE_ENTRIES
+    const documentationTexts = Array.from(
+      { length: maxEntries + 1 },
+      (_, index) => `Documentation entry ${index}`
+    )
+
+    for (const documentationText of documentationTexts.slice(0, -1)) {
+      await QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.getQuickInfoDocumentationContent(
+        documentationText
+      )
+    }
+
+    await QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.getQuickInfoDocumentationContent(
+      documentationTexts[0]!
+    )
+    await QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.getQuickInfoDocumentationContent(
+      documentationTexts.at(-1)!
+    )
+
+    expect(
+      QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.getQuickInfoDocumentationContentCacheSize()
+    ).toBe(maxEntries)
+    expect(
+      QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.hasQuickInfoDocumentationContent(
+        documentationTexts[0]!
+      )
+    ).toBe(true)
+    expect(
+      QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.hasQuickInfoDocumentationContent(
+        documentationTexts[1]!
+      )
+    ).toBe(false)
+    expect(
+      QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.hasQuickInfoDocumentationContent(
+        documentationTexts.at(-1)!
+      )
+    ).toBe(true)
+  })
 })

@@ -1,6 +1,6 @@
 import { watch, type FSWatcher, type Dirent } from 'node:fs'
 import { readdir } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { getTsMorph } from '../utils/ts-morph.ts'
 import type { SyntaxKind as TsMorphSyntaxKind } from '../utils/ts-morph.ts'
 
@@ -76,6 +76,7 @@ import {
   invalidateSharedFileTextPrefixCachePath,
 } from './file-text-prefix-cache.ts'
 import { shouldIgnoreAnalysisPath } from './ignored-paths.ts'
+import { normalizeSlashes } from '../utils/path.ts'
 
 const { SyntaxKind } = getTsMorph()
 
@@ -266,6 +267,64 @@ function toRootRelativeRefreshPath(
 
 function isRefreshPathWithinRoot(path: string): boolean {
   return path === '.' || (!path.startsWith('..') && path !== '..')
+}
+
+function hasPathPrefix(path: string, prefix: string): boolean {
+  const normalizedPath = normalizeSlashes(path)
+  const normalizedPrefix = normalizeSlashes(prefix)
+
+  return (
+    normalizedPath === normalizedPrefix ||
+    normalizedPath.startsWith(`${normalizedPrefix}/`)
+  )
+}
+
+function resolveVirtualSourceFilePath(
+  filePath: string,
+  rootDirectory: string,
+  analysisOptions?: AnalysisOptions
+): string {
+  const resolvedRootDirectory = resolve(rootDirectory)
+  const resolvedProjectDirectory = analysisOptions?.tsConfigFilePath
+    ? resolve(dirname(analysisOptions.tsConfigFilePath))
+    : process.cwd()
+  const projectPathFromRoot = normalizeSlashes(
+    toRootRelativeRefreshPath(resolvedProjectDirectory, resolvedRootDirectory)
+  )
+
+  if (!isRefreshPathWithinRoot(projectPathFromRoot)) {
+    return isAbsolute(filePath)
+      ? resolve(filePath)
+      : resolve(resolvedProjectDirectory, filePath)
+  }
+
+  if (isAbsolute(filePath)) {
+    const resolvedFilePath = resolve(filePath)
+    const filePathFromProject = normalizeSlashes(
+      relative(resolvedProjectDirectory, resolvedFilePath)
+    )
+
+    if (
+      projectPathFromRoot !== '.' &&
+      isRefreshPathWithinRoot(filePathFromProject) &&
+      hasPathPrefix(filePathFromProject, projectPathFromRoot)
+    ) {
+      return resolve(resolvedRootDirectory, filePathFromProject)
+    }
+
+    return resolvedFilePath
+  }
+
+  const normalizedFilePath = normalizeSlashes(filePath).replace(/^\.\//, '')
+
+  if (
+    projectPathFromRoot !== '.' &&
+    hasPathPrefix(normalizedFilePath, projectPathFromRoot)
+  ) {
+    return resolve(resolvedRootDirectory, normalizedFilePath)
+  }
+
+  return resolve(resolvedProjectDirectory, filePath)
 }
 
 async function collectMarkdownFilesUnderDirectory(
@@ -1659,16 +1718,21 @@ export async function createServer(options?: CreateServerOptions) {
       analysisOptions?: AnalysisOptions
     }) {
       const project = getProgram(analysisOptions)
-      project.createSourceFile(filePath, sourceText, {
+      const resolvedFilePath = resolveVirtualSourceFilePath(
+        filePath,
+        rootDirectory,
+        analysisOptions
+      )
+      project.createSourceFile(resolvedFilePath, sourceText, {
         overwrite: true,
       })
-      invalidateProgramFileCache(project, filePath)
-      invalidateRuntimeAnalysisCachePath(filePath)
-      invalidateSharedFileTextPrefixCachePath(filePath)
-      queueCodeFenceLanguagePrewarm([filePath], {
+      invalidateProgramFileCache(project, resolvedFilePath)
+      invalidateRuntimeAnalysisCachePath(resolvedFilePath)
+      invalidateSharedFileTextPrefixCachePath(resolvedFilePath)
+      queueCodeFenceLanguagePrewarm([resolvedFilePath], {
         priority: 'immediate',
       })
-      queueRefreshNotification([filePath], 'virtual-source-update', {
+      queueRefreshNotification([resolvedFilePath], 'virtual-source-update', {
         priority: 'immediate',
       })
     },

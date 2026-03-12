@@ -71,6 +71,7 @@ const QUICK_INFO_KEYWORDS = new Set([
 const QUICK_INFO_TOKEN_PATTERN =
   /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[\r\n]+|[ \t]+|[^\sA-Za-z0-9_$]+)/g
 const QUICK_INFO_TEST_IDS_ENABLED = process.env.NODE_ENV === 'test'
+const MAX_QUICK_INFO_DOCUMENTATION_CACHE_ENTRIES = 64
 
 const Paragraph = styled('p', {
   fontFamily: 'sans-serif',
@@ -439,7 +440,7 @@ function QuickInfoDocumentationMarkdown({
 function getQuickInfoDocumentationContent(
   documentationText: string
 ): Promise<React.ReactNode> {
-  const cached = quickInfoDocumentationContentCache.get(documentationText)
+  const cached = readQuickInfoDocumentationContentFromCache(documentationText)
   if (cached) {
     return cached
   }
@@ -461,12 +462,50 @@ function getQuickInfoDocumentationContent(
       jsxs,
     },
   }).catch((error) => {
-    quickInfoDocumentationContentCache.delete(documentationText)
+    if (
+      quickInfoDocumentationContentCache.get(documentationText) === contentPromise
+    ) {
+      quickInfoDocumentationContentCache.delete(documentationText)
+    }
     throw error
   })
 
-  quickInfoDocumentationContentCache.set(documentationText, contentPromise)
+  setQuickInfoDocumentationContentCache(documentationText, contentPromise)
   return contentPromise
+}
+
+function readQuickInfoDocumentationContentFromCache(
+  documentationText: string
+): Promise<React.ReactNode> | undefined {
+  const cached = quickInfoDocumentationContentCache.get(documentationText)
+  if (!cached) {
+    return undefined
+  }
+
+  quickInfoDocumentationContentCache.delete(documentationText)
+  quickInfoDocumentationContentCache.set(documentationText, cached)
+  return cached
+}
+
+function setQuickInfoDocumentationContentCache(
+  documentationText: string,
+  contentPromise: Promise<React.ReactNode>
+): void {
+  quickInfoDocumentationContentCache.delete(documentationText)
+  quickInfoDocumentationContentCache.set(documentationText, contentPromise)
+
+  // Keep this cache small because rendered markdown trees can be large and are cheap to rebuild.
+  while (
+    quickInfoDocumentationContentCache.size >
+    MAX_QUICK_INFO_DOCUMENTATION_CACHE_ENTRIES
+  ) {
+    const oldestKey = quickInfoDocumentationContentCache.keys().next().value
+    if (typeof oldestKey !== 'string') {
+      return
+    }
+
+    quickInfoDocumentationContentCache.delete(oldestKey)
+  }
 }
 
 function QuickInfoMarkdownCodeBlock({
@@ -621,4 +660,12 @@ const StringToken = styled('span', {
 
 export const __TEST_ONLY__ = {
   getQuickInfoDocumentationContent,
+  getQuickInfoDocumentationContentCacheSize: () =>
+    quickInfoDocumentationContentCache.size,
+  hasQuickInfoDocumentationContent: (documentationText: string) =>
+    quickInfoDocumentationContentCache.has(documentationText),
+  clearQuickInfoDocumentationContentCache: () => {
+    quickInfoDocumentationContentCache.clear()
+  },
+  MAX_QUICK_INFO_DOCUMENTATION_CACHE_ENTRIES,
 }

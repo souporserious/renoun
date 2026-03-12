@@ -57,7 +57,11 @@ describe('restore-renoun-cache action', () => {
     )
 
     expect(actionSource).toContain(
-      'node --experimental-strip-types packages/renoun/src/cli/index.ts cache-token'
+      'token="$(node --experimental-strip-types packages/renoun/src/cli/index.ts cache-token)"'
+    )
+    expect(actionSource).toContain('echo "token=$token" >> "$GITHUB_OUTPUT"')
+    expect(actionSource).not.toContain(
+      'echo "token=$(node --experimental-strip-types packages/renoun/src/cli/index.ts cache-token)"'
     )
     expect(actionSource).not.toContain('node packages/renoun/src/cli/cache-token.ts')
   })

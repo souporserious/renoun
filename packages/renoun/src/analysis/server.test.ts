@@ -9,6 +9,7 @@ import * as cachedAnalysis from './cached-analysis.ts'
 import { WebSocketClient } from './rpc/client.ts'
 import { TestWebSocket } from './rpc/test-websocket.ts'
 import type { RefreshInvalidationsSinceResponse } from './refresh-notifications.ts'
+import type { AnalysisOptions } from './types.ts'
 import { createServer } from './server.ts'
 import * as getProgramModule from './get-program.ts'
 import * as highlighterModule from '../utils/create-highlighter.ts'
@@ -219,6 +220,98 @@ describe('analysis server refresh invalidations', () => {
     expect(response.nextCursor).toBe(1)
     expect(response.filePath).toBe(relativeFilePath)
     expect(response.filePaths).toEqual([relativeFilePath])
+  })
+
+  test('normalizes virtual source update paths from nested package cwd values', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    const uniqueId = Date.now()
+    const originalCwd = process.cwd()
+    const rootDirectory = join('/tmp', `renoun-analysis-server-${uniqueId}`)
+    const packageDirectory = join(rootDirectory, 'packages/renoun')
+    const tsConfigFilePath = join(packageDirectory, 'tsconfig.json')
+    const workspaceRelativeFilePath =
+      `packages/renoun/src/virtual-source-update-${uniqueId}.ts`
+    const duplicatedFilePath = join(
+      packageDirectory,
+      workspaceRelativeFilePath
+    )
+
+    vi.spyOn(rootDirectoryModule, 'getRootDirectory').mockReturnValue(
+      rootDirectory
+    )
+    mkdirSync(packageDirectory, { recursive: true })
+
+    try {
+      process.chdir(packageDirectory)
+
+      server = await createServer({ host: '127.0.0.1' })
+      client = new WebSocketClient(server.getId())
+      await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+      const refreshNotificationPromise = new Promise<{
+        data?: {
+          filePath?: string
+          filePaths?: string[]
+        }
+        type?: string
+      }>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('[renoun] expected refresh notification'))
+        }, REFRESH_NOTIFICATION_TIMEOUT_MS)
+
+        client?.once('notification', (message) => {
+          clearTimeout(timeout)
+          resolve(
+            message as {
+              data?: {
+                filePath?: string
+                filePaths?: string[]
+              }
+              type?: string
+            }
+          )
+        })
+      })
+
+      await client.callMethod<
+        {
+          filePath: string
+          sourceText: string
+          analysisOptions?: AnalysisOptions
+        },
+        void
+      >('createSourceFile', {
+        filePath: duplicatedFilePath,
+        sourceText: 'export const value = 1\n',
+        analysisOptions: {
+          tsConfigFilePath,
+        },
+      })
+
+      const notification = await refreshNotificationPromise
+      expect(notification.type).toBe('refresh')
+      expect(notification.data?.filePath).toBe(workspaceRelativeFilePath)
+      expect(notification.data?.filePaths).toEqual([workspaceRelativeFilePath])
+
+      const transpiled = await client.callMethod<
+        {
+          filePath: string
+          analysisOptions?: AnalysisOptions
+        },
+        string
+      >('transpileSourceFile', {
+        filePath: join(rootDirectory, workspaceRelativeFilePath),
+        analysisOptions: {
+          tsConfigFilePath,
+        },
+      })
+
+      expect(transpiled).toContain('export const value = 1')
+    } finally {
+      process.chdir(originalCwd)
+    }
   })
 
   test('publishes the effective refresh notification mode to process env', async () => {

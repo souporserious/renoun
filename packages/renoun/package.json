@@ -120,8 +120,10 @@
     }
   },
   "scripts": {
-    "build": "tsc && chmod +x dist/cli/index.js",
+    "clean:dist": "node --experimental-strip-types ./scripts/clean-dist.ts",
+    "build": "node --experimental-strip-types ./scripts/clean-dist.ts && tsc && chmod +x dist/cli/index.js",
     "postbuild": "node ./scripts/patch-load-package.ts",
+    "prepack": "npm run build",
     "dev": "node ./scripts/dev.ts",
     "grammars": "node ./scripts/grammars.ts",
     "theme": "node ./scripts/theme.ts",
