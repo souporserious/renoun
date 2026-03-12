@@ -637,6 +637,7 @@ export class GitFileSystem
   readonly #worktreeEnabled: boolean
   #worktreeRootChecked = false
   #worktreeRootExists = false
+  #worktreeIgnoreCache = new Map<string, boolean>()
 
   // Singleton promise to prevent parallel unshallow operations
   #unshallowPromise: Promise<void> | null = null
@@ -794,6 +795,10 @@ export class GitFileSystem
   }
 
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    if (this.#refIsExplicit) {
+      return null
+    }
+
     try {
       await this.#ensureRepoReady()
 
@@ -826,6 +831,10 @@ export class GitFileSystem
     rootPath: string,
     previousToken: string
   ): Promise<readonly string[] | null> {
+    if (this.#refIsExplicit) {
+      return null
+    }
+
     try {
       await this.#ensureRepoReady()
 
@@ -1196,6 +1205,7 @@ export class GitFileSystem
     }
     this.#closed = true
     this.#historyWarmupInFlight.clear()
+    this.#worktreeIgnoreCache.clear()
     if (this.#session) {
       Session.reset(this, this.#session.snapshot.id)
       this.#session = undefined
@@ -1288,7 +1298,14 @@ export class GitFileSystem
       return false
     }
 
-    return true
+    const cached = this.#worktreeIgnoreCache.get(relativePath)
+    if (cached !== undefined) {
+      return !cached
+    }
+
+    const ignored = this.isFilePathGitIgnored(relativePath)
+    this.#worktreeIgnoreCache.set(relativePath, ignored)
+    return !ignored
   }
 
   #resolveRepoAbsolutePath(path: string): string {
@@ -1563,6 +1580,7 @@ export class GitFileSystem
     this.repoRoot = resolved
     this.#worktreeRootChecked = false
     this.#worktreeRootExists = false
+    this.#worktreeIgnoreCache.clear()
     if (!this.#git) {
       this.#git = new GitObjectStore(this.repoRoot)
     }
@@ -1683,6 +1701,7 @@ export class GitFileSystem
   #invalidateSessionPaths(paths: readonly string[]): void {
     const session = Session.for(this, undefined, this.#cache)
     const pathsToInvalidate = new Set<string>()
+    this.#worktreeIgnoreCache.clear()
 
     for (const path of paths) {
       const normalizedPath = this.#normalizeRepoPath(path)
@@ -1711,6 +1730,7 @@ export class GitFileSystem
     this.#refCommit = null
     this.#refCommitPromise = null
     this.#historyWarmupInFlight.clear()
+    this.#worktreeIgnoreCache.clear()
 
     const session = this.#session
     if (session) {
@@ -3838,6 +3858,7 @@ export class GitFileSystem
       this.repoRoot = resolved
       this.#worktreeRootChecked = false
       this.#worktreeRootExists = false
+      this.#worktreeIgnoreCache.clear()
       if (!this.#git) {
         this.#git = new GitObjectStore(this.repoRoot)
       }

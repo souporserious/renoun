@@ -6732,6 +6732,28 @@ export type Metadata = Value`,
     }
   })
 
+  test('stays unavailable after disposal while initialization is still in flight', async () => {
+    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-dispose-'))
+    const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+
+    try {
+      const first = getCacheStorePersistence({ dbPath })
+      disposeCacheStorePersistence({ dbPath })
+
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      expect(first.isAvailable()).toBe(false)
+
+      const second = getCacheStorePersistence({ dbPath })
+      expect(second).not.toBe(first)
+
+      await expect(second.load('test:dispose-race')).resolves.toBeUndefined()
+    } finally {
+      disposeCacheStorePersistence({ dbPath })
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('preserves persisted rows when schema version changes', async () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-schema-'))
 

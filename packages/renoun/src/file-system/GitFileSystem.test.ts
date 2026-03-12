@@ -446,6 +446,37 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('disables workspace token reuse for explicit refs', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+    git(repoRoot, ['checkout', '-b', 'feature'])
+
+    const store = new GitFileSystem({
+      repository: repoRoot,
+      cacheDirectory,
+      ref: 'main',
+    })
+
+    try {
+      expect(await store.getWorkspaceChangeToken('.')).toBeNull()
+      expect(
+        await store.getWorkspaceChangedPathsSinceToken('.', 'head:any')
+      ).toBeNull()
+      expect(await store.readFile('src/index.ts')).toBe(`export const value = 1`)
+
+      git(repoRoot, ['checkout', 'main'])
+      commitFile(repoRoot, 'src/index.ts', `export const value = 2`, 'update')
+      git(repoRoot, ['checkout', 'feature'])
+
+      expect(await store.getWorkspaceChangeToken('.')).toBeNull()
+      expect(await store.readFile('src/index.ts')).toBe(`export const value = 2`)
+    } finally {
+      store.close()
+    }
+  })
+
   test('tracks unicode file names in workspace changed paths', async ({
     repoRoot,
     cacheDirectory,
@@ -2924,37 +2955,31 @@ describe('GitFileSystem', () => {
     expect(fooUpdated!.sha).toBe(c2.hash)
   })
 
-  test('includes files from ignored directories when includeGitIgnoredFiles is enabled', async ({
+  test('excludes gitignored worktree entries from readDirectory', async ({
     repoRoot,
     cacheDirectory,
   }) => {
-    commitFile(repoRoot, '.gitignore', 'src/\n', 'ignore src directory')
-    mkdirSync(join(repoRoot, 'src'), { recursive: true })
-    writeFileSync(join(repoRoot, 'src', 'index.ts'), 'export const value = 1')
+    commitFiles(
+      repoRoot,
+      [
+        { filename: '.gitignore', content: 'dist/\n' },
+        { filename: 'src/index.ts', content: 'export const value = 1' },
+      ],
+      'init'
+    )
+    mkdirSync(join(repoRoot, 'dist'), { recursive: true })
+    writeFileSync(join(repoRoot, 'dist', 'ignored.ts'), 'export const ignored = 1')
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
-    const directory = new Directory({
-      fileSystem: store,
-      tsConfigPath: 'tsconfig.json',
-    })
+    const asyncEntries = (await store.readDirectory('.'))
+      .map((entry) => entry.name)
+      .sort()
+    const syncEntries = store.readDirectorySync('.')
+      .map((entry) => entry.name)
+      .sort()
 
-    const listFiles = async (includeGitIgnoredFiles: boolean) => {
-      const entries = await directory.getEntries({
-        recursive: true,
-        includeDirectoryNamedFiles: true,
-        includeIndexAndReadmeFiles: true,
-        includeGitIgnoredFiles,
-        includeTsConfigExcludedFiles: true,
-      })
-
-      return entries
-        .filter((entry) => entry instanceof File)
-        .map((entry) => entry.relativePath)
-        .sort()
-    }
-
-    expect(await listFiles(false)).toEqual([])
-    expect(await listFiles(true)).toEqual(['src/index.ts'])
+    expect(asyncEntries).toEqual(['.gitignore', 'src'])
+    expect(syncEntries).toEqual(['.gitignore', 'src'])
   })
 
   test('invalidates shared production cache state for write/delete/rename/copy mutations', async ({

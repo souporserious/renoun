@@ -205,7 +205,7 @@ export function useResolvedQuickInfoClientState({
     return toQuickInfoHydrationIdentityKey(request)
   }, [request])
   const hydratedQuickInfoRequestKeyRef = React.useRef<string | null>(
-    quickInfo !== undefined && requestKey ? requestKey : null
+    quickInfo !== undefined ? getHydratedQuickInfoRequestKey(request) : null
   )
   const previousHydrationRequestIdentityKeyRef =
     React.useRef(hydrationRequestIdentityKey)
@@ -233,8 +233,8 @@ export function useResolvedQuickInfoClientState({
       hydrationRequestIdentityKey
     previousHasHydratedQuickInfoRef.current = hasHydratedQuickInfo
     hydratedQuickInfoRequestKeyRef.current =
-      hasHydratedQuickInfo && requestKey ? requestKey : null
-  }, [hydrationRequestIdentityKey, quickInfo, requestKey])
+      hasHydratedQuickInfo ? getHydratedQuickInfoRequestKey(request) : null
+  }, [hydrationRequestIdentityKey, quickInfo, request])
 
   React.useEffect(() => {
     let isDisposed = false
@@ -357,7 +357,7 @@ function toAnalysisServerRuntimeKey(
   return `${runtime.id}:${runtime.host ?? 'localhost'}:${runtime.port}`
 }
 
-function toQuickInfoCacheKey(request: ResolvedQuickInfoRequest): string {
+function toQuickInfoCacheKey(request: QuickInfoRequest): string {
   const analysisVersion = request.analysisVersion ?? `${request.runtime.id}:0:0`
   const valueSignature = request.valueSignature ?? ''
   return serializeQuickInfoKey([
@@ -368,6 +368,16 @@ function toQuickInfoCacheKey(request: ResolvedQuickInfoRequest): string {
     request.filePath,
     request.position,
   ])
+}
+
+function getHydratedQuickInfoRequestKey(
+  request: QuickInfoRequest | undefined
+): string | null {
+  if (!request) {
+    return null
+  }
+
+  return toQuickInfoCacheKey(request)
 }
 
 function toQuickInfoHydrationIdentityKey(
@@ -579,6 +589,7 @@ async function requestDisplayTokens(
 }
 
 export const __TEST_ONLY__ = {
+  getHydratedQuickInfoRequestKey,
   getQuickInfoForRequest,
   resolveQuickInfoAnalysisVersion,
   resolveQuickInfoRuntime,

@@ -291,6 +291,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   readonly #readyPromise: Promise<void>
   #debugCachePersistence: boolean
   #availability: 'initializing' | 'available' | 'unavailable' = 'initializing'
+  #lifecycleGeneration = 0
+  #isClosed = false
   #writesSincePrune = 0
   #lastPrunedAt = 0
   #lastInflightCleanupAt = 0
@@ -318,7 +320,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#structuredIdCacheEnabled = resolveStructuredIdCacheEnabled(
       options.structuredIdCacheEnabled
     )
-    this.#readyPromise = this.#initialize()
+    this.#readyPromise = this.#initialize(++this.#lifecycleGeneration)
   }
 
   setDebugCachePersistence(enabled: boolean): void {
@@ -1726,15 +1728,37 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       })
   }
 
-  async #initialize(): Promise<void> {
+  #shouldAbortInitialization(generation: number): boolean {
+    return this.#isClosed || generation !== this.#lifecycleGeneration
+  }
+
+  #closeDatabase(database: any): void {
+    if (!database || typeof database.close !== 'function') {
+      return
+    }
+
+    try {
+      database.close()
+    } catch (error) {
+      reportBestEffortError('file-system/cache-sqlite', error)
+    }
+  }
+
+  async #initialize(generation: number): Promise<void> {
     for (let attempt = 0; attempt <= SQLITE_DEFAULTS.initBusyRetries; attempt += 1) {
       let database: any
 
       try {
         await mkdir(dirname(this.#dbPath), { recursive: true })
+        if (this.#shouldAbortInitialization(generation)) {
+          return
+        }
 
         const sqliteModule = (await loadSqliteModule()) as {
           DatabaseSync?: new (path: string) => any
+        }
+        if (this.#shouldAbortInitialization(generation)) {
+          return
         }
         const DatabaseSync = sqliteModule.DatabaseSync
 
@@ -1743,6 +1767,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
 
         database = new DatabaseSync(this.#dbPath)
+        if (this.#shouldAbortInitialization(generation)) {
+          this.#closeDatabase(database)
+          return
+        }
         this.#clearPreparedStatements()
         this.#clearStructuredDependencyCaches()
         this.#db = database
@@ -1780,20 +1808,29 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         }
         this.#initializeMissingDependencyMetadata(database)
 
-        this.#availability = 'available'
         await this.#runPruneWithRetries()
+        if (this.#shouldAbortInitialization(generation)) {
+          if (this.#db === database) {
+            this.#db = undefined
+          }
+          this.#clearPreparedStatements()
+          this.#clearStructuredDependencyCaches()
+          this.#closeDatabase(database)
+          return
+        }
+        this.#availability = 'available'
         return
       } catch (error) {
+        const shouldAbort = this.#shouldAbortInitialization(generation)
         this.#clearPreparedStatements()
         this.#clearStructuredDependencyCaches()
-        this.#db = undefined
+        if (this.#db === database) {
+          this.#db = undefined
+        }
+        this.#closeDatabase(database)
 
-        if (database && typeof database.close === 'function') {
-          try {
-            database.close()
-          } catch (error) {
-            reportBestEffortError('file-system/cache-sqlite', error)
-          }
+        if (shouldAbort) {
+          return
         }
 
         if (
@@ -2854,6 +2891,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
   close() {
     const database = this.#db
+    this.#isClosed = true
+    this.#lifecycleGeneration += 1
     this.#pruneInFlight = undefined
     this.#lastAccessTouchAtByNodeKey.clear()
     this.#clearStructuredDependencyCaches()
@@ -2861,9 +2900,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#db = undefined
     this.#availability = 'unavailable'
 
-    if (database && typeof database.close === 'function') {
-      database.close()
-    }
+    this.#closeDatabase(database)
   }
 
   #shouldDebugCachePersistenceLoadFailure(nodeKey: string): boolean {

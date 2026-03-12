@@ -375,6 +375,26 @@ describe('QuickInfoClientPopover runtime selection', () => {
       })
     ).toBe(false)
   })
+
+  it('seeds hydrated quick info reuse from the server request identity', () => {
+    expect(__TEST_ONLY__.getHydratedQuickInfoRequestKey(BASE_REQUEST)).toBe(
+      '["quick-info-cache-test:0:0","quick-info-cache-test:127.0.0.1:43123","","","/tmp/history.ts",42]'
+    )
+
+    expect(
+      __TEST_ONLY__.shouldReuseHydratedQuickInfo({
+        quickInfo: {
+          displayText: 'History',
+          documentationText: 'Server rendered quick info',
+        },
+        canRequestQuickInfo: true,
+        requestKey:
+          '["quick-info-cache-test-secondary:0:0","quick-info-cache-test-secondary:::1:43124","","","/tmp/history.ts",42]',
+        hydratedRequestKey:
+          __TEST_ONLY__.getHydratedQuickInfoRequestKey(BASE_REQUEST),
+      })
+    ).toBe(false)
+  })
 })
 
 describe('QuickInfoClientPopover documentation markdown', () => {

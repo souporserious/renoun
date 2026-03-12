@@ -935,6 +935,47 @@ describe('QuickInfo browser regression', () => {
     }
   })
 
+  it('re-fetches hydrated quick info when the selected runtime changed before mount', async () => {
+    const originalQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)
+    if (!originalQuickInfo) {
+      throw new Error('Expected initial quick info fixture to exist.')
+    }
+
+    QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
+      ...originalQuickInfo,
+      documentationText: 'Refetched quick info after pre-hydration runtime change.',
+    })
+    setAnalysisClientBrowserRuntime(SECOND_RUNTIME)
+    renderHydratedQuickInfoFixture(root, 'hydrated-runtime-pre-hydration', {
+      displayText: '(alias) const History',
+      documentationText: 'Server rendered quick info snapshot.',
+    })
+
+    try {
+      await waitFor(
+        () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+        1_000
+      )
+      const symbol = getSymbolAnchor('symbol-short')
+
+      hoverSymbol(symbol)
+      await waitFor(
+        () =>
+          counters.quickInfoByRuntimeKey.get(
+            'quick-info-browser-test-secondary@ws://127.0.0.1:43124'
+          ) === 1,
+        1_000
+      )
+      await waitFor(() => {
+        return getPopover()?.textContent?.includes(
+          'Refetched quick info after pre-hydration runtime change.'
+        )
+      }, 1_000)
+    } finally {
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, originalQuickInfo)
+    }
+  })
+
   it('re-fetches hydrated quick info after the selected runtime endpoint changes without a new runtime id', async () => {
     const originalQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)
     if (!originalQuickInfo) {
