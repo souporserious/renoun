@@ -1,5 +1,5 @@
 import React, { Fragment } from 'react'
-import { styled, type CSSObject } from 'restyle'
+import { type CSSObject } from 'restyle'
 
 import { getTokens } from '../../analysis/node-client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'

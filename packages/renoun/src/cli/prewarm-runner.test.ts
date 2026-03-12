@@ -132,6 +132,57 @@ describe('runPrewarmSafely', () => {
     })
   })
 
+  test('falls back to inline prewarm when the worker reports an error', async () => {
+    const spawnMock = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        killed: boolean
+        kill: ReturnType<typeof vi.fn>
+        unref: ReturnType<typeof vi.fn>
+      }
+
+      child.killed = false
+      child.kill = vi.fn(() => {
+        child.killed = true
+      })
+      child.unref = vi.fn()
+
+      setTimeout(() => {
+        child.emit('message', {
+          type: 'error',
+          error: 'worker failed',
+          durationMs: 5,
+        })
+        child.emit('exit', 1, null)
+      }, 0)
+
+      return child
+    })
+    const prewarmMock = vi.fn(async () => undefined)
+
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnMock,
+    }))
+    vi.doMock('../utils/env.ts', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('../utils/env.ts')>()
+      return {
+        ...actual,
+        isVitestRuntime: () => false,
+      }
+    })
+    vi.doMock('./prewarm.ts', () => ({
+      prewarmRenounRpcServerCache: prewarmMock,
+    }))
+
+    const { runPrewarmSafely } = await import('./prewarm-runner.ts')
+
+    runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'node20.json' } })
+
+    await vi.waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(prewarmMock).toHaveBeenCalledTimes(1)
+    })
+  })
+
   test('falls back to inline prewarm after a worker timeout before continuing queued work', async () => {
     vi.useFakeTimers()
 

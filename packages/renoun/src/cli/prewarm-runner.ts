@@ -405,6 +405,10 @@ function startPrewarmRequest(request: PrewarmRequest): void {
       }
 
       if (message.type === 'error') {
+        if (didHandleTerminalMessage) {
+          return
+        }
+
         didHandleTerminalMessage = true
         getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
           data: {
@@ -416,6 +420,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
             execution: 'worker',
           },
         }))
+        runInlineFallback()
       }
     })
 

@@ -1462,6 +1462,15 @@ export class File<
     return this.#directory
   }
 
+  /** @internal */
+  getCollectionRootCacheValue() {
+    return {
+      kind: 'file',
+      pathname: this.getPathname(),
+      workspacePath: normalizePathKey(this.workspacePath),
+    }
+  }
+
   /**
    * Get the previous and next sibling entries (files or directories) of the parent directory.
    * If the file is an index or readme file, the siblings will be retrieved from the parent directory.
@@ -6257,7 +6266,7 @@ export class Directory<
     return this.#getSession()
   }
 
-  #getFilterSignature() {
+  #getFilterSignature(session = this.#getSession()) {
     if (this.#filterPattern) {
       return `pattern:${this.#filterPattern}`
     }
@@ -6268,30 +6277,41 @@ export class Directory<
     }
 
     if (typeof filter === 'function') {
-      return this.#getSession().getFunctionId(filter, 'filter')
+      return session.getFunctionId(filter, 'filter')
     }
 
     if (filter instanceof Minimatch) {
       return `pattern:${filter.pattern}`
     }
 
-    return `filter:${this.#getSession().createValueSignature(filter, 'filter')}`
+    return `filter:${session.createValueSignature(filter, 'filter')}`
   }
 
-  #getSortSignature() {
+  #getSortSignature(session = this.#getSession()) {
     if (!this.#sort) {
       return 'sort:none'
     }
 
     if (typeof this.#sort === 'function') {
-      return this.#getSession().getFunctionId(this.#sort, 'sort')
+      return session.getFunctionId(this.#sort, 'sort')
     }
 
     if (typeof this.#sort === 'string') {
       return `sort:string:${this.#sort}`
     }
 
-    return `sort:${this.#getSession().createValueSignature(this.#sort, 'sort')}`
+    return `sort:${session.createValueSignature(this.#sort, 'sort')}`
+  }
+
+  /** @internal */
+  getCollectionRootCacheValue(session = this.#getSession()) {
+    return {
+      kind: 'directory',
+      pathname: this.getPathname(),
+      workspacePath: normalizePathKey(this.workspacePath),
+      filterSignature: this.#getFilterSignature(session),
+      sortSignature: this.#getSortSignature(session),
+    }
   }
 
   #hasDynamicEntriesBehavior() {
@@ -9038,11 +9058,11 @@ export class Collection<
   }
 
   #toCollectionRootSignature(session: Session): string {
-    const roots = this.#entries.map((entry) => ({
-      kind: entry instanceof Directory ? 'directory' : 'file',
-      workspacePath: normalizePathKey(entry.workspacePath),
-      pathname: entry.getPathname(),
-    }))
+    const roots = this.#entries.map((entry) =>
+      entry instanceof Directory
+        ? entry.getCollectionRootCacheValue(session)
+        : entry.getCollectionRootCacheValue()
+    )
 
     return session.createValueSignature(roots, 'collection-root')
   }

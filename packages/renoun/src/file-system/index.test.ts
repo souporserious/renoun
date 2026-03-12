@@ -3125,6 +3125,41 @@ export function identity<T>(value: T) {
     expect(nextFileEntry!.getPathname()).toBe('/guides/next-steps')
   })
 
+  test('entry group siblings keep distinct navigation order for differently sorted roots', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+      'docs/c.mdx': '',
+    })
+    const cache = new Cache()
+    const ascendingDocs = new Directory({
+      path: 'docs',
+      fileSystem,
+      cache,
+      filter: '*.mdx',
+      sort: 'name',
+    })
+    const descendingDocs = new Directory({
+      path: 'docs',
+      fileSystem,
+      cache,
+      filter: '*.mdx',
+      sort: { key: 'name', direction: 'descending' },
+    })
+    const ascendingCollection = new Collection({ entries: [ascendingDocs] })
+    const descendingCollection = new Collection({ entries: [descendingDocs] })
+
+    const [ascendingPreviousEntry, ascendingNextEntry] =
+      await ascendingCollection.getSiblingsFor('/docs/b')
+    const [descendingPreviousEntry, descendingNextEntry] =
+      await descendingCollection.getSiblingsFor('/docs/b')
+
+    expect(ascendingPreviousEntry?.getPathname()).toBe('/docs/a')
+    expect(ascendingNextEntry?.getPathname()).toBe('/docs/c')
+    expect(descendingPreviousEntry?.getPathname()).toBe('/docs/c')
+    expect(descendingNextEntry?.getPathname()).toBe('/docs/a')
+  })
+
   test('entry group getEntries caches recursive results and invalidates on session changes', async () => {
     const fileSystem = new InMemoryFileSystem({
       'docs/a.mdx': '',

@@ -387,7 +387,9 @@ function toQuickInfoHydrationIdentityKey(
   ])
 }
 
-function serializeQuickInfoKey(parts: readonly Array<string | number>): string {
+function serializeQuickInfoKey(
+  parts: ReadonlyArray<string | number>
+): string {
   return JSON.stringify(parts)
 }
 
