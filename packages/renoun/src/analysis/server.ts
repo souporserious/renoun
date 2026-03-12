@@ -1668,6 +1668,9 @@ export async function createServer(options?: CreateServerOptions) {
       queueCodeFenceLanguagePrewarm([filePath], {
         priority: 'immediate',
       })
+      queueRefreshNotification([filePath], 'virtual-source-update', {
+        priority: 'immediate',
+      })
     },
     {
       memoize: false,

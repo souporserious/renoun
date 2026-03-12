@@ -5391,6 +5391,13 @@ export class Directory<
     return this.#filterPattern.includes('**') ? 'recursive' : 'shallow'
   }
 
+  /** Returns whether this directory uses a predicate filter. */
+  hasPredicateFilter(): boolean {
+    return (
+      typeof this.#filter === 'function' && this.#filterPattern === undefined
+    )
+  }
+
   async #passesFilter(entry: FileSystemEntry<LoaderTypes>): Promise<boolean> {
     if (!this.#filter) {
       return true
@@ -6315,7 +6322,7 @@ export class Directory<
   }
 
   #hasDynamicEntriesBehavior() {
-    if (typeof this.#filter === 'function' && this.#filterPattern === undefined) {
+    if (this.hasPredicateFilter()) {
       return true
     }
 
@@ -9797,14 +9804,17 @@ export async function resolveFileFromEntry<
     try {
       return (await entry.getFile('index', extension as any)) as any
     } catch (error) {
-      if (error instanceof FileNotFoundError || error instanceof Error) {
-        try {
-          return (await entry.getFile('readme', extension as any)) as any
-        } catch {
+      if (!(error instanceof FileNotFoundError)) {
+        throw error
+      }
+      try {
+        return (await entry.getFile('readme', extension as any)) as any
+      } catch (fallbackError) {
+        if (fallbackError instanceof FileNotFoundError) {
           return undefined
         }
+        throw fallbackError
       }
-      throw error
     }
   }
 

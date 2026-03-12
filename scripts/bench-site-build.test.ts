@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_FILTER,
   resolveBuildInvocation,
+  resolveCleanPathForRemoval,
   resolveDefaultCleanPaths,
 } from './bench-site-build.mjs'
 
@@ -47,6 +48,18 @@ describe('bench site build invocation', () => {
       command: 'pnpm.cmd',
       args: ['build', '--filter=@apps/site'],
     })
+  })
+
+  test('rejects Windows clean paths on another drive', () => {
+    expect(() =>
+      resolveCleanPathForRemoval({
+        projectRoot: 'C:\\workspace\\renoun',
+        cleanPath: 'D:\\benchmark-cache',
+        platform: 'win32',
+      })
+    ).toThrow(
+      'Refusing to remove clean path outside workspace: D:\\benchmark-cache -> D:\\benchmark-cache'
+    )
   })
 
   test('cleans the default site benchmark outputs before cold runs', async () => {

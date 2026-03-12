@@ -3,7 +3,7 @@
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import { dirname, join, parse, relative, resolve, sep } from 'node:path'
+import { dirname, join, posix, resolve, win32 } from 'node:path'
 import { tmpdir } from 'node:os'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
@@ -194,26 +194,46 @@ function toPercent(value, digits = 1) {
   return `${value.toFixed(digits)}%`
 }
 
+function getPathApi(platform = process.platform) {
+  return platform === 'win32' ? win32 : posix
+}
+
+export function resolveCleanPathForRemoval({
+  projectRoot,
+  cleanPath,
+  platform = process.platform,
+}) {
+  const pathApi = getPathApi(platform)
+  const resolvedProjectRoot = pathApi.resolve(projectRoot)
+  const absolutePath = pathApi.resolve(resolvedProjectRoot, cleanPath)
+  const relativeToProjectRoot = pathApi.relative(
+    resolvedProjectRoot,
+    absolutePath
+  )
+  const isOutsideProjectRoot =
+    relativeToProjectRoot === '..' ||
+    relativeToProjectRoot.startsWith(`..${pathApi.sep}`) ||
+    pathApi.isAbsolute(relativeToProjectRoot)
+
+  if (
+    absolutePath === resolvedProjectRoot ||
+    absolutePath === pathApi.parse(absolutePath).root ||
+    isOutsideProjectRoot
+  ) {
+    throw new Error(
+      `Refusing to remove clean path outside workspace: ${cleanPath} -> ${absolutePath}`
+    )
+  }
+
+  return absolutePath
+}
+
 async function cleanPaths(projectRoot, cleanPaths) {
-  const resolvedProjectRoot = resolve(projectRoot)
-
-  for (const relativePath of cleanPaths) {
-    const absolutePath = resolve(resolvedProjectRoot, relativePath)
-    const relativeToProjectRoot = relative(resolvedProjectRoot, absolutePath)
-    const isOutsideProjectRoot =
-      relativeToProjectRoot === '..' ||
-      relativeToProjectRoot.startsWith(`..${sep}`)
-
-    if (
-      absolutePath === resolvedProjectRoot ||
-      absolutePath === parse(absolutePath).root ||
-      isOutsideProjectRoot
-    ) {
-      throw new Error(
-        `Refusing to remove clean path outside workspace: ${relativePath} -> ${absolutePath}`
-      )
-    }
-
+  for (const cleanPath of cleanPaths) {
+    const absolutePath = resolveCleanPathForRemoval({
+      projectRoot,
+      cleanPath,
+    })
     await rm(absolutePath, { recursive: true, force: true })
   }
 }

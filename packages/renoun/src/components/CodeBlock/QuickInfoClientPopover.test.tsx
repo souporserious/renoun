@@ -1,3 +1,6 @@
+import React from 'react'
+import { PassThrough } from 'node:stream'
+import { renderToPipeableStream } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
 const mockGetQuickInfoAtPosition = vi.fn()
@@ -19,6 +22,7 @@ vi.mock('../../analysis/browser-client.ts', () => ({
 }))
 
 import { __TEST_ONLY__ } from './QuickInfoClientState.tsx'
+import { __TEST_ONLY__ as QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__ } from './QuickInfoClientPopover.tsx'
 
 type QuickInfoRequest = Parameters<
   (typeof __TEST_ONLY__)['getQuickInfoForRequest']
@@ -33,6 +37,54 @@ const BASE_REQUEST: QuickInfoRequest = {
     port: '43123',
     host: '127.0.0.1',
   },
+}
+
+async function renderToStringAsync(
+  element: React.ReactElement,
+  timeoutMs = 30_000
+) {
+  return new Promise<string>((resolve, reject) => {
+    const stream = new PassThrough()
+    const chunks: Buffer[] = []
+    let settled = false
+    const finish = (error?: unknown) => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      if (error) {
+        reject(error)
+      } else {
+        resolve(Buffer.concat(chunks).toString('utf8'))
+      }
+    }
+
+    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)))
+    stream.on('error', (error) => finish(error))
+    stream.on('end', () => finish())
+
+    const { pipe, abort } = renderToPipeableStream(element, {
+      onAllReady() {
+        pipe(stream)
+      },
+      onShellError(error) {
+        finish(error)
+      },
+      onError(error) {
+        finish(error)
+      },
+    })
+
+    const timeout = setTimeout(() => {
+      try {
+        abort()
+      } catch {
+        // ignore
+      }
+      finish(new Error(`renderToStringAsync timed out after ${timeoutMs}ms`))
+    }, timeoutMs)
+  })
 }
 
 describe('QuickInfoClientPopover cache behavior', () => {
@@ -281,4 +333,19 @@ describe('QuickInfoClientPopover runtime selection', () => {
       })
     ).toBe(false)
   })
+})
+
+describe('QuickInfoClientPopover documentation markdown', () => {
+  it('renders fenced code blocks with the CodeBlock component', async () => {
+    const content =
+      await QUICK_INFO_CLIENT_POPOVER_TEST_ONLY__.getQuickInfoDocumentationContent(
+        '```ts path="history.ts"\nconst history = createHistory()\n```'
+      )
+    const html = await renderToStringAsync(<>{content}</>)
+
+    expect(html).toContain('Copy code to clipboard')
+    expect(html).toContain('<pre')
+    expect(html).toContain('createHistory')
+    expect(html).not.toContain('<codeblock')
+  }, 60_000)
 })

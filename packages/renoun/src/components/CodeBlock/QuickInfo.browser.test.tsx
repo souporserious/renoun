@@ -566,6 +566,7 @@ describe('QuickInfo browser regression', () => {
         'inline code'
       )
       expect(getPopover()?.querySelector('table td')?.textContent).toBe('Alpha')
+      expect(getPopover()?.querySelector('codeblock')).toBeNull()
       expect(getPopover()?.querySelector('pre code')?.textContent).toContain(
         'const history = createHistory()'
       )

@@ -3911,6 +3911,64 @@ date: 2024-12-24
     }
   })
 
+  test('resolveFileFromEntry falls back to readme when index is missing', async () => {
+    class MissingIndexDirectory extends Directory {
+      override async getFile(
+        path: string | string[],
+        extension?: string | string[]
+      ) {
+        const normalizedPath = Array.isArray(path) ? path.join('/') : path
+
+        if (normalizedPath.toLowerCase() === 'index') {
+          throw new FileNotFoundError(path, extension)
+        }
+
+        return super.getFile(path, extension)
+      }
+    }
+
+    const fileSystem = new InMemoryFileSystem({
+      'docs/README.mdx': '# Project',
+    })
+    const docsDirectory = new MissingIndexDirectory({
+      path: 'docs',
+      fileSystem,
+    })
+
+    const file = await resolveFileFromEntry(docsDirectory, 'mdx')
+
+    expect(file?.baseName.toLowerCase()).toBe('readme')
+  })
+
+  test('resolveFileFromEntry rethrows index lookup errors that are not missing-file errors', async () => {
+    class BrokenIndexDirectory extends Directory {
+      override async getFile(
+        path: string | string[],
+        extension?: string | string[]
+      ) {
+        const normalizedPath = Array.isArray(path) ? path.join('/') : path
+
+        if (normalizedPath.toLowerCase() === 'index') {
+          throw new Error('index lookup failed')
+        }
+
+        return super.getFile(path, extension)
+      }
+    }
+
+    const fileSystem = new InMemoryFileSystem({
+      'docs/README.mdx': '# Project',
+    })
+    const docsDirectory = new BrokenIndexDirectory({
+      path: 'docs',
+      fileSystem,
+    })
+
+    await expect(resolveFileFromEntry(docsDirectory, 'mdx')).rejects.toThrow(
+      'index lookup failed'
+    )
+  })
+
   test('query path with modifier and separate extensions', async () => {
     const fileSystem = new InMemoryFileSystem({
       'Button.examples.tsx': ``,

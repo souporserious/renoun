@@ -44,7 +44,7 @@ interface FakeDirectoryEntry {
 }
 
 interface FakeDirectorySource extends FakeDirectoryEntry {
-  getFilterPatternKind: () => 'recursive' | 'shallow' | null
+  hasPredicateFilter: () => boolean
 }
 
 interface FakeCollectionSource {
@@ -58,7 +58,7 @@ function createFakeDirectoryEntry(
     getEntries?: (options?: {
       recursive?: boolean
     }) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
-    getFilterPatternKind?: () => 'recursive' | 'shallow' | null
+    hasPredicateFilter?: () => boolean
   }
 ): FakeDirectorySource {
   return {
@@ -67,7 +67,7 @@ function createFakeDirectoryEntry(
     depth: pathname.split('/').filter(Boolean).length - 1,
     workspacePath: pathname.replace(/^\/+/, '') || '.',
     getPathname: () => pathname,
-    getFilterPatternKind: options?.getFilterPatternKind ?? (() => 'recursive'),
+    hasPredicateFilter: options?.hasPredicateFilter ?? (() => false),
     getEntries: options?.getEntries ?? (async () => []),
     getParent: () => {
       if (options?.parent) {
@@ -132,6 +132,23 @@ describe('Navigation', () => {
     expect(markup).toContain('Quickstart')
   })
 
+  test('does not build a recursive tree for unfiltered directories', async () => {
+    const rootDirectory = createFakeDirectoryEntry('/docs')
+    const guideEntry = createFakeFileEntry('Guide', '/docs/guide', rootDirectory)
+
+    rootDirectory.getEntries = vi.fn(async () => [guideEntry])
+
+    const { Navigation } = await import('./Navigation.tsx')
+    const element = await Navigation({ source: rootDirectory as any })
+    const markup = renderToStaticMarkup(<>{element}</>)
+
+    expect(rootDirectory.getEntries).toHaveBeenCalledTimes(1)
+    expect(rootDirectory.getEntries).not.toHaveBeenCalledWith({
+      recursive: true,
+    })
+    expect(markup).toContain('Guide')
+  })
+
   test('renders nested directory entries recursively', async () => {
     const rootDirectory = createFakeDirectoryEntry('/docs')
     const guidesDirectory = createFakeDirectoryEntry('/docs/guides', {
@@ -158,7 +175,7 @@ describe('Navigation', () => {
 
   test('keeps synthesized predicate-filtered ancestors scoped to filtered children', async () => {
     const rootDirectory = createFakeDirectoryEntry('/docs', {
-      getFilterPatternKind: () => null,
+      hasPredicateFilter: () => true,
     })
     const guidesDirectory = createFakeDirectoryEntry('/docs/guides', {
       parent: rootDirectory,
@@ -204,7 +221,7 @@ describe('Navigation', () => {
 
   test('keeps synthesized predicate-filtered ancestors in the recursive sort order', async () => {
     const rootDirectory = createFakeDirectoryEntry('/docs', {
-      getFilterPatternKind: () => null,
+      hasPredicateFilter: () => true,
     })
     const alphaDirectory = createFakeDirectoryEntry('/docs/a', {
       parent: rootDirectory,
@@ -237,7 +254,7 @@ describe('Navigation', () => {
 
   test('reuses the precomputed recursive tree without rescanning directories', async () => {
     const rootDirectory = createFakeDirectoryEntry('/docs', {
-      getFilterPatternKind: () => null,
+      hasPredicateFilter: () => true,
     })
     const guidesDirectory = createFakeDirectoryEntry('/docs/guides', {
       parent: rootDirectory,

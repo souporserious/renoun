@@ -719,6 +719,48 @@ describe('analysis node client transport guards', () => {
     })
   })
 
+  test('advances refresh version after local source updates without RPC', async () => {
+    delete process.env['RENOUN_SERVER_PORT']
+    delete process.env['RENOUN_SERVER_ID']
+
+    const project = {
+      createSourceFile: vi.fn(),
+    }
+    mocks.getProgram.mockReturnValueOnce(project as never)
+
+    const module = await import('./node-client.ts')
+    const refreshVersionListener = vi.fn()
+    const unsubscribe = module.onAnalysisClientRefreshVersionChange(
+      refreshVersionListener
+    )
+
+    try {
+      expect(module.getAnalysisClientRefreshVersion()).toBe('0:0')
+
+      await module.createSourceFile('/project/src/b.ts', 'export const b = 2')
+
+      expect(project.createSourceFile).toHaveBeenCalledWith(
+        '/project/src/b.ts',
+        'export const b = 2',
+        { overwrite: true }
+      )
+      expect(module.getAnalysisClientRefreshVersion()).toBe('0:1')
+      expect(refreshVersionListener).toHaveBeenCalledWith('0:1')
+      expect(mocks.invalidateProgramFileCache).toHaveBeenCalledWith(
+        project,
+        '/project/src/b.ts'
+      )
+      expect(mocks.invalidateRuntimeAnalysisCachePath).toHaveBeenCalledWith(
+        '/project/src/b.ts'
+      )
+      expect(
+        mocks.invalidateSharedFileTextPrefixCachePath
+      ).toHaveBeenCalledWith('/project/src/b.ts')
+    } finally {
+      unsubscribe()
+    }
+  })
+
   test('does not cache getFileExportText results when includeDependencies is enabled', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

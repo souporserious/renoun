@@ -154,6 +154,73 @@ describe('analysis server refresh invalidations', () => {
     )
   })
 
+  test('publishes refresh invalidations for virtual source updates', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+    const uniqueId = Date.now()
+    const relativeFilePath =
+      `packages/renoun/src/analysis/virtual-source-update-${uniqueId}.ts`
+    const filePath = join(process.cwd(), relativeFilePath)
+
+    const refreshNotificationPromise = new Promise<{
+      data?: {
+        filePath?: string
+        filePaths?: string[]
+      }
+      type?: string
+    }>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error('[renoun] expected refresh notification'))
+      }, REFRESH_NOTIFICATION_TIMEOUT_MS)
+
+      client?.once('notification', (message) => {
+        clearTimeout(timeout)
+        resolve(
+          message as {
+            data?: {
+              filePath?: string
+              filePaths?: string[]
+            }
+            type?: string
+          }
+        )
+      })
+    })
+
+    await client.callMethod<
+      {
+        filePath: string
+        sourceText: string
+      },
+      void
+    >('createSourceFile', {
+      filePath,
+      sourceText: 'export const value = 1\n',
+    })
+
+    const notification = await refreshNotificationPromise
+    expect(notification.type).toBe('refresh')
+    expect(notification.data?.filePath).toBe(relativeFilePath)
+    expect(notification.data?.filePaths).toEqual([relativeFilePath])
+
+    const response = await client.callMethod<
+      { sinceCursor: number },
+      RefreshInvalidationsSinceResponse
+    >('getRefreshInvalidationsSince', {
+      sinceCursor: 0,
+    })
+
+    expect(response.fullRefresh).toBe(false)
+    expect(response.nextCursor).toBe(1)
+    expect(response.filePath).toBe(relativeFilePath)
+    expect(response.filePaths).toEqual([relativeFilePath])
+  })
+
   test('publishes the effective refresh notification mode to process env', async () => {
     process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '1'
     server = await createServer({

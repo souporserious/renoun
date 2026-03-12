@@ -86,9 +86,9 @@ async function NavigationAsync({
     | undefined
 
   if (isDirectory(source)) {
-    const canUseRecursiveTree = source.getFilterPatternKind() === null
+    const shouldUseRecursiveTree = source.hasPredicateFilter()
 
-    if (!canUseRecursiveTree) {
+    if (!shouldUseRecursiveTree) {
       entries = await source.getEntries()
     } else {
       const [directEntries, recursiveEntries] = await Promise.all([

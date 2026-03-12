@@ -558,6 +558,35 @@ function invalidateAllClientRpcState(invalidationScopeKey?: string): void {
   )
 }
 
+function notifyLocalSourceFileRefresh(filePath: string): void {
+  if (typeof filePath !== 'string' || filePath.length === 0) {
+    return
+  }
+
+  const runtime = getActiveAnalysisServerRuntime()
+  if (!runtime) {
+    return
+  }
+
+  const runtimeKey = toServerRuntimeKey(runtime)
+  const nextRefreshCursor = getLatestRefreshCursorForRuntime(runtimeKey) + 1
+
+  setLatestRefreshCursorForRuntime(
+    getCurrentAnalysisClientRefreshVersionRuntimeKey(),
+    runtimeKey,
+    nextRefreshCursor,
+    {
+      notify: false,
+    }
+  )
+  emitAnalysisClientBrowserRefreshNotification({
+    runtime,
+    runtimeKey,
+    refreshCursor: nextRefreshCursor,
+    invalidationPaths: [filePath],
+  })
+}
+
 function resetClientRefreshStateForRuntimeChange(): void {
   const runtimeKey = getCurrentAnalysisClientRefreshVersionRuntimeKey()
   hydrateRefreshStateFromSharedAnalysisBrowserVersion(runtimeKey)
@@ -1851,6 +1880,8 @@ export async function createSourceFile(
   serverModules.invalidateProgramFileCache(project, filePath)
   serverModules.invalidateRuntimeAnalysisCachePath(filePath)
   serverModules.invalidateSharedFileTextPrefixCachePath(filePath)
+  invalidateAllClientRpcState()
+  notifyLocalSourceFileRefresh(filePath)
 }
 
 /**

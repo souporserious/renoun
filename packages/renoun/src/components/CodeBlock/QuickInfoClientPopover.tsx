@@ -14,6 +14,7 @@ import {
   QuickInfoMarkdown,
   type QuickInfoTheme,
 } from './QuickInfoContent.tsx'
+import { CodeBlock } from './CodeBlock.tsx'
 import { useQuickInfoContext } from './QuickInfoProvider.tsx'
 import {
   type QuickInfoData,
@@ -382,6 +383,9 @@ function getQuickInfoDocumentationContent(
   const contentPromise = getMarkdownContent({
     source: documentationText,
     components: {
+      CodeBlock: (props) => {
+        return <CodeBlock {...props} shouldAnalyze={false} />
+      },
       p: Paragraph,
       table: Table,
     },
@@ -446,3 +450,7 @@ const TypeToken = styled('span', {
 const StringToken = styled('span', {
   color: 'var(--renoun-quick-info-string, #ecc48d)',
 })
+
+export const __TEST_ONLY__ = {
+  getQuickInfoDocumentationContent,
+}
