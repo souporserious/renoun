@@ -1,50 +1,18 @@
 import React, { Fragment } from 'react'
 import { styled, type CSSObject } from 'restyle'
-import { rehypePlugins } from '@renoun/mdx/rehype'
-import { remarkPlugins } from '@renoun/mdx/remark'
 
 import { getTokens } from '../../analysis/node-client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
 import { createConcurrentQueue } from '../../utils/concurrency.ts'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
-import { Markdown, type MarkdownProps } from '../Markdown.tsx'
 import {
   createQuickInfoTheme,
   QuickInfoContent,
   QuickInfoDisplayText,
   QuickInfoDisplayToken,
-  QuickInfoMarkdown,
 } from './QuickInfoContent.tsx'
-import { CodeBlock } from './CodeBlock.tsx'
-
-const Paragraph = styled('p', {
-  fontFamily: 'sans-serif',
-  fontSize: 'inherit',
-  lineHeight: 'inherit',
-  margin: 0,
-  textWrap: 'pretty',
-})
-
-const Table = styled('table', {
-  borderCollapse: 'collapse',
-  'th, td': {
-    padding: '0.25em 0.75em',
-    border: '1px solid var(--border)',
-  },
-})
-
-const mdxProps = {
-  components: {
-    CodeBlock: (props) => {
-      return <CodeBlock {...props} shouldAnalyze={false} />
-    },
-    p: Paragraph,
-    table: Table,
-  },
-  rehypePlugins,
-  remarkPlugins,
-} satisfies Omit<MarkdownProps, 'children'>
+import { QuickInfoDocumentation } from './QuickInfoDocumentation.tsx'
 
 const quickInfoQueue = createConcurrentQueue(1)
 
@@ -106,14 +74,10 @@ async function renderQuickInfo({
       }
       documentation={
         quickInfo?.documentationText.length ? (
-          <QuickInfoMarkdown
-            css={{
-              '--border': quickInfoTheme.panelBorder,
-              color: quickInfoTheme.foreground,
-            }}
-          >
-            <Markdown children={quickInfo.documentationText} {...mdxProps} />
-          </QuickInfoMarkdown>
+          <QuickInfoDocumentation
+            documentationText={quickInfo.documentationText}
+            theme={quickInfoTheme}
+          />
         ) : null
       }
       theme={quickInfoTheme}

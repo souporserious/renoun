@@ -1,7 +1,4 @@
-import type {
-  Directory,
-  FileSystemEntry,
-} from '../file-system/index.tsx'
+import type { Directory, FileSystemEntry } from '../file-system/index.tsx'
 
 export function buildNavigationTree(
   rootPathname: string,
@@ -99,19 +96,74 @@ export function mergeNavigationEntries(
     return directEntries
   }
 
-  const mergedEntries = [...directEntries]
-  const seenPathnames = new Set(
-    directEntries.map((entry) => entry.getPathname())
+  const directPathnames = directEntries.map((entry) => entry.getPathname())
+  const recursivePathnames = recursiveEntries.map((entry) =>
+    entry.getPathname()
+  )
+  const sharedSuffixLengths = Array.from(
+    { length: directEntries.length + 1 },
+    () => Array<number>(recursiveEntries.length + 1).fill(0)
   )
 
-  for (const entry of recursiveEntries) {
-    const pathname = entry.getPathname()
-    if (seenPathnames.has(pathname)) {
+  for (
+    let directIndex = directEntries.length - 1;
+    directIndex >= 0;
+    --directIndex
+  ) {
+    for (
+      let recursiveIndex = recursiveEntries.length - 1;
+      recursiveIndex >= 0;
+      --recursiveIndex
+    ) {
+      if (directPathnames[directIndex] === recursivePathnames[recursiveIndex]) {
+        sharedSuffixLengths[directIndex]![recursiveIndex] =
+          1 + sharedSuffixLengths[directIndex + 1]![recursiveIndex + 1]!
+        continue
+      }
+
+      sharedSuffixLengths[directIndex]![recursiveIndex] = Math.max(
+        sharedSuffixLengths[directIndex + 1]![recursiveIndex]!,
+        sharedSuffixLengths[directIndex]![recursiveIndex + 1]!
+      )
+    }
+  }
+
+  const mergedEntries: FileSystemEntry<any>[] = []
+  let directIndex = 0
+  let recursiveIndex = 0
+
+  while (
+    directIndex < directEntries.length &&
+    recursiveIndex < recursiveEntries.length
+  ) {
+    if (directPathnames[directIndex] === recursivePathnames[recursiveIndex]) {
+      mergedEntries.push(directEntries[directIndex]!)
+      directIndex += 1
+      recursiveIndex += 1
       continue
     }
 
-    seenPathnames.add(pathname)
-    mergedEntries.push(entry)
+    if (
+      sharedSuffixLengths[directIndex + 1]![recursiveIndex]! >
+      sharedSuffixLengths[directIndex]![recursiveIndex + 1]!
+    ) {
+      mergedEntries.push(directEntries[directIndex]!)
+      directIndex += 1
+      continue
+    }
+
+    mergedEntries.push(recursiveEntries[recursiveIndex]!)
+    recursiveIndex += 1
+  }
+
+  while (directIndex < directEntries.length) {
+    mergedEntries.push(directEntries[directIndex]!)
+    directIndex += 1
+  }
+
+  while (recursiveIndex < recursiveEntries.length) {
+    mergedEntries.push(recursiveEntries[recursiveIndex]!)
+    recursiveIndex += 1
   }
 
   return mergedEntries

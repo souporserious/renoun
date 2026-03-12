@@ -37,9 +37,9 @@ interface FakeDirectoryEntry {
   depth: number
   workspacePath: string
   getPathname: () => string
-  getEntries: (
-    options?: { recursive?: boolean }
-  ) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
+  getEntries: (options?: {
+    recursive?: boolean
+  }) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
   getParent: () => FakeDirectoryEntry
 }
 
@@ -55,9 +55,9 @@ function createFakeDirectoryEntry(
   pathname: string,
   options?: {
     parent?: FakeDirectoryEntry
-    getEntries?: (
-      options?: { recursive?: boolean }
-    ) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
+    getEntries?: (options?: {
+      recursive?: boolean
+    }) => Promise<readonly (FakeDirectoryEntry | FakeFileEntry)[]>
     getFilterPatternKind?: () => 'recursive' | 'shallow' | null
   }
 ): FakeDirectorySource {
@@ -163,9 +163,12 @@ describe('Navigation', () => {
     const guidesDirectory = createFakeDirectoryEntry('/docs/guides', {
       parent: rootDirectory,
     })
-    const advancedDirectory = createFakeDirectoryEntry('/docs/guides/advanced', {
-      parent: guidesDirectory,
-    })
+    const advancedDirectory = createFakeDirectoryEntry(
+      '/docs/guides/advanced',
+      {
+        parent: guidesDirectory,
+      }
+    )
     const draftsDirectory = createFakeDirectoryEntry('/docs/guides/drafts', {
       parent: guidesDirectory,
     })
@@ -180,8 +183,9 @@ describe('Navigation', () => {
       draftsDirectory,
     ])
     advancedDirectory.getEntries = vi.fn(async () => [nestedEntry])
-    rootDirectory.getEntries = vi.fn(async (options?: { recursive?: boolean }) =>
-      options?.recursive ? [nestedEntry] : []
+    rootDirectory.getEntries = vi.fn(
+      async (options?: { recursive?: boolean }) =>
+        options?.recursive ? [nestedEntry] : []
     )
 
     const { Navigation } = await import('./Navigation.tsx')
@@ -198,6 +202,39 @@ describe('Navigation', () => {
     expect(markup).not.toContain('drafts')
   })
 
+  test('keeps synthesized predicate-filtered ancestors in the recursive sort order', async () => {
+    const rootDirectory = createFakeDirectoryEntry('/docs', {
+      getFilterPatternKind: () => null,
+    })
+    const alphaDirectory = createFakeDirectoryEntry('/docs/a', {
+      parent: rootDirectory,
+    })
+    const nestedDirectory = createFakeDirectoryEntry('/docs/a/nested', {
+      parent: alphaDirectory,
+    })
+    const synthesizedDescendant = createFakeFileEntry(
+      'Alpha Deep Dive',
+      '/docs/a/nested/alpha-deep-dive',
+      nestedDirectory
+    )
+    const directEntry = createFakeFileEntry('Zed', '/docs/z', rootDirectory)
+
+    rootDirectory.getEntries = vi.fn(
+      async (options?: { recursive?: boolean }) =>
+        options?.recursive
+          ? [synthesizedDescendant, directEntry]
+          : [directEntry]
+    )
+
+    const { Navigation } = await import('./Navigation.tsx')
+    const element = await Navigation({ source: rootDirectory as any })
+    const markup = renderToStaticMarkup(<>{element}</>)
+
+    expect(markup.indexOf('href="/docs/a"')).toBeLessThan(
+      markup.indexOf('href="/docs/z"')
+    )
+  })
+
   test('reuses the precomputed recursive tree without rescanning directories', async () => {
     const rootDirectory = createFakeDirectoryEntry('/docs', {
       getFilterPatternKind: () => null,
@@ -205,9 +242,12 @@ describe('Navigation', () => {
     const guidesDirectory = createFakeDirectoryEntry('/docs/guides', {
       parent: rootDirectory,
     })
-    const advancedDirectory = createFakeDirectoryEntry('/docs/guides/advanced', {
-      parent: guidesDirectory,
-    })
+    const advancedDirectory = createFakeDirectoryEntry(
+      '/docs/guides/advanced',
+      {
+        parent: guidesDirectory,
+      }
+    )
     const draftsDirectory = createFakeDirectoryEntry('/docs/guides/drafts', {
       parent: guidesDirectory,
     })
@@ -224,10 +264,11 @@ describe('Navigation', () => {
     advancedDirectory.getEntries = vi.fn(async () => [nestedEntry])
     draftsDirectory.getEntries = vi.fn(async () => [])
     emptyDirectory.getEntries = vi.fn(async () => [])
-    rootDirectory.getEntries = vi.fn(async (options?: { recursive?: boolean }) =>
-      options?.recursive
-        ? [guidesDirectory, advancedDirectory, nestedEntry]
-        : [guidesDirectory, emptyDirectory]
+    rootDirectory.getEntries = vi.fn(
+      async (options?: { recursive?: boolean }) =>
+        options?.recursive
+          ? [guidesDirectory, advancedDirectory, nestedEntry]
+          : [guidesDirectory, emptyDirectory]
     )
 
     const { Navigation } = await import('./Navigation.tsx')

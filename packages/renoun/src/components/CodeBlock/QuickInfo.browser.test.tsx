@@ -7,35 +7,226 @@ vi.mock('@renoun/mdx', async () => {
   const React = await import('react')
 
   return {
-    getMarkdownContent: async ({ source }: { source: string }) => {
-      const children: React.ReactNode[] = []
-      const linkPattern = /\[([^\]]+)\]\(([^)]+)\)/g
-      let match: RegExpExecArray | null
-      let cursor = 0
+    getMarkdownContent: async ({
+      source,
+      components,
+    }: {
+      source: string
+      components?: Record<string, React.ElementType>
+    }) => {
+      const ParagraphComponent = components?.p ?? 'p'
+      const TableComponent = components?.table ?? 'table'
 
-      while ((match = linkPattern.exec(source)) !== null) {
-        if (match.index > cursor) {
-          children.push(source.slice(cursor, match.index))
+      function sanitizeHref(value: string): string | null {
+        const href = value.trim()
+        if (href.length === 0) {
+          return null
         }
 
-        children.push(
+        const protocolMatch = href.match(/^([A-Za-z][A-Za-z0-9+.-]*:)/)
+        if (!protocolMatch) {
+          return href
+        }
+
+        return /^(https?|ircs?|mailto|xmpp):$/i.test(protocolMatch[1])
+          ? href
+          : null
+      }
+
+      function renderInline(
+        content: string,
+        keyPrefix: string
+      ): React.ReactNode[] {
+        const children: React.ReactNode[] = []
+        const tokenPattern = /(\[([^\]]+)\]\(([^)]+)\)|`([^`]+)`)/g
+        let cursor = 0
+
+        for (const match of content.matchAll(tokenPattern)) {
+          const matchIndex = match.index ?? 0
+          if (matchIndex > cursor) {
+            children.push(content.slice(cursor, matchIndex))
+          }
+
+          if (match[2] && match[3]) {
+            const href = sanitizeHref(match[3])
+            if (href) {
+              children.push(
+                React.createElement(
+                  'a',
+                  {
+                    href,
+                    key: `${keyPrefix}:link:${matchIndex}`,
+                  },
+                  match[2]
+                )
+              )
+            } else {
+              children.push(match[2])
+            }
+          } else if (match[4]) {
+            children.push(
+              React.createElement(
+                'code',
+                {
+                  key: `${keyPrefix}:code:${matchIndex}`,
+                },
+                match[4]
+              )
+            )
+          }
+
+          cursor = matchIndex + match[0].length
+        }
+
+        if (cursor < content.length) {
+          children.push(content.slice(cursor))
+        }
+
+        return children
+      }
+
+      const blocks: React.ReactNode[] = []
+      const lines = source.replace(/\r\n?/g, '\n').split('\n')
+      let index = 0
+
+      while (index < lines.length) {
+        const line = lines[index]!
+        if (line.trim().length === 0) {
+          index += 1
+          continue
+        }
+
+        if (line.startsWith('```')) {
+          const codeLines: string[] = []
+          index += 1
+          while (index < lines.length && !lines[index]!.startsWith('```')) {
+            codeLines.push(lines[index]!)
+            index += 1
+          }
+          if (index < lines.length) {
+            index += 1
+          }
+          blocks.push(
+            React.createElement(
+              'pre',
+              { key: `pre:${blocks.length}` },
+              React.createElement('code', null, codeLines.join('\n'))
+            )
+          )
+          continue
+        }
+
+        if (line.startsWith('- ')) {
+          const items: React.ReactNode[] = []
+          while (index < lines.length && lines[index]!.startsWith('- ')) {
+            items.push(
+              React.createElement(
+                'li',
+                { key: `li:${items.length}` },
+                ...renderInline(lines[index]!.slice(2), `li:${items.length}`)
+              )
+            )
+            index += 1
+          }
+          blocks.push(
+            React.createElement('ul', { key: `ul:${blocks.length}` }, ...items)
+          )
+          continue
+        }
+
+        if (line.includes('|')) {
+          const tableLines: string[] = []
+          while (index < lines.length && lines[index]!.includes('|')) {
+            tableLines.push(lines[index]!)
+            index += 1
+          }
+
+          if (tableLines.length >= 2) {
+            const rows = tableLines
+              .filter((tableLine, tableIndex) => {
+                return (
+                  tableIndex === 0 || !/^\s*\|?[-:\s|]+\|?\s*$/.test(tableLine)
+                )
+              })
+              .map((tableLine) =>
+                tableLine
+                  .split('|')
+                  .map((cell) => cell.trim())
+                  .filter((cell, cellIndex, cells) => {
+                    return !(
+                      (cellIndex === 0 || cellIndex === cells.length - 1) &&
+                      cell.length === 0
+                    )
+                  })
+              )
+
+            if (rows.length > 0) {
+              const [headerRow, ...bodyRows] = rows
+              blocks.push(
+                React.createElement(
+                  TableComponent,
+                  { key: `table:${blocks.length}` },
+                  React.createElement(
+                    'thead',
+                    null,
+                    React.createElement(
+                      'tr',
+                      null,
+                      ...(headerRow ?? []).map((cell, cellIndex) =>
+                        React.createElement(
+                          'th',
+                          { key: `th:${cellIndex}` },
+                          ...renderInline(cell, `th:${cellIndex}`)
+                        )
+                      )
+                    )
+                  ),
+                  React.createElement(
+                    'tbody',
+                    null,
+                    ...bodyRows.map((row, rowIndex) =>
+                      React.createElement(
+                        'tr',
+                        { key: `tr:${rowIndex}` },
+                        ...row.map((cell, cellIndex) =>
+                          React.createElement(
+                            'td',
+                            { key: `td:${rowIndex}:${cellIndex}` },
+                            ...renderInline(cell, `td:${rowIndex}:${cellIndex}`)
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+              continue
+            }
+          }
+        }
+
+        const paragraphLines = [line]
+        index += 1
+        while (
+          index < lines.length &&
+          lines[index]!.trim().length > 0 &&
+          !lines[index]!.startsWith('- ') &&
+          !lines[index]!.startsWith('```') &&
+          !lines[index]!.includes('|')
+        ) {
+          paragraphLines.push(lines[index]!)
+          index += 1
+        }
+        blocks.push(
           React.createElement(
-            'a',
-            {
-              href: match[2],
-              key: `${match[1]}:${match[2]}:${match.index}`,
-            },
-            match[1]
+            ParagraphComponent,
+            { key: `p:${blocks.length}` },
+            ...renderInline(paragraphLines.join(' '), `p:${blocks.length}`)
           )
         )
-        cursor = match.index + match[0].length
       }
 
-      if (cursor < source.length) {
-        children.push(source.slice(cursor))
-      }
-
-      return React.createElement(React.Fragment, null, ...children)
+      return React.createElement(React.Fragment, null, ...blocks)
     },
   }
 })
@@ -255,7 +446,9 @@ describe('QuickInfo browser regression', () => {
         return false
       }
 
-      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      return (
+        getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      )
     }, 1_000)
     const dividerNode = getPopover()?.querySelector(
       '[data-testid="quick-info-divider"]'
@@ -270,10 +463,14 @@ describe('QuickInfo browser regression', () => {
     const popoverRect = (popoverNode as HTMLElement).getBoundingClientRect()
     const dividerRect = (dividerNode as HTMLElement).getBoundingClientRect()
     expect(Math.abs(dividerRect.left - popoverRect.left)).toBeLessThanOrEqual(2)
-    expect(Math.abs(dividerRect.right - popoverRect.right)).toBeLessThanOrEqual(2)
+    expect(Math.abs(dividerRect.right - popoverRect.right)).toBeLessThanOrEqual(
+      2
+    )
     expect(popoverRect.width).toBeLessThan(460)
 
-    const displayNode = getPopover()?.querySelector('[data-testid="quick-info-display"]')
+    const displayNode = getPopover()?.querySelector(
+      '[data-testid="quick-info-display"]'
+    )
     expect(displayNode).toBeTruthy()
     const displayStyles = getComputedStyle(displayNode as HTMLElement)
     expect(parseFloat(displayStyles.paddingTop)).toBeGreaterThanOrEqual(4)
@@ -316,13 +513,62 @@ describe('QuickInfo browser regression', () => {
 
       hoverSymbol(symbol)
       await waitFor(() => {
-        return getPopover()?.textContent?.includes('Unsafe open and safe source.')
+        return getPopover()?.textContent?.includes(
+          'Unsafe open and safe source.'
+        )
       }, 1_000)
 
       const links = Array.from(getPopover()?.querySelectorAll('a') ?? [])
       expect(links).toHaveLength(1)
       expect(links[0]?.textContent).toBe('source')
       expect(links[0]?.getAttribute('href')).toBe('https://renoun.dev/docs')
+    } finally {
+      QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, originalQuickInfo)
+    }
+  })
+
+  it('preserves block markdown formatting for runtime-backed quick info documentation', async () => {
+    const originalQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)
+    if (!originalQuickInfo) {
+      throw new Error('Expected initial quick info fixture to exist.')
+    }
+
+    QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
+      ...originalQuickInfo,
+      documentationText:
+        'First paragraph.\n\n' +
+        '- Item one\n' +
+        '- Item two with `inline code`\n\n' +
+        '| Name | Value |\n' +
+        '| --- | --- |\n' +
+        '| Alpha | 1 |\n\n' +
+        '```ts\n' +
+        'const history = createHistory()\n' +
+        '```',
+    })
+    renderQuickInfoFixture(root, 'markdown-documentation')
+
+    try {
+      const symbol = await waitForSymbol('symbol-short')
+      hoverSymbol(symbol)
+
+      await waitFor(() => Boolean(getPopover()?.querySelector('p')), 1_000)
+      await waitFor(() => Boolean(getPopover()?.querySelector('ul li')), 1_000)
+      await waitFor(() => Boolean(getPopover()?.querySelector('table')), 1_000)
+      await waitFor(
+        () => Boolean(getPopover()?.querySelector('pre code')),
+        1_000
+      )
+
+      expect(getPopover()?.querySelectorAll('p')).toHaveLength(1)
+      expect(getPopover()?.querySelectorAll('ul li')).toHaveLength(2)
+      expect(getPopover()?.querySelector('code')?.textContent).toContain(
+        'inline code'
+      )
+      expect(getPopover()?.querySelector('table td')?.textContent).toBe('Alpha')
+      expect(getPopover()?.querySelector('pre code')?.textContent).toContain(
+        'const history = createHistory()'
+      )
     } finally {
       QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, originalQuickInfo)
     }
@@ -365,11 +611,13 @@ describe('QuickInfo browser regression', () => {
     renderSignatureCacheFixture(root)
 
     await waitFor(
-      () => Boolean(document.querySelector('[data-testid="symbol-signature-a"]')),
+      () =>
+        Boolean(document.querySelector('[data-testid="symbol-signature-a"]')),
       1_000
     )
     await waitFor(
-      () => Boolean(document.querySelector('[data-testid="symbol-signature-b"]')),
+      () =>
+        Boolean(document.querySelector('[data-testid="symbol-signature-b"]')),
       1_000
     )
 
@@ -409,7 +657,9 @@ describe('QuickInfo browser regression', () => {
         return false
       }
 
-      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      return (
+        getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      )
     }, 1_000)
     leaveSymbol(symbol)
     await waitFor(() => !getPopover(), 1_000)
@@ -422,7 +672,9 @@ describe('QuickInfo browser regression', () => {
         return false
       }
 
-      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(255, 0, 0)'
+      return (
+        getComputedStyle(tokenNode as HTMLElement).color === 'rgb(255, 0, 0)'
+      )
     }, 1_000)
     await expectQuickInfoPopoverToMatchScreenshot()
 
@@ -450,19 +702,27 @@ describe('QuickInfo browser regression', () => {
       () => counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION) === 1,
       1_000
     )
-    await waitFor(() => counters.tokensByValue.get(shortDisplayText) === 1, 1_000)
+    await waitFor(
+      () => counters.tokensByValue.get(shortDisplayText) === 1,
+      1_000
+    )
     leaveSymbol(symbol)
     await waitFor(() => !getPopover(), 1_000)
 
     hoverSymbol(symbol)
-    await waitFor(() => counters.tokensByValue.get(shortDisplayText) === 2, 1_000)
+    await waitFor(
+      () => counters.tokensByValue.get(shortDisplayText) === 2,
+      1_000
+    )
     await waitFor(() => {
       const tokenNode = getPopover()?.querySelector('pre span')
       if (!tokenNode) {
         return false
       }
 
-      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      return (
+        getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      )
     }, 1_000)
   })
 
@@ -485,7 +745,9 @@ describe('QuickInfo browser regression', () => {
         return false
       }
 
-      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      return (
+        getComputedStyle(tokenNode as HTMLElement).color === 'rgb(0, 255, 0)'
+      )
     }, 1_000)
 
     document.documentElement.setAttribute('data-theme', 'light')
@@ -495,7 +757,9 @@ describe('QuickInfo browser regression', () => {
         return false
       }
 
-      return getComputedStyle(tokenNode as HTMLElement).color === 'rgb(255, 0, 0)'
+      return (
+        getComputedStyle(tokenNode as HTMLElement).color === 'rgb(255, 0, 0)'
+      )
     }, 1_000)
 
     expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBe(1)
@@ -611,7 +875,9 @@ describe('QuickInfo browser regression', () => {
           'Server rendered quick info snapshot.'
         )
       }, 1_000)
-      expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBeUndefined()
+      expect(
+        counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)
+      ).toBeUndefined()
 
       QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
         ...originalQuickInfo,
@@ -661,11 +927,14 @@ describe('QuickInfo browser regression', () => {
           'Server rendered quick info snapshot.'
         )
       }, 1_000)
-      expect(counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)).toBeUndefined()
+      expect(
+        counters.quickInfoByPosition.get(SHORT_SYMBOL_POSITION)
+      ).toBeUndefined()
 
       QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
         ...originalQuickInfo,
-        documentationText: 'Refetched quick info after runtime endpoint change.',
+        documentationText:
+          'Refetched quick info after runtime endpoint change.',
       })
 
       setAnalysisClientBrowserRuntime(SAME_ID_UPDATED_RUNTIME)
@@ -767,7 +1036,8 @@ describe('QuickInfo browser regression', () => {
 
       QUICK_INFO_BY_POSITION.set(SHORT_SYMBOL_POSITION, {
         ...originalQuickInfo,
-        documentationText: 'Updated quick info after a retained runtime refresh.',
+        documentationText:
+          'Updated quick info after a retained runtime refresh.',
       })
 
       broadcastNotification(counters, {
@@ -884,9 +1154,8 @@ describe('QuickInfo browser regression', () => {
   })
 
   it('switches open and new hovers to an updated retained runtime without rerendering the code block', async () => {
-    const releaseInitialRuntime = retainAnalysisClientBrowserRuntime(
-      SECOND_RUNTIME
-    )
+    const releaseInitialRuntime =
+      retainAnalysisClientBrowserRuntime(SECOND_RUNTIME)
     renderQuickInfoFixture(root, 'retained-runtime-switch')
 
     try {
@@ -935,7 +1204,6 @@ describe('QuickInfo browser regression', () => {
       releaseInitialRuntime()
     }
   })
-
 })
 
 function renderQuickInfoFixture(root: Root | null, cacheScope: string) {
@@ -1181,9 +1449,7 @@ function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
 
     constructor(url: string, protocol?: string | string[]) {
       super()
-      const resolvedProtocol = Array.isArray(protocol)
-        ? protocol[0]
-        : protocol
+      const resolvedProtocol = Array.isArray(protocol) ? protocol[0] : protocol
       this.#runtimeKey = `${resolvedProtocol ?? 'unknown'}@${url}`
       counters.socketsOpened += 1
       counters.sockets.add(this)
@@ -1197,7 +1463,11 @@ function createMockWebSocket(counters: RpcCallCounters): typeof WebSocket {
 
     send(rawPayload: string): void {
       const request = JSON.parse(rawPayload) as JsonRpcRequest
-      const response = resolveMockRpcResponse(this.#runtimeKey, request, counters)
+      const response = resolveMockRpcResponse(
+        this.#runtimeKey,
+        request,
+        counters
+      )
 
       queueMicrotask(() => {
         if (this.readyState !== MockWebSocket.OPEN) {
@@ -1292,7 +1562,8 @@ function resolveMockRpcResponse(
       (counters.tokensByThemeKey.get(tokenThemeKey) ?? 0) + 1
     )
 
-    const remainingFailures = counters.tokensFailuresByValue.get(displayText) ?? 0
+    const remainingFailures =
+      counters.tokensFailuresByValue.get(displayText) ?? 0
     if (remainingFailures > 0) {
       counters.tokensFailuresByValue.set(displayText, remainingFailures - 1)
       return {
