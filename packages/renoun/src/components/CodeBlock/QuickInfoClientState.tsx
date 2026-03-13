@@ -57,6 +57,8 @@ export interface ResolvedQuickInfoClientState {
   refreshVersion: string
 }
 
+const QUICK_INFO_DISPLAY_TOKEN_REQUEST_DELAY_MS = 75
+
 function useAnalysisClientBrowserRuntimeSnapshot(
   fallback: AnalysisServerRuntime | undefined
 ): AnalysisServerRuntime | undefined {
@@ -289,6 +291,7 @@ export function useResolvedQuickInfoClientState({
 
   React.useEffect(() => {
     let isDisposed = false
+    let timeoutId: ReturnType<typeof setTimeout> | undefined
 
     if (!effectiveRequest || !displayText) {
       setResolvedDisplayTokens(null)
@@ -296,25 +299,30 @@ export function useResolvedQuickInfoClientState({
     }
 
     setResolvedDisplayTokens(null)
-    void (async () => {
-      try {
-        const value = await getQuickInfoDisplayTokens({
-          displayText,
-          runtime: effectiveRequest.runtime,
-          tokenThemeConfig,
-        })
-        if (!isDisposed) {
-          setResolvedDisplayTokens(value)
+    timeoutId = setTimeout(() => {
+      void (async () => {
+        try {
+          const value = await getQuickInfoDisplayTokens({
+            displayText,
+            runtime: effectiveRequest.runtime,
+            tokenThemeConfig,
+          })
+          if (!isDisposed) {
+            setResolvedDisplayTokens(value)
+          }
+        } catch {
+          if (!isDisposed) {
+            setResolvedDisplayTokens(null)
+          }
         }
-      } catch {
-        if (!isDisposed) {
-          setResolvedDisplayTokens(null)
-        }
-      }
-    })()
+      })()
+    }, QUICK_INFO_DISPLAY_TOKEN_REQUEST_DELAY_MS)
 
     return () => {
       isDisposed = true
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
     }
   }, [
     displayText,

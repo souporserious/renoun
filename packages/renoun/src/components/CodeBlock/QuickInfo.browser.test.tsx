@@ -760,6 +760,29 @@ describe('QuickInfo browser regression', () => {
     }, 1_000)
   })
 
+  it('does not request display tokenization for a transient hover', async () => {
+    const shortQuickInfo = QUICK_INFO_BY_POSITION.get(SHORT_SYMBOL_POSITION)!
+    renderHydratedQuickInfoFixture(
+      root,
+      'transient-display-token-hover',
+      shortQuickInfo
+    )
+
+    await waitFor(
+      () => Boolean(document.querySelector('[data-testid="symbol-short"]')),
+      1_000
+    )
+    const symbol = getSymbolAnchor('symbol-short')
+
+    hoverSymbol(symbol)
+    await waitFor(() => Boolean(getPopover()), 1_000)
+    leaveSymbol(symbol)
+    await waitFor(() => !getPopover(), 1_000)
+    await sleep(150)
+
+    expect(counters.tokensByValue.get(shortQuickInfo.displayText)).toBeUndefined()
+  })
+
   it('re-highlights quick info when the active theme changes while the popover stays open', async () => {
     renderQuickInfoFixture(root, 'theme-switch-open')
     const shortDisplayText = QUICK_INFO_BY_POSITION.get(

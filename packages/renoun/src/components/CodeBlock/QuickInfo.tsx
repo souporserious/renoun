@@ -1,7 +1,9 @@
 import React, { Fragment } from 'react'
 import { type CSSObject } from 'restyle'
 
+import { getTokens } from '../../analysis/node-client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
+import type { TokenizedLines } from '../../utils/get-tokens.ts'
 import { createConcurrentQueue } from '../../utils/concurrency.ts'
 import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
@@ -97,6 +99,56 @@ function enqueueQuickInfo<T>(task: () => Promise<T>) {
   return quickInfoQueue.run(task)
 }
 
+function shouldUseQuickInfoThemeVariables(
+  themeConfig: Awaited<ReturnType<typeof getConfig>>['theme']
+): boolean {
+  return (
+    typeof themeConfig === 'object' &&
+    themeConfig !== null &&
+    !Array.isArray(themeConfig) &&
+    Object.keys(themeConfig).length > 1
+  )
+}
+
+function renderTokenizedDisplayText(
+  lines: TokenizedLines,
+  shouldUseThemeVariables: boolean
+): React.ReactNode {
+  return lines.map((line, lineIndex) => {
+    return (
+      <Fragment key={lineIndex}>
+        {lineIndex === 0 ? null : '\n'}
+        {line.map((token, tokenIndex) => {
+          if (
+            token.isWhiteSpace ||
+            (!token.hasTextStyles && token.isBaseColor && !token.isDeprecated)
+          ) {
+            return <Fragment key={tokenIndex}>{token.value}</Fragment>
+          }
+
+          const style: React.CSSProperties = {
+            ...(token.style as React.CSSProperties),
+          }
+
+          if (token.isDeprecated && style.textDecoration === undefined) {
+            style.textDecoration = 'line-through'
+          }
+
+          return (
+            <QuickInfoDisplayToken
+              key={tokenIndex}
+              className={shouldUseThemeVariables ? BASE_TOKEN_CLASS_NAME : undefined}
+              style={style}
+            >
+              {token.value}
+            </QuickInfoDisplayToken>
+          )
+        })}
+      </Fragment>
+    )
+  })
+}
+
 function renderHighlightedDisplayText(displayText: string): React.ReactNode {
   const parts = displayText.match(QUICK_INFO_TOKEN_PATTERN) ?? [displayText]
 
@@ -151,6 +203,18 @@ async function renderQuickInfo({
   const theme = await getThemeColors(config.theme)
   const quickInfoTheme = createQuickInfoTheme(theme)
   const displayText = quickInfo?.displayText || ''
+  const shouldUseThemeVariables = shouldUseQuickInfoThemeVariables(config.theme)
+  const displayTokens =
+    displayText.length > 0
+      ? await getTokens({
+          value: displayText,
+          language: 'typescript',
+          theme: config.theme,
+          languages: config.languages,
+          allowErrors: true,
+          waitForWarmResult: true,
+        }).catch(() => null)
+      : null
 
   return (
     <QuickInfoContent
@@ -158,7 +222,12 @@ async function renderQuickInfo({
       display={
         displayText.length ? (
           <QuickInfoDisplayText>
-            {renderHighlightedDisplayText(displayText)}
+            {displayTokens
+              ? renderTokenizedDisplayText(
+                  displayTokens,
+                  shouldUseThemeVariables
+                )
+              : renderHighlightedDisplayText(displayText)}
           </QuickInfoDisplayText>
         ) : null
       }
