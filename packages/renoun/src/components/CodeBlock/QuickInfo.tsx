@@ -1,10 +1,9 @@
 import React, { Fragment } from 'react'
 import { type CSSObject } from 'restyle'
 
-import { getTokens } from '../../analysis/node-client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
 import { createConcurrentQueue } from '../../utils/concurrency.ts'
-import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'
+import type { TokenDiagnostic } from '../../utils/get-tokens.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import {
   createQuickInfoTheme,
@@ -15,9 +14,124 @@ import {
 import { QuickInfoDocumentation } from './QuickInfoDocumentation.tsx'
 
 const quickInfoQueue = createConcurrentQueue(1)
+const QUICK_INFO_KEYWORDS = new Set([
+  'abstract',
+  'as',
+  'asserts',
+  'async',
+  'await',
+  'boolean',
+  'break',
+  'case',
+  'catch',
+  'class',
+  'const',
+  'constructor',
+  'continue',
+  'debugger',
+  'declare',
+  'default',
+  'delete',
+  'do',
+  'else',
+  'enum',
+  'export',
+  'extends',
+  'false',
+  'finally',
+  'for',
+  'from',
+  'function',
+  'get',
+  'if',
+  'implements',
+  'import',
+  'in',
+  'infer',
+  'instanceof',
+  'interface',
+  'is',
+  'keyof',
+  'let',
+  'module',
+  'namespace',
+  'never',
+  'new',
+  'null',
+  'number',
+  'object',
+  'of',
+  'package',
+  'private',
+  'protected',
+  'public',
+  'readonly',
+  'require',
+  'return',
+  'satisfies',
+  'set',
+  'static',
+  'string',
+  'super',
+  'switch',
+  'symbol',
+  'this',
+  'throw',
+  'true',
+  'try',
+  'type',
+  'typeof',
+  'undefined',
+  'unique',
+  'unknown',
+  'var',
+  'void',
+  'while',
+  'with',
+  'yield',
+])
+const QUICK_INFO_TOKEN_PATTERN =
+  /('(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|`(?:\\.|[^`\\])*`|[A-Za-z_$][A-Za-z0-9_$]*|\d+(?:\.\d+)?|[\r\n]+|[ \t]+|[^\sA-Za-z0-9_$]+)/g
 
 function enqueueQuickInfo<T>(task: () => Promise<T>) {
   return quickInfoQueue.run(task)
+}
+
+function renderHighlightedDisplayText(displayText: string): React.ReactNode {
+  const parts = displayText.match(QUICK_INFO_TOKEN_PATTERN) ?? [displayText]
+
+  return parts.map((part, index) => {
+    if (part === '\n' || part === '\r\n' || part === '\r') {
+      return <Fragment key={index}>{part}</Fragment>
+    }
+
+    let css: CSSObject | undefined
+
+    if (/^['"`]/.test(part)) {
+      css = {
+        color: 'var(--renoun-quick-info-string, #ecc48d)',
+      }
+    } else if (QUICK_INFO_KEYWORDS.has(part)) {
+      css = {
+        color: 'var(--renoun-quick-info-keyword, #82aaff)',
+        fontStyle: 'italic',
+      }
+    } else if (/^[A-Z][A-Za-z0-9_$]*$/.test(part)) {
+      css = {
+        color: 'var(--renoun-quick-info-type, #86e1fc)',
+      }
+    }
+
+    return (
+      <QuickInfoDisplayToken
+        key={index}
+        css={css}
+        className={BASE_TOKEN_CLASS_NAME}
+      >
+        {part}
+      </QuickInfoDisplayToken>
+    )
+  })
 }
 
 async function renderQuickInfo({
@@ -36,39 +150,15 @@ async function renderQuickInfo({
   const config = await getConfig()
   const theme = await getThemeColors(config.theme)
   const quickInfoTheme = createQuickInfoTheme(theme)
-  let displayTextTokens: Token[][] = []
-
-  if (quickInfo?.displayText) {
-    const tokens = await getTokens({
-      value: quickInfo.displayText,
-      language: 'typescript',
-      languages: config.languages,
-      theme: config.theme,
-      waitForWarmResult: true,
-    })
-    displayTextTokens = tokens
-  }
+  const displayText = quickInfo?.displayText || ''
 
   return (
     <QuickInfoContent
       diagnostics={diagnostics}
       display={
-        displayTextTokens.length ? (
+        displayText.length ? (
           <QuickInfoDisplayText>
-            {displayTextTokens.map((line, index) => (
-              <Fragment key={index}>
-                {index === 0 ? null : '\n'}
-                {line.map((token, tokenIndex) => (
-                  <QuickInfoDisplayToken
-                    key={tokenIndex}
-                    css={token.style}
-                    className={BASE_TOKEN_CLASS_NAME}
-                  >
-                    {token.value}
-                  </QuickInfoDisplayToken>
-                ))}
-              </Fragment>
-            ))}
+            {renderHighlightedDisplayText(displayText)}
           </QuickInfoDisplayText>
         ) : null
       }
