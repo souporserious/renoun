@@ -363,6 +363,7 @@ async function CodeBlockAsync(
   })
   const contextValue = {
     filePath: path,
+    label: path?.replace(/\d+\./, ''),
     padding: containerPadding.all,
     allowErrors: allowErrors === undefined ? showErrors : allowErrors,
     showErrors,

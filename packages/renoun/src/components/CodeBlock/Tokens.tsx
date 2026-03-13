@@ -419,6 +419,7 @@ async function TokensAsync({
     } else {
       metadata.value = processedValue
       metadata.language = language
+      metadata.filePath = context?.filePath ?? resolvedPath
       metadata.label = context?.label
       metadata.valueSignature = getSourceTextValueSignature(processedValue)
     }

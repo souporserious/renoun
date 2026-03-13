@@ -55,7 +55,7 @@ async function renderToStringAsync(
 }
 
 const codeString = `
-\`\`\`tsx path="CodeBlock.example.tsx" allowCopy={false} showErrors
+\`\`\`tsx path="CodeBlock.example.tsx" allowCopy={false} showErrors shouldAnalyze={false} shouldFormat={false}
 import { CodeBlock } from 'renoun'
 
 const code = \`
