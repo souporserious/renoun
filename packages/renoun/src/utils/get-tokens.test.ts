@@ -293,6 +293,39 @@ describe('getTokens metadata integration', () => {
     expect(valueTokensWithQuickInfo).toHaveLength(160)
   })
 
+  test.concurrent('sorts symbol metadata before splitting highlighted tokens', async () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    const code = '{ CodeBlock, Toolbar, Tokens }\n'
+
+    const tokens = await getTokens({
+      project,
+      value: code,
+      language: 'ts',
+      filePath: 'symbols.ts',
+      highlighter: createStubHighlighter([['{ CodeBlock, Toolbar, Tokens }']]),
+      theme: 'default',
+      metadataCollector: async () => ({
+        sourceFile: undefined,
+        diagnostics: [],
+        symbolMetadata: [
+          { start: 22, end: 28, isDeprecated: false },
+          { start: 2, end: 11, isDeprecated: false },
+          { start: 13, end: 20, isDeprecated: false },
+        ],
+      }),
+    })
+
+    expect(tokens[0]).toMatchObject([
+      { value: '{ ', isSymbol: false },
+      { value: 'CodeBlock', isSymbol: true },
+      { value: ', ', isSymbol: false },
+      { value: 'Toolbar', isSymbol: true },
+      { value: ', ', isSymbol: false },
+      { value: 'Tokens', isSymbol: true },
+      { value: ' }', isSymbol: false },
+    ])
+  })
+
   test.concurrent('starts highlighter without waiting for TypeScript metadata to resolve', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'parallel.ts'

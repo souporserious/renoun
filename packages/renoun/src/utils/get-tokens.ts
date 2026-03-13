@@ -309,6 +309,14 @@ export async function getTokens({
           diagnostics: sourceFileDiagnostics,
           symbolMetadata,
         } = tsMetadata
+        const sortedSymbolMetadata =
+          symbolMetadata.length > 1
+            ? [...symbolMetadata].sort(sortRangesByStart)
+            : symbolMetadata
+        const normalizedDiagnostics =
+          sourceFileDiagnostics.length > 0
+            ? normalizeTokenDiagnostics(sourceFileDiagnostics)
+            : []
 
         const quickInfoCache = new Map<string, QuickInfoEntry>()
         let remainingQuickInfoLookups = deferQuickInfoUntilHover
@@ -317,6 +325,9 @@ export async function getTokens({
               symbolCount: symbolMetadata.length,
             })
           : Number.POSITIVE_INFINITY
+        let nextSymbolIndex = 0
+        let nextDiagnosticIndex = 0
+        const activeDiagnostics: NormalizedTokenDiagnostic[] = []
         let previousTokenStart = 0
         let parsedTokens: Token[][] = tokens.map((line) => {
           if (line.length === 0) {
@@ -344,10 +355,16 @@ export async function getTokens({
 
             let processedTokens: Tokens = []
 
-            if (symbolMetadata.length) {
-              const symbol = symbolMetadata.find((range) => {
-                return range.start >= tokenStart && range.end <= tokenEnd
-              })
+            if (sortedSymbolMetadata.length) {
+              const { ranges: containedSymbolRanges, nextIndex } =
+                getContainedSymbolRanges(
+                  sortedSymbolMetadata,
+                  tokenStart,
+                  tokenEnd,
+                  nextSymbolIndex
+                )
+              nextSymbolIndex = nextIndex
+              const symbol = containedSymbolRanges[0]
               const inFullRange = symbol
                 ? symbol.start === tokenStart && symbol.end === tokenEnd
                 : false
@@ -359,7 +376,7 @@ export async function getTokens({
               if (symbol && !inFullRange) {
                 processedTokens = splitTokenByRanges(
                   initialToken,
-                  symbolMetadata
+                  containedSymbolRanges
                 )
               } else {
                 processedTokens.push({
@@ -376,22 +393,14 @@ export async function getTokens({
                 return token
               }
 
-              const diagnostics = sourceFileDiagnostics
-                .filter((diagnostic) => {
-                  const start = diagnostic.getStart()
-                  const length = diagnostic.getLength()
-                  if (!start || !length) {
-                    return false
-                  }
-                  const end = start + length
-                  return token.start >= start && token.end <= end
-                })
-                .map((diagnostic) => ({
-                  code: diagnostic.getCode(),
-                  message: getDiagnosticMessageText(
-                    diagnostic.getMessageText()
-                  ),
-                }))
+              const { diagnostics, nextIndex } = collectTokenDiagnostics(
+                normalizedDiagnostics,
+                token.start,
+                token.end,
+                nextDiagnosticIndex,
+                activeDiagnostics
+              )
+              nextDiagnosticIndex = nextIndex
               const quickInfo =
                 remainingQuickInfoLookups > 0 && sourceFile && filePath
                   ? getQuickInfo(
@@ -408,7 +417,7 @@ export async function getTokens({
               return {
                 ...token,
                 quickInfo,
-                diagnostics: diagnostics.length ? diagnostics : undefined,
+                diagnostics,
               }
             })
           })
@@ -509,6 +518,9 @@ export async function collectTypeScriptMetadata(
       start: diagnostic.start!,
       end: diagnostic.start! + (diagnostic.length ?? 0),
     }))
+  const deprecatedRangeKeys = new Set(
+    deprecatedRanges.map((range) => `${range.start}:${range.end}`)
+  )
 
   const symbolMetadata = [...importSpecifiers, ...identifiers]
     .filter((node) => {
@@ -530,9 +542,7 @@ export async function collectTypeScriptMetadata(
         end -= 1
       }
 
-      const isDeprecated = deprecatedRanges.some(
-        (range) => range.start === start && range.end === end
-      )
+      const isDeprecated = deprecatedRangeKeys.has(`${start}:${end}`)
 
       return {
         start: node.getStart(),
@@ -591,6 +601,12 @@ interface QuickInfoEntry {
   documentationText: string
 }
 
+interface NormalizedTokenDiagnostic {
+  start: number
+  end: number
+  value: TokenDiagnostic
+}
+
 const MAX_QUICK_INFO_CACHE_SIZE = 2000
 const MAX_QUICK_INFO_LOOKUPS_PER_BLOCK = 160
 const MAX_QUICK_INFO_LOOKUPS_FOR_LARGE_BLOCK = 64
@@ -613,6 +629,141 @@ export function resolveQuickInfoLookupBudget(options: {
     : MAX_QUICK_INFO_LOOKUPS_PER_BLOCK
 
   return Math.min(maxLookups, options.symbolCount)
+}
+
+function sortRangesByStart<
+  Range extends { start: number; end: number },
+>(left: Range, right: Range): number {
+  if (left.start !== right.start) {
+    return left.start - right.start
+  }
+
+  return left.end - right.end
+}
+
+function getContainedSymbolRanges(
+  symbolMetadata: SymbolMetadata[],
+  tokenStart: number,
+  tokenEnd: number,
+  nextIndex: number
+): {
+  ranges: SymbolMetadata[]
+  nextIndex: number
+} {
+  let symbolIndex = nextIndex
+
+  while (
+    symbolIndex < symbolMetadata.length &&
+    symbolMetadata[symbolIndex]!.end <= tokenStart
+  ) {
+    symbolIndex += 1
+  }
+
+  const ranges: SymbolMetadata[] = []
+
+  for (
+    let candidateIndex = symbolIndex;
+    candidateIndex < symbolMetadata.length;
+    candidateIndex += 1
+  ) {
+    const range = symbolMetadata[candidateIndex]!
+
+    if (range.start >= tokenEnd) {
+      break
+    }
+
+    if (range.start >= tokenStart && range.end <= tokenEnd) {
+      ranges.push(range)
+      continue
+    }
+
+    if (range.end > tokenEnd) {
+      break
+    }
+  }
+
+  return {
+    ranges,
+    nextIndex: symbolIndex,
+  }
+}
+
+function normalizeTokenDiagnostics(
+  diagnostics: Diagnostic<ts.Diagnostic>[]
+): NormalizedTokenDiagnostic[] {
+  const normalizedDiagnostics: NormalizedTokenDiagnostic[] = []
+
+  for (const diagnostic of diagnostics) {
+    const start = diagnostic.getStart()
+    const length = diagnostic.getLength()
+
+    if (!start || !length) {
+      continue
+    }
+
+    normalizedDiagnostics.push({
+      start,
+      end: start + length,
+      value: {
+        code: diagnostic.getCode(),
+        message: getDiagnosticMessageText(diagnostic.getMessageText()),
+      },
+    })
+  }
+
+  if (normalizedDiagnostics.length > 1) {
+    normalizedDiagnostics.sort(sortRangesByStart)
+  }
+
+  return normalizedDiagnostics
+}
+
+function collectTokenDiagnostics(
+  diagnostics: NormalizedTokenDiagnostic[],
+  tokenStart: number,
+  tokenEnd: number,
+  nextIndex: number,
+  activeDiagnostics: NormalizedTokenDiagnostic[]
+): {
+  diagnostics: TokenDiagnostic[] | undefined
+  nextIndex: number
+} {
+  let diagnosticIndex = nextIndex
+
+  while (
+    diagnosticIndex < diagnostics.length &&
+    diagnostics[diagnosticIndex]!.start <= tokenStart
+  ) {
+    activeDiagnostics.push(diagnostics[diagnosticIndex]!)
+    diagnosticIndex += 1
+  }
+
+  if (activeDiagnostics.length > 0) {
+    let activeCount = 0
+
+    for (const diagnostic of activeDiagnostics) {
+      if (diagnostic.end > tokenStart) {
+        activeDiagnostics[activeCount] = diagnostic
+        activeCount += 1
+      }
+    }
+
+    activeDiagnostics.length = activeCount
+  }
+
+  let matchingDiagnostics: TokenDiagnostic[] | undefined
+
+  for (const diagnostic of activeDiagnostics) {
+    if (tokenEnd <= diagnostic.end) {
+      matchingDiagnostics ??= []
+      matchingDiagnostics.push(diagnostic.value)
+    }
+  }
+
+  return {
+    diagnostics: matchingDiagnostics,
+    nextIndex: diagnosticIndex,
+  }
 }
 
 /** Get the quick info a token */

@@ -3429,19 +3429,23 @@ async function recordRuntimeTypeScriptDependencySidecar(
     return
   }
 
-  const dependencyAnalysis = isTestEnvironment()
-    ? await getCachedRuntimeTypeScriptDependencyAnalysis(
-          project,
-          runtimeCacheStore,
-          filePath,
-          compilerOptionsVersion
-        )
-    : await queueRuntimeTypeScriptDependencySidecarHydration({
-        project,
-        runtimeCacheStore,
-        filePath,
-        compilerOptionsVersion,
-      })
+  if (!isTestEnvironment()) {
+    context.disablePersist()
+    void queueRuntimeTypeScriptDependencySidecarHydration({
+      project,
+      runtimeCacheStore,
+      filePath,
+      compilerOptionsVersion,
+    })
+    return
+  }
+
+  const dependencyAnalysis = await getCachedRuntimeTypeScriptDependencyAnalysis(
+    project,
+    runtimeCacheStore,
+    filePath,
+    compilerOptionsVersion
+  )
   if (!dependencyAnalysis) {
     return
   }

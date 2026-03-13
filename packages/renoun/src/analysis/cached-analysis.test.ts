@@ -2403,7 +2403,7 @@ describe('analysis cached analysis', () => {
   )
 
   test(
-    'waits for the TypeScript dependency sidecar before persisting runtime-cached tokens across session resets',
+    'does not block runtime-cached tokens on TypeScript dependency sidecar hydration and skips persisting until it is ready',
     async () => {
       await withNodeEnv('production', async () => {
         await using workspace = await createTemporaryWorkspace({
@@ -2508,7 +2508,7 @@ describe('analysis cached analysis', () => {
           })
           await delay(25)
 
-          expect(firstTokensResolved).toBe(false)
+          expect(firstTokensResolved).toBe(true)
 
           resolveBlockedSidecar()
           await firstTokensPromise
@@ -2522,7 +2522,7 @@ describe('analysis cached analysis', () => {
 
         await getCachedTokens(createScopedProject(), tokenOptions)
 
-        expect(metadataCalls).toBe(1)
+        expect(metadataCalls).toBe(2)
 
         resetRuntimeAnalysisSessionsForTests()
 
@@ -2534,7 +2534,7 @@ describe('analysis cached analysis', () => {
 
         await getCachedTokens(createScopedProject(), tokenOptions)
 
-        expect(metadataCalls).toBe(2)
+        expect(metadataCalls).toBe(3)
       })
     },
     30_000

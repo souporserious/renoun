@@ -120,6 +120,7 @@ export interface CacheStoreComputeContext {
   readonly signal?: AbortSignal
   recordDep(depKey: string, depVersion: string): void
   recordConstDep(name: string, version: string): void
+  disablePersist(): void
   recordFileDep(path: string): Promise<string>
   recordDirectoryDep(path: string): Promise<string>
   recordNodeDep(nodeKey: string): Promise<string>
@@ -2078,6 +2079,7 @@ export class CacheStore {
         : undefined
 
     const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)
+    let shouldPersist = options.persist ?? false
     const dependencyVersions = new Map<string, string>()
     const computeSignal = options.signal ?? getContext()?.signal
     const recordWorkspaceTokenUnsafeDependency = (path: string) => {
@@ -2095,6 +2097,9 @@ export class CacheStore {
       recordConstDep: (name, version) => {
         this.#constDepVersionByName.set(name, version)
         dependencyVersions.set(toConstDependencyKey(name), version)
+      },
+      disablePersist: () => {
+        shouldPersist = false
       },
       recordFileDep: async (path: string) => {
         const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
@@ -2193,7 +2198,7 @@ export class CacheStore {
         value,
         deps: dependencyEntries,
         fingerprint,
-        persist: options.persist ?? false,
+        persist: shouldPersist,
         updatedAt: Date.now(),
       }
       const workspaceTokenRootPath = resolveWorkspaceTokenRootPath(
