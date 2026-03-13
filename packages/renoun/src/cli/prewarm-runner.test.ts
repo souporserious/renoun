@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 const PREWARM_FORCE_WORKER_ENV_KEY = 'RENOUN_PREWARM_FORCE_WORKER'
 const previousForceWorkerEnv = process.env[PREWARM_FORCE_WORKER_ENV_KEY]
+const previousExecArgv = process.execArgv.slice()
 
 type Deferred<Value> = {
   promise: Promise<Value>
@@ -23,11 +24,23 @@ function createDeferred<Value>(): Deferred<Value> {
   }
 }
 
+function ensureTypeScriptWorkerLaunchSupport(): void {
+  if (!process.execArgv.includes('--experimental-strip-types')) {
+    process.execArgv = [...process.execArgv, '--experimental-strip-types']
+  }
+}
+
+beforeEach(() => {
+  process.execArgv = previousExecArgv.slice()
+  vi.resetModules()
+})
+
 afterEach(() => {
   vi.useRealTimers()
   vi.doUnmock('./prewarm.ts')
   vi.doUnmock('../utils/env.ts')
   vi.doUnmock('node:child_process')
+  process.execArgv = previousExecArgv.slice()
   if (previousForceWorkerEnv === undefined) {
     delete process.env[PREWARM_FORCE_WORKER_ENV_KEY]
   } else {
@@ -39,9 +52,8 @@ afterEach(() => {
 
 describe('resolvePrewarmWorkerEntryFilePath', () => {
   test('falls back to the TypeScript worker in source mode', async () => {
-    const { resolvePrewarmWorkerEntryFilePath } = await import(
-      './prewarm-runner.ts'
-    )
+    const { resolvePrewarmWorkerEntryFilePath } =
+      await import('./prewarm-runner.ts')
     const resolvedWorkerPath = resolvePrewarmWorkerEntryFilePath()
     const jsWorkerPath = fileURLToPath(
       new URL('./prewarm.worker.js', import.meta.url)
@@ -59,9 +71,8 @@ describe('resolvePrewarmWorkerEntryFilePath', () => {
   })
 
   test('skips the TypeScript worker when the current runtime cannot execute it', async () => {
-    const { resolvePrewarmWorkerLaunchConfig } = await import(
-      './prewarm-runner.ts'
-    )
+    const { resolvePrewarmWorkerLaunchConfig } =
+      await import('./prewarm-runner.ts')
 
     const resolvedWorker = resolvePrewarmWorkerLaunchConfig({
       exists: (path) => path.endsWith('.ts'),
@@ -73,9 +84,8 @@ describe('resolvePrewarmWorkerEntryFilePath', () => {
   })
 
   test('reuses the current loader flags for a TypeScript worker when needed', async () => {
-    const { resolvePrewarmWorkerLaunchConfig } = await import(
-      './prewarm-runner.ts'
-    )
+    const { resolvePrewarmWorkerLaunchConfig } =
+      await import('./prewarm-runner.ts')
     const tsWorkerPath = fileURLToPath(
       new URL('./prewarm.worker.ts', import.meta.url)
     )
@@ -96,6 +106,7 @@ describe('resolvePrewarmWorkerEntryFilePath', () => {
 describe('runPrewarmSafely', () => {
   test('falls back to inline prewarm when the worker exits before completing', async () => {
     process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
+    ensureTypeScriptWorkerLaunchSupport()
     const spawnMock = vi.fn(() => {
       const child = new EventEmitter() as EventEmitter & {
         killed: boolean
@@ -136,6 +147,7 @@ describe('runPrewarmSafely', () => {
 
   test('falls back to inline prewarm when the worker reports an error', async () => {
     process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
+    ensureTypeScriptWorkerLaunchSupport()
     const spawnMock = vi.fn(() => {
       const child = new EventEmitter() as EventEmitter & {
         killed: boolean
@@ -182,6 +194,7 @@ describe('runPrewarmSafely', () => {
   test('falls back to inline prewarm after a worker timeout before continuing queued work', async () => {
     try {
       process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
+      ensureTypeScriptWorkerLaunchSupport()
       const children: Array<
         EventEmitter & {
           killed: boolean
@@ -210,7 +223,9 @@ describe('runPrewarmSafely', () => {
       const inlineCalls: string[] = []
       const prewarmMock = vi.fn(
         (options?: { analysisOptions?: { tsConfigFilePath?: string } }) => {
-          inlineCalls.push(options?.analysisOptions?.tsConfigFilePath ?? 'default')
+          inlineCalls.push(
+            options?.analysisOptions?.tsConfigFilePath ?? 'default'
+          )
 
           if (inlineCalls.length === 1) {
             return firstInlineFallback.promise
@@ -237,9 +252,7 @@ describe('runPrewarmSafely', () => {
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
 
-      await vi.waitFor(() => {
-        expect(spawnMock).toHaveBeenCalledTimes(1)
-      })
+      expect(spawnMock).toHaveBeenCalledTimes(1)
 
       await vi.advanceTimersByTimeAsync(PREWARM_REQUEST_TIMEOUT_MS)
       await vi.waitFor(() => {
@@ -265,6 +278,7 @@ describe('runPrewarmSafely', () => {
 
   test('skips inline fallback when background prewarm disables it', async () => {
     process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
+    ensureTypeScriptWorkerLaunchSupport()
     const spawnMock = vi.fn(() => {
       const child = new EventEmitter() as EventEmitter & {
         killed: boolean
