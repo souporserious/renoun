@@ -116,3 +116,6 @@ jobs:
           PUBLISHED_PACKAGES: ${{ steps.publish.outputs.publishedPackages }}
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: node .github/scripts/notify-discord.mjs
+
+      - name: Truncate renoun cache WAL before save
+        run: bash .github/scripts/truncate-renoun-cache.sh

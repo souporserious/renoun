@@ -775,7 +775,10 @@ describe('file-system cache integration', () => {
       })
 
       await blockRebuild.promise
-      await fileSystem.writeFile('after-reset.ts', 'export const afterReset = 1')
+      await fileSystem.writeFile(
+        'after-reset.ts',
+        'export const afterReset = 1'
+      )
       Session.reset(fileSystem)
       const freshSession = Session.for(fileSystem)
 
@@ -909,77 +912,73 @@ describe('file-system cache integration', () => {
     }
   })
 
-  test(
-    'revalidates cached child directory snapshots in development mode',
-    async () => {
-      const previousNodeEnv = process.env.NODE_ENV
-      process.env.NODE_ENV = 'development'
-      let tempDirectory: string | undefined
+  test('revalidates cached child directory snapshots in development mode', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    let tempDirectory: string | undefined
 
-      try {
-        tempDirectory = createTmpRenounCacheDirectory(
-          'renoun-cache-child-snapshot-'
+    try {
+      tempDirectory = createTmpRenounCacheDirectory(
+        'renoun-cache-child-snapshot-'
+      )
+      const directoryPath = relativePath(process.cwd(), tempDirectory)
+      const fileSystem = new NodeFileSystem()
+
+      mkdirSync(join(tempDirectory, 'nested'), { recursive: true })
+      writeFileSync(
+        join(tempDirectory, 'nested', 'one.ts'),
+        'export const one = 1',
+        'utf8'
+      )
+
+      const directory = new Directory({
+        fileSystem,
+        path: directoryPath,
+      })
+
+      const firstEntries = await directory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles: true,
+        includeTsConfigExcludedFiles: true,
+      })
+      expect(
+        firstEntries.some((entry) =>
+          entry.workspacePath.endsWith('nested/one.ts')
         )
-        const directoryPath = relativePath(process.cwd(), tempDirectory)
-        const fileSystem = new NodeFileSystem()
+      ).toBe(true)
 
-        mkdirSync(join(tempDirectory, 'nested'), { recursive: true })
-        writeFileSync(
-          join(tempDirectory, 'nested', 'one.ts'),
-          'export const one = 1',
-          'utf8'
+      rmSync(join(tempDirectory, 'nested', 'one.ts'))
+      writeFileSync(
+        join(tempDirectory, 'nested', 'two.ts'),
+        'export const two = 2',
+        'utf8'
+      )
+
+      const secondEntries = await directory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+        includeGitIgnoredFiles: true,
+        includeTsConfigExcludedFiles: true,
+      })
+
+      expect(
+        secondEntries.some((entry) =>
+          entry.workspacePath.endsWith('nested/one.ts')
         )
-
-        const directory = new Directory({
-          fileSystem,
-          path: directoryPath,
-        })
-
-        const firstEntries = await directory.getEntries({
-          recursive: true,
-          includeIndexAndReadmeFiles: true,
-          includeGitIgnoredFiles: true,
-          includeTsConfigExcludedFiles: true,
-        })
-        expect(
-          firstEntries.some((entry) =>
-            entry.workspacePath.endsWith('nested/one.ts')
-          )
-        ).toBe(true)
-
-        rmSync(join(tempDirectory, 'nested', 'one.ts'))
-        writeFileSync(
-          join(tempDirectory, 'nested', 'two.ts'),
-          'export const two = 2',
-          'utf8'
+      ).toBe(false)
+      expect(
+        secondEntries.some((entry) =>
+          entry.workspacePath.endsWith('nested/two.ts')
         )
-
-        const secondEntries = await directory.getEntries({
-          recursive: true,
-          includeIndexAndReadmeFiles: true,
-          includeGitIgnoredFiles: true,
-          includeTsConfigExcludedFiles: true,
-        })
-
-        expect(
-          secondEntries.some((entry) =>
-            entry.workspacePath.endsWith('nested/one.ts')
-          )
-        ).toBe(false)
-        expect(
-          secondEntries.some((entry) =>
-            entry.workspacePath.endsWith('nested/two.ts')
-          )
-        ).toBe(true)
-      } finally {
-        process.env.NODE_ENV = previousNodeEnv
-        if (tempDirectory) {
-          rmSync(tempDirectory, { recursive: true, force: true })
-        }
+      ).toBe(true)
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+      if (tempDirectory) {
+        rmSync(tempDirectory, { recursive: true, force: true })
       }
-    },
-    45_000
-  )
+    }
+  }, 45_000)
 
   test('revalidates cached child directory snapshots in production mode', async () => {
     const previousNodeEnv = process.env.NODE_ENV
@@ -1317,9 +1316,7 @@ export type Metadata = Value`,
       contentIdSpy.mockResolvedValue('v1')
 
       await store.get(nodeKey)
-      expect(contentIdSpy).toHaveBeenCalledWith(
-        'C:/Users/me/project/index.ts'
-      )
+      expect(contentIdSpy).toHaveBeenCalledWith('C:/Users/me/project/index.ts')
     } finally {
       contentIdSpy.mockRestore()
     }
@@ -1557,51 +1554,47 @@ export type Metadata = Value`,
     )
   })
 
-  test(
-    'invalidates cached markdown sections on NodeFileSystem when files change',
-    async () => {
-      const tempDirectory = createTmpRenounCacheDirectory('renoun-cache-node-')
-      const scopedCwd = join(tempDirectory, 'scoped-cwd')
-      mkdirSync(scopedCwd, { recursive: true })
-      const fileSystem = new NestedCwdNodeFileSystem(scopedCwd)
+  test('invalidates cached markdown sections on NodeFileSystem when files change', async () => {
+    const tempDirectory = createTmpRenounCacheDirectory('renoun-cache-node-')
+    const scopedCwd = join(tempDirectory, 'scoped-cwd')
+    mkdirSync(scopedCwd, { recursive: true })
+    const fileSystem = new NestedCwdNodeFileSystem(scopedCwd)
 
-      writeFileSync(
-        join(tempDirectory, 'page.md'),
-        `# Alpha
+    writeFileSync(
+      join(tempDirectory, 'page.md'),
+      `# Alpha
 
 first content`,
-        'utf8'
-      )
+      'utf8'
+    )
 
-      try {
-        const firstDirectory = new Directory({
-          fileSystem,
-          path: tempDirectory,
-        })
-        const firstFile = await firstDirectory.getFile('page', 'md')
-        const firstSections = await firstFile.getSections()
+    try {
+      const firstDirectory = new Directory({
+        fileSystem,
+        path: tempDirectory,
+      })
+      const firstFile = await firstDirectory.getFile('page', 'md')
+      const firstSections = await firstFile.getSections()
 
-        await firstFile.write(
-          `# Beta
+      await firstFile.write(
+        `# Beta
 
 updated content`
-        )
+      )
 
-        const secondDirectory = new Directory({
-          fileSystem,
-          path: tempDirectory,
-        })
-        const secondFile = await secondDirectory.getFile('page', 'md')
-        const secondSections = await waitForFirstSectionTitle(secondFile, 'Beta')
+      const secondDirectory = new Directory({
+        fileSystem,
+        path: tempDirectory,
+      })
+      const secondFile = await secondDirectory.getFile('page', 'md')
+      const secondSections = await waitForFirstSectionTitle(secondFile, 'Beta')
 
-        expect(firstSections[0]?.title).toBe('Alpha')
-        expect(secondSections[0]?.title).toBe('Beta')
-      } finally {
-        rmSync(tempDirectory, { recursive: true, force: true })
-      }
-    },
-    30_000
-  )
+      expect(firstSections[0]?.title).toBe('Alpha')
+      expect(secondSections[0]?.title).toBe('Beta')
+    } finally {
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
+  }, 30_000)
 
   test('invalidates snapshot content IDs for absolute paths in nested-cwd sessions', async () => {
     const tempDirectory = createTmpRenounCacheDirectory(
@@ -2011,9 +2004,9 @@ updated content`
     expect(getFileRelativePaths(await sourcePackage.getStructure())).toEqual([
       'packages/foo/src/index.ts',
     ])
-    expect(getFileRelativePaths(await docsSourcePackage.getStructure())).toEqual(
-      ['packages/foo/docs/guide.ts']
-    )
+    expect(
+      getFileRelativePaths(await docsSourcePackage.getStructure())
+    ).toEqual(['packages/foo/docs/guide.ts'])
     expect(
       getFileRelativePaths(await docsOverridePackage.getStructure())
     ).toEqual(['packages/foo/docs/guide.ts'])
@@ -2590,8 +2583,12 @@ updated content`
       sortSignature: 'none',
     })
 
-    session.directorySnapshots.set(componentsKey, { path: 'src/components' } as any)
-    session.directorySnapshots.set(buttonKey, { path: 'src/components/button' } as any)
+    session.directorySnapshots.set(componentsKey, {
+      path: 'src/components',
+    } as any)
+    session.directorySnapshots.set(buttonKey, {
+      path: 'src/components/button',
+    } as any)
     session.directorySnapshots.set(otherKey, { path: 'src/other' } as any)
 
     session.invalidatePaths(['/src/components/button/file.ts'])
@@ -2852,7 +2849,10 @@ updated content`
         usedDependencyIndex: true,
         hasMissingDependencyMetadata: true,
       })
-    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
+    const listNodeKeysByPrefixSpy = vi.spyOn(
+      session.cache,
+      'listNodeKeysByPrefix'
+    )
 
     session.invalidatePaths(['/src/first.ts', '/src/second.ts'])
     await session.waitForPendingInvalidations()
@@ -2891,7 +2891,10 @@ updated content`
         hasMissingDependencyMetadata: true,
         missingDependencyNodeKeys: ['analysis:missing-metadata'],
       })
-    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
+    const listNodeKeysByPrefixSpy = vi.spyOn(
+      session.cache,
+      'listNodeKeysByPrefix'
+    )
 
     session.invalidatePaths(['/src/first.ts'])
     await session.waitForPendingInvalidations()
@@ -2931,7 +2934,10 @@ updated content`
       hasMissingDependencyMetadata: true,
       missingDependencyNodeKeys: ['analysis:missing-metadata'],
     })
-    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
+    const listNodeKeysByPrefixSpy = vi.spyOn(
+      session.cache,
+      'listNodeKeysByPrefix'
+    )
 
     session.invalidatePaths(['/src/first.ts'])
     await session.waitForPendingInvalidations()
@@ -2985,9 +2991,11 @@ updated content`
     await deleteManyStarted.promise
 
     let completed = false
-    const waitForInvalidations = session.waitForPendingInvalidations().then(() => {
-      completed = true
-    })
+    const waitForInvalidations = session
+      .waitForPendingInvalidations()
+      .then(() => {
+        completed = true
+      })
     await Promise.resolve()
 
     expect(completed).toBe(false)
@@ -3024,7 +3032,10 @@ updated content`
       usedDependencyIndex: false,
       hasMissingDependencyMetadata: false,
     })
-    const listNodeKeysByPrefixSpy = vi.spyOn(session.cache, 'listNodeKeysByPrefix')
+    const listNodeKeysByPrefixSpy = vi.spyOn(
+      session.cache,
+      'listNodeKeysByPrefix'
+    )
 
     session.invalidatePaths(['/src/first.ts'])
     await session.waitForPendingInvalidations()
@@ -3409,10 +3420,8 @@ describe('session cache persistence policy', () => {
       expect(secondToken).toBe('token:docs')
       expect(tokenLookup).toHaveBeenCalledTimes(1)
 
-      const firstChangedPaths = await session.getWorkspaceChangedPathsSinceToken(
-        'docs',
-        'prev'
-      )
+      const firstChangedPaths =
+        await session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
       const secondChangedPaths =
         await session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
       expect(Array.from(firstChangedPaths ?? [])).toEqual([
@@ -3478,10 +3487,8 @@ describe('session cache persistence policy', () => {
       const session = Session.for(fileSystem, undefined, cache)
 
       const firstToken = await session.getWorkspaceChangeToken('docs')
-      const firstChangedPaths = await session.getWorkspaceChangedPathsSinceToken(
-        'docs',
-        'prev'
-      )
+      const firstChangedPaths =
+        await session.getWorkspaceChangedPathsSinceToken('docs', 'prev')
       expect(firstToken).toBe('token:v1:docs')
       expect(Array.from(firstChangedPaths ?? [])).toEqual([
         normalizePathKey('docs/v1.ts'),
@@ -3513,9 +3520,7 @@ describe('session cache persistence policy', () => {
       const refreshedChangedPathsAfterRevalidation =
         await refreshedChangedPathsPromise
       expect(refreshedTokenDuringRevalidation).toBe('token:v2:docs')
-      expect(
-        Array.from(refreshedChangedPathsAfterRevalidation ?? [])
-      ).toEqual([
+      expect(Array.from(refreshedChangedPathsAfterRevalidation ?? [])).toEqual([
         normalizePathKey('docs/v2.ts'),
       ])
       await new Promise((resolve) => setTimeout(resolve, 5))
@@ -3947,7 +3952,11 @@ describe('sqlite cache persistence', () => {
       const secondToken = `head:${'b'.repeat(40)};dirty:${'0'.repeat(40)};count:0;ignored-only:0`
 
       mkdirSync(docsDirectory, { recursive: true })
-      writeFileSync(join(docsDirectory, 'index.ts'), 'export const value = 1', 'utf8')
+      writeFileSync(
+        join(docsDirectory, 'index.ts'),
+        'export const value = 1',
+        'utf8'
+      )
       writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
 
       const firstFileSystem = new HeadAwareMetadataNodeFileSystem(
@@ -4975,7 +4984,10 @@ describe('sqlite cache persistence', () => {
 
       try {
         const docsDirectory = join(tmpDirectory, 'docs')
-        const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+        const workspaceDirectory = relativePath(
+          getRootDirectory(),
+          docsDirectory
+        )
         const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
 
         mkdirSync(docsDirectory, { recursive: true })
@@ -4986,7 +4998,8 @@ describe('sqlite cache persistence', () => {
           getRootDirectory(),
           tsConfigPath
         )
-        ;(firstWorkerFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+        ;(firstWorkerFileSystem as { repoRoot?: string }).repoRoot =
+          tmpDirectory
 
         const firstWorkerDirectory = new Directory({
           fileSystem: firstWorkerFileSystem,
@@ -5007,7 +5020,8 @@ describe('sqlite cache persistence', () => {
           getRootDirectory(),
           tsConfigPath
         )
-        ;(secondWorkerFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+        ;(secondWorkerFileSystem as { repoRoot?: string }).repoRoot =
+          tmpDirectory
         const secondReadDirectory = vi.spyOn(
           secondWorkerFileSystem,
           'readDirectory'
@@ -5044,7 +5058,10 @@ describe('sqlite cache persistence', () => {
 
       try {
         const docsDirectory = join(tmpDirectory, 'docs')
-        const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+        const workspaceDirectory = relativePath(
+          getRootDirectory(),
+          docsDirectory
+        )
         const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
 
         mkdirSync(docsDirectory, { recursive: true })
@@ -5898,91 +5915,87 @@ export type Metadata = Value`,
     })
   })
 
-  test(
-    'revalidates persisted workspace structure when scanned package set changes',
-    async () => {
-      await withProductionSqliteCache(async (tmpDirectory) => {
-        const workspaceDirectory = join(tmpDirectory)
-        const packageDirectory = join(workspaceDirectory, 'packages', 'foo')
-        const createWorkerFileSystem = () =>
-          createTempNodeFileSystem(tmpDirectory)
+  test('revalidates persisted workspace structure when scanned package set changes', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const workspaceDirectory = join(tmpDirectory)
+      const packageDirectory = join(workspaceDirectory, 'packages', 'foo')
+      const createWorkerFileSystem = () =>
+        createTempNodeFileSystem(tmpDirectory)
 
-        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
-        writeFileSync(
-          join(workspaceDirectory, 'package.json'),
-          JSON.stringify(
-            {
-              name: 'docs-workspace',
-              workspaces: ['packages/*'],
-            },
-            null,
-            2
-          ),
-          'utf8'
-        )
-        writeFileSync(
-          join(packageDirectory, 'package.json'),
-          JSON.stringify(
-            {
-              name: 'foo',
-            },
-            null,
-            2
-          ),
-          'utf8'
-        )
-        writeFileSync(
-          join(packageDirectory, 'src', 'index.ts'),
-          'export const value = 1',
-          'utf8'
-        )
+      mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+      writeFileSync(
+        join(workspaceDirectory, 'package.json'),
+        JSON.stringify(
+          {
+            name: 'docs-workspace',
+            workspaces: ['packages/*'],
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+      writeFileSync(
+        join(packageDirectory, 'package.json'),
+        JSON.stringify(
+          {
+            name: 'foo',
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+      writeFileSync(
+        join(packageDirectory, 'src', 'index.ts'),
+        'export const value = 1',
+        'utf8'
+      )
 
-        const firstWorkerWorkspace = new Workspace({
-          fileSystem: createWorkerFileSystem(),
-          rootDirectory: workspaceDirectory,
-        })
-        const firstStructure = await firstWorkerWorkspace.getStructure()
-        const firstPackages = firstStructure
-          .filter((entry) => entry.kind === 'Package')
-          .map((entry) => entry.name)
-          .sort()
-        expect(firstPackages).toEqual(['foo'])
-
-        const barDirectory = join(workspaceDirectory, 'packages', 'bar')
-        mkdirSync(join(barDirectory, 'src'), { recursive: true })
-        writeFileSync(
-          join(barDirectory, 'package.json'),
-          JSON.stringify(
-            {
-              name: 'bar',
-            },
-            null,
-            2
-          ),
-          'utf8'
-        )
-        writeFileSync(
-          join(barDirectory, 'src', 'index.ts'),
-          'export const value = 2',
-          'utf8'
-        )
-
-        await new Promise((resolve) => setTimeout(resolve, 300))
-
-        const secondWorkerWorkspace = new Workspace({
-          fileSystem: createWorkerFileSystem(),
-          rootDirectory: workspaceDirectory,
-        })
-        const secondStructure = await secondWorkerWorkspace.getStructure()
-        const secondPackages = secondStructure
-          .filter((entry) => entry.kind === 'Package')
-          .map((entry) => entry.name)
-          .sort()
-        expect(secondPackages).toEqual(['bar', 'foo'])
+      const firstWorkerWorkspace = new Workspace({
+        fileSystem: createWorkerFileSystem(),
+        rootDirectory: workspaceDirectory,
       })
-    },
-    30_000
-  )
+      const firstStructure = await firstWorkerWorkspace.getStructure()
+      const firstPackages = firstStructure
+        .filter((entry) => entry.kind === 'Package')
+        .map((entry) => entry.name)
+        .sort()
+      expect(firstPackages).toEqual(['foo'])
+
+      const barDirectory = join(workspaceDirectory, 'packages', 'bar')
+      mkdirSync(join(barDirectory, 'src'), { recursive: true })
+      writeFileSync(
+        join(barDirectory, 'package.json'),
+        JSON.stringify(
+          {
+            name: 'bar',
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+      writeFileSync(
+        join(barDirectory, 'src', 'index.ts'),
+        'export const value = 2',
+        'utf8'
+      )
+
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
+      const secondWorkerWorkspace = new Workspace({
+        fileSystem: createWorkerFileSystem(),
+        rootDirectory: workspaceDirectory,
+      })
+      const secondStructure = await secondWorkerWorkspace.getStructure()
+      const secondPackages = secondStructure
+        .filter((entry) => entry.kind === 'Package')
+        .map((entry) => entry.name)
+        .sort()
+      expect(secondPackages).toEqual(['bar', 'foo'])
+    })
+  }, 30_000)
 
   test('revalidates persisted workspace structure when root manifest changes', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
@@ -6172,7 +6185,10 @@ export type Metadata = Value`,
         firstFileSystem,
         'workspace-token-fast-path-first'
       )
-      const firstStore = new CacheStore({ snapshot: firstSnapshot, persistence })
+      const firstStore = new CacheStore({
+        snapshot: firstSnapshot,
+        persistence,
+      })
       await firstStore.getOrCompute(
         nodeKey,
         { persist: true },
@@ -6223,8 +6239,7 @@ export type Metadata = Value`,
           'stable-token'
         )
         vi.spyOn(fileSystem, 'isFilePathGitIgnored').mockImplementation(
-          (filePath) =>
-            normalizePathKey(filePath).endsWith('docs/ignored.ts')
+          (filePath) => normalizePathKey(filePath).endsWith('docs/ignored.ts')
         )
         return fileSystem
       }
@@ -6234,7 +6249,10 @@ export type Metadata = Value`,
         firstFileSystem,
         'workspace-token-ignored-first'
       )
-      const firstStore = new CacheStore({ snapshot: firstSnapshot, persistence })
+      const firstStore = new CacheStore({
+        snapshot: firstSnapshot,
+        persistence,
+      })
       await firstStore.getOrCompute(
         nodeKey,
         { persist: true },
@@ -6295,7 +6313,10 @@ export type Metadata = Value`,
         firstFileSystem,
         'workspace-token-intersection-first'
       )
-      const firstStore = new CacheStore({ snapshot: firstSnapshot, persistence })
+      const firstStore = new CacheStore({
+        snapshot: firstSnapshot,
+        persistence,
+      })
       await firstStore.getOrCompute(
         nodeKey,
         { persist: true },
@@ -7018,9 +7039,66 @@ export type Metadata = Value`,
     expect(computeCount).toBe(2)
     expect(
       telemetryCounters.some(
-        (counter) => counter.name === 'renoun.cache.sqlite.fallback_to_memory_count'
+        (counter) =>
+          counter.name === 'renoun.cache.sqlite.fallback_to_memory_count'
       )
     ).toBe(true)
+  })
+
+  test('auto-resets malformed sqlite cache files once before falling back', async () => {
+    const telemetryCounters: Array<{
+      name: string
+      value: number
+      tags?: Record<string, string>
+    }> = []
+    const telemetry: Telemetry = {
+      enabled() {
+        return true
+      },
+      emit() {},
+      counter(name, value = 1, tags) {
+        telemetryCounters.push({
+          name,
+          value,
+          tags,
+        })
+      },
+    }
+    setGlobalTelemetry(telemetry)
+
+    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-auto-reset-'))
+
+    try {
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      writeFileSync(dbPath, 'this is not sqlite', 'utf8')
+      writeFileSync(`${dbPath}-wal`, 'stale wal', 'utf8')
+      writeFileSync(`${dbPath}-shm`, 'stale shm', 'utf8')
+
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:sqlite-auto-reset'
+      await persistence.save(nodeKey, {
+        value: { value: 'recovered' },
+        deps: [{ depKey: 'const:auto-reset:1', depVersion: '1' }],
+        fingerprint: createFingerprint([
+          { depKey: 'const:auto-reset:1', depVersion: '1' },
+        ]),
+        persist: true,
+        updatedAt: Date.now(),
+      })
+
+      expect(await persistence.load(nodeKey)).toBeDefined()
+      expect(readFileSync(dbPath).subarray(0, 15).toString('utf8')).toBe(
+        'SQLite format 3'
+      )
+      expect(
+        telemetryCounters.some(
+          (counter) => counter.name === 'renoun.cache.sqlite.auto_reset_count'
+        )
+      ).toBe(true)
+      persistence.close()
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
   })
 
   test('runs sqlite checkpoint and vacuum maintenance without clearing persisted rows', async () => {
@@ -7044,6 +7122,8 @@ export type Metadata = Value`,
 
       const result = await persistence.runMaintenance({
         checkpoint: true,
+        quickCheck: true,
+        integrityCheck: true,
         vacuum: true,
         checkpointMode: 'PASSIVE',
       })
@@ -7051,6 +7131,10 @@ export type Metadata = Value`,
       expect(result.available).toBe(true)
       expect(result.checkpoint.executed).toBe(true)
       expect(result.checkpoint.mode).toBe('PASSIVE')
+      expect(result.quickCheck.executed).toBe(true)
+      expect(result.quickCheck.ok).toBe(true)
+      expect(result.integrityCheck.executed).toBe(true)
+      expect(result.integrityCheck.ok).toBe(true)
       expect(result.vacuum.executed).toBe(true)
       expect(await persistence.load(nodeKey)).toBeDefined()
     } finally {
@@ -7503,7 +7587,9 @@ export type Metadata = Value`,
       const previousDeps = [
         { depKey: 'const:load-snapshot-race:1', depVersion: '1' },
       ]
-      const nextDeps = [{ depKey: 'const:load-snapshot-race:2', depVersion: '1' }]
+      const nextDeps = [
+        { depKey: 'const:load-snapshot-race:2', depVersion: '1' },
+      ]
 
       await persistence.save(nodeKey, {
         value: { value: 'initial' },
@@ -8466,7 +8552,10 @@ export type Metadata = Value`,
         this: unknown,
         sql: string
       ): unknown {
-        if (!injectedPruneBusy && sql.trim().toUpperCase() === 'BEGIN IMMEDIATE') {
+        if (
+          !injectedPruneBusy &&
+          sql.trim().toUpperCase() === 'BEGIN IMMEDIATE'
+        ) {
           const stack = new Error().stack ?? ''
           if (stack.includes('runPruneWithRetries')) {
             injectedPruneBusy = true
@@ -8842,13 +8931,13 @@ export type Metadata = Value`,
         let secondSettled = false
         const second = secondStore
           .getOrCompute(
-          'test:sqlite-compute-slot-lock',
-          { persist: true },
-          async () => {
-            computeCount += 1
-            return 'second'
-          }
-        )
+            'test:sqlite-compute-slot-lock',
+            { persist: true },
+            async () => {
+              computeCount += 1
+              return 'second'
+            }
+          )
           .finally(() => {
             secondSettled = true
           })
@@ -10138,7 +10227,9 @@ export type Metadata = Value`,
         )
 
         const structuredIndexInfoRows = db
-          .prepare(`PRAGMA index_info('cache_entry_deps_v2_dep_term_node_key_idx')`)
+          .prepare(
+            `PRAGMA index_info('cache_entry_deps_v2_dep_term_node_key_idx')`
+          )
           .all() as Array<{ name?: string }>
         const structuredIndexColumns = structuredIndexInfoRows
           .map((row) => row.name)
@@ -10305,10 +10396,10 @@ export type Metadata = Value`,
     const unaffectedNodeKey = 'dir:src/other|mask=1|sig=structured-unseen'
 
     try {
-      const affectedDirectoryDepVersion = await snapshot.contentId(
-        'src/components'
-      )
-      const unaffectedDirectoryDepVersion = await snapshot.contentId('src/other')
+      const affectedDirectoryDepVersion =
+        await snapshot.contentId('src/components')
+      const unaffectedDirectoryDepVersion =
+        await snapshot.contentId('src/other')
 
       await store.put(
         affectedNodeKey,

@@ -4,7 +4,7 @@ import {
 } from '../file-system/CacheSqlite.ts'
 
 const CACHE_MAINTENANCE_USAGE =
-  `Usage: renoun cache-maintenance [--checkpoint] [--vacuum] [--db-path <path>] [--json]\n` +
+  `Usage: renoun cache-maintenance [--checkpoint] [--quick-check] [--integrity-check] [--vacuum] [--db-path <path>] [--json]\n` +
   `       renoun cache-maintenance [--checkpoint-mode <mode>] [--db-path <path>] [--json]\n` +
   `Modes: passive | full | restart | truncate`
 
@@ -52,6 +52,8 @@ export async function runCacheMaintenanceCommand(
   let shouldOutputJson = false
   let checkpoint: boolean | undefined
   let vacuum: boolean | undefined
+  let quickCheck: boolean | undefined
+  let integrityCheck: boolean | undefined
   let dbPath: string | undefined
   let checkpointMode: SqliteCheckpointMode | undefined
 
@@ -76,6 +78,14 @@ export async function runCacheMaintenanceCommand(
     }
     if (argument === '--no-vacuum') {
       vacuum = false
+      continue
+    }
+    if (argument === '--quick-check') {
+      quickCheck = true
+      continue
+    }
+    if (argument === '--integrity-check') {
+      integrityCheck = true
       continue
     }
     if (argument === '--db-path') {
@@ -121,6 +131,8 @@ export async function runCacheMaintenanceCommand(
     checkpoint: checkpoint ?? true,
     vacuum: vacuum ?? false,
     checkpointMode,
+    quickCheck: quickCheck ?? false,
+    integrityCheck: integrityCheck ?? false,
   })
 
   if (!result.available) {
@@ -132,8 +144,37 @@ export async function runCacheMaintenanceCommand(
     )
   }
 
+  const failedHealthChecks = [
+    result.quickCheck.executed && !result.quickCheck.ok
+      ? {
+          name: 'quick_check',
+          errors: result.quickCheck.errors,
+        }
+      : null,
+    result.integrityCheck.executed && !result.integrityCheck.ok
+      ? {
+          name: 'integrity_check',
+          errors: result.integrityCheck.errors,
+        }
+      : null,
+  ].filter(
+    (
+      value
+    ): value is {
+      name: string
+      errors: string[]
+    } => value !== null
+  )
+
   if (shouldOutputJson) {
     console.log(JSON.stringify(result, null, 2))
+    if (failedHealthChecks.length > 0) {
+      throw new Error(
+        `[renoun] SQLite health check failed at ${result.dbPath}: ${failedHealthChecks
+          .map((check) => `${check.name}=${check.errors.join(' | ')}`)
+          .join('; ')}`
+      )
+    }
     return
   }
 
@@ -141,8 +182,24 @@ export async function runCacheMaintenanceCommand(
   if (result.checkpoint.executed) {
     operations.push(`checkpoint:${result.checkpoint.mode.toLowerCase()}`)
   }
+  if (result.quickCheck.executed) {
+    operations.push(`quick-check:${result.quickCheck.ok ? 'ok' : 'failed'}`)
+  }
+  if (result.integrityCheck.executed) {
+    operations.push(
+      `integrity-check:${result.integrityCheck.ok ? 'ok' : 'failed'}`
+    )
+  }
   if (result.vacuum.executed) {
     operations.push('vacuum')
+  }
+
+  if (failedHealthChecks.length > 0) {
+    throw new Error(
+      `[renoun] SQLite health check failed at ${result.dbPath}: ${failedHealthChecks
+        .map((check) => `${check.name}=${check.errors.join(' | ')}`)
+        .join('; ')}`
+    )
   }
 
   console.log(

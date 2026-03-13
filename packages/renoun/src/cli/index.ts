@@ -22,7 +22,7 @@ const usageMessage =
   `         renoun override <pattern>       Copy files from app template (supports globs)\n` +
   `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
   `         renoun cache-token [--json]     Print deterministic cache token for CI\n` +
-  `         renoun cache-maintenance [...]  Run SQLite cache checkpoint/vacuum maintenance\n` +
+  `         renoun cache-maintenance [...]  Run SQLite cache checkpoint/health/vacuum maintenance\n` +
   `         renoun validate [path|url]      Check for broken links\n` +
   `\n` +
   `Examples:\n` +
@@ -34,9 +34,7 @@ const usageMessage =
   `  renoun override tsconfig.json    Copy tsconfig.json from app\n` +
   `  renoun override "ui/*.tsx"       Copy all UI components from app`
 
-function toStringArguments(
-  values: Array<string | undefined>
-): Array<string> {
+function toStringArguments(values: Array<string | undefined>): Array<string> {
   return values.filter((value): value is string => typeof value === 'string')
 }
 
@@ -94,9 +92,7 @@ if (firstArgument === 'validate') {
     exitWithCommandError(error)
   }
 } else if (firstArgument === 'cache-maintenance') {
-  const { runCacheMaintenanceCommand } = await import(
-    './cache-maintenance.ts'
-  )
+  const { runCacheMaintenanceCommand } = await import('./cache-maintenance.ts')
   const args = toStringArguments([secondArgument, ...restArguments])
 
   try {
@@ -404,7 +400,9 @@ if (firstArgument === 'validate') {
   }
 } else {
   if (firstArgument) {
-    console.error(`[renoun] Unknown command "${firstArgument}".\n${usageMessage}`)
+    console.error(
+      `[renoun] Unknown command "${firstArgument}".\n${usageMessage}`
+    )
   } else {
     console.error(`[renoun] Missing command.\n${usageMessage}`)
   }

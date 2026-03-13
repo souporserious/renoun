@@ -1,4 +1,4 @@
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
 
@@ -16,7 +16,10 @@ import {
   resolvePersistentProjectRootDirectory,
 } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
-import { emitTelemetryCounter, emitTelemetryHistogram } from '../utils/telemetry.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryHistogram,
+} from '../utils/telemetry.ts'
 import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
 import { summarizePersistedValue } from './cache-persistence-debug.ts'
 import { loadSqliteModule } from './sqlite.ts'
@@ -47,6 +50,8 @@ const SQLITE_DEFAULTS = {
   structuredDepTermIdCacheMaxSize: 100_000,
   structuredPathClosureSeededCacheMaxSize: 100_000,
 } as const
+
+const SQLITE_DATABASE_FILE_SUFFIXES = ['', '-shm', '-wal'] as const
 
 const SQLITE_META_KEYS = {
   missingDependencyEntryCount: 'missing_dependency_entry_count',
@@ -104,16 +109,21 @@ interface ResolvedSqlitePersistenceOptions {
   debugCachePersistence?: boolean
 }
 
-export type SqliteCheckpointMode =
-  | 'PASSIVE'
-  | 'FULL'
-  | 'RESTART'
-  | 'TRUNCATE'
+export type SqliteCheckpointMode = 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE'
 
 export interface SqliteCacheMaintenanceOptions {
   checkpoint?: boolean
   vacuum?: boolean
   checkpointMode?: SqliteCheckpointMode
+  quickCheck?: boolean
+  integrityCheck?: boolean
+}
+
+export interface SqliteHealthCheckResult {
+  executed: boolean
+  ok: boolean
+  errors: string[]
+  durationMs: number
 }
 
 export interface SqliteCacheMaintenanceResult {
@@ -127,6 +137,8 @@ export interface SqliteCacheMaintenanceResult {
     checkpointedFrames: number
     durationMs: number
   }
+  quickCheck: SqliteHealthCheckResult
+  integrityCheck: SqliteHealthCheckResult
   vacuum: {
     executed: boolean
     durationMs: number
@@ -257,13 +269,17 @@ export function disposeDefaultCacheStorePersistence() {
   disposeCacheStorePersistence()
 }
 
-export async function runSqliteCacheMaintenance(options: {
-  dbPath?: string
-  projectRoot?: string
-  checkpoint?: boolean
-  vacuum?: boolean
-  checkpointMode?: SqliteCheckpointMode
-} = {}): Promise<SqliteCacheMaintenanceResult> {
+export async function runSqliteCacheMaintenance(
+  options: {
+    dbPath?: string
+    projectRoot?: string
+    checkpoint?: boolean
+    vacuum?: boolean
+    checkpointMode?: SqliteCheckpointMode
+    quickCheck?: boolean
+    integrityCheck?: boolean
+  } = {}
+): Promise<SqliteCacheMaintenanceResult> {
   const persistence = new SqliteCacheStorePersistence({
     dbPath: options.dbPath,
     projectRoot: options.projectRoot,
@@ -274,6 +290,8 @@ export async function runSqliteCacheMaintenance(options: {
       checkpoint: options.checkpoint,
       vacuum: options.vacuum,
       checkpointMode: options.checkpointMode,
+      quickCheck: options.quickCheck,
+      integrityCheck: options.integrityCheck,
     })
   } finally {
     persistence.close()
@@ -312,7 +330,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     this.#debugCachePersistence = options.debugCachePersistence === true
     this.#overflowCheckInterval = Math.max(
       1,
-      Math.min(SQLITE_DEFAULTS.pruneWriteInterval, Math.floor(this.#maxRows / 100))
+      Math.min(
+        SQLITE_DEFAULTS.pruneWriteInterval,
+        Math.floor(this.#maxRows / 100)
+      )
     )
     this.#preparedStatementCacheMax = resolvePreparedStatementCacheMax(
       options.preparedStatementCacheMax
@@ -348,6 +369,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         busy: 0,
         logFrames: 0,
         checkpointedFrames: 0,
+        durationMs: 0,
+      },
+      quickCheck: {
+        executed: false,
+        ok: true,
+        errors: [],
+        durationMs: 0,
+      },
+      integrityCheck: {
+        executed: false,
+        ok: true,
+        errors: [],
         durationMs: 0,
       },
       vacuum: {
@@ -408,6 +441,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       })
     }
 
+    if (resolvedOptions.quickCheck) {
+      result.quickCheck = await this.#runHealthCheck('QUICK')
+    }
+
+    if (resolvedOptions.integrityCheck) {
+      result.integrityCheck = await this.#runHealthCheck('INTEGRITY')
+    }
+
     if (resolvedOptions.vacuum) {
       const startedAt = Date.now()
       await this.#runWithBusyRetries(
@@ -437,6 +478,57 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     return result
   }
 
+  #runHealthCheck(
+    mode: 'QUICK' | 'INTEGRITY'
+  ): Promise<SqliteHealthCheckResult> {
+    const pragma =
+      mode === 'QUICK' ? 'PRAGMA quick_check' : 'PRAGMA integrity_check'
+    const startedAt = Date.now()
+
+    return this.#runWithBusyRetries(
+      () => {
+        const rows = this.#prepareStatement(pragma).all() as Array<{
+          quick_check?: unknown
+          integrity_check?: unknown
+        }>
+        const messages = rows
+          .map((row) =>
+            mode === 'QUICK' ? row.quick_check : row.integrity_check
+          )
+          .filter((value): value is string => typeof value === 'string')
+        const ok =
+          messages.length === 1 && messages[0]?.trim().toLowerCase() === 'ok'
+        const durationMs = Date.now() - startedAt
+
+        emitTelemetryCounter({
+          name: 'renoun.cache.sqlite.maintenance_health_check_count',
+          tags: {
+            mode: mode.toLowerCase(),
+            ok: String(ok),
+          },
+        })
+        emitTelemetryHistogram({
+          name: 'renoun.cache.sqlite.maintenance_health_check_ms',
+          value: durationMs,
+          tags: {
+            mode: mode.toLowerCase(),
+            ok: String(ok),
+          },
+        })
+
+        return {
+          executed: true,
+          ok,
+          errors: ok ? [] : messages,
+          durationMs,
+        }
+      },
+      {
+        operationName: `maintenance_${mode.toLowerCase()}_check`,
+      }
+    )
+  }
+
   async acquireComputeSlot(
     nodeKey: string,
     owner: string,
@@ -454,9 +546,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     return this.#runWithBusyRetries(() => {
       this.#cleanupExpiredComputeSlots(now)
 
-      const result = this
-        .#prepareStatement(
-          `
+      const result = this.#prepareStatement(
+        `
             INSERT INTO cache_inflight (node_key, owner, started_at, expires_at)
             VALUES (?, ?, ?, ?)
             ON CONFLICT(node_key) DO UPDATE SET
@@ -465,8 +556,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               expires_at = excluded.expires_at
             WHERE cache_inflight.expires_at < ?
           `
-        )
-        .run(nodeKey, owner, now, expiresAt, now)
+      ).run(nodeKey, owner, now, expiresAt, now)
 
       const changes = Number((result as { changes?: number }).changes ?? 0)
       return changes > 0
@@ -488,15 +578,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const expiresAt = now + ttlMs
 
     return this.#runWithBusyRetries(() => {
-      const result = this
-        .#prepareStatement(
-          `
+      const result = this.#prepareStatement(
+        `
             UPDATE cache_inflight
             SET expires_at = ?
             WHERE node_key = ? AND owner = ?
           `
-        )
-        .run(expiresAt, nodeKey, owner)
+      ).run(expiresAt, nodeKey, owner)
 
       return Number((result as { changes?: number }).changes ?? 0) > 0
     })
@@ -528,15 +616,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
       this.#cleanupExpiredComputeSlots(now)
 
-      const row = this
-        .#prepareStatement(
-          `
+      const row = this.#prepareStatement(
+        `
             SELECT owner, expires_at
             FROM cache_inflight
             WHERE node_key = ?
           `
-        )
-        .get(nodeKey) as { owner?: string; expires_at?: number } | undefined
+      ).get(nodeKey) as { owner?: string; expires_at?: number } | undefined
 
       if (!row?.owner) {
         return undefined
@@ -544,9 +630,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
       const expiresAt = Number(row.expires_at)
       if (!Number.isFinite(expiresAt) || expiresAt <= now) {
-        this.#prepareStatement(`DELETE FROM cache_inflight WHERE node_key = ?`).run(
-          nodeKey
-        )
+        this.#prepareStatement(
+          `DELETE FROM cache_inflight WHERE node_key = ?`
+        ).run(nodeKey)
         return undefined
       }
 
@@ -610,9 +696,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
               FROM cache_entries
               WHERE node_key = ?
             `
-        const row = this
-          .#prepareStatement(loadEntrySql)
-          .get(nodeKey) as
+        const row = this.#prepareStatement(loadEntrySql).get(nodeKey) as
           | {
               fingerprint?: string
               value_blob?: unknown
@@ -628,16 +712,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           dep_version?: string | null
         }> = []
         if (row && includeDeps) {
-          dependencyRows = this
-            .#prepareStatement(
-              `
+          dependencyRows = this.#prepareStatement(
+            `
                 SELECT dep_key as dep_key, dep_version as dep_version
                 FROM cache_entry_deps_v2
                 WHERE node_key = ?
                 ORDER BY dep_key
               `
-            )
-            .all(nodeKey) as Array<{
+          ).all(nodeKey) as Array<{
             dep_key?: string | null
             dep_version?: string | null
           }>
@@ -827,7 +909,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const persist = entry.persist ? 1 : 0
     const now = Date.now()
 
-    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt <= SQLITE_DEFAULTS.busyRetries;
+      attempt += 1
+    ) {
       let transactionStarted = false
 
       try {
@@ -837,9 +923,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         const previousMissingDependencyMetadata =
           this.#isNodeKeyMissingDependencyMetadata(nodeKey)
 
-        this
-          .#prepareStatement(
-            `
+        this.#prepareStatement(
+          `
               INSERT INTO cache_entries (
                 node_key,
                 fingerprint,
@@ -860,17 +945,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
                 workspace_change_token = excluded.workspace_change_token,
                 revision = excluded.revision
             `
-          )
-          .run(
-            nodeKey,
-            entry.fingerprint,
-            serializedValue,
-            entry.updatedAt,
-            now,
-            persist,
-            entry.workspaceChangeToken ?? null,
-            nodeKey
-          )
+        ).run(
+          nodeKey,
+          entry.fingerprint,
+          serializedValue,
+          entry.updatedAt,
+          now,
+          persist,
+          entry.workspaceChangeToken ?? null,
+          nodeKey
+        )
 
         this.#replaceDependenciesForNodeKey(nodeKey, entry.deps)
 
@@ -944,7 +1028,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const persist = entry.persist ? 1 : 0
     const now = Date.now()
 
-    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt <= SQLITE_DEFAULTS.busyRetries;
+      attempt += 1
+    ) {
       let transactionStarted = false
 
       try {
@@ -965,9 +1053,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             return { applied: false, revision: currentRevision }
           }
 
-          this
-            .#prepareStatement(
-              `
+          this.#prepareStatement(
+            `
                 INSERT INTO cache_entries (
                   node_key,
                   fingerprint,
@@ -980,16 +1067,15 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
                 )
                 VALUES (?, ?, ?, ?, ?, ?, ?, 1)
               `
-            )
-            .run(
-              nodeKey,
-              entry.fingerprint,
-              serializedValue,
-              entry.updatedAt,
-              now,
-              persist,
-              entry.workspaceChangeToken ?? null
-            )
+          ).run(
+            nodeKey,
+            entry.fingerprint,
+            serializedValue,
+            entry.updatedAt,
+            now,
+            persist,
+            entry.workspaceChangeToken ?? null
+          )
         } else {
           if (
             !Number.isFinite(currentRevision) ||
@@ -1005,9 +1091,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           const nextRevision = options.expectedRevision + 1
           previousMissingDependencyMetadata =
             this.#isNodeKeyMissingDependencyMetadata(nodeKey)
-          const updateResult = this
-            .#prepareStatement(
-              `
+          const updateResult = this.#prepareStatement(
+            `
                 UPDATE cache_entries
                 SET
                   fingerprint = ?,
@@ -1019,18 +1104,17 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
                   revision = ?
                 WHERE node_key = ? AND revision = ?
               `
-            )
-            .run(
-              entry.fingerprint,
-              serializedValue,
-              entry.updatedAt,
-              now,
-              persist,
-              entry.workspaceChangeToken ?? null,
-              nextRevision,
-              nodeKey,
-              options.expectedRevision
-            ) as { changes?: number }
+          ).run(
+            entry.fingerprint,
+            serializedValue,
+            entry.updatedAt,
+            now,
+            persist,
+            entry.workspaceChangeToken ?? null,
+            nextRevision,
+            nodeKey,
+            options.expectedRevision
+          ) as { changes?: number }
 
           const changes = Number(updateResult.changes ?? 0)
           if (changes === 0) {
@@ -1187,7 +1271,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     const dependencyPathKeyVariants = new Set<string>()
     for (const dependencyPathKey of dependencyPathKeys) {
-      if (typeof dependencyPathKey !== 'string' || dependencyPathKey.length === 0) {
+      if (
+        typeof dependencyPathKey !== 'string' ||
+        dependencyPathKey.length === 0
+      ) {
         continue
       }
 
@@ -1251,9 +1338,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    const deletedNodeKeys = await this.#selectNodeKeysByStructuredDependencyPaths(
-      dependencyPathKeys
-    )
+    const deletedNodeKeys =
+      await this.#selectNodeKeysByStructuredDependencyPaths(dependencyPathKeys)
 
     if (deletedNodeKeys.length > 0) {
       await this.#runWithBusyRetries(() => {
@@ -1311,8 +1397,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return []
     }
 
-    const lookupPathKeys =
-      this.#expandStructuredDependencyLookupPathKeys(normalizedChangedPathKeys)
+    const lookupPathKeys = this.#expandStructuredDependencyLookupPathKeys(
+      normalizedChangedPathKeys
+    )
     if (lookupPathKeys.length === 0) {
       return []
     }
@@ -1429,7 +1516,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     ).run(SQLITE_META_KEYS.invalidationSequence)
     const row = this.#prepareStatement(
       `SELECT value FROM meta WHERE key = ?`
-    ).get(SQLITE_META_KEYS.invalidationSequence) as { value?: unknown } | undefined
+    ).get(SQLITE_META_KEYS.invalidationSequence) as
+      | { value?: unknown }
+      | undefined
     const sequence = Number.parseInt(String(row?.value ?? '0'), 10)
     if (!Number.isFinite(sequence) || sequence <= 0) {
       return 0
@@ -1457,9 +1546,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return
     }
 
-    this.#prepareStatement(`DELETE FROM cache_entry_deps_v2 WHERE node_key = ?`).run(
-      nodeKey
-    )
+    this.#prepareStatement(
+      `DELETE FROM cache_entry_deps_v2 WHERE node_key = ?`
+    ).run(nodeKey)
 
     if (dependencies.length === 0) {
       return
@@ -1521,14 +1610,18 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       if (pathDependency.startsWith('file:')) {
         return {
           kind: STRUCTURED_DEP_KIND.file,
-          pathKey: normalizeAbsolutePathKey(pathDependency.slice('file:'.length)),
+          pathKey: normalizeAbsolutePathKey(
+            pathDependency.slice('file:'.length)
+          ),
         }
       }
 
       if (pathDependency.startsWith('dir:')) {
         return {
           kind: STRUCTURED_DEP_KIND.dir,
-          pathKey: normalizeAbsolutePathKey(pathDependency.slice('dir:'.length)),
+          pathKey: normalizeAbsolutePathKey(
+            pathDependency.slice('dir:'.length)
+          ),
         }
       }
 
@@ -1592,14 +1685,22 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       `
     )
 
-    for (let descendantIndex = 0; descendantIndex < uniqueLineage.length; descendantIndex += 1) {
+    for (
+      let descendantIndex = 0;
+      descendantIndex < uniqueLineage.length;
+      descendantIndex += 1
+    ) {
       const descendantPathKey = uniqueLineage[descendantIndex]
       const descendantPathId = pathIdByPathKey.get(descendantPathKey)
       if (!descendantPathId) {
         continue
       }
 
-      for (let ancestorIndex = 0; ancestorIndex <= descendantIndex; ancestorIndex += 1) {
+      for (
+        let ancestorIndex = 0;
+        ancestorIndex <= descendantIndex;
+        ancestorIndex += 1
+      ) {
         const ancestorPathKey = uniqueLineage[ancestorIndex]
         const ancestorPathId = pathIdByPathKey.get(ancestorPathKey)
         if (!ancestorPathId) {
@@ -1745,7 +1846,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 
   async #initialize(generation: number): Promise<void> {
-    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.initBusyRetries; attempt += 1) {
+    let didResetCorruptDatabase = false
+
+    for (
+      let attempt = 0;
+      attempt <= SQLITE_DEFAULTS.initBusyRetries;
+      attempt += 1
+    ) {
       let database: any
 
       try {
@@ -1774,10 +1881,10 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#clearPreparedStatements()
         this.#clearStructuredDependencyCaches()
         this.#db = database
-        database.exec(`PRAGMA journal_mode = WAL`)
-        database.exec(`PRAGMA synchronous = NORMAL`)
         database.exec(`PRAGMA busy_timeout = 5000`)
         database.exec(`PRAGMA foreign_keys = ON`)
+        database.exec(`PRAGMA journal_mode = WAL`)
+        database.exec(`PRAGMA synchronous = NORMAL`)
         database.exec(
           `
             CREATE TABLE IF NOT EXISTS meta (
@@ -1798,13 +1905,15 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         this.#migrateCacheSchema(database, currentSchemaVersion)
 
         if (currentSchemaVersion !== this.#schemaVersion) {
-          database.prepare(
-            `
+          database
+            .prepare(
+              `
               INSERT INTO meta(key, value)
               VALUES (?, ?)
               ON CONFLICT(key) DO UPDATE SET value = excluded.value
             `
-          ).run('cache_schema_version', String(this.#schemaVersion))
+            )
+            .run('cache_schema_version', String(this.#schemaVersion))
         }
         this.#initializeMissingDependencyMetadata(database)
 
@@ -1844,6 +1953,23 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
           )
           await delay(retryDelay)
           continue
+        }
+
+        if (!didResetCorruptDatabase && isSqliteCorruptionError(error)) {
+          didResetCorruptDatabase = true
+
+          try {
+            await resetSqliteDatabaseFiles(this.#dbPath)
+            emitTelemetryCounter({
+              name: 'renoun.cache.sqlite.auto_reset_count',
+              tags: {
+                reason: getSqliteErrorCategory(error),
+              },
+            })
+            continue
+          } catch (resetError) {
+            reportBestEffortError('file-system/cache-sqlite-reset', resetError)
+          }
         }
 
         this.#availability = 'unavailable'
@@ -1981,7 +2107,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     const migrationStartedAt = Date.now()
     this.#ensureCacheEntriesColumns(database)
 
-    const copiedLegacyDependencyRows = this.#copyLegacyDependenciesIntoV2(database)
+    const copiedLegacyDependencyRows =
+      this.#copyLegacyDependenciesIntoV2(database)
     const hasNullStructuredDependencyTermIds =
       this.#hasNullStructuredDependencyTermIds()
     const backfilledStructuredDependencyRows =
@@ -2044,7 +2171,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return new Set()
     }
 
-    const rows = database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{
+    const rows = database
+      .prepare(`PRAGMA table_info(${tableName})`)
+      .all() as Array<{
       name?: unknown
     }>
     const columnNames = new Set<string>()
@@ -2152,8 +2281,12 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
 
       const depVersion =
-        typeof row.dep_version === 'string' ? row.dep_version : String(row.dep_version ?? '')
-      const parsedDependency = this.#parseStructuredPathDependencyTerm(row.dep_key)
+        typeof row.dep_version === 'string'
+          ? row.dep_version
+          : String(row.dep_version ?? '')
+      const parsedDependency = this.#parseStructuredPathDependencyTerm(
+        row.dep_key
+      )
       let depTermId: number | null = null
 
       if (parsedDependency) {
@@ -2183,16 +2316,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return false
     }
 
-    const row = this
-      .#prepareStatement(
-        `
+    const row = this.#prepareStatement(
+      `
           SELECT 1 as has_row
           FROM cache_entry_deps_v2
           WHERE dep_term_id IS NULL
           LIMIT 1
         `
-      )
-      .get() as { has_row?: unknown } | undefined
+    ).get() as { has_row?: unknown } | undefined
 
     return Number(row?.has_row ?? 0) === 1
   }
@@ -2202,16 +2333,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return 0
     }
 
-    const rows = this
-      .#prepareStatement(
-        `
+    const rows = this.#prepareStatement(
+      `
           SELECT node_key as node_key, dep_key as dep_key
           FROM cache_entry_deps_v2
           WHERE dep_term_id IS NULL
           ORDER BY node_key, dep_key
         `
-      )
-      .all() as Array<{ node_key?: unknown; dep_key?: unknown }>
+    ).all() as Array<{ node_key?: unknown; dep_key?: unknown }>
     if (rows.length === 0) {
       return 0
     }
@@ -2230,7 +2359,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         continue
       }
 
-      const parsedDependency = this.#parseStructuredPathDependencyTerm(row.dep_key)
+      const parsedDependency = this.#parseStructuredPathDependencyTerm(
+        row.dep_key
+      )
       if (!parsedDependency) {
         continue
       }
@@ -2367,7 +2498,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
   async #runPruneWithRetries() {
     const pruneStartedAt = Date.now()
-    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt <= SQLITE_DEFAULTS.busyRetries;
+      attempt += 1
+    ) {
       try {
         const pruneMetrics = await this.#pruneStaleEntries()
         const pruneDurationMs = Date.now() - pruneStartedAt
@@ -2426,9 +2561,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       }
     }
 
-    throw new Error(
-      '[renoun] Exhausted SQLITE busy retries for cache pruning.'
-    )
+    throw new Error('[renoun] Exhausted SQLITE busy retries for cache pruning.')
   }
 
   async #touchLastAccessed(nodeKey: string): Promise<void> {
@@ -2446,9 +2579,8 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     await this.#runWithBusyRetries(() => {
-      this
-        .#prepareStatement(
-          `
+      this.#prepareStatement(
+        `
             UPDATE cache_entries
             SET last_accessed_at = CASE
               WHEN last_accessed_at >= ? THEN last_accessed_at + 1
@@ -2456,8 +2588,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
             END
             WHERE node_key = ?
           `
-        )
-        .run(now, now, nodeKey)
+      ).run(now, now, nodeKey)
     })
     this.#recordLastAccessTouch(nodeKey, now)
   }
@@ -2608,7 +2739,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     options: { operationName?: string } = {}
   ): Promise<T> {
     const operationName = options.operationName ?? 'sqlite_operation'
-    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt <= SQLITE_DEFAULTS.busyRetries;
+      attempt += 1
+    ) {
       try {
         return operation()
       } catch (error) {
@@ -2643,14 +2778,15 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     if (
       !options.force &&
-      now - this.#lastInflightCleanupAt < SQLITE_DEFAULTS.inflightCleanupIntervalMs
+      now - this.#lastInflightCleanupAt <
+        SQLITE_DEFAULTS.inflightCleanupIntervalMs
     ) {
       return
     }
 
-    this.#prepareStatement(`DELETE FROM cache_inflight WHERE expires_at <= ?`).run(
-      now
-    )
+    this.#prepareStatement(
+      `DELETE FROM cache_inflight WHERE expires_at <= ?`
+    ).run(now)
     this.#lastInflightCleanupAt = now
   }
 
@@ -2673,15 +2809,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
 
     this.#db.exec('BEGIN IMMEDIATE')
     try {
-      const staleNodes = this
-        .#prepareStatement(
-          `
+      const staleNodes = this.#prepareStatement(
+        `
             SELECT node_key
             FROM cache_entries
             WHERE last_accessed_at < ?
           `
-        )
-        .all(staleBefore) as Array<{ node_key?: string }>
+      ).all(staleBefore) as Array<{ node_key?: string }>
       const staleNodeKeys = staleNodes
         .map((row) => row.node_key)
         .filter((nodeKey: string | undefined): nodeKey is string => {
@@ -2702,16 +2836,14 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       const overflow = totalRows - this.#maxRows
 
       if (overflow > 0) {
-        const overflowRows = this
-          .#prepareStatement(
-            `
+        const overflowRows = this.#prepareStatement(
+          `
               SELECT node_key
               FROM cache_entries
               ORDER BY last_accessed_at ASC, updated_at ASC, node_key ASC
               LIMIT ?
             `
-          )
-          .all(overflow) as Array<{ node_key?: string }>
+        ).all(overflow) as Array<{ node_key?: string }>
 
         const victimNodeKeys = overflowRows
           .map((row) => row.node_key)
@@ -2724,14 +2856,13 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
         overflowRowsDeleted = victimNodeKeys.length
       }
 
-      const expiredInflightNodeKeys = this
-        .#prepareStatement(
-          `
+      const expiredInflightNodeKeys = this.#prepareStatement(
+        `
             SELECT node_key
             FROM cache_inflight
             WHERE expires_at <= ?
           `
-        )
+      )
         .all(pruneStartedAt)
         .map((row: { node_key?: string }) => row.node_key)
         .filter((nodeKey: string | undefined): nodeKey is string => {
@@ -2768,7 +2899,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const compactionStartedAt = Date.now()
-    for (let attempt = 0; attempt <= SQLITE_DEFAULTS.busyRetries; attempt += 1) {
+    for (
+      let attempt = 0;
+      attempt <= SQLITE_DEFAULTS.busyRetries;
+      attempt += 1
+    ) {
       try {
         this.#db.exec('BEGIN IMMEDIATE')
         try {
@@ -2949,10 +3084,7 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
   }
 
   #disposePreparedStatement(preparedStatement: any): void {
-    if (
-      preparedStatement &&
-      typeof preparedStatement.finalize === 'function'
-    ) {
+    if (preparedStatement && typeof preparedStatement.finalize === 'function') {
       try {
         preparedStatement.finalize()
       } catch (error) {
@@ -2989,9 +3121,11 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       return 0
     }
 
-    const row = this.#prepareStatement(`SELECT value FROM meta WHERE key = ?`).get(
-      SQLITE_META_KEYS.missingDependencyEntryCount
-    ) as { value?: unknown } | undefined
+    const row = this.#prepareStatement(
+      `SELECT value FROM meta WHERE key = ?`
+    ).get(SQLITE_META_KEYS.missingDependencyEntryCount) as
+      | { value?: unknown }
+      | undefined
     const numericValue = Number.parseInt(String(row?.value ?? '0'), 10)
     if (!Number.isFinite(numericValue) || numericValue <= 0) {
       return 0
@@ -3088,7 +3222,9 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
       const deleteEntriesSql = `DELETE FROM cache_entries WHERE node_key IN (${placeholders})`
       this.#prepareStatement(deleteStructuredDepsSql).run(...batch)
       this.#prepareStatement(deleteEntriesSql).run(...batch)
-      this.#adjustMissingDependencyMetadataCount(-missingDependencyCountForBatch)
+      this.#adjustMissingDependencyMetadataCount(
+        -missingDependencyCountForBatch
+      )
     }
   }
 
@@ -3410,6 +3546,63 @@ function isSqliteBusyOrLockedError(error: unknown): boolean {
   )
 }
 
+function isSqliteCorruptionError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const candidateError = error as {
+    code?: number | string
+    errno?: number | string
+    resultCode?: number | string
+    extendedResultCode?: number | string
+  }
+
+  const isCorruptSqliteCode = (code: unknown): boolean => {
+    if (typeof code === 'number') {
+      return code === 11 || code === 26
+    }
+
+    if (typeof code !== 'string') {
+      return false
+    }
+
+    const normalizedCode = code.toUpperCase()
+    if (
+      normalizedCode.includes('SQLITE_CORRUPT') ||
+      normalizedCode.includes('SQLITE_NOTADB')
+    ) {
+      return true
+    }
+
+    const parsedCode = Number.parseInt(normalizedCode, 10)
+    return parsedCode === 11 || parsedCode === 26
+  }
+
+  if (
+    isCorruptSqliteCode(candidateError.code) ||
+    isCorruptSqliteCode(candidateError.errno) ||
+    isCorruptSqliteCode(candidateError.resultCode) ||
+    isCorruptSqliteCode(candidateError.extendedResultCode)
+  ) {
+    return true
+  }
+
+  const normalizedMessage = error.message.toLowerCase()
+  return (
+    normalizedMessage.includes('malformed') ||
+    normalizedMessage.includes('not a database') ||
+    normalizedMessage.includes('file is not a database') ||
+    normalizedMessage.includes('database disk image is malformed')
+  )
+}
+
+async function resetSqliteDatabaseFiles(dbPath: string): Promise<void> {
+  for (const suffix of SQLITE_DATABASE_FILE_SUFFIXES) {
+    await rm(`${dbPath}${suffix}`, { force: true })
+  }
+}
+
 const SQLITE_CHECKPOINT_MODES: SqliteCheckpointMode[] = [
   'PASSIVE',
   'FULL',
@@ -3421,6 +3614,8 @@ interface ResolvedSqliteMaintenanceOptions {
   checkpoint: boolean
   vacuum: boolean
   checkpointMode: SqliteCheckpointMode
+  quickCheck: boolean
+  integrityCheck: boolean
 }
 
 function resolveSqliteMaintenanceOptions(
@@ -3428,13 +3623,18 @@ function resolveSqliteMaintenanceOptions(
 ): ResolvedSqliteMaintenanceOptions {
   const checkpoint =
     typeof options.checkpoint === 'boolean' ? options.checkpoint : true
-  const vacuum =
-    typeof options.vacuum === 'boolean' ? options.vacuum : false
+  const vacuum = typeof options.vacuum === 'boolean' ? options.vacuum : false
+  const quickCheck =
+    typeof options.quickCheck === 'boolean' ? options.quickCheck : false
+  const integrityCheck =
+    typeof options.integrityCheck === 'boolean' ? options.integrityCheck : false
 
   return {
     checkpoint,
     vacuum,
     checkpointMode: resolveSqliteCheckpointMode(options.checkpointMode),
+    quickCheck,
+    integrityCheck,
   }
 }
 
@@ -3456,6 +3656,10 @@ function resolveSqliteCheckpointMode(
 function getSqliteErrorCategory(error: unknown): string {
   if (isSqliteBusyOrLockedError(error)) {
     return 'busy_or_locked'
+  }
+
+  if (isSqliteCorruptionError(error)) {
+    return 'corrupt_or_notadb'
   }
 
   if (error instanceof Error) {

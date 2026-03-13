@@ -484,6 +484,9 @@ In GitHub Actions, resolve the token once and use it in `actions/cache`:
     key: ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
     restore-keys: |
       ${{ runner.os }}-node${{ matrix.node-version }}-renoun-cache-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-
+
+- name: Truncate renoun cache WAL before the cache post-job save
+  run: bash .github/scripts/truncate-renoun-cache.sh
 ```
 
 #### Comparison with `GitVirtualFileSystem`

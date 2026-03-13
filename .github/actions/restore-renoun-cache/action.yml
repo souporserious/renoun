@@ -2,7 +2,7 @@ name: Restore renoun cache
 description: Resolve and restore the renoun filesystem cache for CI jobs
 inputs:
   node-version:
-    description: Node major version used by the workflow cache key segment
+    description: Node version used by the workflow cache key segment
     required: false
     default: '22'
 runs:
