@@ -1,4 +1,7 @@
 import { describe, test, expect } from 'vitest'
+import { randomBytes } from 'node:crypto'
+import { once } from 'node:events'
+import { createConnection, type Socket as NetSocket } from 'node:net'
 
 import { WebSocketServer } from './websocket'
 import { TestWebSocket } from './test-websocket'
@@ -106,6 +109,98 @@ async function closeClient(client: TestWebSocket) {
   await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
+
+function makeMaskedClientFrame(
+  opcode: number,
+  payload: Buffer = Buffer.alloc(0),
+  options: { fin?: boolean } = {}
+) {
+  const fin = options.fin ?? true
+  const length = payload.length
+
+  let header: Buffer
+  if (length < 126) {
+    header = Buffer.alloc(2)
+    header[1] = length
+  } else if (length < 65536) {
+    header = Buffer.alloc(4)
+    header[1] = 126
+    header.writeUInt16BE(length, 2)
+  } else {
+    header = Buffer.alloc(10)
+    header[1] = 127
+    header.writeBigUInt64BE(BigInt(length), 2)
+  }
+
+  header[0] = (fin ? 0x80 : 0) | opcode
+  header[1] |= 0x80
+
+  const mask = randomBytes(4)
+  const maskedPayload = Buffer.from(payload)
+  for (let index = 0; index < maskedPayload.length; index++) {
+    maskedPayload[index] ^= mask[index % 4]
+  }
+
+  return Buffer.concat([header, mask, maskedPayload])
+}
+
+async function readHttpResponseHead(socket: NetSocket) {
+  let buffer = Buffer.alloc(0)
+
+  while (!buffer.includes(Buffer.from('\r\n\r\n'))) {
+    const [chunk] = (await once(socket, 'data')) as [Buffer]
+    buffer = Buffer.concat([buffer, chunk])
+  }
+
+  return buffer.toString('latin1')
+}
+
+async function connectRawClient(
+  port: number,
+  key = randomBytes(16).toString('base64')
+) {
+  const socket = createConnection({ host: '127.0.0.1', port })
+  await once(socket, 'connect')
+
+  const request = [
+    'GET / HTTP/1.1',
+    `Host: 127.0.0.1:${port}`,
+    'Upgrade: websocket',
+    'Connection: Upgrade',
+    `Sec-WebSocket-Key: ${key}`,
+    'Sec-WebSocket-Version: 13',
+    '',
+    '',
+  ].join('\r\n')
+
+  socket.write(request)
+  const responseHead = await readHttpResponseHead(socket)
+  return { socket, responseHead }
+}
+
+async function closeRawClient(socket: NetSocket) {
+  if (socket.destroyed) {
+    return
+  }
+
+  await new Promise<void>((resolve) => {
+    const onClose = () => {
+      socket.removeListener('close', onClose)
+      socket.removeListener('error', onError)
+      resolve()
+    }
+    const onError = () => {
+      socket.removeListener('close', onClose)
+      socket.removeListener('error', onError)
+      resolve()
+    }
+
+    socket.once('close', onClose)
+    socket.once('error', onError)
+    socket.destroy()
+  })
+}
+
 describe('WebSocketServer', () => {
   test('accepts connection and receives text message', async () => {
     await withServer({}, async ({ server, port }) => {
@@ -193,4 +288,94 @@ describe('WebSocketServer', () => {
       await expect(closePromise).resolves.toBe(1009)
     })
   })
+
+  test('rejects malformed websocket key with trailing junk', async () => {
+    await withServer({}, async ({ port }) => {
+      const { socket, responseHead } = await connectRawClient(
+        port,
+        'AQIDBAUGBwgJCgsMDQ4PEA==junk'
+      )
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeRawClient(socket)
+      })
+
+      expect(responseHead.startsWith('HTTP/1.1 400 Bad Request')).toBe(true)
+    })
+  })
+
+  test('close frame with 1-byte payload is rejected with 1002', async () => {
+    await withServer({}, async ({ server, port }) => {
+      const closePromise = new Promise<number | undefined>((resolve) => {
+        server.once('connection', (ws: any) =>
+          ws.once('close', (code: number) => resolve(code))
+        )
+      })
+
+      const { socket, responseHead } = await connectRawClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeRawClient(socket)
+      })
+
+      expect(responseHead.startsWith('HTTP/1.1 101 Switching Protocols')).toBe(
+        true
+      )
+
+      socket.write(makeMaskedClientFrame(0x8, Buffer.from([0x00])))
+      await expect(closePromise).resolves.toBe(1002)
+    })
+  })
+
+  test('close frame stops queued data frames from being emitted', async () => {
+    await withServer({}, async ({ server, port }) => {
+      const messages: string[] = []
+      const closePromise = new Promise<number | undefined>((resolve) => {
+        server.once('connection', (ws: any) => {
+          ws.on('message', (message: string) => messages.push(message))
+          ws.once('close', (code: number) => resolve(code))
+        })
+      })
+
+      const { socket, responseHead } = await connectRawClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeRawClient(socket)
+      })
+
+      expect(responseHead.startsWith('HTTP/1.1 101 Switching Protocols')).toBe(
+        true
+      )
+
+      socket.write(
+        Buffer.concat([
+          makeMaskedClientFrame(0x8, Buffer.from([0x03, 0xe8])),
+          makeMaskedClientFrame(0x1, Buffer.from('after-close')),
+        ])
+      )
+
+      await expect(closePromise).resolves.toBe(1000)
+      expect(messages).toEqual([])
+    })
+  })
+
+  test('empty close frame is surfaced as 1005', async () => {
+    await withServer({}, async ({ server, port }) => {
+      const closePromise = new Promise<number | undefined>((resolve) => {
+        server.once('connection', (ws: any) =>
+          ws.once('close', (code: number) => resolve(code))
+        )
+      })
+
+      const { socket, responseHead } = await connectRawClient(port)
+      await using _client = createAsyncDisposeHandle(async () => {
+        await closeRawClient(socket)
+      })
+
+      expect(responseHead.startsWith('HTTP/1.1 101 Switching Protocols')).toBe(
+        true
+      )
+
+      socket.write(makeMaskedClientFrame(0x8))
+      await expect(closePromise).resolves.toBe(1005)
+    })
+  })
+
 })

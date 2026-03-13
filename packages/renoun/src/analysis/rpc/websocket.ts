@@ -106,11 +106,13 @@ function frame(opcode: Opcode, payload: Buffer) {
   return Buffer.concat([header, payload])
 }
 
+const WEBSOCKET_KEY = /^[+/0-9A-Za-z]{22}==$/
+
 function isValidWebSocketKey(key: string | undefined): key is string {
-  if (!key || key.length > 60) return false
+  if (!key || !WEBSOCKET_KEY.test(key)) return false
   try {
     const buf = Buffer.from(key, 'base64')
-    return buf.length === 16
+    return buf.length === 16 && buf.toString('base64') === key
   } catch {
     return false
   }
@@ -386,6 +388,10 @@ export class WebSocket extends EventEmitter {
   }
 
   _handleData(chunk: Buffer) {
+    if (this.readyState === WebSocket.CLOSED) {
+      return
+    }
+
     this.#buffer = Buffer.concat([this.#buffer, chunk])
 
     if (this.#buffer.length > this.#maxBufferBytes) {
@@ -464,6 +470,11 @@ export class WebSocket extends EventEmitter {
 
       // advance buffer
       this.#buffer = this.#buffer.subarray(total)
+
+      if (this.readyState === WebSocket.CLOSING && opcode !== OPCODE.CLOSE) {
+        // After a close has started, ignore anything except the peer's close
+        continue parse_loop
+      }
 
       switch (opcode) {
         // CONTINUATION
@@ -603,49 +614,69 @@ export class WebSocket extends EventEmitter {
 
         // CLOSE
         case OPCODE.CLOSE: {
-          const code = payload.length >= 2 ? payload.readUInt16BE(0) : 1000
+          const sendCloseResponse = (code: number) => {
+            this.readyState = WebSocket.CLOSING
+            this.#closeCode = code
+            this.#closeReason = undefined
+
+            if (!this.#closeSent) {
+              const buf = Buffer.alloc(2)
+              buf.writeUInt16BE(code, 0)
+              this.#closeSent = true
+              this.#socket.end(frame(OPCODE.CLOSE, buf))
+            } else {
+              this.#socket.end()
+            }
+          }
+
+          if (payload.length === 1) {
+            sendCloseResponse(1002)
+            return
+          }
+
+          const hasStatusCode = payload.length >= 2
+          const code = hasStatusCode ? payload.readUInt16BE(0) : undefined
           const reasonBytes =
             payload.length > 2 ? payload.subarray(2) : undefined
+          const isValidCode = code === undefined || isValidCloseCode(code)
 
           if (reasonBytes) {
             try {
               statelessTextDecoder.decode(reasonBytes, { stream: false })
             } catch {
-              const buf = Buffer.alloc(2)
-              buf.writeUInt16BE(1007, 0)
-              this.#socket.end(frame(OPCODE.CLOSE, buf))
+              sendCloseResponse(1007)
               return
             }
           }
 
-          this.#closeCode = isValidCloseCode(code) ? code : 1002
-          this.#closeReason = isValidCloseCode(code)
+          this.readyState = WebSocket.CLOSING
+          this.#closeCode =
+            code === undefined ? 1005 : isValidCode ? code : 1002
+          this.#closeReason = code !== undefined && isValidCode
             ? reasonBytes?.toString('utf8')
             : undefined
 
           if (!this.#closeSent) {
-            // echo valid close or respond with protocol error
-            const responseCode = isValidCloseCode(code) ? code : 1002
-            const responsePayload =
-              isValidCloseCode(code) && reasonBytes
-                ? (() => {
-                    const buf = Buffer.alloc(2 + reasonBytes.length)
-                    buf.writeUInt16BE(responseCode, 0)
-                    reasonBytes.copy(buf, 2)
-                    return buf
-                  })()
-                : (() => {
-                    const buf = Buffer.alloc(2)
-                    buf.writeUInt16BE(responseCode, 0)
-                    return buf
-                  })()
+            let responsePayload = Buffer.alloc(0)
+
+            if (code !== undefined) {
+              const responseCode = isValidCode ? code : 1002
+              responsePayload = Buffer.alloc(
+                2 + (isValidCode ? reasonBytes?.length ?? 0 : 0)
+              )
+              responsePayload.writeUInt16BE(responseCode, 0)
+              if (isValidCode && reasonBytes) {
+                reasonBytes.copy(responsePayload, 2)
+              }
+            }
+
             this.#closeSent = true
             this.#socket.end(frame(OPCODE.CLOSE, responsePayload))
           } else {
             // We already sent a close; just end the socket
             this.#socket.end()
           }
-          continue parse_loop
+          return
         }
 
         // PING
