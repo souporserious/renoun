@@ -6,6 +6,7 @@ import {
   getSourceTextMetadata,
   getTokens,
 } from '../../analysis/node-client.ts'
+import { getServerRuntimeFromProcessEnv } from '../../analysis/runtime-env.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
@@ -15,6 +16,7 @@ import { hasSourceTextFormatterParser } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
 import {
   getSourceTextValueSignature,
+  type SourceTextHydrationMetadata,
   type SourceTextMetadata,
 } from '../../analysis/query/source-text-metadata.ts'
 import type {
@@ -41,12 +43,119 @@ import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
-import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
-import { QuickInfoProvider } from './QuickInfoProvider.tsx'
+import { createQuickInfoTheme } from './QuickInfoContent.tsx'
+import {
+  QuickInfoProvider,
+  type QuickInfoEntry,
+} from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
 import { Symbol } from './Symbol.tsx'
 
 type ThemeColors = Awaited<ReturnType<typeof getThemeColors>>
+
+function toQuickInfoEntryId(lineIndex: number, tokenIndex: number): string {
+  return `${lineIndex}:${tokenIndex}`
+}
+
+function toQuickInfoRequestCacheKey({
+  filePath,
+  position,
+  valueSignature,
+}: {
+  filePath: string
+  position: number
+  valueSignature?: string
+}): string {
+  return valueSignature
+    ? `${filePath}:${position}:${valueSignature}`
+    : `${filePath}:${position}`
+}
+
+interface QuickInfoRequestSource {
+  filePath: string
+  sourceMetadata: SourceTextHydrationMetadata
+  valueSignature?: string
+}
+
+async function createQuickInfoEntriesById({
+  tokens,
+  themeConfiguration,
+  languages,
+  waitForWarmResult,
+  quickInfoRequestSource,
+}: {
+  tokens: TokenizedLines
+  themeConfiguration: ConfigurationOptions['theme']
+  languages: ConfigurationOptions['languages']
+  waitForWarmResult: boolean
+  quickInfoRequestSource?: QuickInfoRequestSource
+}): Promise<Map<string, QuickInfoEntry>> {
+  const entriesById = new Map<string, QuickInfoEntry>()
+  const displayTokensByText = new Map<string, Promise<TokenizedLines | undefined>>()
+
+  for (let lineIndex = 0; lineIndex < tokens.length; lineIndex++) {
+    const line = tokens[lineIndex]!
+
+    for (let tokenIndex = 0; tokenIndex < line.length; tokenIndex++) {
+      const token = line[tokenIndex]!
+      if (!token.quickInfo && (!token.isSymbol || !quickInfoRequestSource)) {
+        continue
+      }
+
+      const id = toQuickInfoEntryId(lineIndex, tokenIndex)
+      if (entriesById.has(id)) {
+        continue
+      }
+
+      let displayTokens: TokenizedLines | undefined
+
+      if (token.quickInfo) {
+        const displayText = token.quickInfo.displayText
+        let displayTokensPromise = displayTokensByText.get(displayText)
+
+        if (!displayTokensPromise) {
+          displayTokensPromise = Promise.resolve(
+            getTokens({
+              value: displayText,
+              language: 'typescript',
+              languages,
+              theme: themeConfiguration,
+              allowErrors: true,
+              waitForWarmResult,
+            })
+          ).catch(() => {
+            return undefined
+          })
+          displayTokensByText.set(displayText, displayTokensPromise)
+        }
+
+        displayTokens = await displayTokensPromise
+      }
+
+      entriesById.set(id, {
+        id,
+        quickInfo: token.quickInfo,
+        displayTokens,
+        request:
+          token.isSymbol && quickInfoRequestSource
+            ? {
+                cacheKey: toQuickInfoRequestCacheKey({
+                  filePath: quickInfoRequestSource.filePath,
+                  position: token.start,
+                  valueSignature: quickInfoRequestSource.valueSignature,
+                }),
+                filePath: quickInfoRequestSource.filePath,
+                position: token.start,
+                sourceMetadata: quickInfoRequestSource.sourceMetadata,
+              }
+            : undefined,
+        diagnostics: token.diagnostics,
+      })
+    }
+  }
+
+  return entriesById
+}
 
 const SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES = new Set([
   'javascript',
@@ -322,6 +431,7 @@ async function TokensAsync({
   try {
     const config = await getConfig()
     const theme = await getThemeColors(config.theme)
+    const serverRuntime = getServerRuntimeFromProcessEnv()
     const language = languageProp || context?.language
     const themeConfiguration = themeProp ?? config.theme
     const baseTokenClassName = hasMultipleThemes(themeConfiguration)
@@ -443,6 +553,8 @@ async function TokensAsync({
             : undefined
           : context.allowErrors
         : allowErrorsProp
+    const shouldDeferQuickInfoUntilHover =
+      isDevelopmentRuntime && shouldAnalyze
     const tokens = await getTokens({
       value: metadata.value,
       language: metadata.language,
@@ -451,11 +563,47 @@ async function TokensAsync({
       showErrors,
       theme: themeConfiguration,
       languages: config.languages,
+      deferQuickInfoUntilHover: shouldDeferQuickInfoUntilHover,
       // In development, wait for the warmed analysis result so the streamed
       // update replaces the plain-text fallback with real highlighting and
       // symbol quick info.
       waitForWarmResult: isDevelopmentRuntime,
     })
+    const quickInfoRequestSource =
+      shouldDeferQuickInfoUntilHover && metadata.filePath
+        ? {
+            filePath: metadata.filePath,
+            sourceMetadata: {
+              value: metadata.value,
+              language: metadata.language,
+            },
+            valueSignature: metadata.valueSignature,
+          }
+        : undefined
+    const quickInfoEntriesById = await createQuickInfoEntriesById({
+      tokens,
+      themeConfiguration,
+      languages: config.languages,
+      waitForWarmResult: isDevelopmentRuntime,
+      quickInfoRequestSource,
+    })
+    const registerQuickInfoEntry = (entry: QuickInfoEntry) => {
+      const existingEntry = quickInfoEntriesById.get(entry.id)
+
+      if (!existingEntry) {
+        quickInfoEntriesById.set(entry.id, entry)
+        return
+      }
+
+      quickInfoEntriesById.set(entry.id, {
+        ...existingEntry,
+        quickInfo: existingEntry.quickInfo ?? entry.quickInfo,
+        displayTokens: existingEntry.displayTokens ?? entry.displayTokens,
+        request: existingEntry.request ?? entry.request,
+        diagnostics: existingEntry.diagnostics ?? entry.diagnostics,
+      })
+    }
+    const quickInfoTheme = createQuickInfoTheme(theme)
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =
       annotationInstructions !== null &&
@@ -463,66 +611,81 @@ async function TokensAsync({
         annotationInstructions.inline.length > 0)
 
     if (!hasAnnotations) {
-      return (
-        <QuickInfoProvider>
-          {tokens.map((line, lineIndex) => {
-            const lineChildren = line.map((token, tokenIndex) =>
-              renderToken({
-                token,
-                tokenIndex,
-                lineIndex,
-                baseTokenClassName,
-                theme,
-                css,
-                className,
-                style,
-              })
-            )
-            const diagnostics = getUniqueDiagnostics(line)
-            const diagnosticNodes = renderDiagnostics({
-              diagnostics,
-              lineIndex,
-              baseTokenClassName,
-              theme,
-              className,
-              style,
+      const renderedLines = tokens.map((line, lineIndex) => {
+        const lineChildren = line.map((token, tokenIndex) =>
+          renderToken({
+            token,
+            tokenIndex,
+            lineIndex,
+            baseTokenClassName,
+            quickInfoRequestPosition: token.start,
+            quickInfoRequestSource,
+            registerQuickInfoEntry,
+            theme,
+            css,
+            className,
+            style,
+          })
+        )
+        const diagnostics = getUniqueDiagnostics(line)
+        const diagnosticNodes = renderDiagnostics({
+          diagnostics,
+          lineIndex,
+          baseTokenClassName,
+          theme,
+          className,
+          style,
+        })
+        const lineChildrenWithDiagnostics = diagnosticNodes.length
+          ? lineChildren.concat(diagnosticNodes)
+          : lineChildren
+        const isLastLine = lineIndex === lastLineIndex
+        // If diagnostics are rendered with display: block, avoid adding the
+        // trailing newline after the line; the block element will naturally
+        // place subsequent content on the next line, and adding a newline
+        // would introduce extra vertical space below the diagnostic.
+        const hasDiagnostics = diagnosticNodes.length > 0
+        const explicitDiagnosticDisplay =
+          css?.error?.display ?? style?.error?.display
+        const diagnosticsAreBlock = explicitDiagnosticDisplay
+          ? explicitDiagnosticDisplay !== 'inline' &&
+            explicitDiagnosticDisplay !== 'inline-block'
+          : true
+        const shouldAppendLineBreak =
+          !isLastLine && !(hasDiagnostics && diagnosticsAreBlock)
+        const renderedLine = renderLine
+          ? renderLine({
+              children: lineChildrenWithDiagnostics,
+              index: lineIndex,
+              isLast: isLastLine,
             })
-            const lineChildrenWithDiagnostics = diagnosticNodes.length
-              ? lineChildren.concat(diagnosticNodes)
-              : lineChildren
-            const isLastLine = lineIndex === lastLineIndex
-            // If diagnostics are rendered with display: block, avoid adding the
-            // trailing newline after the line; the block element will naturally
-            // place subsequent content on the next line, and adding a newline
-            // would introduce extra vertical space below the diagnostic.
-            const hasDiagnostics = diagnosticNodes.length > 0
-            const explicitDiagnosticDisplay =
-              css?.error?.display ?? style?.error?.display
-            const diagnosticsAreBlock = explicitDiagnosticDisplay
-              ? explicitDiagnosticDisplay !== 'inline' &&
-                explicitDiagnosticDisplay !== 'inline-block'
-              : true
-            const shouldAppendLineBreak =
-              !isLastLine && !(hasDiagnostics && diagnosticsAreBlock)
-            const renderedLine = renderLine
-              ? renderLine({
-                  children: lineChildrenWithDiagnostics,
-                  index: lineIndex,
-                  isLast: isLastLine,
-                })
-              : lineChildrenWithDiagnostics
+          : lineChildrenWithDiagnostics
 
-            if (renderLine && renderedLine) {
-              return renderedLine
-            }
+        if (renderLine && renderedLine) {
+          return renderedLine
+        }
 
-            return (
-              <Fragment key={lineIndex}>
-                {lineChildrenWithDiagnostics}
-                {shouldAppendLineBreak ? '\n' : null}
-              </Fragment>
-            )
-          })}
+        return (
+          <Fragment key={lineIndex}>
+            {lineChildrenWithDiagnostics}
+            {shouldAppendLineBreak ? '\n' : null}
+          </Fragment>
+        )
+      })
+      const quickInfoEntries = Array.from(quickInfoEntriesById.values())
+
+      return (
+        <QuickInfoProvider
+          entries={quickInfoEntries}
+          popoverTheme={quickInfoTheme}
+          popoverCss={css?.popover}
+          popoverClassName={className?.popover}
+          popoverStyle={style?.popover}
+          tokenThemeConfig={themeConfiguration}
+          tokenRuntime={serverRuntime}
+          tokenLanguages={config.languages}
+        >
+          {renderedLines}
         </QuickInfoProvider>
       )
     }
@@ -534,13 +697,28 @@ async function TokensAsync({
       tokens,
       value: metadata.value,
       baseTokenClassName,
+      quickInfoRequestSource,
+      registerQuickInfoEntry,
       theme,
       css,
       className,
       style,
     })
 
-    return <QuickInfoProvider>{annotatedNodes}</QuickInfoProvider>
+    return (
+      <QuickInfoProvider
+        entries={Array.from(quickInfoEntriesById.values())}
+        popoverTheme={quickInfoTheme}
+        popoverCss={css?.popover}
+        popoverClassName={className?.popover}
+        popoverStyle={style?.popover}
+        tokenThemeConfig={themeConfiguration}
+        tokenRuntime={serverRuntime}
+        tokenLanguages={config.languages}
+      >
+        {annotatedNodes}
+      </QuickInfoProvider>
+    )
   } catch (error) {
     rejectContext(error)
     throw error
@@ -551,7 +729,10 @@ interface RenderTokenOptions {
   token: Token
   tokenIndex: number
   lineIndex: number
+  quickInfoRequestPosition?: number
   baseTokenClassName?: string
+  quickInfoRequestSource?: QuickInfoRequestSource
+  registerQuickInfoEntry?: (entry: QuickInfoEntry) => void
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -575,6 +756,8 @@ interface RenderWithAnnotationsOptions {
   tokens: TokenizedLines
   value: string
   baseTokenClassName?: string
+  quickInfoRequestSource?: QuickInfoRequestSource
+  registerQuickInfoEntry?: (entry: QuickInfoEntry) => void
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -585,7 +768,10 @@ function renderToken({
   token,
   tokenIndex,
   lineIndex,
+  quickInfoRequestPosition = token.start,
   baseTokenClassName,
+  quickInfoRequestSource,
+  registerQuickInfoEntry,
   theme,
   css: cssProp,
   className,
@@ -593,10 +779,14 @@ function renderToken({
 }: RenderTokenOptions): React.ReactNode {
   const hasDiagnostics = Boolean(token.diagnostics?.length)
   const hasQuickInfo = Boolean(token.quickInfo)
+  const hasQuickInfoRequest = Boolean(
+    token.isSymbol && quickInfoRequestSource?.filePath
+  )
+  const hasInteractiveQuickInfo = hasQuickInfo || hasQuickInfoRequest
 
   if (
     token.isWhiteSpace ||
-    (!hasQuickInfo &&
+    (!hasInteractiveQuickInfo &&
       !hasDiagnostics &&
       !token.hasTextStyles &&
       token.isBaseColor)
@@ -626,29 +816,32 @@ function renderToken({
     className?.token
   )
 
-  if (hasQuickInfo) {
+  if (hasInteractiveQuickInfo) {
+    const quickInfoId = toQuickInfoEntryId(lineIndex, tokenIndex)
+    registerQuickInfoEntry?.({
+      id: quickInfoId,
+      quickInfo: token.quickInfo,
+      request:
+        hasQuickInfoRequest && quickInfoRequestSource
+          ? {
+              cacheKey: toQuickInfoRequestCacheKey({
+                filePath: quickInfoRequestSource.filePath,
+                position: quickInfoRequestPosition,
+                valueSignature: quickInfoRequestSource.valueSignature,
+              }),
+              filePath: quickInfoRequestSource.filePath,
+              position: quickInfoRequestPosition,
+              sourceMetadata: quickInfoRequestSource.sourceMetadata,
+            }
+          : undefined,
+      diagnostics: token.diagnostics,
+    })
+
     return (
       <Symbol
         key={`${lineIndex}-${tokenIndex}`}
         highlightColor={theme.editor.hoverHighlightBackground}
-        popover={
-          <Suspense
-            fallback={
-              <QuickInfoLoading
-                css={cssProp?.popover}
-                className={className?.popover}
-                style={style?.popover}
-              />
-            }
-          >
-            <QuickInfo
-              quickInfo={token.quickInfo}
-              css={cssProp?.popover}
-              className={className?.popover}
-              style={style?.popover}
-            />
-          </Suspense>
-        }
+        quickInfoId={quickInfoId}
         className={tokenClassName}
         style={style?.token}
       >
@@ -753,6 +946,8 @@ function renderWithAnnotations({
   tokens,
   value,
   baseTokenClassName,
+  quickInfoRequestSource,
+  registerQuickInfoEntry,
   theme,
   css,
   className,
@@ -933,7 +1128,10 @@ function renderWithAnnotations({
           },
           tokenIndex,
           lineIndex,
+          quickInfoRequestPosition: token.start,
           baseTokenClassName,
+          quickInfoRequestSource,
+          registerQuickInfoEntry,
           theme,
           css,
           className,
