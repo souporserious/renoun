@@ -18,7 +18,7 @@ for db_path in "${cache_paths[@]}"; do
     continue
   fi
 
-  pnpm exec renoun cache-maintenance \
+  node --experimental-strip-types packages/renoun/src/cli/index.ts cache-maintenance \
     --db-path "$db_path" \
     --checkpoint \
     --checkpoint-mode truncate \
