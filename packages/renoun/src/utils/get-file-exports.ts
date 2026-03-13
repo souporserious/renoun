@@ -1,5 +1,5 @@
 import { getTsMorph } from './ts-morph.ts'
-import type { Node, Project, SyntaxKind } from './ts-morph.ts'
+import type { Node, Project, SourceFile, SyntaxKind } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 
@@ -47,22 +47,7 @@ export function getFileExports(
     const exports = getDebugLogger().trackOperation(
       'get-file-exports',
       () => {
-        let sourceFile = project.getSourceFile(filePath)
-
-        if (!sourceFile) {
-          const addStart = performance.now()
-          sourceFile = project.addSourceFileAtPath(filePath)
-
-          getDebugLogger().debug('Added source file to project', () => ({
-            operation: 'get-file-exports',
-            data: {
-              filePath,
-              wasAdded: true,
-              duration: (performance.now() - addStart).toFixed(1),
-              projectFiles: project.getSourceFiles().length,
-            },
-          }))
-        }
+        const sourceFile = ensureProjectSourceFile(filePath, project)
 
         const processStart = performance.now()
         const exportDeclarations: ModuleExport[] = []
@@ -176,6 +161,30 @@ export function getFileExports(
   }
 }
 
+export function ensureProjectSourceFile(
+  filePath: string,
+  project: Project
+): SourceFile {
+  let sourceFile = project.getSourceFile(filePath)
+
+  if (!sourceFile) {
+    const addStart = performance.now()
+    sourceFile = project.addSourceFileAtPath(filePath)
+
+    getDebugLogger().debug('Added source file to project', () => ({
+      operation: 'ensure-project-source-file',
+      data: {
+        filePath,
+        wasAdded: true,
+        duration: (performance.now() - addStart).toFixed(1),
+        projectFiles: project.getSourceFiles().length,
+      },
+    }))
+  }
+
+  return sourceFile
+}
+
 /**
  * Selects the preferred declaration from a list of declarations.
  *
@@ -231,10 +240,7 @@ export function getFileExportDeclaration(
   return getDebugLogger().trackOperation(
     'get-file-export-declaration',
     () => {
-      const sourceFile = project.getSourceFile(filePath)
-      if (!sourceFile) {
-        throw new Error(`[renoun] Source file not found: ${filePath}`)
-      }
+      const sourceFile = ensureProjectSourceFile(filePath, project)
 
       const declaration = sourceFile.getDescendantAtPos(position)
       if (!declaration) {
@@ -296,11 +302,7 @@ export async function getFileExportMetadata(
     const metadata = await getDebugLogger().trackOperation(
       'get-file-export-metadata',
       async () => {
-        const sourceFile = project.getSourceFile(filePath)
-
-        if (!sourceFile) {
-          throw new Error(`[renoun] Source file not found: ${filePath}`)
-        }
+        const sourceFile = ensureProjectSourceFile(filePath, project)
 
         const exportDeclaration = getFileExportDeclaration(
           filePath,

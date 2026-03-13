@@ -10,6 +10,7 @@ import type {
 
 import { getPrinter } from '../analysis/get-printer.ts'
 import { getExportPosition } from './get-export-position.ts'
+import { ensureProjectSourceFile } from './get-file-exports.ts'
 
 const tsMorph = getTsMorph()
 
@@ -81,7 +82,7 @@ export function getFileExportsTextWithDependencies(
   project: Project
 ): Array<FileExportWithDependencies> {
   const printer = getPrinter(project)
-  const sourceFile = project.getSourceFileOrThrow(filePath)
+  const sourceFile = ensureProjectSourceFile(filePath, project)
   const importMap = getImportInfo(sourceFile)
   const declarationMap = buildDeclarationMap(sourceFile)
   const exportedSymbols = getExportedSymbols(sourceFile, declarationMap)
