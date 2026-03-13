@@ -56,5 +56,7 @@ jobs:
         working-directory: packages/screenshot
         run: pnpm test
 
-      - name: Truncate renoun cache WAL before save
-        run: bash .github/scripts/truncate-renoun-cache.sh
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

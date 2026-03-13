@@ -115,8 +115,10 @@ jobs:
             pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!//" --filter="!@renoun/screenshot"
           fi
 
-      - name: Truncate renoun cache WAL before save
-        run: bash .github/scripts/truncate-renoun-cache.sh
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22
 
   renoun-browser:
     needs: test
@@ -152,5 +154,7 @@ jobs:
       - name: Run renoun browser regression tests
         run: pnpm turbo run test:browser --filter renoun
 
-      - name: Truncate renoun cache WAL before save
-        run: bash .github/scripts/truncate-renoun-cache.sh
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

@@ -30,10 +30,6 @@ function getIndentedBlock(actionSource: string, field: string): string[] {
   return values
 }
 
-function getRestoreKeys(actionSource: string): string[] {
-  return getIndentedBlock(actionSource, 'restore-keys')
-}
-
 function getCachePaths(actionSource: string): string[] {
   return getIndentedBlock(actionSource, 'path')
 }
@@ -51,10 +47,10 @@ function getPrimaryKey(actionSource: string): string {
   return keyLine!.trim()
 }
 
-describe('restore-renoun-cache action', () => {
+describe('save-renoun-cache action', () => {
   test('resolves cache token from the dedicated cache-token command', () => {
     const actionSource = readFileSync(
-      '.github/actions/restore-renoun-cache/action.yml',
+      '.github/actions/save-renoun-cache/action.yml',
       'utf8'
     )
 
@@ -62,31 +58,25 @@ describe('restore-renoun-cache action', () => {
       'token="$(node --experimental-strip-types packages/renoun/src/cli/index.ts cache-token)"'
     )
     expect(actionSource).toContain('echo "token=$token" >> "$GITHUB_OUTPUT"')
-    expect(actionSource).not.toContain(
-      'echo "token=$(node --experimental-strip-types packages/renoun/src/cli/index.ts cache-token)"'
-    )
-    expect(actionSource).not.toContain(
-      'node packages/renoun/src/cli/cache-token.ts'
-    )
   })
 
-  test('uses the cache restore action so cache persistence can be handled explicitly later in the job', () => {
+  test('truncates the WAL before saving the cache', () => {
     const actionSource = readFileSync(
-      '.github/actions/restore-renoun-cache/action.yml',
+      '.github/actions/save-renoun-cache/action.yml',
       'utf8'
     )
 
     expect(actionSource).toContain(
-      'uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
+      'run: bash .github/scripts/truncate-renoun-cache.sh'
     )
-    expect(actionSource).not.toContain(
-      'uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
+    expect(actionSource).toContain(
+      'uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306'
     )
   })
 
   test('caches repo and workspace SQLite databases used by app and example builds', () => {
     const actionSource = readFileSync(
-      '.github/actions/restore-renoun-cache/action.yml',
+      '.github/actions/save-renoun-cache/action.yml',
       'utf8'
     )
     const cachePaths = getCachePaths(actionSource)
@@ -96,9 +86,9 @@ describe('restore-renoun-cache action', () => {
     expect(cachePaths).toContain('examples/*/.renoun/cache/fs-cache.sqlite*')
   })
 
-  test('scopes save keys to the workflow job for the current commit', () => {
+  test('uses the same workflow and job scoped cache key as restore', () => {
     const actionSource = readFileSync(
-      '.github/actions/restore-renoun-cache/action.yml',
+      '.github/actions/save-renoun-cache/action.yml',
       'utf8'
     )
     const key = getPrimaryKey(actionSource)
@@ -108,27 +98,5 @@ describe('restore-renoun-cache action', () => {
     expect(key).toContain('${{ steps.renoun-cache-token.outputs.token }}')
     expect(key).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
     expect(key).toContain('${{ github.sha }}')
-    expect(key).not.toContain('github.run_id')
-    expect(key).not.toContain('github.run_attempt')
-  })
-
-  test('keeps restore keys scoped to the workflow job lockfile hash prefix', () => {
-    const actionSource = readFileSync(
-      '.github/actions/restore-renoun-cache/action.yml',
-      'utf8'
-    )
-    const key = getPrimaryKey(actionSource).replace(/^key:\s*/, '')
-    const restoreKeys = getRestoreKeys(actionSource)
-
-    expect(restoreKeys.length).toBeGreaterThan(0)
-
-    for (const restoreKey of restoreKeys) {
-      expect(restoreKey).toContain('${{ github.workflow }}')
-      expect(restoreKey).toContain('${{ github.job }}')
-      expect(restoreKey).toContain("${{ hashFiles('pnpm-lock.yaml') }}")
-      expect(restoreKey.endsWith('-')).toBe(true)
-      expect(key.startsWith(restoreKey)).toBe(true)
-    }
-    expect(restoreKeys[0]).not.toContain('${{ github.sha }}')
   })
 })

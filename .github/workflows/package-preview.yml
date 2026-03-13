@@ -66,8 +66,10 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Truncate renoun cache WAL before save
-        run: bash .github/scripts/truncate-renoun-cache.sh
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22
 
   comment:
     needs: build-and-publish
@@ -145,5 +147,7 @@ jobs:
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ROOT_DIRECTORY: apps/site
 
-      - name: Truncate renoun cache WAL before save
-        run: bash .github/scripts/truncate-renoun-cache.sh
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

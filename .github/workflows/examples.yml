@@ -74,6 +74,8 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: pnpm build --filter=@examples/*
 
-      - name: Truncate renoun cache WAL before save
+      - name: Save renoun cache
         if: steps.detect.outputs.changed == 'true'
-        run: bash .github/scripts/truncate-renoun-cache.sh
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

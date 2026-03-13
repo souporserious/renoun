@@ -1,5 +1,5 @@
-name: Restore renoun cache
-description: Resolve and restore the renoun filesystem cache for CI jobs
+name: Save renoun cache
+description: Truncate WAL state and save the renoun filesystem cache for CI jobs
 inputs:
   node-version:
     description: Node version used by the workflow cache key segment
@@ -16,13 +16,15 @@ runs:
         token="$(node --experimental-strip-types packages/renoun/src/cli/index.ts cache-token)"
         echo "token=$token" >> "$GITHUB_OUTPUT"
 
-    - name: Restore renoun cache
-      uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
+    - name: Truncate renoun cache WAL
+      shell: bash
+      run: bash .github/scripts/truncate-renoun-cache.sh
+
+    - name: Save renoun cache
+      uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
       with:
         path: |
           .renoun/cache/fs-cache.sqlite*
           apps/*/.renoun/cache/fs-cache.sqlite*
           examples/*/.renoun/cache/fs-cache.sqlite*
         key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ github.workflow }}-${{ github.job }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ github.workflow }}-${{ github.job }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-
