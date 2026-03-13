@@ -2,10 +2,7 @@ import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
-import {
-  isDevelopmentEnvironment,
-  isTestEnvironment,
-} from '../utils/env.ts'
+import { isDevelopmentEnvironment, isTestEnvironment } from '../utils/env.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
   normalizeNonNegativeInteger,
@@ -21,7 +18,6 @@ import {
 } from '../utils/cache-constants.ts'
 import { isAbsolutePath, normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
-import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { emitTelemetryEvent } from '../utils/telemetry.ts'
 import type { Telemetry } from '../utils/telemetry.ts'
 import { Cache, CacheStore, type CacheStorePersistence } from './Cache.ts'
@@ -34,14 +30,8 @@ import {
   getPathAncestors,
   pathsIntersect,
 } from './directory-snapshot-path-index.ts'
-import {
-  SessionRegistry,
-  getCacheIdentity,
-} from './session-registry.ts'
-import {
-  FileSystemSnapshot,
-  type Snapshot,
-} from './Snapshot.ts'
+import { SessionRegistry, getCacheIdentity } from './session-registry.ts'
+import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
 import type { DirectorySnapshot } from './directory-snapshot.ts'
 import {
   WorkspaceChangeLookupCache,
@@ -150,7 +140,10 @@ function createResetBarrierPersistence(
   const gatedPersistence: CacheStorePersistenceWithComputeSlots = {
     load: gatePersistedOperation(ready, persistence.load.bind(persistence))!,
     save: gatePersistedOperation(ready, persistence.save.bind(persistence))!,
-    delete: gatePersistedOperation(ready, persistence.delete.bind(persistence))!,
+    delete: gatePersistedOperation(
+      ready,
+      persistence.delete.bind(persistence)
+    )!,
     isAvailable: persistence.isAvailable?.bind(persistence),
   }
 
@@ -204,7 +197,9 @@ function createResetBarrierPersistence(
 
   const acquireComputeSlot = gatePersistedOperation(
     ready,
-    persistenceWithComputeSlots.acquireComputeSlot?.bind(persistenceWithComputeSlots)
+    persistenceWithComputeSlots.acquireComputeSlot?.bind(
+      persistenceWithComputeSlots
+    )
   )
   if (acquireComputeSlot) {
     gatedPersistence.acquireComputeSlot = acquireComputeSlot
@@ -212,7 +207,9 @@ function createResetBarrierPersistence(
 
   const refreshComputeSlot = gatePersistedOperation(
     ready,
-    persistenceWithComputeSlots.refreshComputeSlot?.bind(persistenceWithComputeSlots)
+    persistenceWithComputeSlots.refreshComputeSlot?.bind(
+      persistenceWithComputeSlots
+    )
   )
   if (refreshComputeSlot) {
     gatedPersistence.refreshComputeSlot = refreshComputeSlot
@@ -220,7 +217,9 @@ function createResetBarrierPersistence(
 
   const releaseComputeSlot = gatePersistedOperation(
     ready,
-    persistenceWithComputeSlots.releaseComputeSlot?.bind(persistenceWithComputeSlots)
+    persistenceWithComputeSlots.releaseComputeSlot?.bind(
+      persistenceWithComputeSlots
+    )
   )
   if (releaseComputeSlot) {
     gatedPersistence.releaseComputeSlot = releaseComputeSlot
@@ -228,14 +227,17 @@ function createResetBarrierPersistence(
 
   const getComputeSlotOwner = gatePersistedOperation(
     ready,
-    persistenceWithComputeSlots.getComputeSlotOwner?.bind(persistenceWithComputeSlots)
+    persistenceWithComputeSlots.getComputeSlotOwner?.bind(
+      persistenceWithComputeSlots
+    )
   )
   if (getComputeSlotOwner) {
     gatedPersistence.getComputeSlotOwner = getComputeSlotOwner
   }
 
   if (typeof persistenceWithComputeSlots.computeSlotTtlMs === 'number') {
-    gatedPersistence.computeSlotTtlMs = persistenceWithComputeSlots.computeSlotTtlMs
+    gatedPersistence.computeSlotTtlMs =
+      persistenceWithComputeSlots.computeSlotTtlMs
   }
 
   return gatedPersistence
@@ -278,9 +280,7 @@ export class Session {
   readonly cache: CacheStore
   readonly #directorySnapshotPathIndex: DirectorySnapshotPathIndex
   readonly #directorySnapshotBuildPathIndex: DirectorySnapshotPathIndex
-  readonly directorySnapshots: IndexedStringKeyMap<
-    DirectorySnapshot<any, any>
-  >
+  readonly directorySnapshots: IndexedStringKeyMap<DirectorySnapshot<any, any>>
   readonly directorySnapshotBuilds: IndexedStringKeyMap<
     Promise<{
       snapshot: DirectorySnapshot<any, any>
@@ -395,7 +395,7 @@ export class Session {
       },
     })
     const prefersPersistentCache = cache
-      ? cache.usesPersistentCache
+      ? cache.usesPersistentCache || cache.outputDirectory !== undefined
       : shouldUseSessionCachePersistence(fileSystem)
     this.#cacheMetricsEnabled = cache?.cacheMetricsEnabled === true
     this.#cacheMetricsTopKeysLimit = normalizePositiveInteger(
@@ -439,29 +439,35 @@ export class Session {
         cache?.targetedMissingDependencyFallback
       )
     this.#telemetry = cache?.telemetry
-    this.#workspaceChangeLookupCache = createFileSystemWorkspaceChangeLookupCache({
-      fileSystem: this.#fileSystem,
-      getWorkspaceTokenTtlMs: () => this.#resolveWorkspaceChangeTokenTtlMs(),
-      getWorkspaceChangedPathsTtlMs: () =>
-        this.#resolveWorkspaceChangedPathsTtlMs(),
-      serveStaleWhileRevalidate: isDevelopmentEnvironment(),
-      normalizeRootPath: (rootPath) =>
-        normalizeSessionPath(this.#fileSystem, rootPath),
-      normalizeChangedPath: (changedPath) => {
-        return isAbsolutePath(changedPath)
-          ? normalizeSessionPath(this.#fileSystem, changedPath)
-          : normalizePathKey(changedPath)
-      },
-      changedPathsCleanupIntervalMs:
-        SESSION_CACHE_DEFAULTS.workspaceChangedPathsCleanupIntervalMs,
-      changedPathsMaxEntries: SESSION_CACHE_DEFAULTS.workspaceChangedPathsMaxEntries,
-    })
+    this.#workspaceChangeLookupCache =
+      createFileSystemWorkspaceChangeLookupCache({
+        fileSystem: this.#fileSystem,
+        getWorkspaceTokenTtlMs: () => this.#resolveWorkspaceChangeTokenTtlMs(),
+        getWorkspaceChangedPathsTtlMs: () =>
+          this.#resolveWorkspaceChangedPathsTtlMs(),
+        serveStaleWhileRevalidate: isDevelopmentEnvironment(),
+        normalizeRootPath: (rootPath) =>
+          normalizeSessionPath(this.#fileSystem, rootPath),
+        normalizeChangedPath: (changedPath) => {
+          return isAbsolutePath(changedPath)
+            ? normalizeSessionPath(this.#fileSystem, changedPath)
+            : normalizePathKey(changedPath)
+        },
+        changedPathsCleanupIntervalMs:
+          SESSION_CACHE_DEFAULTS.workspaceChangedPathsCleanupIntervalMs,
+        changedPathsMaxEntries:
+          SESSION_CACHE_DEFAULTS.workspaceChangedPathsMaxEntries,
+      })
 
     const persistence =
       cache?.persistence ??
       (prefersPersistentCache
         ? getCacheStorePersistence({
-            projectRoot: resolveSessionProjectRoot(
+            cacheDirectory:
+              cache?.outputDirectory ??
+              (this.#fileSystem as { outputDirectory?: string })
+                .outputDirectory,
+            startDirectory: resolveSessionProjectRoot(
               fileSystem,
               cache?.debugSessionRoot
             ),
@@ -469,7 +475,10 @@ export class Session {
             debugCachePersistence: cache?.debugCachePersistence === true,
           })
         : undefined)
-    const readyPersistence = createResetBarrierPersistence(persistence, resetBarrier)
+    const readyPersistence = createResetBarrierPersistence(
+      persistence,
+      resetBarrier
+    )
 
     this.cache =
       cache?.createStore({
@@ -820,9 +829,8 @@ export class Session {
   }
 
   #collectIntersectingDirectorySnapshotKeys(path: string): Set<string> {
-    const intersectingKeys = this.#directorySnapshotPathIndex.getIntersectingKeys(
-      path
-    )
+    const intersectingKeys =
+      this.#directorySnapshotPathIndex.getIntersectingKeys(path)
     for (const buildKey of this.#directorySnapshotBuildPathIndex.getIntersectingKeys(
       path
     )) {
@@ -876,9 +884,11 @@ export class Session {
       return this.#cacheDisposePromise
     }
 
-    this.#cacheDisposePromise = this.waitForPendingInvalidations().finally(() => {
-      this.cache.dispose({ skipClearMemory: true })
-    })
+    this.#cacheDisposePromise = this.waitForPendingInvalidations().finally(
+      () => {
+        this.cache.dispose({ skipClearMemory: true })
+      }
+    )
     return this.#cacheDisposePromise
   }
 
@@ -985,9 +995,7 @@ export class Session {
           this.#pendingPersistedInvalidationPathsImmediate.size > 0
             ? this.#pendingPersistedInvalidationPathsImmediate
             : this.#pendingPersistedInvalidationPathsBackground
-        const normalizedPaths = collapseInvalidationPaths(
-          pendingQueue
-        )
+        const normalizedPaths = collapseInvalidationPaths(pendingQueue)
         pendingQueue.clear()
 
         await this.#runPersistedDependencyInvalidationsBatch(normalizedPaths)
@@ -1011,9 +1019,8 @@ export class Session {
     }
 
     try {
-      const dependencyEviction = await this.cache.deleteByDependencyPaths(
-        normalizedPaths
-      )
+      const dependencyEviction =
+        await this.cache.deleteByDependencyPaths(normalizedPaths)
 
       if (dependencyEviction.deletedNodeKeys.length > 0) {
         this.recordCacheMetric(
@@ -1336,9 +1343,8 @@ export class Session {
   async #listDirectorySnapshotFallbackCandidates(
     normalizedPath: string
   ): Promise<string[]> {
-    const prefixes = getPersistedFallbackDirectorySnapshotPrefixes(
-      normalizedPath
-    )
+    const prefixes =
+      getPersistedFallbackDirectorySnapshotPrefixes(normalizedPath)
     if (prefixes.length === 0) {
       return []
     }
@@ -1364,9 +1370,8 @@ export class Session {
 
     const prefixSet = new Set<string>()
     for (const normalizedPath of normalizedPaths) {
-      const pathPrefixes = getPersistedFallbackDirectorySnapshotPrefixes(
-        normalizedPath
-      )
+      const pathPrefixes =
+        getPersistedFallbackDirectorySnapshotPrefixes(normalizedPath)
       for (const prefix of pathPrefixes) {
         prefixSet.add(prefix)
       }
@@ -1662,19 +1667,7 @@ function resolveSessionProjectRoot(
       typeof repoRoot === 'string' ? resolve(repoRoot) : resolve('.')
   }
 
-  try {
-    const rootDirectory = getRootDirectory(absoluteRoot)
-    return resolveCanonicalPath(rootDirectory)
-  } catch (error) {
-    if (debug) {
-      // eslint-disable-next-line no-console
-      console.log('[renoun-debug] resolveSessionProjectRoot(fallback)', {
-        error: error instanceof Error ? error.message : String(error),
-        absoluteRoot,
-      })
-    }
-    return resolveCanonicalPath(absoluteRoot)
-  }
+  return resolveCanonicalPath(absoluteRoot)
 }
 
 function resolveDirectorySnapshotPrefixIndexMaxKeys(

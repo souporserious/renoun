@@ -75,6 +75,8 @@ export type {
   FileSystem,
 } from './FileSystem.ts'
 export { BaseFileSystem } from './FileSystem.ts'
+export type { CacheOptions } from './Cache.ts'
+export { Cache } from './Cache.ts'
 export { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 export { GitFileSystem } from './GitFileSystem.ts'

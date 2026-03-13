@@ -22,10 +22,7 @@ import {
 } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
-import {
-  FS_STRUCTURE_CACHE_VERSION,
-  createCacheNodeKey,
-} from './cache-key.ts'
+import { FS_STRUCTURE_CACHE_VERSION, createCacheNodeKey } from './cache-key.ts'
 import { type Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
@@ -1504,14 +1501,26 @@ export class Package<
       options.repository instanceof Repository
         ? options.repository
         : options.repository
-          ? new Repository(options.repository)
+          ? typeof options.repository === 'string'
+            ? new Repository({
+                path: options.repository,
+                cache: options.cache,
+              })
+            : new Repository({
+                ...options.repository,
+                cache: options.cache,
+              })
           : undefined
     const { fileSystem, packagePath } = this.#resolvePackageLocation({
       name: options.name,
       path: options.path,
       directory: startDirectory,
       repository: repositoryInstance,
-      fileSystem: options.fileSystem ?? new NodeFileSystem(),
+      fileSystem:
+        options.fileSystem ??
+        new NodeFileSystem({
+          outputDirectory: options.cache?.outputDirectory,
+        }),
     })
 
     this.#fileSystem = fileSystem
@@ -2010,8 +2019,10 @@ export class Package<
     config: ResolveExportSourcesOptions,
     pkg: PackageJson
   ): string {
-    const normalizedOptions =
-      normalizeResolveExportSourcesOptionsForCache(pkg, config)
+    const normalizedOptions = normalizeResolveExportSourcesOptionsForCache(
+      pkg,
+      config
+    )
     return hashString(stableStringify(normalizedOptions))
   }
 

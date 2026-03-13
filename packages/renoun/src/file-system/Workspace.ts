@@ -15,10 +15,7 @@ import {
   trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
-import {
-  FS_STRUCTURE_CACHE_VERSION,
-  createCacheNodeKey,
-} from './cache-key.ts'
+import { FS_STRUCTURE_CACHE_VERSION, createCacheNodeKey } from './cache-key.ts'
 import type { Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
@@ -248,7 +245,11 @@ export class Workspace {
       cache?: Cache
     } = {}
   ) {
-    this.#fileSystem = options.fileSystem ?? new NodeFileSystem()
+    this.#fileSystem =
+      options.fileSystem ??
+      new NodeFileSystem({
+        outputDirectory: options.cache?.outputDirectory,
+      })
     const resolvedRoot = normalizeSlashes(
       resolveSchemePath(options.rootDirectory ?? getRootDirectory())
     )

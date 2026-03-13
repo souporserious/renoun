@@ -1,5 +1,5 @@
 import { mkdir, rm } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { deserialize, serialize } from 'node:v8'
 
 import { delay } from '../utils/delay.ts'
@@ -12,7 +12,6 @@ import {
 import { HASH_STRING_HEX_LENGTH } from '../utils/stable-serialization.ts'
 import { DIRECTORY_SNAPSHOT_DEP_INDEX_PREFIX } from '../utils/cache-constants.ts'
 import {
-  getRootDirectory,
   resolvePersistentProjectRootDirectory,
 } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
@@ -21,6 +20,7 @@ import {
   emitTelemetryHistogram,
 } from '../utils/telemetry.ts'
 import { CACHE_SCHEMA_VERSION } from './cache-key.ts'
+import { resolveCacheRootDirectory } from './cache-directory.ts'
 import { summarizePersistedValue } from './cache-persistence-debug.ts'
 import { loadSqliteModule } from './sqlite.ts'
 import {
@@ -88,7 +88,9 @@ const persistenceOptionsByDbPath = new Map<
 
 export interface CacheStoreSqliteOptions {
   dbPath?: string
+  cacheDirectory?: string
   projectRoot?: string
+  startDirectory?: string
   schemaVersion?: number
   maxAgeMs?: number
   maxRows?: number
@@ -147,7 +149,9 @@ export interface SqliteCacheMaintenanceResult {
 
 function resolveDbPath(options: {
   dbPath?: string
+  cacheDirectory?: string
   projectRoot?: string
+  startDirectory?: string
   debugSessionRoot?: boolean
 }): string {
   if (typeof options.dbPath === 'string' && options.dbPath.trim()) {
@@ -161,26 +165,64 @@ function resolveDbPath(options: {
   }
   return getDefaultCacheDatabasePath(
     options.projectRoot,
-    options.debugSessionRoot
+    options.debugSessionRoot,
+    options.cacheDirectory,
+    options.startDirectory
   )
 }
 
 export function getDefaultCacheDatabasePath(
   projectRoot?: string,
-  debugSessionRoot?: boolean
+  debugSessionRoot?: boolean,
+  cacheDirectory?: string,
+  startDirectory?: string
 ): string {
-  let root = projectRoot
-    ? resolvePersistentProjectRootDirectory(projectRoot)
-    : resolvePersistentProjectRootDirectory(getRootDirectory())
-  if (root === resolve('/')) {
+  if (
+    !cacheDirectory &&
+    projectRoot &&
+    resolvePersistentProjectRootDirectory(projectRoot) === resolve('/')
+  ) {
     throw new Error(
-      '[renoun] Refusing to write cache database at filesystem root "/". Run from a workspace directory or pass `dbPath`/`projectRoot` explicitly.'
+      '[renoun] Refusing to write cache database at filesystem root "/". Run from a workspace directory or pass `dbPath`/`cacheDirectory`/`projectRoot` explicitly.'
     )
   }
-  const path = resolve(root, '.renoun', 'cache', 'fs-cache.sqlite')
+
+  let path: string
+  if (typeof cacheDirectory === 'string' && cacheDirectory.trim() !== '') {
+    path = join(resolve(cacheDirectory), 'fs-cache.sqlite')
+  } else if (projectRoot) {
+    path = join(
+      resolvePersistentProjectRootDirectory(projectRoot),
+      '.renoun',
+      'cache',
+      'fs-cache.sqlite'
+    )
+  } else {
+    try {
+        path = join(
+        resolveCacheRootDirectory({
+          startDirectory,
+          fallbackToStartDirectory: startDirectory !== undefined,
+        }),
+        'fs-cache.sqlite'
+      )
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes('filesystem root "/"')
+      ) {
+        throw new Error(
+          '[renoun] Refusing to write cache database at filesystem root "/". Run from a workspace directory or pass `dbPath`/`cacheDirectory`/`projectRoot` explicitly.'
+        )
+      }
+      throw error
+    }
+  }
   if (debugSessionRoot === true) {
     logSessionRootDebug('getDefaultCacheDatabasePath', {
       projectRoot,
+      cacheDirectory,
+      startDirectory,
       resolved: path,
     })
   }
@@ -242,10 +284,11 @@ export function getDefaultCacheStorePersistence() {
 export function disposeCacheStorePersistence(
   options: {
     dbPath?: string
+    cacheDirectory?: string
     projectRoot?: string
   } = {}
 ) {
-  if (!options.dbPath && !options.projectRoot) {
+  if (!options.dbPath && !options.cacheDirectory && !options.projectRoot) {
     for (const [dbPath, persistence] of persistenceByDbPath) {
       persistence.close()
       persistenceByDbPath.delete(dbPath)
@@ -272,6 +315,7 @@ export function disposeDefaultCacheStorePersistence() {
 export async function runSqliteCacheMaintenance(
   options: {
     dbPath?: string
+    cacheDirectory?: string
     projectRoot?: string
     checkpoint?: boolean
     vacuum?: boolean
@@ -282,6 +326,7 @@ export async function runSqliteCacheMaintenance(
 ): Promise<SqliteCacheMaintenanceResult> {
   const persistence = new SqliteCacheStorePersistence({
     dbPath: options.dbPath,
+    cacheDirectory: options.cacheDirectory,
     projectRoot: options.projectRoot,
   })
 

@@ -47,10 +47,6 @@ import {
 } from '../utils/path.ts'
 import { createConcurrentQueue, mapConcurrent } from '../utils/concurrency.ts'
 import {
-  getRootDirectory,
-  resolvePersistentProjectRootDirectory,
-} from '../utils/get-root-directory.ts'
-import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
 } from '../utils/is-javascript-like-extension.ts'
@@ -107,12 +103,9 @@ import {
   sanitizeCredentialedGitRemote,
 } from './git-cache-key.ts'
 import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
-import {
-  spawnWithBuffer,
-  spawnWithResult,
-  spawnWithStdout,
-} from './spawn.ts'
+import { spawnWithBuffer, spawnWithResult, spawnWithStdout } from './spawn.ts'
 import type { Cache } from './Cache.ts'
+import { resolveCacheRootDirectory } from './cache-directory.ts'
 import { Session } from './Session.ts'
 import {
   getWorkspaceChangedPathsSinceTokenFromGit,
@@ -266,14 +259,14 @@ function supportsGitBackfillSync(): boolean {
   return isSupported
 }
 
-function resolveDefaultGitCacheDirectory(): string {
+function resolveDefaultGitCacheDirectory(startDirectory?: string): string {
   try {
-    const rootDirectory = resolvePersistentProjectRootDirectory(
-      getRootDirectory()
+    return join(
+      resolveCacheRootDirectory({
+        startDirectory,
+      }),
+      'git'
     )
-    if (rootDirectory !== resolve('/')) {
-      return resolve(rootDirectory, '.renoun', 'cache', 'git')
-    }
   } catch {
     // Preserve the long-standing home-cache fallback for scripts and tests
     // that run outside a package-manager workspace.
@@ -663,10 +656,17 @@ export class GitFileSystem
     this.#refIsExplicit = options.ref !== undefined
     this.#worktreeEnabled = !this.repositoryIsRemote && !this.#refIsExplicit
     assertSafeGitArg(this.ref, 'ref')
+    this.#cache = options.cache
 
+    const cacheStartDirectory = this.repositoryIsRemote
+      ? process.cwd()
+      : resolve(this.repository)
+    const sharedCacheRoot = this.#cache?.outputDirectory ?? this.outputDirectory
     this.cacheDirectory = options.cacheDirectory
       ? resolve(String(options.cacheDirectory))
-      : resolveDefaultGitCacheDirectory()
+      : sharedCacheRoot
+        ? join(sharedCacheRoot, 'git')
+        : resolveDefaultGitCacheDirectory(cacheStartDirectory)
 
     this.verbose = Boolean(options.verbose)
     this.maxBufferBytes = options.maxBufferBytes ?? 100 * 1024 * 1024
@@ -676,7 +676,6 @@ export class GitFileSystem
     this.prepareScopeDirectories = options.sparse ?? []
     this.prepareTransport = options.transport ?? 'https'
     this.fetchRemote = options.fetchRemote ?? 'origin'
-    this.#cache = options.cache
     this.autoFetch =
       options.autoFetch ??
       (this.autoPrepare
@@ -4399,7 +4398,9 @@ export class GitFileSystem
           }
 
           const name =
-            typeof commit.authorName === 'string' ? commit.authorName.trim() : ''
+            typeof commit.authorName === 'string'
+              ? commit.authorName.trim()
+              : ''
           const githubUsername = resolveGitHubUsername({
             email: commit.authorEmail,
           })
@@ -6170,7 +6171,8 @@ function assertSafeGitSpec(specifier: string): string {
  * (`https://`, `ssh://`, `git://`, `file://`, `git@…`) and rejects
  * control characters and leading dashes.
  */
-const SAFE_CLONE_URL_RE = /^(https?:\/\/|git:\/\/|ssh:\/\/|file:\/\/)[^\0\n\r]+$/
+const SAFE_CLONE_URL_RE =
+  /^(https?:\/\/|git:\/\/|ssh:\/\/|file:\/\/)[^\0\n\r]+$/
 const SAFE_CLONE_SCP_REMOTE_RE =
   /^git@[A-Za-z0-9.-]+:[A-Za-z0-9._~-]+(?:\/[A-Za-z0-9._~-]+)+(?:\.git)?$/
 

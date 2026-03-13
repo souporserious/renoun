@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { AsyncLocalStorage } from 'node:async_hooks'
 
 import { delay } from '../utils/delay.ts'
@@ -162,6 +163,8 @@ export interface CacheStoreOptions {
 export interface CacheOptions {
   persistence?: CacheStorePersistence
   telemetry?: Telemetry
+  /** Optional base directory for persisted cache files. */
+  outputDirectory?: string
   /** Enable cache metric collection for directory snapshots. */
   cacheMetricsEnabled?: boolean
   /** Maximum number of hot paths tracked when logging cache metrics. */
@@ -317,6 +320,7 @@ export function createMemoryOnlyCacheStore(
 }
 
 export class Cache {
+  readonly outputDirectory?: string
   readonly telemetry?: Telemetry
   readonly cacheMetricsEnabled: boolean
   readonly cacheMetricsTopKeysLimit: number
@@ -337,6 +341,11 @@ export class Cache {
   readonly debugSessionRoot: boolean
 
   constructor(options: CacheOptions = {}) {
+    this.outputDirectory =
+      typeof options.outputDirectory === 'string' &&
+      options.outputDirectory.trim() !== ''
+        ? resolve(options.outputDirectory)
+        : undefined
     this.persistence = options.persistence
     this.telemetry = options.telemetry
     this.cacheMetricsEnabled = options.cacheMetricsEnabled === true
@@ -438,8 +447,7 @@ const snapshotInvalidationUnsubscribeBySnapshot = new WeakMap<
   () => void
 >()
 const CONST_DEPENDENCY_PREFIX = 'const:'
-const WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX =
-  'workspace-token-unsafe:'
+const WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX = 'workspace-token-unsafe:'
 
 interface CacheStorePersistenceComputeSlot {
   acquireComputeSlot(
@@ -1022,12 +1030,18 @@ export class CacheStore {
 
     const memoryEntry = this.#entries.get(nodeKey)
     if (memoryEntry) {
-      await this.#recordAutomaticNodeDependency(nodeKey, memoryEntry.fingerprint)
+      await this.#recordAutomaticNodeDependency(
+        nodeKey,
+        memoryEntry.fingerprint
+      )
       return memoryEntry.value as Value
     }
 
     const persistedEntry = await this.#loadPersistedEntry(nodeKey)
-    await this.#recordAutomaticNodeDependency(nodeKey, persistedEntry?.fingerprint)
+    await this.#recordAutomaticNodeDependency(
+      nodeKey,
+      persistedEntry?.fingerprint
+    )
     return persistedEntry?.value as Value | undefined
   }
 
@@ -1260,9 +1274,8 @@ export class CacheStore {
       persist: options.persist ?? false,
       updatedAt: Date.now(),
     }
-    const workspaceTokenRootPath = resolveWorkspaceTokenRootPath(
-      dependencyEntries
-    )
+    const workspaceTokenRootPath =
+      resolveWorkspaceTokenRootPath(dependencyEntries)
     if (entry.persist && workspaceTokenRootPath) {
       entry.workspaceChangeToken = await this.#getWorkspaceChangeToken(
         workspaceTokenRootPath
@@ -1396,9 +1409,8 @@ export class CacheStore {
       return defaultResult
     }
 
-    const dependencyPathCandidates = this.#getDependencyPathCandidatesForMany(
-      dependencyPathKeys
-    )
+    const dependencyPathCandidates =
+      this.#getDependencyPathCandidatesForMany(dependencyPathKeys)
     const deletedNodeKeys = new Set<string>()
     const missingDependencyNodeKeys = new Set<string>()
     let usedDependencyIndex = false
@@ -1519,7 +1531,10 @@ export class CacheStore {
     }
 
     const evictionMetadata: Partial<CacheDependencyEvictionResult> = {}
-    if (typeof invalidationSeq === 'number' && Number.isFinite(invalidationSeq)) {
+    if (
+      typeof invalidationSeq === 'number' &&
+      Number.isFinite(invalidationSeq)
+    ) {
       evictionMetadata.invalidationSeq = invalidationSeq
     }
     if (invalidationMode) {
@@ -1564,7 +1579,10 @@ export class CacheStore {
     const candidates = new Set<string>()
 
     for (const dependencyPathKey of dependencyPathKeys) {
-      if (typeof dependencyPathKey !== 'string' || dependencyPathKey.length === 0) {
+      if (
+        typeof dependencyPathKey !== 'string' ||
+        dependencyPathKey.length === 0
+      ) {
         continue
       }
 
@@ -1584,9 +1602,8 @@ export class CacheStore {
 
   invalidateDependencyPaths(dependencyPathKeys: Iterable<string>): void {
     this.#assertNotDisposed('invalidateDependencyPaths')
-    const dependencyPathCandidates = this.#getDependencyPathCandidatesForMany(
-      dependencyPathKeys
-    )
+    const dependencyPathCandidates =
+      this.#getDependencyPathCandidatesForMany(dependencyPathKeys)
     if (dependencyPathCandidates.size === 0) {
       return
     }
@@ -2201,9 +2218,8 @@ export class CacheStore {
         persist: shouldPersist,
         updatedAt: Date.now(),
       }
-      const workspaceTokenRootPath = resolveWorkspaceTokenRootPath(
-        dependencyEntries
-      )
+      const workspaceTokenRootPath =
+        resolveWorkspaceTokenRootPath(dependencyEntries)
       if (entry.persist && workspaceTokenRootPath) {
         entry.workspaceChangeToken = await this.#getWorkspaceChangeToken(
           workspaceTokenRootPath
@@ -2627,7 +2643,8 @@ export class CacheStore {
   }
 
   #getRecentlyInvalidatedPathKeys(): ReadonlySet<string> | undefined {
-    const recentlyInvalidatedPathsGetter = this.#snapshot.getRecentlyInvalidatedPaths
+    const recentlyInvalidatedPathsGetter =
+      this.#snapshot.getRecentlyInvalidatedPaths
     if (typeof recentlyInvalidatedPathsGetter !== 'function') {
       return undefined
     }
@@ -2638,7 +2655,9 @@ export class CacheStore {
         return undefined
       }
 
-      return normalizeWorkspaceChangedPathKeys(paths, this.#snapshot) ?? undefined
+      return (
+        normalizeWorkspaceChangedPathKeys(paths, this.#snapshot) ?? undefined
+      )
     } catch {
       return undefined
     }
@@ -2725,10 +2744,7 @@ export class CacheStore {
     }
 
     if (
-      !pathKeySetsIntersect(
-        dependencyPathKeys.pathKeys,
-        knownChangedPathKeys
-      )
+      !pathKeySetsIntersect(dependencyPathKeys.pathKeys, knownChangedPathKeys)
     ) {
       entry.workspaceChangeToken = currentToken
       return dependencyPathKeys.depKeys
@@ -3464,7 +3480,9 @@ function normalizeWorkspaceChangedPathKeys(
     let normalizedPath: string
     try {
       normalizedPath = isAbsoluteCachePath(changedPath)
-        ? normalizeCachePathKey(snapshot.getRelativePathToWorkspace(changedPath))
+        ? normalizeCachePathKey(
+            snapshot.getRelativePathToWorkspace(changedPath)
+          )
         : normalizeCachePathKey(changedPath)
     } catch {
       continue
@@ -3576,10 +3594,7 @@ function resolveWorkspaceTokenRootPath(
 
   let commonScopePath = scopePaths[0]!
   for (let index = 1; index < scopePaths.length; index += 1) {
-    commonScopePath = intersectPathPrefixes(
-      commonScopePath,
-      scopePaths[index]!
-    )
+    commonScopePath = intersectPathPrefixes(commonScopePath, scopePaths[index]!)
     if (commonScopePath === '.') {
       break
     }
@@ -3602,7 +3617,10 @@ function getParentPathKey(path: string): string {
   return normalizedPath.slice(0, lastSlashIndex)
 }
 
-function toRelativePathFromBasePath(targetPath: string, basePath: string): string {
+function toRelativePathFromBasePath(
+  targetPath: string,
+  basePath: string
+): string {
   const normalizedTargetPath = normalizeCachePathKey(targetPath)
   const normalizedBasePath = normalizeCachePathKey(basePath)
   const targetSegments =

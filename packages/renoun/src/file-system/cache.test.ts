@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  realpathSync,
   renameSync,
   rmSync,
   symlinkSync,
@@ -112,8 +113,8 @@ class SyntheticContentIdFileSystem extends InMemoryFileSystem {
 class NestedCwdNodeFileSystem extends NodeFileSystem {
   readonly #cwd: string
 
-  constructor(cwd: string, tsConfigPath?: string) {
-    super({ tsConfigPath })
+  constructor(cwd: string, tsConfigPath?: string, outputDirectory?: string) {
+    super({ tsConfigPath, outputDirectory })
     this.#cwd = cwd
   }
 
@@ -393,7 +394,8 @@ function createTempNodeFileSystem(tmpDirectory: string) {
   }
   const fileSystem = new NestedCwdNodeFileSystem(
     getRootDirectory(),
-    tsConfigPath
+    tsConfigPath,
+    join(tmpDirectory, '.renoun', 'cache')
   )
   ;(fileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
   return fileSystem
@@ -409,6 +411,20 @@ function createTmpRenounCacheDirectory(prefix: string) {
   )
   mkdirSync(cacheBaseDirectory, { recursive: true })
   return mkdtempSync(join(cacheBaseDirectory, prefix))
+}
+
+function withWorkingDirectory<Value>(
+  directory: string,
+  fn: () => Value
+): Value {
+  const previousWorkingDirectory = process.cwd()
+  process.chdir(directory)
+
+  try {
+    return fn()
+  } finally {
+    process.chdir(previousWorkingDirectory)
+  }
 }
 
 function waitForMilliseconds(ms: number): Promise<void> {
@@ -4519,7 +4535,8 @@ describe('sqlite cache persistence', () => {
 
       const secondFileSystem = new ThrowingByteLengthNodeFileSystem(
         getRootDirectory(),
-        tsConfigPath
+        tsConfigPath,
+        join(tmpDirectory, '.renoun', 'cache')
       )
       ;(secondFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
       const secondReadDirectory = vi.spyOn(secondFileSystem, 'readDirectory')
@@ -7209,6 +7226,75 @@ export type Metadata = Value`,
 
       disposeCacheStorePersistence({ projectRoot })
       disposeCacheStorePersistence({ projectRoot: runtimeRoot })
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('prefers the nearest Next app .next cache directory for sqlite persistence', () => {
+    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-next-app-'))
+    const workspaceRoot = join(tmpDirectory, 'workspace')
+    const appRoot = join(workspaceRoot, 'apps', 'site')
+
+    mkdirSync(join(appRoot, 'app'), { recursive: true })
+    writeFileSync(
+      join(workspaceRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-cache-next-workspace',
+        private: true,
+        workspaces: ['apps/*'],
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(appRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-cache-next-app',
+        private: true,
+        dependencies: {
+          next: '15.0.0',
+        },
+      }),
+      'utf8'
+    )
+
+    try {
+      const canonicalAppRoot = realpathSync(appRoot)
+      withWorkingDirectory(appRoot, () => {
+        expect(getDefaultCacheDatabasePath()).toBe(
+          join(canonicalAppRoot, '.next', 'cache', 'renoun', 'fs-cache.sqlite')
+        )
+      })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('allows overriding the sqlite cache directory from a Directory option', async () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-explicit-directory-')
+    )
+    const cacheDirectory = join(tmpDirectory, 'custom-cache')
+    const cache = new Cache({
+      outputDirectory: cacheDirectory,
+    })
+    const directory = new Directory({
+      cache,
+    })
+    const fileSystem = directory.getFileSystem()
+
+    try {
+      const session = Session.for(fileSystem, undefined, cache)
+      const value = await session.cache.getOrCompute(
+        'test:explicit-sqlite-cache-directory',
+        { persist: true },
+        async () => 'persisted'
+      )
+
+      expect(value).toBe('persisted')
+      expect(existsSync(join(cacheDirectory, 'fs-cache.sqlite'))).toBe(true)
+    } finally {
+      Session.reset(fileSystem)
+      disposeCacheStorePersistence({ cacheDirectory })
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
   })

@@ -1,5 +1,9 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { Cache } from './Cache'
 import { GitFileSystem } from './GitFileSystem'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem'
 import { Repository, type RepositoryConfig } from './Repository'
@@ -89,6 +93,26 @@ describe('Repository', () => {
       ).toEqual('https://github.com/owner/repo/blob/main/README.md')
     })
 
+    test('passes outputDirectory through to cloned git file systems', () => {
+      const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-repository-'))
+      const cacheDirectory = join(tmpDirectory, 'custom-cache')
+      const repo = new Repository({
+        path: 'https://github.com/owner/repo',
+        cache: new Cache({ outputDirectory: cacheDirectory }),
+      })
+
+      try {
+        const fileSystem = repo.getFileSystem()
+        expect(fileSystem).toBeInstanceOf(GitFileSystem)
+        expect((fileSystem as GitFileSystem).cacheDirectory).toBe(
+          resolve(cacheDirectory, 'git')
+        )
+      } finally {
+        closeRepositoryFileSystem(repo)
+        rmSync(tmpDirectory, { recursive: true, force: true })
+      }
+    })
+
     test('throws an error for unsupported hosts', () => {
       const config: RepositoryConfig = {
         baseUrl: 'https://example.com/owner/repo',
@@ -132,34 +156,32 @@ describe('Repository', () => {
 
     test('uses the virtual file system when clone is false', async () => {
       const originalFetch = globalThis.fetch
-      const mockFetch = vi.fn(
-        async (input: string | URL) => {
-          const url = String(input)
-          const parsedUrl = new URL(url)
-          if (parsedUrl.pathname === '/repos/owner/repo') {
-            return {
-              ok: true,
-              status: 200,
-              statusText: 'OK',
-              headers: new Headers({
-                'content-type': 'application/json',
-              }),
-              json: async () => ({ default_branch: 'main' }),
-            }
-          }
-
+      const mockFetch = vi.fn(async (input: string | URL) => {
+        const url = String(input)
+        const parsedUrl = new URL(url)
+        if (parsedUrl.pathname === '/repos/owner/repo') {
           return {
             ok: true,
             status: 200,
             statusText: 'OK',
             headers: new Headers({
-              'content-type': 'application/octet-stream',
-              'content-length': '1024',
+              'content-type': 'application/json',
             }),
-            arrayBuffer: async () => new Uint8Array(1024).buffer,
+            json: async () => ({ default_branch: 'main' }),
           }
         }
-      ) as unknown as typeof fetch
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({
+            'content-type': 'application/octet-stream',
+            'content-length': '1024',
+          }),
+          arrayBuffer: async () => new Uint8Array(1024).buffer,
+        }
+      }) as unknown as typeof fetch
       globalThis.fetch = mockFetch
       using _restoreFetch = createDisposeHandle(() => {
         globalThis.fetch = originalFetch

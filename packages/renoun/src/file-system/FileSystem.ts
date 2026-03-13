@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { Minimatch } from 'minimatch'
 import type { SyntaxKind, ts } from '../utils/ts-morph.ts'
 
@@ -103,6 +104,9 @@ export type FileSystem = BaseFileSystem &
 export interface FileSystemOptions {
   /** Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */
   tsConfigPath?: string
+
+  /** Optional base directory for persisted cache files. */
+  outputDirectory?: string
 }
 
 export interface TsConfig {
@@ -120,6 +124,7 @@ export abstract class BaseFileSystem {
   #tsConfig?: TsConfig
   #tsConfigPromise?: Promise<TsConfig | undefined>
   #exclude?: Minimatch[]
+  readonly outputDirectory?: string
 
   /**
    * Optional workspace change token used for fast cache revalidation.
@@ -185,6 +190,11 @@ export abstract class BaseFileSystem {
 
   constructor(options: FileSystemOptions = {}) {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
+    this.outputDirectory =
+      typeof options.outputDirectory === 'string' &&
+      options.outputDirectory.trim() !== ''
+        ? resolve(options.outputDirectory)
+        : undefined
   }
 
   abstract getAnalysisOptions(): AnalysisOptions

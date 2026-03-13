@@ -422,7 +422,9 @@ function toGitMetadataDate(value?: string): Date | undefined {
   return Number.isNaN(parsed.getTime()) ? undefined : parsed
 }
 
-function serializeGitMetadataForCache(metadata: GitMetadata): PersistedGitMetadata {
+function serializeGitMetadataForCache(
+  metadata: GitMetadata
+): PersistedGitMetadata {
   return {
     firstCommitDate: toGitMetadataDateValue(metadata.firstCommitDate),
     lastCommitDate: toGitMetadataDateValue(metadata.lastCommitDate),
@@ -489,7 +491,7 @@ async function resolveGitHistoryDependency(
   rootPath: string
 ): Promise<{ name: string; version: string } | undefined> {
   const token = await session.getWorkspaceChangeToken(rootPath)
-  const version = token ? extractHeadFromWorkspaceToken(token) ?? token : null
+  const version = token ? (extractHeadFromWorkspaceToken(token) ?? token) : null
 
   if (!version) {
     return undefined
@@ -522,11 +524,27 @@ function isRepositoryInstance(value: unknown): value is Repository {
 }
 
 function normalizeRepositoryInput(
-  repository?: RepositoryInput
+  repository?: RepositoryInput,
+  cache?: Cache
 ): Repository | undefined {
   if (!repository) return undefined
   if (isRepositoryInstance(repository)) return repository
-  return new Repository(repository)
+
+  if (cache === undefined) {
+    return new Repository(repository)
+  }
+
+  if (typeof repository === 'string') {
+    return new Repository({
+      path: repository,
+      cache,
+    })
+  }
+
+  return new Repository({
+    ...repository,
+    cache,
+  })
 }
 
 async function getGitFileMetadataForPath(
@@ -858,6 +876,9 @@ export interface FileOptions<
 
   /** The repository to use for git operations and source URLs. */
   repository?: RepositoryInput
+
+  /** Optional cache provider for directory/session-level caching. */
+  cache?: Cache
 }
 
 /** A file in the file system. */
@@ -888,7 +909,10 @@ export class File<
 
   constructor(options: FileOptions<DirectoryTypes, Path, any>) {
     const resolvedPath = resolveSchemePath(options.path)
-    const repository = normalizeRepositoryInput(options.repository)
+    const repository = normalizeRepositoryInput(
+      options.repository,
+      options.cache
+    )
     if (repository && options.directory === undefined) {
       repository.registerSparsePath(directoryName(resolvedPath))
     }
@@ -905,9 +929,13 @@ export class File<
           ? new Directory({
               path: options.directory,
               repository,
+              cache: options.cache,
             })
           : repository
-            ? new Directory({ repository })
+            ? new Directory({
+                repository,
+                cache: options.cache,
+              })
             : new Directory()
 
     let byteLength = options.byteLength
@@ -1338,7 +1366,8 @@ export class File<
         cachedWorkspaceChangeToken,
       } = options
 
-      const currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
+      const currentWorkspaceChangeToken =
+        await this.#getCurrentWorkspaceChangeToken()
 
       if (
         this.#structureCacheSessionKey !== cacheSessionKey ||
@@ -4160,7 +4189,8 @@ export class MDXFile<
     }
 
     if (
-      Date.now() - resolvedAt <= FILE_SYSTEM_RUNTIME_MODULE_SWR_MAX_STALE_AGE_MS
+      Date.now() - resolvedAt <=
+      FILE_SYSTEM_RUNTIME_MODULE_SWR_MAX_STALE_AGE_MS
     ) {
       return this.#modulePromise
     }
@@ -4469,7 +4499,8 @@ export class MarkdownFile<
     }
 
     if (
-      Date.now() - resolvedAt <= FILE_SYSTEM_RUNTIME_MODULE_SWR_MAX_STALE_AGE_MS
+      Date.now() - resolvedAt <=
+      FILE_SYSTEM_RUNTIME_MODULE_SWR_MAX_STALE_AGE_MS
     ) {
       return this.#modulePromise
     }
@@ -5317,7 +5348,10 @@ export class Directory<
         'tsconfig.json'
       this.#slugCasing = options.slugCasing ?? 'kebab'
 
-      const repositoryOption = normalizeRepositoryInput(options.repository)
+      const repositoryOption = normalizeRepositoryInput(
+        options.repository,
+        options.cache
+      )
 
       if (hasCustomFileSystem) {
         this.#fileSystem = options.fileSystem
@@ -5374,10 +5408,14 @@ export class Directory<
           normalizeSlashes(absolutePath)
         )
 
-        this.#repository = new Repository({ path: detectedRoot })
+        this.#repository = new Repository({
+          path: detectedRoot,
+          cache: this.#cache,
+        })
         this.#repository.registerSparsePath(repoRelativePath)
         this.#fileSystem = new NodeFileSystem({
           tsConfigPath: this.#tsConfigPath,
+          outputDirectory: this.#cache?.outputDirectory,
         })
       }
     }
@@ -5574,7 +5612,10 @@ export class Directory<
       return this.#fileSystem
     }
 
-    this.#fileSystem = new NodeFileSystem({ tsConfigPath: this.#tsConfigPath })
+    this.#fileSystem = new NodeFileSystem({
+      tsConfigPath: this.#tsConfigPath,
+      outputDirectory: this.#cache?.outputDirectory,
+    })
 
     return this.#fileSystem
   }
@@ -5582,7 +5623,10 @@ export class Directory<
   /** Get the `Repository` for this directory. */
   getRepository(repository?: RepositoryInput) {
     if (repository) {
-      const normalizedRepository = normalizeRepositoryInput(repository)
+      const normalizedRepository = normalizeRepositoryInput(
+        repository,
+        this.#cache
+      )
       if (normalizedRepository) {
         const sparsePath = this.#fileSystem
           ? this.#fileSystem.getRelativePathToWorkspace(this.#path)
@@ -6795,7 +6839,9 @@ export class Directory<
     }
 
     void (async () => {
-      const dependencyEviction = await session.cache.deleteByDependencyPaths(['.'])
+      const dependencyEviction = await session.cache.deleteByDependencyPaths([
+        '.',
+      ])
       if (!dependencyEviction.usedDependencyIndex) {
         const candidateSnapshotKeys =
           await session.cache.listNodeKeysByPrefix('dir:')
@@ -6965,10 +7011,7 @@ export class Directory<
           }
         }
 
-        if (
-          ctx &&
-          typeof (entry as any).getStructureCacheKey === 'function'
-        ) {
+        if (ctx && typeof (entry as any).getStructureCacheKey === 'function') {
           await ctx.recordNodeDep((entry as any).getStructureCacheKey())
         }
 
@@ -7056,16 +7099,18 @@ export class Directory<
     const canReuseCachedSnapshot = !directory.#hasDynamicEntriesBehavior()
     session.recordDirectorySnapshotLookup(snapshotKey)
     const fileSystem = directory.getFileSystem()
-    const cachedSnapshot = registerInSession && canReuseCachedSnapshot
-      ? session.directorySnapshots.get(snapshotKey)
-      : undefined
+    const cachedSnapshot =
+      registerInSession && canReuseCachedSnapshot
+        ? session.directorySnapshots.get(snapshotKey)
+        : undefined
     const strictHermetic = directory.#isStrictHermeticFileSystemMode()
     const hasStaticSnapshotOptions = isSessionSnapshotPersistable({
       filter: directory.#filter,
       filterPattern: directory.#filterPattern,
       sort: directory.#sort,
     })
-    const fileSystemAllowsPersistence = shouldPersistDirectorySnapshots(fileSystem)
+    const fileSystemAllowsPersistence =
+      shouldPersistDirectorySnapshots(fileSystem)
     const canPersist =
       hasStaticSnapshotOptions &&
       session.usesPersistentCache &&
@@ -7096,9 +7141,10 @@ export class Directory<
       ? session.hasInvalidatedDirectorySnapshotKeys()
       : false
 
-    const existingBuild = registerInSession && canReuseCachedSnapshot
-      ? session.directorySnapshotBuilds.get(snapshotKey)
-      : undefined
+    const existingBuild =
+      registerInSession && canReuseCachedSnapshot
+        ? session.directorySnapshotBuilds.get(snapshotKey)
+        : undefined
     if (existingBuild) {
       return existingBuild.then((metadata) => metadata.snapshot)
     }
@@ -7731,9 +7777,8 @@ export class Directory<
           }
         )
       } else {
-        const currentModified = await fileSystem.getFileLastModifiedMs(
-          fileSystemPath
-        )
+        const currentModified =
+          await fileSystem.getFileLastModifiedMs(fileSystemPath)
         currentSignature =
           currentModified === undefined ? 'missing' : String(currentModified)
       }
@@ -8894,11 +8939,12 @@ type CollectionNavigationIndex = {
   indexByPathname: Map<string, number>
 }
 
-type CollectionEntriesCacheEntry<Entries extends readonly FileSystemEntry<any>[]> =
-  {
-    freshnessKey: string
-    value: Entries
-  }
+type CollectionEntriesCacheEntry<
+  Entries extends readonly FileSystemEntry<any>[],
+> = {
+  freshnessKey: string
+  value: Entries
+}
 
 type CollectionEntriesInflightEntry<
   Entries extends readonly FileSystemEntry<any>[],
@@ -9152,14 +9198,12 @@ export class Collection<
     }
   }
 
-  #createNavigationIndex(orderedPathnames: readonly string[]): CollectionNavigationIndex {
+  #createNavigationIndex(
+    orderedPathnames: readonly string[]
+  ): CollectionNavigationIndex {
     const indexByPathname = new Map<string, number>()
 
-    for (
-      let index = 0;
-      index < orderedPathnames.length;
-      index += 1
-    ) {
+    for (let index = 0; index < orderedPathnames.length; index += 1) {
       const pathname = orderedPathnames[index]
       if (
         typeof pathname === 'string' &&
@@ -9201,12 +9245,15 @@ export class Collection<
     if (!sharedSession) {
       const entries = await this.getEntries(options)
       this.#primeSiblingEntryCache(entries)
-      return this.#createNavigationIndex(entries.map((entry) => entry.getPathname()))
+      return this.#createNavigationIndex(
+        entries.map((entry) => entry.getPathname())
+      )
     }
 
     Collection.#trackSessionNavigationInvalidation(sharedSession)
     const cacheKey = this.#toNavigationIndexCacheKey(sharedSession, options)
-    const navigationMap = Collection.#getOrCreateSessionNavigationMap(sharedSession)
+    const navigationMap =
+      Collection.#getOrCreateSessionNavigationMap(sharedSession)
     const freshnessKey = await this.#getRootFreshnessKey()
     const existingNavigation = navigationMap.get(cacheKey)
     if (existingNavigation?.freshnessKey === freshnessKey) {
@@ -9267,7 +9314,10 @@ export class Collection<
           )
           const refreshNavigationPromise = computeNavigationIndex().catch(
             (error) => {
-              if (navigationMap.get(cacheKey)?.promise === refreshNavigationPromise) {
+              if (
+                navigationMap.get(cacheKey)?.promise ===
+                refreshNavigationPromise
+              ) {
                 navigationMap.delete(cacheKey)
               }
               reportBestEffortError('file-system/entries', error)
@@ -9316,12 +9366,14 @@ export class Collection<
     const resolvePromise = (async () => {
       const normalizedPath = trimLeadingSlashes(normalizeSlashes(pathname))
       if (normalizedPath.length > 0) {
-        const directMatch = await this.getEntry(normalizedPath).catch((error) => {
-          if (error instanceof FileNotFoundError) {
-            return undefined
+        const directMatch = await this.getEntry(normalizedPath).catch(
+          (error) => {
+            if (error instanceof FileNotFoundError) {
+              return undefined
+            }
+            throw error
           }
-          throw error
-        })
+        )
 
         if (directMatch && directMatch.getPathname() === pathname) {
           this.#siblingEntryByPathname.set(pathname, directMatch)
@@ -9333,7 +9385,9 @@ export class Collection<
       this.#primeSiblingEntryCache(entries)
       return this.#siblingEntryByPathname.get(pathname)
     })().finally(() => {
-      if (this.#siblingEntryResolutionByPathname.get(pathname) === resolvePromise) {
+      if (
+        this.#siblingEntryResolutionByPathname.get(pathname) === resolvePromise
+      ) {
         this.#siblingEntryResolutionByPathname.delete(pathname)
       }
     })
@@ -9452,10 +9506,14 @@ export class Collection<
     }
   ): Promise<
     [
-      | FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
-      | undefined,
-      | FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
-      | undefined,
+      (
+        | FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
+        | undefined
+      ),
+      (
+        | FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
+        | undefined
+      ),
     ]
   > {
     const pathname =

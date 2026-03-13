@@ -32,7 +32,7 @@ import { getProgram, invalidateProgramCachesByPath } from './get-program.ts'
 import { setProjectAnalysisScopeId } from './project-scope.ts'
 import { resetRuntimeAnalysisSessionsForTests } from './runtime-analysis-session.ts'
 
-const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget } =
+const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget, SyntaxKind } =
   getTsMorph()
 
 function createTextMateToken(value: string) {
@@ -1543,6 +1543,63 @@ describe('analysis cached analysis', () => {
     expect(getSourceFileOrThrowSpy.mock.calls.length).toBeGreaterThan(
       sourceFileCallsAfterFirstRun
     )
+  })
+
+  test('loads tsconfig-excluded files on demand when reading export text', async () => {
+    const source = [
+      "import { helper } from './helper'",
+      '',
+      'export function ComponentName() {',
+      '  return helper',
+      '}',
+      '',
+    ].join('\n')
+
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+        exclude: ['src/**/*.examples.tsx'],
+      }),
+      'src/helper.ts': 'export const helper = 1\n',
+      'src/Button.examples.tsx': source,
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const filePath = join(workspace.workspacePath, 'src/Button.examples.tsx')
+    const position = source.indexOf('ComponentName')
+    const project = new Project({
+      tsConfigFilePath,
+    })
+
+    expect(position).toBeGreaterThanOrEqual(0)
+    expect(project.getSourceFile(filePath)).toBeUndefined()
+
+    const plainText = await getCachedFileExportText(project, {
+      filePath,
+      position,
+      kind: SyntaxKind.FunctionDeclaration,
+      includeDependencies: false,
+    })
+    expect(plainText).toContain('export function ComponentName()')
+
+    const dependencyText = await getCachedFileExportText(project, {
+      filePath,
+      position,
+      kind: SyntaxKind.FunctionDeclaration,
+      includeDependencies: true,
+    })
+    expect(dependencyText).toContain('export function ComponentName()')
+    expect(project.getSourceFile(filePath)).toBeDefined()
   })
 
   test('tracks dependency files for cached type resolution and refreshes after dependency invalidation', async () => {

@@ -717,7 +717,6 @@ export class Repository {
           ? { path: repository }
           : repository
     this.#cache = options.cache
-
     this.#releaseSource = normalizeReleaseSource(
       'releaseSource' in options ? options.releaseSource : undefined
     )

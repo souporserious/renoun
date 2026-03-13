@@ -6,6 +6,7 @@ import {
   rmSync,
   mkdtempSync,
   existsSync,
+  realpathSync,
   symlinkSync,
 } from 'node:fs'
 import { join, dirname, relative, resolve } from 'node:path'
@@ -25,7 +26,7 @@ import {
 import * as rootDirectoryModule from '../utils/get-root-directory.ts'
 import { Directory, File } from './index.tsx'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key'
-import { CacheStore } from './Cache.ts'
+import { Cache, CacheStore } from './Cache.ts'
 import {
   getCacheStorePersistence,
   disposeCacheStorePersistence,
@@ -228,6 +229,20 @@ function withTemporaryHomeDirectory(fn: (homeDirectory: string) => void) {
   }
 }
 
+function withWorkingDirectory<Value>(
+  directory: string,
+  fn: () => Value
+): Value {
+  const previousWorkingDirectory = process.cwd()
+  process.chdir(directory)
+
+  try {
+    return fn()
+  } finally {
+    process.chdir(previousWorkingDirectory)
+  }
+}
+
 describe('GitFileSystem', () => {
   it('defaults clone cacheDirectory to the workspace .renoun/cache/git path', () => {
     const store = new GitFileSystem({ repository: '.' })
@@ -251,7 +266,10 @@ describe('GitFileSystem', () => {
     mkdirSync(runtimeRoot, { recursive: true })
     writeFileSync(
       join(projectRoot, 'package.json'),
-      JSON.stringify({ name: 'git-cache-app-runtime-root-test', private: true }),
+      JSON.stringify({
+        name: 'git-cache-app-runtime-root-test',
+        private: true,
+      }),
       'utf8'
     )
 
@@ -278,6 +296,68 @@ describe('GitFileSystem', () => {
         process.env.RENOUN_RUNTIME_DIRECTORY = previousRuntimeDirectory
       }
 
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('prefers the nearest Next app .next cache directory for clone caches', () => {
+    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-next-app-'))
+    const workspaceRoot = join(tmpDirectory, 'workspace')
+    const appRoot = join(workspaceRoot, 'apps', 'site')
+
+    mkdirSync(join(appRoot, 'app'), { recursive: true })
+    writeFileSync(
+      join(workspaceRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-git-next-workspace',
+        private: true,
+        workspaces: ['apps/*'],
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(appRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-git-next-app',
+        private: true,
+        dependencies: {
+          next: '15.0.0',
+        },
+      }),
+      'utf8'
+    )
+
+    try {
+      const canonicalAppRoot = realpathSync(appRoot)
+      withWorkingDirectory(appRoot, () => {
+        const store = new GitFileSystem({ repository: '.' })
+        try {
+          expect(store.cacheDirectory).toBe(
+            resolve(canonicalAppRoot, '.next', 'cache', 'renoun', 'git')
+          )
+        } finally {
+          store.close()
+        }
+      })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('allows overriding the cache root explicitly', () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-git-cache-explicit-')
+    )
+    const cacheDirectory = join(tmpDirectory, 'custom-cache')
+    const store = new GitFileSystem({
+      repository: '.',
+      cache: new Cache({ outputDirectory: cacheDirectory }),
+    })
+
+    try {
+      expect(store.cacheDirectory).toBe(resolve(cacheDirectory, 'git'))
+    } finally {
+      store.close()
       rmSync(tmpDirectory, { recursive: true, force: true })
     }
   })
@@ -464,14 +544,18 @@ describe('GitFileSystem', () => {
       expect(
         await store.getWorkspaceChangedPathsSinceToken('.', 'head:any')
       ).toBeNull()
-      expect(await store.readFile('src/index.ts')).toBe(`export const value = 1`)
+      expect(await store.readFile('src/index.ts')).toBe(
+        `export const value = 1`
+      )
 
       git(repoRoot, ['checkout', 'main'])
       commitFile(repoRoot, 'src/index.ts', `export const value = 2`, 'update')
       git(repoRoot, ['checkout', 'feature'])
 
       expect(await store.getWorkspaceChangeToken('.')).toBeNull()
-      expect(await store.readFile('src/index.ts')).toBe(`export const value = 2`)
+      expect(await store.readFile('src/index.ts')).toBe(
+        `export const value = 2`
+      )
     } finally {
       store.close()
     }
@@ -2968,13 +3052,17 @@ describe('GitFileSystem', () => {
       'init'
     )
     mkdirSync(join(repoRoot, 'dist'), { recursive: true })
-    writeFileSync(join(repoRoot, 'dist', 'ignored.ts'), 'export const ignored = 1')
+    writeFileSync(
+      join(repoRoot, 'dist', 'ignored.ts'),
+      'export const ignored = 1'
+    )
 
     using store = new GitFileSystem({ repository: repoRoot, cacheDirectory })
     const asyncEntries = (await store.readDirectory('.'))
       .map((entry) => entry.name)
       .sort()
-    const syncEntries = store.readDirectorySync('.')
+    const syncEntries = store
+      .readDirectorySync('.')
       .map((entry) => entry.name)
       .sort()
 
