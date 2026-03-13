@@ -3,27 +3,12 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, test, vi } from 'vitest'
 
 import { parseAnnotations } from '../../utils/annotations.ts'
-import { getSourceTextMetadata } from '../../analysis/node-client.ts'
 
 const mockTokens = vi.fn()
-const symbolMock = vi.fn(({ children }: { children: React.ReactNode }) => (
-  <>{children}</>
-))
 
 vi.mock('../../analysis/node-client.ts', () => ({
   getSourceTextMetadata: vi.fn(),
   getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
-}))
-
-vi.mock('../../analysis/browser-client.ts', () => ({
-  getAnalysisClientBrowserRuntime: () => undefined,
-  getAnalysisClientRefreshVersion: () => '0:0',
-  getQuickInfoAtPosition: vi.fn(),
-  hasRetainedAnalysisClientBrowserRuntime: () => false,
-  onAnalysisClientBrowserRuntimeRetentionChange: () => () => {},
-  onAnalysisClientBrowserRefreshNotification: () => () => {},
-  onAnalysisClientBrowserRuntimeChange: () => () => {},
-  onAnalysisClientRefreshVersionChange: () => () => {},
 }))
 
 vi.mock('../Config/ServerConfigContext.tsx', () => ({
@@ -46,17 +31,6 @@ vi.mock('../../utils/get-theme.ts', () => ({
       errorForeground: 'currentColor',
       foreground: 'currentColor',
     },
-    editorHoverWidget: {
-      border: 'transparent',
-      background: 'transparent',
-      foreground: 'currentColor',
-    },
-    panel: {
-      border: 'transparent',
-    },
-    editorError: {
-      foreground: 'currentColor',
-    },
     tokenColors: [],
     semanticTokenColors: [],
   }),
@@ -75,18 +49,16 @@ vi.mock('./Context.tsx', () => ({
   Context: {},
 }))
 
-vi.mock('./QuickInfoProvider.ts', () => ({
+vi.mock('./QuickInfoProvider.tsx', () => ({
   QuickInfoProvider: ({ children }: { children: React.ReactNode }) => (
     <>{children}</>
   ),
 }))
 
 vi.mock('./Symbol.tsx', () => ({
-  Symbol: (...args: Parameters<typeof symbolMock>) => symbolMock(...args),
+  Symbol: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }))
 
-// The restyle CSS helper inserts inline styles into the component tree. Use a
-// lightweight shim to keep the rendered HTML stable for assertions.
 vi.mock('restyle/css', () => ({
   css: (styles: Record<string, any>) => [
     `token-${Object.keys(styles).length}`,
@@ -94,7 +66,6 @@ vi.mock('restyle/css', () => ({
   ],
 }))
 
-// Use a predictable mark element when rendering annotations.
 const annotations = {
   mark: ({ children }: { children?: React.ReactNode }) => (
     <mark>{children}</mark>
@@ -103,482 +74,43 @@ const annotations = {
 
 describe('Tokens', () => {
   test('does not duplicate block annotations when they start at a token boundary', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'test'
+    const source = [
+      "import { createContext } from 'react'",
+      "const /*mark*/ThemeContext/**mark*/ = createContext(/*mark*/'light'/**mark*/)",
+    ].join('\n')
 
-    try {
-      const source = [
-        "import { createContext } from 'react'",
-        "const /*mark*/ThemeContext/**mark*/ = createContext(/*mark*/'light'/**mark*/)",
-      ].join('\n')
+    const parsed = parseAnnotations(source, Object.keys(annotations))
+    const value = parsed.value
+    const identifier = 'ThemeContext'
+    const identifierStart = value.indexOf(identifier)
+    const identifierEnd = identifierStart + identifier.length
 
-      const parsed = parseAnnotations(source, Object.keys(annotations))
-      const value = parsed.value
-      const identifier = 'ThemeContext'
-      const identifierStart = value.indexOf(identifier)
-      const identifierEnd = identifierStart + identifier.length
-
-      mockTokens.mockResolvedValueOnce([
-        [
-          {
-            start: 0,
-            end: identifierStart,
-            value: value.slice(0, identifierStart),
-          },
-          { start: identifierStart, end: identifierEnd, value: identifier },
-          {
-            start: identifierEnd,
-            end: value.length,
-            value: value.slice(identifierEnd),
-          },
-        ],
-      ])
-
-      const { Tokens } = await import('./Tokens.tsx')
-      const element = await Tokens({
-        annotations,
-        shouldAnalyze: false,
-        children: source,
-      })
-
-      const markup = renderToStaticMarkup(<>{element}</>)
-      const markCount = markup.match(/<mark>/g)?.length ?? 0
-
-      expect(markCount).toBe(2)
-    } finally {
-      if (previousNodeEnv === undefined) {
-        delete process.env.NODE_ENV
-      } else {
-        process.env.NODE_ENV = previousNodeEnv
-      }
-    }
-  })
-
-  test('skips source metadata lookup for inline parser-less languages in development', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'development'
-
-    try {
-      const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
-      getSourceTextMetadataMock.mockClear()
-
-      mockTokens.mockResolvedValueOnce([
-        [
-          {
-            start: 0,
-            end: 8,
-            value: 'echo hi\n',
-            hasTextStyles: false,
-            isBaseColor: true,
-            isWhiteSpace: false,
-            isDeprecated: false,
-            isSymbol: false,
-            style: {},
-          },
-        ],
-      ])
-
-      const { Tokens } = await import('./Tokens.tsx')
-
-      await Tokens({
-        children: 'echo hi\n',
-        language: 'shell',
-        shouldAnalyze: true,
-        shouldFormat: true,
-      })
-
-      expect(getSourceTextMetadataMock).not.toHaveBeenCalled()
-    } finally {
-      if (previousNodeEnv === undefined) {
-        delete process.env.NODE_ENV
-      } else {
-        process.env.NODE_ENV = previousNodeEnv
-      }
-    }
-  })
-
-  test('keeps default formatting enabled for formattable inline non-TypeScript snippets', async () => {
-    const { shouldSkipInlineSourceMetadataLookup } = await import('./Tokens.tsx')
-
-    expect(
-      shouldSkipInlineSourceMetadataLookup({
-        resolvedPath: undefined,
-        language: 'json',
-        supportsSourceFormattingInCurrentContext: true,
-        shouldUseInlineSourceMetadataFastPath: true,
-        isFormattingExplicit: false,
-        shouldFormat: true,
-      })
-    ).toBe(false)
-  })
-
-  test('does not force in-memory analysis for inline TypeScript snippets', async () => {
-    const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
-    getSourceTextMetadataMock.mockResolvedValueOnce({
-      value: 'export const example = 1\n',
-      language: 'tsx',
-      filePath: '_renoun/example.tsx',
-      label: '_renoun/example.tsx',
-    })
     mockTokens.mockResolvedValueOnce([
       [
         {
           start: 0,
-          end: 24,
-          value: 'export const example = 1',
-          hasTextStyles: false,
-          isBaseColor: true,
-          isWhiteSpace: false,
-          isDeprecated: false,
-          isSymbol: false,
-          style: {},
+          end: identifierStart,
+          value: value.slice(0, identifierStart),
+        },
+        { start: identifierStart, end: identifierEnd, value: identifier },
+        {
+          start: identifierEnd,
+          end: value.length,
+          value: value.slice(identifierEnd),
         },
       ],
     ])
 
     const { Tokens } = await import('./Tokens.tsx')
-
-    await Tokens({
-      children: 'export const example = 1\n',
-      language: 'tsx',
-      shouldAnalyze: true,
-      shouldFormat: false,
+    const element = await Tokens({
+      annotations,
+      shouldAnalyze: false,
+      children: source,
     })
 
-    expect(getSourceTextMetadataMock).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        analysisOptions: expect.anything(),
-      })
-    )
-    expect(mockTokens).toHaveBeenCalledWith(
-      expect.not.objectContaining({
-        analysisOptions: expect.anything(),
-      })
-    )
-  })
+    const markup = renderToStaticMarkup(<>{element}</>)
+    const markCount = markup.match(/<mark>/g)?.length ?? 0
 
-  test('does not defer quick info when no development analysis runtime is available', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousServerPort = process.env.RENOUN_SERVER_PORT
-    const previousServerId = process.env.RENOUN_SERVER_ID
-    process.env.NODE_ENV = 'development'
-    delete process.env.RENOUN_SERVER_PORT
-    delete process.env.RENOUN_SERVER_ID
-
-    try {
-      symbolMock.mockClear()
-      mockTokens.mockClear()
-      const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
-      getSourceTextMetadataMock.mockResolvedValueOnce({
-        value: 'History',
-        language: 'ts',
-        filePath: '/tmp/history.ts',
-        label: '/tmp/history.ts',
-      })
-      mockTokens.mockResolvedValueOnce([
-        [
-          {
-            value: 'History',
-            start: 0,
-            end: 7,
-            hasTextStyles: true,
-            isBaseColor: false,
-            isDeprecated: false,
-            isSymbol: true,
-            isWhiteSpace: false,
-            quickInfo: {
-              displayText: '(alias) const History',
-              documentationText: 'History hover info',
-            },
-            style: {},
-          },
-        ],
-      ])
-
-      const { Tokens } = await import('./Tokens.tsx')
-      const element = await Tokens({
-        children: 'History',
-        language: 'ts',
-        shouldAnalyze: true,
-      })
-      renderToStaticMarkup(<>{element}</>)
-
-      expect(mockTokens).toHaveBeenCalledWith(
-        expect.objectContaining({
-          deferQuickInfoUntilHover: false,
-          filePath: '/tmp/history.ts',
-        })
-      )
-      expect(symbolMock).toHaveBeenCalled()
-    } finally {
-      if (previousServerPort === undefined) {
-        delete process.env.RENOUN_SERVER_PORT
-      } else {
-        process.env.RENOUN_SERVER_PORT = previousServerPort
-      }
-
-      if (previousServerId === undefined) {
-        delete process.env.RENOUN_SERVER_ID
-      } else {
-        process.env.RENOUN_SERVER_ID = previousServerId
-      }
-
-      if (previousNodeEnv === undefined) {
-        delete process.env.NODE_ENV
-      } else {
-        process.env.NODE_ENV = previousNodeEnv
-      }
-    }
-  })
-
-  test('does not enable quick-info request mode outside development runtime', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    const previousServerPort = process.env.RENOUN_SERVER_PORT
-    const previousServerId = process.env.RENOUN_SERVER_ID
-    process.env.NODE_ENV = 'production'
-    process.env.RENOUN_SERVER_PORT = '43123'
-    process.env.RENOUN_SERVER_ID = 'tokens-production-runtime'
-
-    try {
-      symbolMock.mockClear()
-      mockTokens.mockClear()
-      const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
-      getSourceTextMetadataMock.mockResolvedValueOnce({
-        value: 'History',
-        language: 'ts',
-        filePath: '/tmp/history.ts',
-        label: '/tmp/history.ts',
-      })
-      mockTokens.mockResolvedValueOnce([
-        [
-          {
-            value: 'History',
-            start: 0,
-            end: 7,
-            hasTextStyles: true,
-            isBaseColor: false,
-            isDeprecated: false,
-            isSymbol: true,
-            isWhiteSpace: false,
-            style: {},
-          },
-        ],
-      ])
-
-      const { Tokens } = await import('./Tokens.tsx')
-      const element = await Tokens({
-        children: 'History',
-        language: 'ts',
-        shouldAnalyze: true,
-      })
-      renderToStaticMarkup(<>{element}</>)
-
-      expect(mockTokens).toHaveBeenCalledWith(
-        expect.objectContaining({
-          deferQuickInfoUntilHover: false,
-          filePath: '/tmp/history.ts',
-        })
-      )
-      expect(symbolMock).not.toHaveBeenCalled()
-    } finally {
-      if (previousServerPort === undefined) {
-        delete process.env.RENOUN_SERVER_PORT
-      } else {
-        process.env.RENOUN_SERVER_PORT = previousServerPort
-      }
-
-      if (previousServerId === undefined) {
-        delete process.env.RENOUN_SERVER_ID
-      } else {
-        process.env.RENOUN_SERVER_ID = previousServerId
-      }
-
-      if (previousNodeEnv === undefined) {
-        delete process.env.NODE_ENV
-      } else {
-        process.env.NODE_ENV = previousNodeEnv
-      }
-    }
-  })
-
-  test('routes precomputed quick info through the client popover in runtime-backed hovers', async () => {
-    symbolMock.mockClear()
-
-    const initialQuickInfo = {
-      displayText: '(alias) const History',
-      documentationText: 'History hover info',
-    }
-    const { __TEST_ONLY__ } = await import('./Tokens.tsx')
-    const tokenNode = __TEST_ONLY__.renderToken({
-      token: {
-        value: 'History',
-        start: 0,
-        end: 7,
-        hasTextStyles: true,
-        isBaseColor: false,
-        isDeprecated: false,
-        isSymbol: true,
-        isWhiteSpace: false,
-        quickInfo: initialQuickInfo,
-        style: {},
-      },
-      tokenIndex: 0,
-      lineIndex: 0,
-      filePath: '/tmp/history.ts',
-      quickInfoRuntime: {
-        id: 'tokens-development-runtime',
-        port: '43123',
-        host: '127.0.0.1',
-      },
-      quickInfoValueSignature: 'history-v1',
-      quickInfoThemeConfig: 'default',
-      theme: {
-        editor: {
-          hoverHighlightBackground: 'transparent',
-        },
-        editorHoverWidget: {
-          border: 'transparent',
-          background: 'transparent',
-          foreground: 'currentColor',
-        },
-        panel: {
-          border: 'transparent',
-        },
-        editorError: {
-          foreground: 'currentColor',
-        },
-      } as any,
-    })
-
-    renderToStaticMarkup(<>{tokenNode}</>)
-
-    expect(symbolMock).toHaveBeenCalled()
-
-    const props = symbolMock.mock.calls[0]?.[0] as
-      | { popover?: React.ReactElement | undefined }
-      | undefined
-    expect(React.isValidElement(props?.popover)).toBe(true)
-    expect(props?.popover?.props.quickInfo).toEqual(initialQuickInfo)
-    expect(props?.popover?.props.request).toEqual(
-      expect.objectContaining({
-        filePath: '/tmp/history.ts',
-        position: 0,
-        valueSignature: 'history-v1',
-        runtime: {
-          id: 'tokens-development-runtime',
-          port: '43123',
-          host: '127.0.0.1',
-        },
-        themeConfig: 'default',
-      })
-    )
-  })
-
-  test('virtualizes explicit snippet paths during analysis', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'production'
-
-    try {
-      const getSourceTextMetadataMock = vi.mocked(getSourceTextMetadata)
-      getSourceTextMetadataMock.mockResolvedValueOnce({
-        value: 'History',
-        language: 'ts',
-        filePath: '/tmp/history.__renoun_snippet_sig_1.ts',
-        label: '/tmp/history.ts',
-        valueSignature: 'sig-1',
-      })
-      mockTokens.mockResolvedValueOnce([
-        [
-          {
-            value: 'History',
-            start: 0,
-            end: 7,
-            hasTextStyles: true,
-            isBaseColor: false,
-            isDeprecated: false,
-            isSymbol: true,
-            isWhiteSpace: false,
-            style: {},
-          },
-        ],
-      ])
-
-      const { Tokens } = await import('./Tokens.tsx')
-      const element = await Tokens({
-        children: 'History',
-        path: '/tmp/history.ts',
-        language: 'ts',
-        shouldAnalyze: true,
-      })
-      renderToStaticMarkup(<>{element}</>)
-
-      expect(getSourceTextMetadataMock).toHaveBeenCalledWith(
-        expect.objectContaining({
-          filePath: '/tmp/history.ts',
-          value: 'History',
-          virtualizeFilePath: true,
-        })
-      )
-      expect(mockTokens).toHaveBeenCalledWith(
-        expect.objectContaining({
-          filePath: '/tmp/history.__renoun_snippet_sig_1.ts',
-          value: 'History',
-        })
-      )
-    } finally {
-      if (previousNodeEnv === undefined) {
-        delete process.env.NODE_ENV
-      } else {
-        process.env.NODE_ENV = previousNodeEnv
-      }
-    }
-  })
-
-  test('passes a serializable popover prop to Symbol', async () => {
-    const previousNodeEnv = process.env.NODE_ENV
-    process.env.NODE_ENV = 'test'
-
-    try {
-      symbolMock.mockClear()
-      mockTokens.mockResolvedValueOnce([
-        [
-          {
-            value: 'Directory',
-            start: 0,
-            end: 9,
-            hasTextStyles: true,
-            isBaseColor: false,
-            isDeprecated: false,
-            isSymbol: true,
-            isWhiteSpace: false,
-            quickInfo: {
-              displayText: '(alias) class Directory',
-              documentationText: 'A directory in the file system.',
-            },
-            style: {},
-          },
-        ],
-      ])
-
-      const { Tokens } = await import('./Tokens.tsx')
-      const element = await Tokens({
-        children: 'Directory',
-        language: 'ts',
-        shouldAnalyze: false,
-      })
-      renderToStaticMarkup(<>{element}</>)
-
-      expect(symbolMock).toHaveBeenCalled()
-      const props = symbolMock.mock.calls[0]?.[0] as
-        | { popover?: unknown }
-        | undefined
-      expect(typeof props?.popover).not.toBe('function')
-    } finally {
-      if (previousNodeEnv === undefined) {
-        delete process.env.NODE_ENV
-      } else {
-        process.env.NODE_ENV = previousNodeEnv
-      }
-    }
+    expect(markCount).toBe(2)
   })
 })

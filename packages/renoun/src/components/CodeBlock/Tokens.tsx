@@ -6,7 +6,6 @@ import {
   getSourceTextMetadata,
   getTokens,
 } from '../../analysis/node-client.ts'
-import { isSyntheticAnalysisDocumentFilePath } from '../../analysis/document-paths.ts'
 import {
   isProductionEnvironment,
   isTestEnvironment,
@@ -16,7 +15,6 @@ import { hasSourceTextFormatterParser } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
 import {
   getSourceTextValueSignature,
-  type SourceTextHydrationMetadata,
   type SourceTextMetadata,
 } from '../../analysis/query/source-text-metadata.ts'
 import type {
@@ -43,11 +41,6 @@ import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
-import {
-  getServerRuntimeFromProcessEnv,
-  type AnalysisServerRuntime,
-} from '../../analysis/runtime-env.ts'
-import { QuickInfoClientPopover } from './QuickInfoClientPopover.tsx'
 import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
 import { QuickInfoProvider } from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
@@ -450,10 +443,6 @@ async function TokensAsync({
             : undefined
           : context.allowErrors
         : allowErrorsProp
-    const quickInfoRuntime = isDevelopmentRuntime
-      ? getServerRuntimeFromProcessEnv()
-      : undefined
-
     const tokens = await getTokens({
       value: metadata.value,
       language: metadata.language,
@@ -462,20 +451,11 @@ async function TokensAsync({
       showErrors,
       theme: themeConfiguration,
       languages: config.languages,
-      deferQuickInfoUntilHover: quickInfoRuntime !== undefined,
-      // During development we render a suspense fallback immediately and wait
-      // for highlighted tokens so the final stream updates this block.
+      // In development, wait for the warmed analysis result so the streamed
+      // update replaces the plain-text fallback with real highlighting and
+      // symbol quick info.
       waitForWarmResult: isDevelopmentRuntime,
     })
-    const quickInfoValueSignature = metadata.valueSignature
-    const quickInfoSourceMetadata: SourceTextHydrationMetadata | undefined =
-      metadata.filePath &&
-      isSyntheticAnalysisDocumentFilePath(metadata.filePath)
-        ? {
-            value: metadata.value,
-            language: metadata.language,
-          }
-        : undefined
     const lastLineIndex = tokens.length - 1
     const hasAnnotations =
       annotationInstructions !== null &&
@@ -492,11 +472,6 @@ async function TokensAsync({
                 tokenIndex,
                 lineIndex,
                 baseTokenClassName,
-                filePath: metadata.filePath,
-                quickInfoRuntime,
-                quickInfoValueSignature,
-                quickInfoSourceMetadata,
-                quickInfoThemeConfig: themeConfiguration,
                 theme,
                 css,
                 className,
@@ -559,11 +534,6 @@ async function TokensAsync({
       tokens,
       value: metadata.value,
       baseTokenClassName,
-      filePath: metadata.filePath,
-      quickInfoRuntime,
-      quickInfoValueSignature,
-      quickInfoSourceMetadata,
-      quickInfoThemeConfig: themeConfiguration,
       theme,
       css,
       className,
@@ -582,11 +552,6 @@ interface RenderTokenOptions {
   tokenIndex: number
   lineIndex: number
   baseTokenClassName?: string
-  filePath?: string
-  quickInfoRuntime?: AnalysisServerRuntime
-  quickInfoValueSignature?: string
-  quickInfoSourceMetadata?: SourceTextHydrationMetadata
-  quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -610,11 +575,6 @@ interface RenderWithAnnotationsOptions {
   tokens: TokenizedLines
   value: string
   baseTokenClassName?: string
-  filePath?: string
-  quickInfoRuntime?: AnalysisServerRuntime
-  quickInfoValueSignature?: string
-  quickInfoSourceMetadata?: SourceTextHydrationMetadata
-  quickInfoThemeConfig?: ConfigurationOptions['theme']
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -626,23 +586,13 @@ function renderToken({
   tokenIndex,
   lineIndex,
   baseTokenClassName,
-  filePath,
-  quickInfoRuntime,
-  quickInfoValueSignature,
-  quickInfoSourceMetadata,
-  quickInfoThemeConfig,
   theme,
   css: cssProp,
   className,
   style,
 }: RenderTokenOptions): React.ReactNode {
   const hasDiagnostics = Boolean(token.diagnostics?.length)
-  const canRequestQuickInfo =
-    token.isSymbol &&
-    typeof filePath === 'string' &&
-    filePath.length > 0 &&
-    quickInfoRuntime !== undefined
-  const hasQuickInfo = Boolean(token.quickInfo) || canRequestQuickInfo
+  const hasQuickInfo = Boolean(token.quickInfo)
 
   if (
     token.isWhiteSpace ||
@@ -677,63 +627,28 @@ function renderToken({
   )
 
   if (hasQuickInfo) {
-    const request = canRequestQuickInfo
-      ? {
-          filePath: filePath!,
-          position: token.start,
-          valueSignature: quickInfoValueSignature,
-          sourceMetadata: quickInfoSourceMetadata,
-          runtime: quickInfoRuntime!,
-          themeConfig: quickInfoThemeConfig,
-        }
-      : undefined
-    let popover: React.ReactNode
-
-    if (request) {
-      popover = (
-        <QuickInfoClientPopover
-          diagnostics={token.diagnostics}
-          quickInfo={token.quickInfo}
-          request={request}
-          theme={{
-            border: theme.editorHoverWidget.border,
-            background: theme.editorHoverWidget.background,
-            foreground: theme.editorHoverWidget.foreground,
-            panelBorder: theme.panel.border,
-            errorForeground: theme.editorError.foreground,
-          }}
-          css={cssProp?.popover}
-          className={className?.popover}
-          style={style?.popover}
-        />
-      )
-    } else {
-      popover = (
-        <Suspense
-          fallback={
-            <QuickInfoLoading
-              css={cssProp?.popover}
-              className={className?.popover}
-              style={style?.popover}
-            />
-          }
-        >
-          <QuickInfo
-            diagnostics={token.diagnostics}
-            quickInfo={token.quickInfo}
-            css={cssProp?.popover}
-            className={className?.popover}
-            style={style?.popover}
-          />
-        </Suspense>
-      )
-    }
-
     return (
       <Symbol
         key={`${lineIndex}-${tokenIndex}`}
         highlightColor={theme.editor.hoverHighlightBackground}
-        popover={popover}
+        popover={
+          <Suspense
+            fallback={
+              <QuickInfoLoading
+                css={cssProp?.popover}
+                className={className?.popover}
+                style={style?.popover}
+              />
+            }
+          >
+            <QuickInfo
+              quickInfo={token.quickInfo}
+              css={cssProp?.popover}
+              className={className?.popover}
+              style={style?.popover}
+            />
+          </Suspense>
+        }
         className={tokenClassName}
         style={style?.token}
       >
@@ -838,11 +753,6 @@ function renderWithAnnotations({
   tokens,
   value,
   baseTokenClassName,
-  filePath,
-  quickInfoRuntime,
-  quickInfoValueSignature,
-  quickInfoSourceMetadata,
-  quickInfoThemeConfig,
   theme,
   css,
   className,
@@ -1024,11 +934,6 @@ function renderWithAnnotations({
           tokenIndex,
           lineIndex,
           baseTokenClassName,
-          filePath,
-          quickInfoRuntime,
-          quickInfoValueSignature,
-          quickInfoSourceMetadata,
-          quickInfoThemeConfig,
           theme,
           css,
           className,
