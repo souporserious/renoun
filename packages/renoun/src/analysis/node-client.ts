@@ -26,13 +26,9 @@ import {
   getAnalysisClientBrowserRuntime as getSharedAnalysisClientBrowserRuntime,
   getAnalysisServerRuntimeKey,
   normalizeAnalysisServerRuntime,
-  onAnalysisClientBrowserRuntimeChange as onSharedAnalysisClientBrowserRuntimeChange,
   setAnalysisClientBrowserRuntime as setSharedAnalysisClientBrowserRuntime,
 } from './browser-runtime.ts'
 import {
-  getAnalysisClientRetainedBrowserRuntimeActivationKey as getRetainedBrowserRuntimeActivationKey,
-  hasRetainedAnalysisClientBrowserRuntime as hasRetainedBrowserRuntime,
-  onAnalysisClientBrowserRuntimeRetentionChange as onBrowserRuntimeRetentionChange,
   resetRequestedAnalysisClientBrowserRuntimeState,
   retainRequestedAnalysisClientBrowserRuntime,
   setRequestedAnalysisClientBrowserRuntime,
@@ -78,7 +74,6 @@ import {
   notifyAnalysisClientBrowserRefreshNotification,
   notifyAnalysisClientRefreshVersionChanged,
   onAnalysisClientBrowserRefreshNotification as subscribeAnalysisClientBrowserRefreshNotification,
-  onAnalysisClientRefreshVersionChange as subscribeAnalysisClientRefreshVersionChange,
   rememberConnectedAnalysisServerClientRuntime,
   resetAnalysisClientRefreshState,
   resetLatestAnalysisClientRefreshCursor,
@@ -108,6 +103,16 @@ import type { AnalysisOptions } from './types.ts'
 import type { AnalysisClientServerModules } from './client.server.types.ts'
 
 export type { AnalysisClientBrowserRefreshNotification } from './client-refresh-state.ts'
+export {
+  getAnalysisClientBrowserRuntime,
+  onAnalysisClientBrowserRuntimeChange,
+} from './browser-runtime.ts'
+export {
+  getAnalysisClientRetainedBrowserRuntimeActivationKey,
+  hasRetainedAnalysisClientBrowserRuntime,
+  onAnalysisClientBrowserRuntimeRetentionChange,
+} from './client-browser-runtime-retention.ts'
+export { onAnalysisClientRefreshVersionChange } from './client-refresh-state.ts'
 
 interface ActiveClientState {
   client: WebSocketClient
@@ -187,36 +192,6 @@ function getCurrentAnalysisClientRefreshVersionRuntimeKey():
     activeClientState?.runtimeKey ??
     cachedBrowserClientState?.runtimeKey
   )
-}
-
-export function onAnalysisClientRefreshVersionChange(
-  listener: (version: string) => void
-): () => void {
-  return subscribeAnalysisClientRefreshVersionChange(listener)
-}
-
-export function getAnalysisClientBrowserRuntime():
-  | AnalysisServerRuntime
-  | undefined {
-  return getSharedAnalysisClientBrowserRuntime()
-}
-
-export function onAnalysisClientBrowserRuntimeChange(
-  listener: (runtime: AnalysisServerRuntime | undefined) => void
-): () => void {
-  return onSharedAnalysisClientBrowserRuntimeChange(listener)
-}
-
-export function onAnalysisClientBrowserRuntimeRetentionChange(
-  listener: (hasRetainedBrowserRuntime: boolean) => void
-): () => void {
-  return onBrowserRuntimeRetentionChange(listener)
-}
-
-export function getAnalysisClientRetainedBrowserRuntimeActivationKey():
-  | string
-  | undefined {
-  return getRetainedBrowserRuntimeActivationKey()
 }
 
 export function onAnalysisClientBrowserRefreshNotification(
@@ -360,10 +335,6 @@ export function retainAnalysisClientBrowserRuntime(
     applyAnalysisClientBrowserRuntime,
     options
   )
-}
-
-export function hasRetainedAnalysisClientBrowserRuntime(): boolean {
-  return hasRetainedBrowserRuntime()
 }
 
 export interface AnalysisClientRuntimeOptions {

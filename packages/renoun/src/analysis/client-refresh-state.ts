@@ -2,7 +2,6 @@ import {
   getAnalysisClientBrowserRefreshVersion,
   getAnalysisClientBrowserRefreshVersionRuntimeKey,
   getAnalysisServerRuntimeKey,
-  onAnalysisClientBrowserRefreshVersionChange,
   parseAnalysisClientRefreshVersion,
   setAnalysisClientBrowserRefreshVersion,
 } from './browser-runtime.ts'
@@ -14,6 +13,10 @@ export interface AnalysisClientBrowserRefreshNotification extends RefreshNotific
   runtime: AnalysisServerRuntime
   runtimeKey: string
 }
+
+export {
+  onAnalysisClientBrowserRefreshVersionChange as onAnalysisClientRefreshVersionChange,
+} from './browser-runtime.ts'
 
 const browserRefreshNotificationListeners = new Set<
   (message: AnalysisClientBrowserRefreshNotification) => void
@@ -229,12 +232,6 @@ export function bumpLatestRefreshCursorForRuntime(
     Math.max(getLatestRefreshCursorForRuntime(runtimeKey), Math.floor(value)),
     options
   )
-}
-
-export function onAnalysisClientRefreshVersionChange(
-  listener: (version: string) => void
-): () => void {
-  return onAnalysisClientBrowserRefreshVersionChange(listener)
 }
 
 export function bumpAnalysisClientRefreshInvalidationEpoch(
