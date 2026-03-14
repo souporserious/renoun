@@ -1,5 +1,12 @@
 # @renoun/blog
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [6cb43c6]
+  - @renoun/mdx@3.8.2
+
 ## 0.2.2
 
 ### Patch Changes

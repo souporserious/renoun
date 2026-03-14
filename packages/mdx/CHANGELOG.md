@@ -1,5 +1,11 @@
 # @renoun/mdx
 
+## 3.8.2
+
+### Patch Changes
+
+- 6cb43c6: Ensure `@renoun/mdx` publishes rewritten relative import extensions and excludes test-only build artifacts from the npm tarball.
+
 ## 3.8.1
 
 ### Patch Changes
