@@ -1,6 +1,7 @@
 import { Project } from 'ts-morph'
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const SOURCE_PATH = 'src/utils/load-package.ts'
 const DIST_PATH = 'dist/utils/load-package.js'
@@ -53,7 +54,7 @@ function rewriteRelativeImportExtensions(text: string): string {
   )
 }
 
-async function main() {
+export async function patchLoadPackage(): Promise<void> {
   if (!(await exists(SOURCE_PATH))) {
     fail(`Missing source file: ${SOURCE_PATH}`)
   }
@@ -125,7 +126,12 @@ async function main() {
   )
 }
 
-main().catch((error) => {
-  console.error(error.stack ?? String(error))
-  process.exitCode = 1
-})
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  patchLoadPackage().catch((error) => {
+    console.error(error.stack ?? String(error))
+    process.exitCode = 1
+  })
+}

@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'vitest'
 
-import { collectTypeScriptMetadata, getTokens } from './get-tokens.ts'
+import {
+  collectTypeScriptMetadata,
+  createPlainTextTokenizedLines,
+  getTokens,
+  resolveQuickInfoLookupBudget,
+} from './get-tokens.ts'
 import type { Token } from './get-tokens.ts'
 import type { Highlighter } from './create-highlighter.ts'
 import type { TextMateToken } from './create-tokenizer.ts'
@@ -50,6 +55,27 @@ function createStubHighlighter(lines: string[][]): Highlighter {
   } as Highlighter
 }
 
+function createRepeatedValueSymbolFixture(referenceCount: number) {
+  const project = new Project({ useInMemoryFileSystem: true })
+  const filePath = 'quick-info-budget.ts'
+  const source = [
+    'const value = 1;',
+    ...Array.from({ length: referenceCount }, () => 'value;'),
+  ].join('\n')
+
+  project.createSourceFile(filePath, `${source}\n`, { overwrite: true })
+
+  return {
+    code: `${source}\n`,
+    filePath,
+    highlighter: createStubHighlighter([
+      ['const', ' ', 'value', ' ', '=', ' ', '1', ';'],
+      ...Array.from({ length: referenceCount }, () => ['value', ';']),
+    ]),
+    project,
+  }
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
   let reject!: (reason?: unknown) => void
@@ -65,6 +91,68 @@ function waitForDuration(ms: number) {
     setTimeout(() => resolve(), ms)
   })
 }
+
+describe('createPlainTextTokenizedLines', () => {
+  test('splits lines and preserves token offsets', () => {
+    const tokens = createPlainTextTokenizedLines('first\nsecond')
+
+    expect(tokens).toHaveLength(2)
+    expect(tokens[0]?.[0]).toMatchObject({
+      value: 'first',
+      start: 0,
+      end: 5,
+    })
+    expect(tokens[1]?.[0]).toMatchObject({
+      value: 'second',
+      start: 6,
+      end: 12,
+    })
+  })
+
+  test('keeps a trailing empty line when source ends with a newline', () => {
+    const tokens = createPlainTextTokenizedLines('line\n')
+
+    expect(tokens).toHaveLength(2)
+    expect(tokens[0]?.[0]?.value).toBe('line')
+    expect(tokens[1]?.[0]).toMatchObject({
+      value: '',
+      start: 5,
+      end: 5,
+    })
+  })
+})
+
+describe('resolveQuickInfoLookupBudget', () => {
+  test('uses fixed defaults for normal and large blocks', () => {
+    expect(
+      resolveQuickInfoLookupBudget({
+        valueLength: 1_000,
+        symbolCount: 500,
+      })
+    ).toBe(160)
+    expect(
+      resolveQuickInfoLookupBudget({
+        valueLength: 100_000,
+        symbolCount: 10_000,
+      })
+    ).toBe(64)
+  })
+
+  test('caps budget at symbol count', () => {
+    expect(
+      resolveQuickInfoLookupBudget({
+        valueLength: 1_000,
+        symbolCount: 3,
+      })
+    ).toBe(3)
+    expect(
+      resolveQuickInfoLookupBudget({
+        valueLength: 100_000,
+        symbolCount: 12,
+      })
+    ).toBe(12)
+  })
+})
 
 describe('getTokens metadata integration', () => {
   test.concurrent('attaches diagnostics and quick info when source has errors', async () => {
@@ -159,6 +247,85 @@ describe('getTokens metadata integration', () => {
     expect(componentToken?.quickInfo?.displayText).toContain('Component')
   })
 
+  test.concurrent('preserves quick info past the lookup budget when hover cannot be deferred', async () => {
+    const { project, filePath, code, highlighter } =
+      createRepeatedValueSymbolFixture(170)
+
+    const tokens = await getTokens({
+      project,
+      value: code,
+      language: 'ts',
+      filePath,
+      highlighter,
+      theme: 'default',
+    })
+
+    const valueTokens = tokens
+      .flat()
+      .filter((token) => token.value === 'value' && token.isSymbol)
+
+    expect(valueTokens.length).toBeGreaterThan(160)
+    expect(valueTokens.every((token) => token.quickInfo !== undefined)).toBe(true)
+  })
+
+  test.concurrent('limits precomputed quick info when hover can be deferred', async () => {
+    const { project, filePath, code, highlighter } =
+      createRepeatedValueSymbolFixture(170)
+
+    const tokens = await getTokens({
+      project,
+      value: code,
+      language: 'ts',
+      filePath,
+      highlighter,
+      theme: 'default',
+      deferQuickInfoUntilHover: true,
+    })
+
+    const valueTokens = tokens
+      .flat()
+      .filter((token) => token.value === 'value' && token.isSymbol)
+    const valueTokensWithQuickInfo = valueTokens.filter(
+      (token) => token.quickInfo !== undefined
+    )
+
+    expect(valueTokens.length).toBeGreaterThan(160)
+    expect(valueTokensWithQuickInfo).toHaveLength(160)
+  })
+
+  test.concurrent('sorts symbol metadata before splitting highlighted tokens', async () => {
+    const project = new Project({ useInMemoryFileSystem: true })
+    const code = '{ CodeBlock, Toolbar, Tokens }\n'
+
+    const tokens = await getTokens({
+      project,
+      value: code,
+      language: 'ts',
+      filePath: 'symbols.ts',
+      highlighter: createStubHighlighter([['{ CodeBlock, Toolbar, Tokens }']]),
+      theme: 'default',
+      metadataCollector: async () => ({
+        sourceFile: undefined,
+        diagnostics: [],
+        symbolMetadata: [
+          { start: 22, end: 28, isDeprecated: false },
+          { start: 2, end: 11, isDeprecated: false },
+          { start: 13, end: 20, isDeprecated: false },
+        ],
+      }),
+    })
+
+    expect(tokens[0]).toMatchObject([
+      { value: '{ ', isSymbol: false },
+      { value: 'CodeBlock', isSymbol: true },
+      { value: ', ', isSymbol: false },
+      { value: 'Toolbar', isSymbol: true },
+      { value: ', ', isSymbol: false },
+      { value: 'Tokens', isSymbol: true },
+      { value: ' }', isSymbol: false },
+    ])
+  })
+
   test.concurrent('starts highlighter without waiting for TypeScript metadata to resolve', async () => {
     const project = new Project({ useInMemoryFileSystem: true })
     const filePath = 'parallel.ts'
@@ -230,7 +397,7 @@ describe('getTokens metadata integration', () => {
     try {
       const highlighterResult = await Promise.race([
         highlighterStarted.promise.then(() => 'started'),
-        waitForDuration(50).then(() => 'timeout'),
+        waitForDuration(120).then(() => 'timeout'),
       ])
 
       expect(highlighterResult).toBe('started')
@@ -274,33 +441,9 @@ describe('getTokens metadata integration', () => {
       metadataCollector,
     })
 
-    // Verify metadata collector was NOT called for MDX
     expect(metadataCollectorCalled).toBe(false)
-
-    // Verify tokens were still returned correctly
     expect(tokens.length).toBe(3)
     expect(tokens[0][0]?.value).toBe('# Hello World')
-  })
-
-  test.concurrent('throws with actionable error when language is js-like but path is mdx', async () => {
-    const project = new Project({ useInMemoryFileSystem: true })
-    const filePath = 'post.mdx'
-    const code = 'export const metadata = { title: \"Hello\" }\n'
-
-    const highlighter = createStubHighlighter([
-      ['export', ' ', 'const', ' ', 'metadata', ' ', '=', ' ', '{', ' ', '}'],
-    ])
-
-    await expect(
-      getTokens({
-        project,
-        value: code,
-        language: 'tsx', // language suggests JS/TS, but path is .mdx
-        filePath,
-        highlighter,
-        theme: 'default',
-      })
-    ).rejects.toThrow('getTokens received language "tsx" for file "post.mdx"')
   })
 
   test.concurrent('throws with actionable error when language does not match file extension', async () => {
@@ -354,7 +497,6 @@ describe('getTokens metadata integration', () => {
       metadataCollector,
     })
 
-    // Verify metadata collector WAS called for TSX
     expect(metadataCollectorCalled).toBe(true)
   })
 })

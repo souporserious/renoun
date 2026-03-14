@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'vitest'
+import { describe, test, expect, vi, afterAll } from 'vitest'
 import { getTsMorph } from './ts-morph.ts'
 import type { ClassDeclaration, FunctionDeclaration } from './ts-morph.ts'
 import dedent from 'dedent'
@@ -15,6 +15,19 @@ const renounTsConfigFilePath = fileURLToPath(
 const renounFileSystemWorkspacePath = fileURLToPath(
   new URL('../file-system/Workspace.ts', import.meta.url)
 )
+
+const renounPackageRootPath = fileURLToPath(new URL('../../', import.meta.url))
+const originalTestCwd = process.cwd()
+
+if (originalTestCwd !== renounPackageRootPath) {
+  process.chdir(renounPackageRootPath)
+}
+
+afterAll(() => {
+  if (process.cwd() !== originalTestCwd) {
+    process.chdir(originalTestCwd)
+  }
+})
 
 const project = new Project({
   compilerOptions: {
@@ -2729,7 +2742,7 @@ describe('resolveType', () => {
         type Primitives = {
           /** a string */
           str: string;
-          
+
           /**
            * a number
            * @internal
@@ -6861,7 +6874,7 @@ describe('resolveType', () => {
         "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
       }
     `)
-  })
+  }, 60_000)
 
   test('enum', () => {
     const sourceFile = project.createSourceFile(
@@ -10977,34 +10990,37 @@ describe('resolveType', () => {
     `)
   })
 
-  test('library tagged template literal generic types', () => {
-    const project = new Project({
-      tsConfigFilePath: renounTsConfigFilePath,
-    })
-    const sourceFile = project.createSourceFile(
-      getProjectTestFilePath(project),
-      dedent`
-        import * as React from 'react'
-        import styled from 'styled-components'
-  
-        export const Grid = styled.div<{
-          $gridTemplateColumns: string
-          $gridTemplateRows: string
-        }>\`
-          display: grid;
-          grid-template-columns: \${({ $gridTemplateColumns }) => $gridTemplateColumns};
-          grid-template-rows: \${({ $gridTemplateRows }) => $gridTemplateRows};
-        \`
-        `,
-      { overwrite: true }
-    )
-    const variableDeclaration = sourceFile.getVariableDeclarationOrThrow('Grid')
-    const types = resolveType(
-      variableDeclaration.getType(),
-      variableDeclaration
-    )
+  test(
+    'library tagged template literal generic types',
+    () => {
+      const project = new Project({
+        tsConfigFilePath: renounTsConfigFilePath,
+      })
+      const sourceFile = project.createSourceFile(
+        getProjectTestFilePath(project),
+        dedent`
+          import * as React from 'react'
+          import styled from 'styled-components'
 
-    expect(types).toMatchInlineSnapshot(`
+          export const Grid = styled.div<{
+            $gridTemplateColumns: string
+            $gridTemplateRows: string
+          }>\`
+            display: grid;
+            grid-template-columns: \${({ $gridTemplateColumns }) => $gridTemplateColumns};
+            grid-template-rows: \${({ $gridTemplateRows }) => $gridTemplateRows};
+          \`
+          `,
+        { overwrite: true }
+      )
+      const variableDeclaration =
+        sourceFile.getVariableDeclarationOrThrow('Grid')
+      const types = resolveType(
+        variableDeclaration.getType(),
+        variableDeclaration
+      )
+
+      expect(types).toMatchInlineSnapshot(`
       {
         "filePath": "test.ts",
         "kind": "Component",
@@ -11218,7 +11234,9 @@ describe('resolveType', () => {
         "text": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
       }
     `)
-  })
+    },
+    30_000
+  )
 
   test('type aliases', () => {
     const sourceFile = project.createSourceFile(

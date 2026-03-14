@@ -3,7 +3,7 @@ import { styled, type CSSObject } from 'restyle'
 import { rehypePlugins } from '@renoun/mdx/rehype'
 import { remarkPlugins } from '@renoun/mdx/remark'
 
-import { getTokens } from '../../project/client.ts'
+import { getTokens } from '../../analysis/node-client.ts'
 import { BASE_TOKEN_CLASS_NAME, getThemeColors } from '../../utils/get-theme.ts'
 import type { Token, TokenDiagnostic } from '../../utils/get-tokens.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
@@ -76,6 +76,8 @@ async function renderQuickInfo({
       language: 'typescript',
       languages: config.languages,
       theme: config.theme,
+      allowErrors: true,
+      waitForWarmResult: true,
     })
     displayTextTokens = tokens
   }

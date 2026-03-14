@@ -26,6 +26,7 @@ build
 dist
 
 # misc
+.cache
 .DS_Store
 *.pem
 yalc.lock

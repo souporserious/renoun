@@ -1,14 +1,76 @@
-import { fileURLToPath } from 'node:url'
+import type * as NodeUrl from 'node:url'
 
 import { getRootDirectory } from './get-root-directory.ts'
+import { reportBestEffortError } from './best-effort.ts'
+import {
+  joinPaths,
+  normalizeSlashes,
+  trimLeadingSlashes,
+} from './path-core.ts'
 
 export type PathLike = string | URL
+
+function getNodeUrl(): typeof NodeUrl | undefined {
+  if (
+    typeof process === 'undefined' ||
+    typeof process.getBuiltinModule !== 'function'
+  ) {
+    return undefined
+  }
+
+  return (
+    (process.getBuiltinModule('node:url') as typeof NodeUrl | undefined) ??
+    (process.getBuiltinModule('url') as typeof NodeUrl | undefined)
+  )
+}
+
+function fileUrlToPath(url: URL): string {
+  const nodeUrl = getNodeUrl()
+
+  if (nodeUrl?.fileURLToPath) {
+    return nodeUrl.fileURLToPath(url)
+  }
+
+  const decodedPathname = decodeURIComponent(url.pathname)
+
+  if (url.host) {
+    return `//${url.host}${decodedPathname}`
+  }
+
+  if (/^\/[A-Za-z]:/.test(decodedPathname)) {
+    return decodedPathname.slice(1)
+  }
+
+  return decodedPathname
+}
+export {
+  baseName,
+  directoryName,
+  ensureRelativePath,
+  extensionName,
+  isAbsolutePath,
+  joinPaths,
+  normalizePath,
+  normalizePathKey,
+  normalizeSlashes,
+  normalizeWorkspaceRelativePath,
+  relativePath,
+  removeAllExtensions,
+  removeExtension,
+  removeOrderPrefixes,
+  trimLeadingCurrentDirPrefix,
+  trimLeadingDotPrefix,
+  trimLeadingDotsSegment,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
+} from './path-core.ts'
 
 /** Convert a `PathLike` input into a usable file system path string. */
 export function pathLikeToString(path: PathLike): string {
   if (path instanceof URL) {
     if (path.protocol === 'file:') {
-      return fileURLToPath(path)
+      return fileUrlToPath(path)
     }
 
     return path.href
@@ -16,9 +78,9 @@ export function pathLikeToString(path: PathLike): string {
 
   if (typeof path === 'string' && path.startsWith('file:')) {
     try {
-      return fileURLToPath(new URL(path))
-    } catch {
-      // Ignore parsing errors and fall back to the original string.
+      return fileUrlToPath(new URL(path))
+    } catch (error) {
+      reportBestEffortError('utils/path', error)
     }
   }
 
@@ -28,9 +90,8 @@ export function pathLikeToString(path: PathLike): string {
 const SCHEME_RESOLVERS: Record<string, (path: string) => string> = {
   workspace: (schemePath: string) => {
     const workspaceRoot = normalizeSlashes(getRootDirectory())
-    const normalizedSchemePath = normalizeSlashes(schemePath).replace(
-      /^\/+/,
-      ''
+    const normalizedSchemePath = trimLeadingSlashes(
+      normalizeSlashes(schemePath)
     )
 
     if (normalizedSchemePath.length === 0) {
@@ -55,169 +116,6 @@ function parseSchemePath(path: string) {
   }
 }
 
-/** Normalize Windows backslashes to POSIX forward slashes. */
-export function normalizeSlashes(path: string): string {
-  return path.replace(/\\+/g, '/')
-}
-
-/** Remove trailing forward slashes from a path-like string. */
-export function trimTrailingSlashes(value: string): string {
-  let end = value.length
-  // 47 is '/'
-  while (end > 0 && value.charCodeAt(end - 1) === 47) end--
-  return value.slice(0, end)
-}
-
-/** Normalize a path to be relative to the current working directory. */
-export function normalizePath(path: string): string {
-  const normalizedSlashes = normalizeSlashes(path)
-  // Handle current directory special case
-  if (normalizedSlashes === '.') {
-    return './'
-  }
-  // Check for actual relative paths (./ or ../) not hidden files (.gitkeep)
-  const isCurrentDirectoryRelativePath = normalizedSlashes.startsWith('./')
-  const isAncestorRelativePath = normalizedSlashes.startsWith('../')
-  return isCurrentDirectoryRelativePath || isAncestorRelativePath
-    ? normalizedSlashes
-    : `./${normalizedSlashes}`
-}
-
-/** Get the base name of a file system path e.g. /path/to/file.ts -> file */
-export function baseName(path: string, extension?: string): string {
-  path = normalizeSlashes(path)
-  const base = path.slice(path.lastIndexOf('/') + 1)
-  if (extension && base.endsWith(extension)) {
-    return base.slice(0, -extension.length)
-  }
-  return base
-}
-
-/** Get the extension from a file path e.g. readme.md -> .md */
-export function extensionName(path: string): string {
-  path = normalizeSlashes(path)
-  const dotIndex = path.lastIndexOf('.')
-  const slashIndex = path.lastIndexOf('/')
-  if (dotIndex > slashIndex) {
-    return path.slice(dotIndex)
-  }
-  return ''
-}
-
-/** Get the directory name from a file path e.g. /path/to/file.ts -> /path/to */
-export function directoryName(path: string): string {
-  path = normalizeSlashes(path)
-  const slashIndex = path.lastIndexOf('/')
-  if (slashIndex === -1) return '.'
-  if (slashIndex === 0) return '/'
-  return path.slice(0, slashIndex)
-}
-
-/** Remove the extension from a file path e.g. readme.md -> readme */
-export function removeExtension(filePath: string): string {
-  filePath = normalizeSlashes(filePath)
-  const lastDotIndex = filePath.lastIndexOf('.')
-  const lastSlashIndex = filePath.lastIndexOf('/')
-
-  if (lastDotIndex > lastSlashIndex) {
-    return filePath.slice(0, lastDotIndex)
-  }
-
-  return filePath
-}
-
-/** Remove all extensions from a file path e.g. Button.examples.tsx -> Button */
-export function removeAllExtensions(filePath: string): string {
-  filePath = normalizeSlashes(filePath)
-  const lastSlashIndex = filePath.lastIndexOf('/')
-  const filenNameStartOffset = 1
-  const fileName = filePath.slice(lastSlashIndex + filenNameStartOffset)
-
-  // Find the first dot that's not at position 0 (hidden files start with .)
-  let firstDotIndex = fileName.indexOf('.')
-  if (firstDotIndex === 0) {
-    // This is a hidden file, look for the next dot
-    firstDotIndex = fileName.indexOf('.', 1)
-  }
-
-  if (firstDotIndex === -1) {
-    return filePath // No extension found
-  }
-
-  return filePath.slice(
-    0,
-    lastSlashIndex + filenNameStartOffset + firstDotIndex
-  )
-}
-
-/** Remove order prefixes from a file path e.g. 01.intro -> intro */
-export function removeOrderPrefixes(filePath: string): string {
-  filePath = normalizeSlashes(filePath)
-  return filePath.replace(/(^|\/)\d+\./g, '$1')
-}
-
-/** Join multiple paths together */
-export function joinPaths(...paths: (string | undefined)[]): string {
-  if (paths.length === 0) {
-    return '.'
-  }
-
-  const isAbsolute = normalizeSlashes(paths.at(0)!).startsWith('/')
-  const segments: string[] = []
-  const lastSegmentIndex = paths.length - 1
-  let hasTrailingSlash = false
-
-  for (let index = 0; index < paths.length; index++) {
-    const path = paths[index]
-
-    if (!path) {
-      continue
-    }
-
-    if (index === lastSegmentIndex) {
-      hasTrailingSlash = path.endsWith('/') || path.endsWith('\\')
-    }
-
-    for (const segment of normalizeSlashes(path).split('/')) {
-      if (segment === '..') {
-        if (isAbsolute || segments.length > 0) {
-          segments.pop() // Go up one directory
-        }
-      } else if (segment && segment !== '.') {
-        segments.push(segment)
-      }
-    }
-  }
-
-  const resolvedPath = segments.join('/')
-  let finalPath = isAbsolute ? `/${resolvedPath}` : resolvedPath || '.'
-
-  if (hasTrailingSlash && finalPath !== '/') {
-    finalPath += '/'
-  }
-
-  return finalPath
-}
-
-/** Get the relative path from one file to another */
-export function relativePath(from: string, to: string): string {
-  const fromParts = normalizeSlashes(from).split('/').filter(Boolean)
-  const toParts = normalizeSlashes(to).split('/').filter(Boolean)
-
-  let commonIndex = 0
-  while (
-    commonIndex < fromParts.length &&
-    fromParts[commonIndex] === toParts[commonIndex]
-  ) {
-    commonIndex++
-  }
-
-  const fromRemaining = fromParts.slice(commonIndex).map(() => '..')
-  const toRemaining = toParts.slice(commonIndex)
-
-  return [...fromRemaining, ...toRemaining].join('/')
-}
-
 /** Resolve a path scheme relative to the current working directory. */
 export function resolveSchemePath(path: PathLike): string {
   const normalizedPath = pathLikeToString(path)
@@ -235,9 +133,4 @@ export function resolveSchemePath(path: PathLike): string {
 
   // Return an absolute path resolved from the workspace root
   return resolver(parsed.rest)
-}
-
-/** Ensure a path is relative */
-export function ensureRelativePath(path: string = '.') {
-  return path.startsWith('.') ? path : `./${path}`
 }

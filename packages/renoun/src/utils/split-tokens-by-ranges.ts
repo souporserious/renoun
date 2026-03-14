@@ -5,17 +5,18 @@ export function splitTokenByRanges<
   let currentPosition = 0
   let splitTokens: Token[] = []
   let tokenGlobalStart = token.start
+  const tokenValueLength = token.value.length
 
-  // Adjust ranges to token range
-  let localRanges = globalRanges
-    .map((range) => ({
-      start: range.start - tokenGlobalStart,
-      end: range.end - tokenGlobalStart,
-    }))
-    // Only include ranges that overlap with the token
-    .filter((range) => range.start < token.value.length && range.end > 0)
+  for (const globalRange of globalRanges) {
+    const range = {
+      start: globalRange.start - tokenGlobalStart,
+      end: globalRange.end - tokenGlobalStart,
+    }
 
-  localRanges.forEach((range) => {
+    if (range.start >= tokenValueLength || range.end <= 0) {
+      continue
+    }
+
     if (range.start > currentPosition) {
       splitTokens.push({
         ...token,
@@ -34,14 +35,14 @@ export function splitTokenByRanges<
       })
       currentPosition = range.end
     }
-  })
+  }
 
-  if (currentPosition < token.value.length) {
+  if (currentPosition < tokenValueLength) {
     splitTokens.push({
       ...token,
       value: token.value.slice(currentPosition),
       start: tokenGlobalStart + currentPosition,
-      end: tokenGlobalStart + token.value.length,
+      end: tokenGlobalStart + tokenValueLength,
     })
   }
 

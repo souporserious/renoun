@@ -1,8 +1,91 @@
-import { existsSync, readFileSync, realpathSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
-import { cwd, env } from 'node:process'
+import type * as NodeFs from 'node:fs'
+import type * as NodePath from 'node:path'
 
 const rootDirectoryCache: Map<string, string> = new Map()
+
+function getBuiltinModule<TModule>(name: string): TModule | undefined {
+  if (
+    typeof process === 'undefined' ||
+    typeof process.getBuiltinModule !== 'function'
+  ) {
+    return undefined
+  }
+
+  return (
+    (process.getBuiltinModule(`node:${name}`) as TModule | undefined) ??
+    (process.getBuiltinModule(name) as TModule | undefined)
+  )
+}
+
+function getNodeFs(): typeof NodeFs {
+  const nodeFs = getBuiltinModule<typeof NodeFs>('fs')
+
+  if (!nodeFs) {
+    throw new Error(
+      '[renoun] Workspace root resolution requires a Node.js runtime.'
+    )
+  }
+
+  return nodeFs
+}
+
+function getNodePath(): typeof NodePath {
+  const nodePath = getBuiltinModule<typeof NodePath>('path')
+
+  if (!nodePath) {
+    throw new Error(
+      '[renoun] Workspace root resolution requires a Node.js runtime.'
+    )
+  }
+
+  return nodePath
+}
+
+function getCurrentWorkingDirectory(): string {
+  if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
+    return process.cwd()
+  }
+
+  throw new Error('[renoun] Workspace root resolution requires a Node.js runtime.')
+}
+
+export function resolveCanonicalPath(pathToResolve: string): string {
+  const { realpathSync } = getNodeFs()
+  const { resolve } = getNodePath()
+
+  try {
+    return realpathSync(pathToResolve)
+  } catch {
+    return resolve(pathToResolve)
+  }
+}
+
+export function resolvePersistentProjectRootDirectory(
+  pathToResolve: string
+): string {
+  const { existsSync } = getNodeFs()
+  const { basename, dirname, join } = getNodePath()
+  const canonicalPath = resolveCanonicalPath(pathToResolve)
+  const appDirectory = dirname(canonicalPath)
+  const renounDirectory = dirname(appDirectory)
+
+  if (
+    basename(appDirectory) !== 'app' ||
+    basename(renounDirectory) !== '.renoun'
+  ) {
+    return canonicalPath
+  }
+
+  const projectRoot = dirname(renounDirectory)
+  if (
+    !existsSync(join(projectRoot, 'package.json')) &&
+    !existsSync(join(projectRoot, 'pnpm-workspace.yaml'))
+  ) {
+    return canonicalPath
+  }
+
+  return resolveCanonicalPath(projectRoot)
+}
 
 /**
  * Validate that a runtime directory path is safe to use.
@@ -18,6 +101,9 @@ const rootDirectoryCache: Map<string, string> = new Map()
  * - Arbitrary directory injection
  */
 function isValidRuntimeDirectory(runtimePath: string): boolean {
+  const { existsSync, realpathSync } = getNodeFs()
+  const { join } = getNodePath()
+
   // Must exist
   if (!existsSync(runtimePath)) {
     return false
@@ -54,14 +140,19 @@ function isValidRuntimeDirectory(runtimePath: string): boolean {
 }
 
 /** Resolve the root of the workspace, using bun, npm, pnpm, or yarn. */
-export function getRootDirectory(startDirectory: string = cwd()): string {
+export function getRootDirectory(
+  startDirectory: string = getCurrentWorkingDirectory()
+): string {
+  const { existsSync, readFileSync } = getNodeFs()
+  const { dirname, join, resolve } = getNodePath()
+
   // In application mode, use the runtime directory as the root
   // This ensures paths resolve relative to the runtime directory
   if (
-    env.RENOUN_RUNTIME_DIRECTORY &&
-    isValidRuntimeDirectory(env.RENOUN_RUNTIME_DIRECTORY)
+    process.env.RENOUN_RUNTIME_DIRECTORY &&
+    isValidRuntimeDirectory(process.env.RENOUN_RUNTIME_DIRECTORY)
   ) {
-    return env.RENOUN_RUNTIME_DIRECTORY
+    return process.env.RENOUN_RUNTIME_DIRECTORY
   }
 
   if (rootDirectoryCache.has(startDirectory)) {

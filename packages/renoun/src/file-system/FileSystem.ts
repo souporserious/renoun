@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { Minimatch } from 'minimatch'
 import type { SyntaxKind, ts } from '../utils/ts-morph.ts'
 
@@ -8,8 +9,9 @@ import {
   getFileExportStaticValue,
   getOutlineRanges,
   resolveTypeAtLocation,
-} from '../project/client.ts'
-import type { ProjectOptions } from '../project/types.ts'
+  resolveTypeAtLocationWithDependencies,
+} from '../analysis/node-client.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
 import {
   directoryName,
   joinPaths,
@@ -17,6 +19,8 @@ import {
   relativePath,
   removeAllExtensions,
   removeOrderPrefixes,
+  trimLeadingDotSlash,
+  trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
 import { parseJsonWithComments } from '../utils/parse-json-with-comments.ts'
@@ -100,6 +104,9 @@ export type FileSystem = BaseFileSystem &
 export interface FileSystemOptions {
   /** Path to the tsconfig.json file to use when analyzing types and determining if a file is excluded. */
   tsConfigPath?: string
+
+  /** Optional base directory for persisted cache files. */
+  outputDirectory?: string
 }
 
 export interface TsConfig {
@@ -117,12 +124,80 @@ export abstract class BaseFileSystem {
   #tsConfig?: TsConfig
   #tsConfigPromise?: Promise<TsConfig | undefined>
   #exclude?: Minimatch[]
+  readonly outputDirectory?: string
+
+  /**
+   * Optional workspace change token used for fast cache revalidation.
+   *
+   * Implementations should return a deterministic token for a scoped root path
+   * or `null` when a token cannot be produced.
+   */
+  getWorkspaceChangeToken?(rootPath: string): Promise<string | null>
+
+  /**
+   * Optional stable identity used to scope persistent cache keys for different
+   * file-system backends that may expose the same workspace-relative paths.
+   */
+  getCacheIdentity?(): unknown
+
+  /**
+   * Optional hint indicating whether persisted cache entries are deterministic
+   * for the current file-system state.
+   *
+   * Returning `false` allows callers to skip persistence for cache domains that
+   * cannot be safely revalidated (for example moving branch refs).
+   */
+  isPersistentCacheDeterministic?(): boolean
+
+  /**
+   * Optional changed-path resolver used when a workspace token changes.
+   *
+   * Implementations should return workspace-relative POSIX paths that changed
+   * since `previousToken`, scoped to `rootPath`. Return `null` when the change
+   * set cannot be determined.
+   */
+  getWorkspaceChangedPathsSinceToken?(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[] | null>
+
+  /**
+   * Whether this file system should use persistent cache by default.
+   *
+   * Implementations that represent real and stable storage (for example local
+   * disk or git-backed stores) should return `true`. In-memory implementations
+   * should return `false`.
+   */
+  usesPersistentCacheByDefault(): boolean {
+    return false
+  }
+
+  /**
+   * Whether directory `mtime` signatures should be tracked for snapshot
+   * dependency validation in non-strict hermetic mode.
+   */
+  usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return false
+  }
+
+  /**
+   * Whether persisted snapshot file dependencies should be validated in
+   * non-strict hermetic mode.
+   */
+  validatesPersistedFileDependenciesByDefault(): boolean {
+    return false
+  }
 
   constructor(options: FileSystemOptions = {}) {
     this.#tsConfigPath = options.tsConfigPath || 'tsconfig.json'
+    this.outputDirectory =
+      typeof options.outputDirectory === 'string' &&
+      options.outputDirectory.trim() !== ''
+        ? resolve(options.outputDirectory)
+        : undefined
   }
 
-  abstract getProjectOptions(): ProjectOptions
+  abstract getAnalysisOptions(): AnalysisOptions
 
   abstract getAbsolutePath(path: string): string
 
@@ -141,13 +216,11 @@ export abstract class BaseFileSystem {
       return joinPaths('/', options.basePath)
     }
 
-    const resolvedPath = removeAllExtensions(
-      removeOrderPrefixes(rootRelativePath)
+    const resolvedPath = trimTrailingSlashes(
+      trimLeadingDotSlash(
+        removeAllExtensions(removeOrderPrefixes(rootRelativePath))
+      )
     )
-      // remove leading dot
-      .replace(/^\.\//, '')
-      // remove trailing slash
-      .replace(/\/$/, '')
 
     return joinPaths('/', options.basePath, resolvedPath)
   }
@@ -327,7 +400,7 @@ export abstract class BaseFileSystem {
   abstract isFilePathGitIgnored(filePath: string): boolean
 
   getFileExports(filePath: string) {
-    return getFileExports(filePath, this.getProjectOptions())
+    return getFileExports(filePath, this.getAnalysisOptions())
   }
 
   getFileExportMetadata(
@@ -341,7 +414,7 @@ export abstract class BaseFileSystem {
       filePath,
       position,
       kind,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 
@@ -356,12 +429,12 @@ export abstract class BaseFileSystem {
       position,
       kind,
       includeDependencies,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 
   getOutlineRanges(filePath: string) {
-    return getOutlineRanges(filePath, this.getProjectOptions())
+    return getOutlineRanges(filePath, this.getAnalysisOptions())
   }
 
   async getFoldingRanges(filePath: string) {
@@ -382,10 +455,26 @@ export abstract class BaseFileSystem {
       filePath,
       position,
       kind,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 
+  resolveTypeAtLocationWithDependencies(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    filter?: TypeFilter
+  ) {
+    return resolveTypeAtLocationWithDependencies(
+      filePath,
+      position,
+      kind,
+      filter,
+      this.getAnalysisOptions()
+    )
+  }
+
+  /** @deprecated Use `resolveTypeAtLocationWithDependencies` for dependency-aware results. */
   resolveTypeAtLocation(
     filePath: string,
     position: number,
@@ -397,7 +486,7 @@ export abstract class BaseFileSystem {
       position,
       kind,
       filter,
-      this.getProjectOptions()
+      this.getAnalysisOptions()
     )
   }
 }

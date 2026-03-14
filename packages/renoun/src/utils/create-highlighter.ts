@@ -1,11 +1,11 @@
-import type { ConfigurationOptions } from '../components/Config/types.ts'
+import type { HighlighterInitializationOptions } from './highlighter-options.ts'
 import { Tokenizer } from './create-tokenizer.ts'
 import { getGrammar } from './get-grammar.ts'
 import { getTheme } from './get-theme.ts'
 
 /** Converts a string of code to an array of highlighted tokens. */
 export async function createHighlighter(
-  options: Partial<Pick<ConfigurationOptions, 'theme' | 'languages'>>
+  options: HighlighterInitializationOptions
 ) {
   const tokenizer = new Tokenizer({
     getGrammar: (scopeName) => getGrammar(scopeName, options.languages),

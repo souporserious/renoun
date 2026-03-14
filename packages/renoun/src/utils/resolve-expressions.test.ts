@@ -79,17 +79,98 @@ describe('resolveLiteralExpression', () => {
     })
   })
 
-  test.concurrent('array literal expressions', () => {
+  test.concurrent(
+    'array literal expressions via resolveLiteralExpression',
+    () => {
+      const sourceFile = project.createSourceFile(
+        'test.ts',
+        'const test = [1, 2, 3];',
+        { overwrite: true }
+      )
+      const arrayLiteral = sourceFile.getFirstDescendantByKind(
+        SyntaxKind.ArrayLiteralExpression
+      )
+
+      expect(resolveLiteralExpression(arrayLiteral!)).toEqual([1, 2, 3])
+    }
+  )
+
+  test.concurrent('parenthesized expressions', () => {
     const sourceFile = project.createSourceFile(
       'test.ts',
-      'const test = [1, 2, 3];',
+      'const test = (123);',
       { overwrite: true }
     )
-    const arrayLiteral = sourceFile.getFirstDescendantByKind(
-      SyntaxKind.ArrayLiteralExpression
+    const numericLiteral = sourceFile.getFirstDescendantByKind(
+      SyntaxKind.ParenthesizedExpression
     )
 
-    expect(resolveLiteralExpression(arrayLiteral!)).toEqual([1, 2, 3])
+    expect(resolveLiteralExpression(numericLiteral!)).toBe(123)
+  })
+
+  test.concurrent('prefix unary expressions', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      'const test = -123;',
+      { overwrite: true }
+    )
+    const numericLiteral = sourceFile.getFirstDescendantByKind(
+      SyntaxKind.PrefixUnaryExpression
+    )
+
+    expect(resolveLiteralExpression(numericLiteral!)).toBe(-123)
+  })
+
+  test.concurrent('conditional expressions', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      'const test = true ? 1 : 2;',
+      { overwrite: true }
+    )
+    const conditionalExpression = sourceFile.getFirstDescendantByKind(
+      SyntaxKind.ConditionalExpression
+    )
+
+    expect(resolveLiteralExpression(conditionalExpression!)).toBe(1)
+  })
+
+  test.concurrent('binary expressions', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      'const test = 1 + 2;',
+      { overwrite: true }
+    )
+    const binaryExpression = sourceFile.getFirstDescendantByKind(
+      SyntaxKind.BinaryExpression
+    )
+
+    expect(resolveLiteralExpression(binaryExpression!)).toBe(3)
+  })
+
+  test.concurrent('template literals', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      'const test = `hello`;',
+      { overwrite: true }
+    )
+    const templateExpression = sourceFile.getFirstDescendantByKind(
+      SyntaxKind.NoSubstitutionTemplateLiteral
+    )
+
+    expect(resolveLiteralExpression(templateExpression!)).toBe('hello')
+  })
+
+  test.concurrent('template literals with substitutions', () => {
+    const sourceFile = project.createSourceFile(
+      'test.ts',
+      'const base = "base"; const test = `content/${base}`;',
+      { overwrite: true }
+    )
+    const templateExpression = sourceFile.getFirstDescendantByKind(
+      SyntaxKind.TemplateExpression
+    )
+
+    expect(resolveLiteralExpression(templateExpression!)).toBe('content/base')
   })
 
   test.concurrent('identifiers', () => {

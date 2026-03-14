@@ -1,19 +1,29 @@
 import { Minimatch } from 'minimatch'
 import { createSlug } from '@renoun/mdx/utils'
 
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { parseBooleanProcessEnv } from '../utils/env.ts'
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import {
   baseName,
   directoryName,
   ensureRelativePath,
   joinPaths,
+  normalizePathKey,
   normalizeSlashes,
+  normalizeWorkspaceRelativePath as normalizeWorkspaceRelative,
   relativePath,
   resolveSchemePath,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
   trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
+import { FS_STRUCTURE_CACHE_VERSION, createCacheNodeKey } from './cache-key.ts'
+import { type Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
@@ -33,7 +43,8 @@ import {
   type ModuleLoaders,
   type PackageStructure,
   type WithDefaultTypes,
-} from './entries.tsx'
+} from './entries.ts'
+import { Session } from './Session.ts'
 
 interface PackageJson {
   name?: string
@@ -121,12 +132,47 @@ function resolveSearchStartDirectory(
   return normalizeSlashes(getRootDirectory())
 }
 
-function normalizeWorkspaceRelative(path: string) {
-  const normalized = normalizeSlashes(path)
-  if (!normalized || normalized === '.' || normalized === './') {
-    return ''
+function createStructureNodeKey(namespace: string, payload: unknown) {
+  return createCacheNodeKey(namespace, payload)
+}
+
+function createDirectoryFilterSignature(
+  session: Session,
+  filter: unknown
+): string {
+  if (!filter) {
+    return 'filter:none'
   }
-  return normalized.replace(/^\.\/+/, '')
+
+  if (typeof filter === 'function') {
+    return session.getFunctionId(filter, 'filter')
+  }
+
+  if (typeof filter === 'string') {
+    return `pattern:${filter}`
+  }
+
+  if (filter instanceof Minimatch) {
+    return `pattern:${filter.pattern}`
+  }
+
+  return `filter:${session.createValueSignature(filter, 'filter')}`
+}
+
+function createDirectorySortSignature(session: Session, sort: unknown): string {
+  if (!sort) {
+    return 'sort:none'
+  }
+
+  if (typeof sort === 'function') {
+    return session.getFunctionId(sort, 'sort')
+  }
+
+  if (typeof sort === 'string') {
+    return `sort:string:${sort}`
+  }
+
+  return `sort:${session.createValueSignature(sort, 'sort')}`
 }
 
 function parsePnpmWorkspacePackages(source: string) {
@@ -413,6 +459,9 @@ export interface PackageOptions<
    * will be invoked with the export path (e.g. "remark/add-sections").
    */
   loader?: ExportLoaders | PackageExportLoader<ModuleExports<any>>
+
+  /** Optional cache provider for package-level caches. */
+  cache?: Cache
 }
 
 type PackageEntryType = 'exports' | 'imports'
@@ -553,7 +602,7 @@ function normalizeExportSubpath(exportPath: string) {
     return ''
   }
 
-  let normalized = exportPath.replace(/^\.\/+/, '')
+  let normalized = trimLeadingDotSlash(exportPath)
   const wildcardIndex = normalized.indexOf('*')
 
   if (wildcardIndex !== -1) {
@@ -572,7 +621,7 @@ function isDirectoryLikeExport(exportPath: string) {
     return false
   }
 
-  const normalized = exportPath.replace(/^\.\/+/, '')
+  const normalized = trimLeadingDotSlash(exportPath)
 
   if (!normalized) {
     return true
@@ -611,7 +660,7 @@ function normalizePackageExportSpecifier(
     }
   }
 
-  normalized = normalized.replace(/^\/+/, '')
+  normalized = trimLeadingSlashes(normalized)
 
   if (!normalized || normalized === '.' || normalized === './') {
     return ''
@@ -782,6 +831,160 @@ export interface ResolveExportSourcesOptions {
 
 type FlatExportMap = Record<string, string>
 
+interface ExportSourceDependencyProbeRecorder {
+  recordProbe(path: string): void
+}
+
+interface ResolveExportSourcesCacheEntry {
+  results: ResolvedExportSource[]
+  dependencySignatures: Map<string, string>
+}
+
+const resolveExportSourcesSharedCacheByFileSystem = new WeakMap<
+  FileSystem,
+  Map<string, ResolveExportSourcesCacheEntry>
+>()
+
+function getResolveExportSourcesSharedCache(fileSystem: FileSystem) {
+  const existing = resolveExportSourcesSharedCacheByFileSystem.get(fileSystem)
+  if (existing) {
+    return existing
+  }
+
+  const created = new Map<string, ResolveExportSourcesCacheEntry>()
+  resolveExportSourcesSharedCacheByFileSystem.set(fileSystem, created)
+  return created
+}
+
+function createResolveExportSourcesSharedCacheKey(
+  packagePath: string,
+  cacheKey: string
+) {
+  return `${normalizePathKey(packagePath)}:${cacheKey}`
+}
+
+function toRewriteCacheSignature(
+  rewrite: NonNullable<ResolveExportSourcesOptions['rewrites']>[number]
+): { from: string; to: string } {
+  const from =
+    typeof rewrite.from === 'string'
+      ? `string:${rewrite.from}`
+      : `regexp:${rewrite.from.source}/${rewrite.from.flags}`
+
+  return {
+    from,
+    to: rewrite.to,
+  }
+}
+
+function normalizeResolveExportSourceConditionsForCache(
+  pkg: PackageJson,
+  conditions: ResolveExportSourcesOptions['conditions']
+): Record<string, unknown> | string[] | undefined {
+  if (typeof conditions === 'function') {
+    const normalizedByExportKey: Record<string, string[]> = {}
+    const exportsField = pkg.exports
+
+    if (exportsField && typeof exportsField === 'object') {
+      const sortedExportKeys = Object.keys(exportsField).sort((a, b) =>
+        a.localeCompare(b)
+      )
+
+      for (const exportKey of sortedExportKeys) {
+        const target = exportsField[exportKey as keyof typeof exportsField]
+        if (!target || typeof target !== 'object') {
+          continue
+        }
+
+        normalizedByExportKey[exportKey] = conditions(exportKey).map((entry) =>
+          String(entry)
+        )
+      }
+    }
+
+    return {
+      type: 'callback',
+      byExportKey: normalizedByExportKey,
+    }
+  }
+
+  if (Array.isArray(conditions)) {
+    return [...conditions]
+  }
+
+  return undefined
+}
+
+function normalizeResolveExportSourcesOptionsForCache(
+  pkg: PackageJson,
+  config: ResolveExportSourcesOptions
+): Record<string, unknown> {
+  const normalizedOverrides: Record<string, string[]> = {}
+  if (config.overrides) {
+    const sortedOverrideKeys = Object.keys(config.overrides).sort((a, b) =>
+      a.localeCompare(b)
+    )
+
+    for (const key of sortedOverrideKeys) {
+      const value = config.overrides[key]
+      if (!value) {
+        continue
+      }
+
+      normalizedOverrides[key] = (Array.isArray(value) ? value : [value]).map(
+        (entry) => String(entry)
+      )
+    }
+  }
+
+  return {
+    conditions: normalizeResolveExportSourceConditionsForCache(
+      pkg,
+      config.conditions
+    ),
+    overrides: normalizedOverrides,
+    rewrites: Array.isArray(config.rewrites)
+      ? config.rewrites.map((rewrite) => toRewriteCacheSignature(rewrite))
+      : undefined,
+    sourceRoots: Array.isArray(config.sourceRoots)
+      ? [...config.sourceRoots]
+      : undefined,
+  }
+}
+
+function cloneResolvedExportSources(
+  results: ResolvedExportSource[]
+): ResolvedExportSource[] {
+  return results.map((result) => ({
+    ...result,
+    sources: [...result.sources],
+  }))
+}
+
+function resolvePackageProbePath(packageRoot: string, path: string): string {
+  if (
+    path.startsWith('/') ||
+    /^[A-Za-z]:\//.test(path) ||
+    path.startsWith('//')
+  ) {
+    return normalizeSlashes(path)
+  }
+
+  return normalizeSlashes(joinPaths(packageRoot, path))
+}
+
+function recordExportSourceProbe(
+  probeRecorder: ExportSourceDependencyProbeRecorder | undefined,
+  packageRoot: string,
+  path: string
+): void {
+  if (!probeRecorder) {
+    return
+  }
+
+  probeRecorder.recordProbe(resolvePackageProbePath(packageRoot, path))
+}
+
 const DEFAULT_EXPORT_CONDITIONS = [
   'types',
   'import',
@@ -892,7 +1095,8 @@ function resolveFromDeclarationMaps(
   packageRoot: string,
   pkg: PackageJson,
   exportKey: string,
-  builtTarget: string
+  builtTarget: string,
+  probeRecorder?: ExportSourceDependencyProbeRecorder
 ): string[] | null {
   // 1. Try root ts types (pkg.types / pkg.typings) for "." export.
   if (exportKey === '.' && (pkg.types || pkg.typings)) {
@@ -900,7 +1104,8 @@ function resolveFromDeclarationMaps(
     const fromTypes = resolveSourcesFromDtsMap(
       fileSystem,
       packageRoot,
-      resolvedTypePath
+      resolvedTypePath,
+      probeRecorder
     )
     if (fromTypes.length > 0) return fromTypes
   }
@@ -910,7 +1115,8 @@ function resolveFromDeclarationMaps(
   const fromSibling = resolveSourcesFromDtsMap(
     fileSystem,
     packageRoot,
-    dtsFilePath
+    dtsFilePath,
+    probeRecorder
   )
   if (fromSibling.length > 0) return fromSibling
 
@@ -920,13 +1126,16 @@ function resolveFromDeclarationMaps(
 function resolveSourcesFromDtsMap(
   fileSystem: FileSystem,
   packageRoot: string,
-  dtsRelPath: string
+  dtsRelPath: string,
+  probeRecorder?: ExportSourceDependencyProbeRecorder
 ): string[] {
   const dtsPath = joinPaths(packageRoot, dtsRelPath)
+  recordExportSourceProbe(probeRecorder, packageRoot, dtsRelPath)
   if (!safeFileExistsSync(fileSystem, dtsPath)) return []
 
   const mapRel = dtsRelPath + '.map'
   const mapPath = joinPaths(packageRoot, mapRel)
+  recordExportSourceProbe(probeRecorder, packageRoot, mapRel)
   if (!safeFileExistsSync(fileSystem, mapPath)) return []
 
   let mapJson: any
@@ -947,6 +1156,7 @@ function resolveSourcesFromDtsMap(
     if (typeof s !== 'string') continue
     const candidateRel = normalizeSlashes(joinPaths(mapDirRel, s))
     const candidatePath = joinPaths(packageRoot, candidateRel)
+    recordExportSourceProbe(probeRecorder, packageRoot, candidateRel)
     if (safeFileExistsSync(fileSystem, candidatePath)) {
       resolved.push(candidateRel)
     }
@@ -962,10 +1172,12 @@ function resolveSourcesFromDtsMap(
 function resolveFromJsSourceMap(
   fileSystem: FileSystem,
   packageRoot: string,
-  builtTarget: string
+  builtTarget: string,
+  probeRecorder?: ExportSourceDependencyProbeRecorder
 ): string[] {
   const mapRel = builtTarget + '.map'
   const mapPath = joinPaths(packageRoot, mapRel)
+  recordExportSourceProbe(probeRecorder, packageRoot, mapRel)
   if (!safeFileExistsSync(fileSystem, mapPath)) return []
 
   let mapJson: any
@@ -986,6 +1198,7 @@ function resolveFromJsSourceMap(
     if (typeof s !== 'string') continue
     const candidateRel = normalizeSlashes(joinPaths(mapDirRel, s))
     const candidatePath = joinPaths(packageRoot, candidateRel)
+    recordExportSourceProbe(probeRecorder, packageRoot, candidateRel)
     if (safeFileExistsSync(fileSystem, candidatePath)) {
       resolved.push(candidateRel)
     }
@@ -1007,7 +1220,8 @@ function guessSourceFromBuilt(
   fileSystem: FileSystem,
   packageRoot: string,
   builtTarget: string,
-  config: ResolveExportSourcesOptions = {}
+  config: ResolveExportSourcesOptions = {},
+  probeRecorder?: ExportSourceDependencyProbeRecorder
 ): string | null {
   const roots =
     config.sourceRoots && config.sourceRoots.length > 0
@@ -1027,11 +1241,10 @@ function guessSourceFromBuilt(
     '.',
   ])
 
-  const normalizedBuilt = normalizeSlashes(builtTarget).replace(/^\.\//, '')
-  const rewrittenBuilt = applyRewrites(
-    normalizedBuilt,
-    config.rewrites
-  ).replace(/^\.\//, '')
+  const normalizedBuilt = trimLeadingDotSlash(normalizeSlashes(builtTarget))
+  const rewrittenBuilt = trimLeadingDotSlash(
+    applyRewrites(normalizedBuilt, config.rewrites)
+  )
 
   // Candidate “inside paths” we try mapping under sourceRoots.
   // We try:
@@ -1075,6 +1288,7 @@ function guessSourceFromBuilt(
 
         const candidateRel = joinPaths(root, candidateInside)
         const candidatePath = joinPaths(packageRoot, candidateRel)
+        recordExportSourceProbe(probeRecorder, packageRoot, candidateRel)
 
         if (safeFileExistsSync(fileSystem, candidatePath)) {
           return candidateRel
@@ -1083,6 +1297,7 @@ function guessSourceFromBuilt(
         // If insidePath is just "foo.js", also try `${root}/foo.ts` directly (already covered)
         // Keep a small extra fallback: `${root}/${bareName}/index.ts(x)` for barrel-ish layouts.
         const indexFilePath = joinPaths(root, bareName, 'index' + extension)
+        recordExportSourceProbe(probeRecorder, packageRoot, indexFilePath)
         if (
           safeFileExistsSync(fileSystem, joinPaths(packageRoot, indexFilePath))
         ) {
@@ -1147,12 +1362,14 @@ function resolveLegacyEntrypoints(
   fileSystem: FileSystem,
   packageRoot: string,
   packageJson: PackageJson,
-  config: ResolveExportSourcesOptions
+  config: ResolveExportSourcesOptions,
+  probeRecorder?: ExportSourceDependencyProbeRecorder
 ): ResolvedExportSource[] {
   const results: ResolvedExportSource[] = []
 
   const add = (exportKey: string, target: string | undefined) => {
     if (!target) return
+    recordExportSourceProbe(probeRecorder, packageRoot, target)
 
     // manual overrides still win
     const overrideSources = normalizeOverrideSources(
@@ -1175,7 +1392,8 @@ function resolveLegacyEntrypoints(
       const fromTypes = resolveSourcesFromDtsMap(
         fileSystem,
         packageRoot,
-        typeFilePath
+        typeFilePath,
+        probeRecorder
       )
       if (fromTypes.length > 0) {
         results.push({
@@ -1189,7 +1407,12 @@ function resolveLegacyEntrypoints(
     }
 
     // try JS source map
-    const fromJsMap = resolveFromJsSourceMap(fileSystem, packageRoot, target)
+    const fromJsMap = resolveFromJsSourceMap(
+      fileSystem,
+      packageRoot,
+      target,
+      probeRecorder
+    )
     if (fromJsMap.length > 0) {
       results.push({
         exportKey,
@@ -1205,7 +1428,8 @@ function resolveLegacyEntrypoints(
       fileSystem,
       packageRoot,
       target,
-      config
+      config,
+      probeRecorder
     )
     if (heuristicSource) {
       results.push({
@@ -1243,6 +1467,7 @@ export class Package<
   ExportLoaders extends PackageExportLoaderMap = {},
 > {
   #name?: string
+  #hasExplicitName: boolean
   #packagePath: string
   #sourceRootPath: string
   #fileSystem: FileSystem
@@ -1252,8 +1477,11 @@ export class Package<
   #exportOverrides?: Record<string, PackageExportOptions<Types, LoaderTypes>>
   #exportDirectories?: PackageExportDirectory<Types, LoaderTypes>[]
   #importEntries?: PackageImportEntry[]
+  #cache?: Cache
   #exportManifestEntries?: Map<string, PackageManifestEntry>
   #importManifestEntries?: Map<string, PackageManifestEntry>
+  #resolveExportSourcesCache = new Map<string, ResolveExportSourcesCacheEntry>()
+  #packageJsonDependencySignature?: string
 
   constructor(options: PackageOptions<Types, LoaderTypes, ExportLoaders>) {
     if (!options?.name && !options?.path) {
@@ -1273,22 +1501,36 @@ export class Package<
       options.repository instanceof Repository
         ? options.repository
         : options.repository
-          ? new Repository(options.repository)
+          ? typeof options.repository === 'string'
+            ? new Repository({
+                path: options.repository,
+                cache: options.cache,
+              })
+            : new Repository({
+                ...options.repository,
+                cache: options.cache,
+              })
           : undefined
     const { fileSystem, packagePath } = this.#resolvePackageLocation({
       name: options.name,
       path: options.path,
       directory: startDirectory,
       repository: repositoryInstance,
-      fileSystem: options.fileSystem ?? new NodeFileSystem(),
+      fileSystem:
+        options.fileSystem ??
+        new NodeFileSystem({
+          outputDirectory: options.cache?.outputDirectory,
+        }),
     })
 
     this.#fileSystem = fileSystem
     this.#packagePath = packagePath
     this.#name = options.name
+    this.#hasExplicitName = options.name !== undefined
     this.#repository = repositoryInstance
     this.#exportOverrides = options.exports
     this.#exportLoaders = options.loader
+    this.#cache = options.cache
     this.#sourceRootPath =
       options.sourcePath === null
         ? this.#packagePath
@@ -1321,14 +1563,60 @@ export class Package<
   resolveExportSources(
     config: ResolveExportSourcesOptions = {}
   ): ResolvedExportSource[] {
+    const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
+    const currentPackageJsonSignature =
+      this.#createResolveExportSourceDependencySignature(packageJsonPath)
+    if (
+      this.#packageJson !== undefined &&
+      this.#packageJsonDependencySignature !== undefined &&
+      this.#packageJsonDependencySignature !== currentPackageJsonSignature
+    ) {
+      this.#resetManifestState()
+    }
+
     this.#ensurePackageJsonLoaded()
     const pkg = this.#packageJson!
+    const cacheKey = this.#createResolveExportSourcesCacheKey(config, pkg)
+    const sharedCache = getResolveExportSourcesSharedCache(this.#fileSystem)
+    const sharedCacheKey = createResolveExportSourcesSharedCacheKey(
+      this.#packagePath,
+      cacheKey
+    )
+    const cached = this.#resolveExportSourcesCache.get(cacheKey)
+    if (
+      cached &&
+      this.#areResolveExportSourcesDependenciesFresh(
+        cached.dependencySignatures
+      )
+    ) {
+      return cloneResolvedExportSources(cached.results)
+    }
+
+    const sharedCached = sharedCache.get(sharedCacheKey)
+    if (
+      sharedCached &&
+      this.#areResolveExportSourcesDependenciesFresh(
+        sharedCached.dependencySignatures
+      )
+    ) {
+      this.#resolveExportSourcesCache.set(cacheKey, sharedCached)
+      return cloneResolvedExportSources(sharedCached.results)
+    }
+
+    const dependencyProbePaths = new Set<string>([packageJsonPath])
+    const probeRecorder: ExportSourceDependencyProbeRecorder = {
+      recordProbe: (path) => {
+        dependencyProbePaths.add(normalizeSlashes(path))
+      },
+    }
 
     const exportTargets = flattenExportsField(pkg, config)
     const results: ResolvedExportSource[] = []
 
     // 1. Resolve entries from "exports"
     for (const [exportKey, builtTarget] of Object.entries(exportTargets)) {
+      recordExportSourceProbe(probeRecorder, this.#packagePath, builtTarget)
+
       // Wildcards are tricky – mark as unsupported for now.
       if (exportKey.includes('*') || builtTarget.includes('*')) {
         results.push({
@@ -1362,7 +1650,8 @@ export class Package<
         this.#packagePath,
         pkg,
         exportKey,
-        builtTarget
+        builtTarget,
+        probeRecorder
       )
       if (fromDtsMap) {
         results.push({
@@ -1378,7 +1667,8 @@ export class Package<
       const fromJsMap = resolveFromJsSourceMap(
         this.#fileSystem,
         this.#packagePath,
-        builtTarget
+        builtTarget,
+        probeRecorder
       )
       if (fromJsMap.length > 0) {
         results.push({
@@ -1395,7 +1685,8 @@ export class Package<
         this.#fileSystem,
         this.#packagePath,
         builtTarget,
-        config
+        config,
+        probeRecorder
       )
       if (heuristicSource) {
         results.push({
@@ -1424,12 +1715,23 @@ export class Package<
         this.#fileSystem,
         this.#packagePath,
         pkg,
-        config
+        config,
+        probeRecorder
       )
       results.push(...legacy)
     }
 
-    return results
+    const dependencySignatures =
+      this.#createResolveExportSourcesDependencySignatures(dependencyProbePaths)
+    const clonedResults = cloneResolvedExportSources(results)
+    const cacheEntry: ResolveExportSourcesCacheEntry = {
+      results: clonedResults,
+      dependencySignatures,
+    }
+    this.#resolveExportSourcesCache.set(cacheKey, cacheEntry)
+    sharedCache.set(sharedCacheKey, cacheEntry)
+
+    return cloneResolvedExportSources(clonedResults)
   }
 
   /** Resolve a single export key to its source file(s). */
@@ -1457,47 +1759,118 @@ export class Package<
     return mainExport?.sources[0]
   }
 
+  #createExportOverridesStructureSignature(session: Session): string {
+    if (!this.#exportOverrides) {
+      return 'exports:none'
+    }
+
+    const normalizedOverrides = Object.keys(this.#exportOverrides)
+      .sort((left, right) => left.localeCompare(right))
+      .map((exportKey) => {
+        const override = this.#exportOverrides?.[exportKey]
+        if (!override) {
+          return {
+            exportKey,
+            override: null,
+          }
+        }
+
+        const overridePath = override.path
+        const resolvedPath = normalizePackagePath(
+          overridePath
+            ? this.#resolveWithinPackage(overridePath)
+            : this.#resolveDerivedPath(exportKey)
+        )
+
+        return {
+          exportKey,
+          path: normalizePathKey(resolvedPath),
+          basePathname:
+            override.basePathname === undefined
+              ? '[default]'
+              : override.basePathname,
+          filterSignature: createDirectoryFilterSignature(
+            session,
+            override.filter
+          ),
+          sortSignature: createDirectorySortSignature(session, override.sort),
+        }
+      })
+
+    return session.createValueSignature(
+      normalizedOverrides,
+      'package-structure-exports'
+    )
+  }
+
+  /** @internal */
+  getStructureCacheKey() {
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
+
+    return createStructureNodeKey('structure.package', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      packagePath: normalizePathKey(this.#packagePath),
+      explicitName: this.#hasExplicitName ? (this.#name ?? null) : null,
+      sourceRootPath: normalizePathKey(this.#sourceRootPath),
+      exportOverrides: this.#createExportOverridesStructureSignature(session),
+    })
+  }
+
   async getStructure(): Promise<
     Array<PackageStructure | DirectoryStructure | FileStructure>
   > {
-    this.#ensurePackageJsonLoaded()
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
+    const nodeKey = this.getStructureCacheKey()
 
-    const packageJson = this.#packageJson
-    const name =
-      this.#name ??
-      packageJson?.name ??
-      formatNameAsTitle(baseName(this.#packagePath))
-    const relativePath = this.#fileSystem.getRelativePathToWorkspace(
-      this.#packagePath
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        await ctx.recordFileDep(joinPaths(this.#packagePath, 'package.json'))
+
+        this.#resetManifestState()
+        this.#ensurePackageJsonLoaded()
+
+        const packageJson = this.#packageJson
+        const name =
+          this.#name ??
+          packageJson?.name ??
+          formatNameAsTitle(baseName(this.#packagePath))
+        const relativePath = this.#fileSystem.getRelativePathToWorkspace(
+          this.#packagePath
+        )
+        const normalizedRelativePath =
+          relativePath === '.' ? '' : normalizeSlashes(relativePath)
+        const path =
+          normalizedRelativePath === ''
+            ? '/'
+            : `/${trimLeadingSlashes(normalizedRelativePath)}`
+
+        const structures: Array<
+          PackageStructure | DirectoryStructure | FileStructure
+        > = [
+          {
+            kind: 'Package',
+            name,
+            title: formatNameAsTitle(name),
+            slug: createSlug(name, 'kebab'),
+            path,
+            version: packageJson?.version,
+            description: packageJson?.description,
+            relativePath: normalizedRelativePath || '.',
+          },
+        ]
+
+        for (const directory of this.getExports()) {
+          const directoryStructures = await directory.getStructure()
+          structures.push(...directoryStructures)
+          await ctx.recordNodeDep(directory.getStructureCacheKey())
+        }
+
+        return structures
+      }
     )
-    const normalizedRelativePath =
-      relativePath === '.' ? '' : normalizeSlashes(relativePath)
-    const path =
-      normalizedRelativePath === ''
-        ? '/'
-        : `/${normalizedRelativePath.replace(/^\/+/, '')}`
-
-    const structures: Array<
-      PackageStructure | DirectoryStructure | FileStructure
-    > = [
-      {
-        kind: 'Package',
-        name,
-        title: formatNameAsTitle(name),
-        slug: createSlug(name, 'kebab'),
-        path,
-        version: packageJson?.version,
-        description: packageJson?.description,
-        relativePath: normalizedRelativePath || '.',
-      },
-    ]
-
-    for (const directory of this.getExports()) {
-      const directoryStructures = await directory.getStructure()
-      structures.push(...directoryStructures)
-    }
-
-    return structures
   }
 
   async getExport<Key extends keyof ExportLoaders & string>(
@@ -1606,17 +1979,118 @@ export class Package<
   }
 
   #ensurePackageJsonLoaded() {
-    if (!this.#packageJson) {
+    const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
+    const currentPackageJsonSignature =
+      this.#createResolveExportSourceDependencySignature(packageJsonPath)
+    if (
+      this.#packageJson !== undefined &&
+      this.#packageJsonDependencySignature !== undefined &&
+      this.#packageJsonDependencySignature !== currentPackageJsonSignature
+    ) {
+      this.#resetManifestState()
+    }
+
+    if (this.#packageJson === undefined) {
       const packageJson = this.#readPackageJson()
       this.#packageJson = packageJson
-      if (!this.#name && packageJson.name) {
+      if (!this.#hasExplicitName && packageJson.name) {
         this.#name = packageJson.name
       }
     }
+
+    this.#packageJsonDependencySignature = currentPackageJsonSignature
+  }
+
+  #resetManifestState() {
+    this.#packageJson = undefined
+    this.#exportDirectories = undefined
+    this.#importEntries = undefined
+    this.#exportManifestEntries = undefined
+    this.#importManifestEntries = undefined
+    this.#resolveExportSourcesCache.clear()
+    this.#packageJsonDependencySignature = undefined
+
+    if (!this.#hasExplicitName) {
+      this.#name = undefined
+    }
+  }
+
+  #createResolveExportSourcesCacheKey(
+    config: ResolveExportSourcesOptions,
+    pkg: PackageJson
+  ): string {
+    const normalizedOptions = normalizeResolveExportSourcesOptionsForCache(
+      pkg,
+      config
+    )
+    return hashString(stableStringify(normalizedOptions))
+  }
+
+  #createResolveExportSourceDependencySignature(path: string): string {
+    try {
+      const modifiedMs = this.#fileSystem.getFileLastModifiedMsSync(path)
+      if (modifiedMs !== undefined) {
+        return `mtime:${String(modifiedMs)}`
+      }
+    } catch (error) {
+      reportBestEffortError('file-system/package', error)
+    }
+
+    if (!safeFileExistsSync(this.#fileSystem, path)) {
+      return 'missing'
+    }
+
+    try {
+      const contents = readTextFile(this.#fileSystem, path)
+      return `content:${hashString(contents)}:${contents.length}`
+    } catch {
+      return 'exists'
+    }
+  }
+
+  #createResolveExportSourcesDependencySignatures(
+    dependencyProbePaths: Iterable<string>
+  ): Map<string, string> {
+    const dependencySignatures = new Map<string, string>()
+
+    for (const dependencyProbePath of dependencyProbePaths) {
+      dependencySignatures.set(
+        dependencyProbePath,
+        this.#createResolveExportSourceDependencySignature(dependencyProbePath)
+      )
+    }
+
+    return dependencySignatures
+  }
+
+  #areResolveExportSourcesDependenciesFresh(
+    dependencySignatures: Map<string, string>
+  ): boolean {
+    for (const [
+      dependencyPath,
+      previousSignature,
+    ] of dependencySignatures.entries()) {
+      const nextSignature =
+        this.#createResolveExportSourceDependencySignature(dependencyPath)
+      if (nextSignature !== previousSignature) {
+        return false
+      }
+    }
+
+    return true
   }
 
   #readPackageJson(): PackageJson {
     const packageJsonPath = joinPaths(this.#packagePath, 'package.json')
+    if (
+      parseBooleanProcessEnv(PROCESS_ENV_KEYS.renounDebugPackagePath) === true
+    ) {
+      // eslint-disable-next-line no-console
+      console.log('[renoun-debug-package]', {
+        packagePath: this.#packagePath,
+        packageJsonPath,
+      })
+    }
     try {
       return readJsonFile<PackageJson>(
         this.#fileSystem,
@@ -1782,6 +2256,7 @@ export class Package<
           ...overrideOptions,
           path: directoryPath,
           fileSystem: this.#fileSystem,
+          cache: this.#cache,
           repository: this.#repository,
           loader:
             overrideOptions.loader ??

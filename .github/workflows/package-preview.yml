@@ -38,6 +38,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Restore renoun cache
+        uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
@@ -60,6 +65,11 @@ jobs:
           path: previews/manifest.json
           if-no-files-found: error
           retention-days: 1
+
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22
 
   comment:
     needs: build-and-publish
@@ -119,6 +129,11 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Restore renoun cache
+        uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
@@ -131,3 +146,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           ROOT_DIRECTORY: apps/site
+
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

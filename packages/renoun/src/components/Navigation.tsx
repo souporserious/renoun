@@ -1,10 +1,10 @@
 import React, { Suspense } from 'react'
 
 import {
-  isFile,
   type Collection,
   type Directory,
   type FileSystemEntry,
+  type NavigationEntry,
 } from '../file-system/index.tsx'
 
 export interface NavigationComponents {
@@ -75,67 +75,60 @@ async function NavigationAsync({
   source,
   components: componentsProp = {},
 }: NavigationProps) {
-  const entries = await source.getEntries()
   const components: NavigationComponents = {
     ...defaultComponents,
     ...componentsProp,
   }
+  const navigationEntries = await source.getTree()
+  const renderedEntries = await Promise.all(
+    navigationEntries.map((navigationEntry) =>
+      renderNavigationItem({
+        navigationEntry,
+        components,
+      })
+    )
+  )
 
   return (
     <components.Root source={source}>
       <components.List entry={source} depth={0}>
-        {entries.map((entry) => (
-          <Item
-            key={entry.getPathname()}
-            entry={entry}
-            components={components}
-          />
-        ))}
+        {renderedEntries}
       </components.List>
     </components.Root>
   )
 }
 
-/** A navigation item that displays a link to an entry. */
-async function Item({
-  entry,
+async function renderNavigationItem({
+  navigationEntry,
   components,
 }: {
-  entry: FileSystemEntry<any>
+  navigationEntry: NavigationEntry<FileSystemEntry<any>>
   components: NavigationComponents
-}) {
+}): Promise<React.ReactNode> {
+  const { entry, children } = navigationEntry
   const pathname = entry.getPathname()
   const depth = entry.depth + 1
 
-  if (isFile(entry)) {
+  if (!children || children.length === 0) {
     return (
-      <components.Item entry={entry} depth={depth}>
-        <components.Link entry={entry} depth={depth} pathname={pathname} />
-      </components.Item>
-    )
-  }
-
-  const entries = await entry.getEntries()
-
-  if (entries.length === 0) {
-    return (
-      <components.Item entry={entry} depth={depth}>
+      <components.Item key={pathname} entry={entry} depth={depth}>
         <components.Link entry={entry} depth={depth} pathname={pathname} />
       </components.Item>
     )
   }
 
   return (
-    <components.Item entry={entry} depth={depth}>
+    <components.Item key={pathname} entry={entry} depth={depth}>
       <components.Link entry={entry} depth={depth} pathname={pathname} />
-      <components.List entry={entry} depth={depth}>
-        {entries.map((childEntry) => (
-          <Item
-            key={childEntry.getPathname()}
-            entry={childEntry}
-            components={components}
-          />
-        ))}
+      <components.List entry={entry as Directory<any>} depth={depth}>
+        {await Promise.all(
+          children.map((childNavigationEntry) =>
+            renderNavigationItem({
+              navigationEntry: childNavigationEntry,
+              components,
+            })
+          )
+        )}
       </components.List>
     </components.Item>
   )

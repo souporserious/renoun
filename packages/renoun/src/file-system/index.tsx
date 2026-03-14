@@ -17,6 +17,7 @@ export type {
   WithDefaultTypes,
   InferModuleExports,
   FileSystemEntry,
+  NavigationEntry,
   FileWithExtension,
   DirectoryFilter,
   BaseDirectoryOptions,
@@ -33,7 +34,7 @@ export type {
   CollectionOptions,
   SortDescriptor,
   LoadersToExtensions,
-} from './entries.tsx'
+} from './entries.ts'
 
 export {
   File,
@@ -56,7 +57,7 @@ export {
   resolveFileFromEntry,
   sortEntries,
   createSort,
-} from './entries.tsx'
+} from './entries.ts'
 
 export type { PackageExportOptions, PackageOptions } from './Package.ts'
 export {
@@ -75,6 +76,8 @@ export type {
   FileSystem,
 } from './FileSystem.ts'
 export { BaseFileSystem } from './FileSystem.ts'
+export type { CacheOptions } from './Cache.ts'
+export { Cache } from './Cache.ts'
 export { GitVirtualFileSystem } from './GitVirtualFileSystem.ts'
 export { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 export { GitFileSystem } from './GitFileSystem.ts'

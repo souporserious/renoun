@@ -2,21 +2,32 @@ import { join, posix } from 'node:path'
 import { getTsMorph } from './ts-morph.ts'
 import type { Diagnostic, Project, SourceFile, ts } from './ts-morph.ts'
 
-import type { ConfigurationOptions } from '../components/Config/types.ts'
 import type { Languages as TextMateLanguages } from '../grammars/index.ts'
 import type { Highlighter } from './create-highlighter.ts'
 import { getDebugLogger } from './debug.ts'
 import { getDiagnosticMessageText } from './get-diagnostic-message.ts'
+import {
+  formatQuickInfoDisplayText,
+  formatQuickInfoDocumentationText,
+} from './get-quick-info-at-position.ts'
 import { getLanguage, type Languages } from './get-language.ts'
-import { getRootDirectory } from './get-root-directory.ts'
 import { isJsxOnly } from './is-jsx-only.ts'
-import { generatedFilenames } from './get-source-text-metadata.ts'
+import { generatedFilenames } from '../analysis/query/source-text-metadata.ts'
 import { splitTokenByRanges } from './split-tokens-by-ranges.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryEvent,
+  emitTelemetryHistogram,
+} from './telemetry.ts'
 import { attachPublicError, RENOUN_PUBLIC_ERROR_CODES } from './public-error.ts'
 import {
   validateLanguageFileCompatibility,
   isJavaScriptTypeScriptFile,
 } from './validate-language-file-compatibility.ts'
+import {
+  getHighlighterThemeNames,
+  type HighlighterInitializationOptions,
+} from './highlighter-options.ts'
 
 const tsMorph = getTsMorph()
 const { Node, SyntaxKind } = tsMorph
@@ -106,8 +117,40 @@ export interface GetTokensOptions {
   showErrors?: boolean
   highlighter: Highlighter | null
   sourcePath?: string | false
-  theme: ConfigurationOptions['theme']
+  theme: HighlighterInitializationOptions['theme']
   metadataCollector?: MetadataCollector
+
+  /**
+   * When true, only eagerly populate quick info for an initial symbol budget so
+   * the caller can resolve remaining hover data on demand.
+   */
+  deferQuickInfoUntilHover?: boolean
+}
+
+export function createPlainTextTokenizedLines(value: string): TokenizedLines {
+  const normalizedValue = value.replace(/\r\n?/g, '\n')
+  const lines = normalizedValue.split('\n')
+  let offset = 0
+
+  return lines.map((line, lineIndex) => {
+    const start = offset
+    const end = start + line.length
+    offset = end + (lineIndex < lines.length - 1 ? 1 : 0)
+
+    return [
+      {
+        value: line,
+        start,
+        end,
+        hasTextStyles: false,
+        isBaseColor: true,
+        isDeprecated: false,
+        isWhiteSpace: false,
+        isSymbol: false,
+        style: {},
+      } satisfies Token,
+    ]
+  })
 }
 
 /** Converts a string of code to an array of highlighted tokens. */
@@ -121,240 +164,314 @@ export async function getTokens({
   highlighter = null,
   theme: themeConfig,
   metadataCollector = collectTypeScriptMetadata,
+  deferQuickInfoUntilHover = false,
 }: GetTokensOptions): Promise<TokenizedLines> {
   return getDebugLogger().trackTokenProcessing(
     language,
     filePath,
     value.length,
     async () => {
-      // Validate language/filePath pairing to prevent syntax highlighting issues
-      if (filePath && language !== 'plaintext') {
-        validateLanguageFileCompatibility(language, filePath)
+      const telemetryStartedAt = performance.now()
+      let telemetryLanguage = language
+      let telemetryTypeScriptFile = false
+
+      const emitSuccessTelemetry = (
+        lines: TokenizedLines,
+        fields: {
+          totalTokens?: number
+          symbolCount?: number
+          diagnosticCount?: number
+          themeCount?: number
+        } = {}
+      ): void => {
+        const durationMs = performance.now() - telemetryStartedAt
+        const tags = {
+          language: telemetryLanguage,
+          hasFilePath: filePath ? 'true' : 'false',
+          isTypeScriptFile: telemetryTypeScriptFile ? 'true' : 'false',
+        }
+        const totalTokens =
+          fields.totalTokens ??
+          lines.reduce((sum, line) => sum + line.length, 0)
+
+        emitTelemetryHistogram({
+          name: 'renoun.analysis.tokens_ms',
+          value: durationMs,
+          tags,
+        })
+        emitTelemetryEvent({
+          name: 'renoun.analysis.tokens',
+          tags,
+          fields: {
+            durationMs,
+            valueLength: value.length,
+            tokenLines: lines.length,
+            totalTokens,
+            symbolCount: fields.symbolCount ?? 0,
+            diagnosticCount: fields.diagnosticCount ?? 0,
+            themeCount: fields.themeCount ?? 0,
+          },
+        })
       }
 
-      if (
-        language === 'plaintext' ||
-        language === 'text' ||
-        language === 'txt' ||
-        language === 'diff' // TODO: add support for diff highlighting
-      ) {
-        return [
-          [
-            {
+      const emitErrorTelemetry = (error: unknown): void => {
+        const durationMs = performance.now() - telemetryStartedAt
+        const tags = {
+          language: telemetryLanguage,
+          hasFilePath: filePath ? 'true' : 'false',
+          isTypeScriptFile: telemetryTypeScriptFile ? 'true' : 'false',
+        }
+
+        emitTelemetryCounter({
+          name: 'renoun.analysis.tokens_error_count',
+          tags,
+        })
+        emitTelemetryEvent({
+          name: 'renoun.analysis.tokens_error',
+          tags,
+          fields: {
+            durationMs,
+            errorName: error instanceof Error ? error.name : 'UnknownError',
+          },
+        })
+      }
+
+      try {
+        if (filePath && language !== 'plaintext') {
+          validateLanguageFileCompatibility(language, filePath)
+        }
+
+        if (
+          language === 'plaintext' ||
+          language === 'text' ||
+          language === 'txt' ||
+          language === 'diff' // TODO: add support for diff highlighting
+        ) {
+          const plainTextTokens = createPlainTextTokenizedLines(value)
+          emitSuccessTelemetry(plainTextTokens)
+          return plainTextTokens
+        }
+
+        if (highlighter === null) {
+          throw new Error(
+            '[renoun] Highlighter was not initialized. Ensure that the highlighter is created before calling "getTokens".'
+          )
+        }
+
+        const finalLanguage = getLanguage(language)
+        telemetryLanguage = finalLanguage
+        const isTypeScriptFile = filePath
+          ? isJavaScriptTypeScriptFile(filePath)
+          : false
+        telemetryTypeScriptFile = isTypeScriptFile
+        const jsxOnly = isTypeScriptFile ? isJsxOnly(value) : false
+
+        const themeNames = getHighlighterThemeNames(themeConfig)
+
+        const tsMetadataPromise = isTypeScriptFile
+          ? metadataCollector(
+              project,
+              filePath,
+              jsxOnly,
+              allowErrors,
+              showErrors
+            )
+          : Promise.resolve<TypeScriptMetadata>({
+              sourceFile: undefined,
+              diagnostics: [],
+              symbolMetadata: [],
+            })
+
+        const tokensPromise = getDebugLogger().trackOperation(
+          'highlighter',
+          () =>
+            highlighter.tokenize(
               value,
-              start: 0,
-              end: value.length,
-              hasTextStyles: false,
-              isBaseColor: true,
-              isDeprecated: false,
-              isWhiteSpace: false,
-              isSymbol: false,
-              style: {},
-            } satisfies Token,
-          ],
-        ]
-      }
-
-      if (highlighter === null) {
-        throw new Error(
-          '[renoun] Highlighter was not initialized. Ensure that the highlighter is created before calling "getTokens".'
+              finalLanguage as TextMateLanguages,
+              themeNames
+            ),
+          {
+            data: {
+              language: finalLanguage,
+              valueLength: value.length,
+              themeCount: themeNames.length,
+            },
+          }
         )
-      }
 
-      const finalLanguage = getLanguage(language)
-      const isTypeScriptFile = filePath
-        ? isJavaScriptTypeScriptFile(filePath)
-        : false
-      const jsxOnly = isTypeScriptFile ? isJsxOnly(value) : false
+        const [tokens, tsMetadata] = await Promise.all([
+          tokensPromise,
+          tsMetadataPromise,
+        ])
 
-      let themeNames: string[] =
-        typeof themeConfig === 'string'
-          ? [themeConfig]
-          : themeConfig
-            ? (Object.values(themeConfig) as Array<string | [string, any]>).map(
-                (themeVariant) =>
-                  typeof themeVariant === 'string'
-                    ? themeVariant
-                    : themeVariant[0]
-              )
+        const {
+          sourceFile,
+          diagnostics: sourceFileDiagnostics,
+          symbolMetadata,
+        } = tsMetadata
+        const sortedSymbolMetadata =
+          symbolMetadata.length > 1
+            ? [...symbolMetadata].sort(sortRangesByStart)
+            : symbolMetadata
+        const normalizedDiagnostics =
+          sourceFileDiagnostics.length > 0
+            ? normalizeTokenDiagnostics(sourceFileDiagnostics)
             : []
 
-      // Fallback to the built-in default theme when none is configured
-      if (themeNames.length === 0) {
-        themeNames = ['default']
-      }
-
-      const tsMetadataPromise = isTypeScriptFile
-        ? metadataCollector(project, filePath, jsxOnly, allowErrors, showErrors)
-        : Promise.resolve<TypeScriptMetadata>({
-            sourceFile: undefined,
-            diagnostics: [],
-            symbolMetadata: [],
-          })
-
-      const tokensPromise = getDebugLogger().trackOperation(
-        'highlighter',
-        () =>
-          highlighter.tokenize(
-            value,
-            finalLanguage as TextMateLanguages,
-            themeNames
-          ),
-        {
-          data: {
-            language: finalLanguage,
-            valueLength: value.length,
-            themeCount: themeNames.length,
-          },
-        }
-      )
-
-      const [tokens, tsMetadata] = await Promise.all([
-        tokensPromise,
-        tsMetadataPromise,
-      ])
-
-      const {
-        sourceFile,
-        diagnostics: sourceFileDiagnostics,
-        symbolMetadata,
-      } = tsMetadata
-
-      const rootDirectory = getRootDirectory()
-      const baseDirectory = process.cwd().replace(rootDirectory, '')
-      let previousTokenStart = 0
-      let parsedTokens: Token[][] = tokens.map((line) => {
-        // increment position for line breaks if the line is empty
-        if (line.length === 0) {
-          previousTokenStart += 1
-        }
-
-        return line.flatMap((baseToken, tokenIndex) => {
-          const tokenStart = previousTokenStart
-          const tokenEnd = tokenStart + baseToken.value.length
-          const lastToken = tokenIndex === line.length - 1
-
-          // account for newlines
-          previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
-
-          const initialToken: Token = {
-            value: baseToken.value,
-            start: tokenStart,
-            end: tokenEnd,
-            hasTextStyles: baseToken.hasTextStyles,
-            isBaseColor: baseToken.isBaseColor,
-            isWhiteSpace: baseToken.isWhiteSpace,
-            isDeprecated: false,
-            isSymbol: false,
-            style: baseToken.style,
-          }
-
-          // Split this token further if it intersects symbol ranges
-          let processedTokens: Tokens = []
-
-          if (symbolMetadata.length) {
-            const symbol = symbolMetadata.find((range) => {
-              return range.start >= tokenStart && range.end <= tokenEnd
+        const quickInfoCache = new Map<string, QuickInfoEntry>()
+        let remainingQuickInfoLookups = deferQuickInfoUntilHover
+          ? resolveQuickInfoLookupBudget({
+              valueLength: value.length,
+              symbolCount: symbolMetadata.length,
             })
-            const inFullRange = symbol
-              ? symbol.start === tokenStart && symbol.end === tokenEnd
-              : false
-
-            if (symbol) {
-              initialToken.isDeprecated = symbol.isDeprecated
-            }
-
-            if (symbol && !inFullRange) {
-              processedTokens = splitTokenByRanges(initialToken, symbolMetadata)
-            } else {
-              processedTokens.push({
-                ...initialToken,
-                isSymbol: inFullRange,
-              })
-            }
-          } else {
-            processedTokens.push(initialToken)
+          : Number.POSITIVE_INFINITY
+        let nextSymbolIndex = 0
+        let nextDiagnosticIndex = 0
+        const activeDiagnostics: NormalizedTokenDiagnostic[] = []
+        let previousTokenStart = 0
+        let parsedTokens: Token[][] = tokens.map((line) => {
+          if (line.length === 0) {
+            previousTokenStart += 1
           }
 
-          return processedTokens.map((token) => {
-            if (!token.isSymbol) {
-              return token
+          return line.flatMap((baseToken, tokenIndex) => {
+            const tokenStart = previousTokenStart
+            const tokenEnd = tokenStart + baseToken.value.length
+            const lastToken = tokenIndex === line.length - 1
+
+            previousTokenStart = lastToken ? tokenEnd + 1 : tokenEnd
+
+            const initialToken: Token = {
+              value: baseToken.value,
+              start: tokenStart,
+              end: tokenEnd,
+              hasTextStyles: baseToken.hasTextStyles,
+              isBaseColor: baseToken.isBaseColor,
+              isWhiteSpace: baseToken.isWhiteSpace,
+              isDeprecated: false,
+              isSymbol: false,
+              style: baseToken.style,
             }
 
-            const diagnostics = sourceFileDiagnostics
-              .filter((diagnostic) => {
-                const start = diagnostic.getStart()
-                const length = diagnostic.getLength()
-                if (!start || !length) {
-                  return false
-                }
-                const end = start + length
-                return token.start >= start && token.end <= end
-              })
-              .map((diagnostic) => ({
-                code: diagnostic.getCode(),
-                message: getDiagnosticMessageText(diagnostic.getMessageText()),
-              }))
-            const quickInfo =
-              sourceFile && filePath
-                ? getQuickInfo(
-                    sourceFile,
-                    filePath,
-                    token.start,
-                    rootDirectory,
-                    baseDirectory
-                  )
-                : undefined
+            let processedTokens: Tokens = []
 
-            return {
-              ...token,
-              quickInfo,
-              diagnostics: diagnostics.length ? diagnostics : undefined,
+            if (sortedSymbolMetadata.length) {
+              const { ranges: containedSymbolRanges, nextIndex } =
+                getContainedSymbolRanges(
+                  sortedSymbolMetadata,
+                  tokenStart,
+                  tokenEnd,
+                  nextSymbolIndex
+                )
+              nextSymbolIndex = nextIndex
+              const symbol = containedSymbolRanges[0]
+              const inFullRange = symbol
+                ? symbol.start === tokenStart && symbol.end === tokenEnd
+                : false
+
+              if (symbol) {
+                initialToken.isDeprecated = symbol.isDeprecated
+              }
+
+              if (symbol && !inFullRange) {
+                processedTokens = splitTokenByRanges(
+                  initialToken,
+                  containedSymbolRanges
+                )
+              } else {
+                processedTokens.push({
+                  ...initialToken,
+                  isSymbol: inFullRange,
+                })
+              }
+            } else {
+              processedTokens.push(initialToken)
             }
+
+            return processedTokens.map((token) => {
+              if (!token.isSymbol) {
+                return token
+              }
+
+              const { diagnostics, nextIndex } = collectTokenDiagnostics(
+                normalizedDiagnostics,
+                token.start,
+                token.end,
+                nextDiagnosticIndex,
+                activeDiagnostics
+              )
+              nextDiagnosticIndex = nextIndex
+              const quickInfo =
+                remainingQuickInfoLookups > 0 && sourceFile && filePath
+                  ? getQuickInfo(
+                      sourceFile,
+                      filePath,
+                      token.start,
+                      quickInfoCache
+                    )
+                  : undefined
+              if (remainingQuickInfoLookups > 0 && sourceFile && filePath) {
+                remainingQuickInfoLookups -= 1
+              }
+
+              return {
+                ...token,
+                quickInfo,
+                diagnostics,
+              }
+            })
           })
         })
-      })
 
-      // Remove leading imports and whitespace for jsx only code blocks
-      if (jsxOnly) {
-        const firstJsxLineIndex = parsedTokens.findIndex((line) =>
-          line.find((token) => token.value === '<')
-        )
-        if (firstJsxLineIndex > 0) {
-          parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+        if (jsxOnly) {
+          const firstJsxLineIndex = parsedTokens.findIndex((line) =>
+            line.find((token) => token.value === '<')
+          )
+          if (firstJsxLineIndex > 0) {
+            parsedTokens = parsedTokens.slice(firstJsxLineIndex)
+          }
         }
-      }
 
-      if (
-        allowErrors !== true &&
-        sourceFile &&
-        sourceFileDiagnostics.length > 0
-      ) {
-        throwDiagnosticErrors(
-          filePath,
-          sourceFile,
-          sourceFileDiagnostics,
-          parsedTokens
+        if (
+          allowErrors !== true &&
+          sourceFile &&
+          sourceFileDiagnostics.length > 0
+        ) {
+          throwDiagnosticErrors(
+            filePath,
+            sourceFile,
+            sourceFileDiagnostics,
+            parsedTokens
+          )
+        }
+
+        const totalTokens = parsedTokens.reduce(
+          (sum: number, line: Token[]) => sum + line.length,
+          0
         )
+
+        getDebugLogger().logTokenProcessing(
+          finalLanguage,
+          filePath,
+          value.length,
+          parsedTokens.length,
+          totalTokens,
+          symbolMetadata.length,
+          sourceFileDiagnostics.length
+        )
+
+        emitSuccessTelemetry(parsedTokens, {
+          totalTokens,
+          symbolCount: symbolMetadata.length,
+          diagnosticCount: sourceFileDiagnostics.length,
+          themeCount: themeNames.length,
+        })
+
+        return parsedTokens
+      } catch (error) {
+        emitErrorTelemetry(error)
+        throw error
       }
-
-      // Log summary statistics for performance monitoring
-      const totalTokens = parsedTokens.reduce(
-        (sum: number, line: Token[]) => sum + line.length,
-        0
-      )
-
-      getDebugLogger().logTokenProcessing(
-        finalLanguage,
-        filePath,
-        value.length,
-        parsedTokens.length,
-        totalTokens,
-        symbolMetadata.length,
-        sourceFileDiagnostics.length
-      )
-
-      return parsedTokens
     }
   )
 }
@@ -401,6 +518,9 @@ export async function collectTypeScriptMetadata(
       start: diagnostic.start!,
       end: diagnostic.start! + (diagnostic.length ?? 0),
     }))
+  const deprecatedRangeKeys = new Set(
+    deprecatedRanges.map((range) => `${range.start}:${range.end}`)
+  )
 
   const symbolMetadata = [...importSpecifiers, ...identifiers]
     .filter((node) => {
@@ -422,9 +542,7 @@ export async function collectTypeScriptMetadata(
         end -= 1
       }
 
-      const isDeprecated = deprecatedRanges.some(
-        (range) => range.start === start && range.end === end
-      )
+      const isDeprecated = deprecatedRangeKeys.has(`${start}:${end}`)
 
       return {
         start: node.getStart(),
@@ -478,49 +596,185 @@ export function getDiagnostics(
   })
 }
 
-/** Convert documentation entries to markdown-friendly links. */
-function formatDocumentationText(documentation: ts.SymbolDisplayPart[]) {
-  let markdownText = ''
-  let currentLinkText = ''
-  let currentLinkUrl = ''
-
-  documentation.forEach((part) => {
-    if (part.kind === 'text') {
-      markdownText += part.text
-    } else if (part.kind === 'linkText') {
-      const [url, ...descriptionParts] = part.text.split(' ')
-      currentLinkUrl = url
-      currentLinkText = descriptionParts.join(' ') || url
-    } else if (part.kind === 'link') {
-      if (currentLinkUrl) {
-        markdownText += `[${currentLinkText}](${currentLinkUrl})`
-        currentLinkText = ''
-        currentLinkUrl = ''
-      }
-    }
-  })
-
-  return markdownText
-}
-
 interface QuickInfoEntry {
   displayText: string
   documentationText: string
 }
 
-const quickInfoCache = new Map<string, QuickInfoEntry>()
+interface NormalizedTokenDiagnostic {
+  start: number
+  end: number
+  value: TokenDiagnostic
+}
+
 const MAX_QUICK_INFO_CACHE_SIZE = 2000
+const MAX_QUICK_INFO_LOOKUPS_PER_BLOCK = 160
+const MAX_QUICK_INFO_LOOKUPS_FOR_LARGE_BLOCK = 64
+const QUICK_INFO_LARGE_BLOCK_VALUE_LENGTH = 50_000
+const QUICK_INFO_LARGE_BLOCK_SYMBOL_THRESHOLD = 800
+
+export function resolveQuickInfoLookupBudget(options: {
+  valueLength: number
+  symbolCount: number
+}): number {
+  if (options.symbolCount <= 0) {
+    return 0
+  }
+
+  const isLargeBlock =
+    options.valueLength >= QUICK_INFO_LARGE_BLOCK_VALUE_LENGTH ||
+    options.symbolCount >= QUICK_INFO_LARGE_BLOCK_SYMBOL_THRESHOLD
+  const maxLookups = isLargeBlock
+    ? MAX_QUICK_INFO_LOOKUPS_FOR_LARGE_BLOCK
+    : MAX_QUICK_INFO_LOOKUPS_PER_BLOCK
+
+  return Math.min(maxLookups, options.symbolCount)
+}
+
+function sortRangesByStart<
+  Range extends { start: number; end: number },
+>(left: Range, right: Range): number {
+  if (left.start !== right.start) {
+    return left.start - right.start
+  }
+
+  return left.end - right.end
+}
+
+function getContainedSymbolRanges(
+  symbolMetadata: SymbolMetadata[],
+  tokenStart: number,
+  tokenEnd: number,
+  nextIndex: number
+): {
+  ranges: SymbolMetadata[]
+  nextIndex: number
+} {
+  let symbolIndex = nextIndex
+
+  while (
+    symbolIndex < symbolMetadata.length &&
+    symbolMetadata[symbolIndex]!.end <= tokenStart
+  ) {
+    symbolIndex += 1
+  }
+
+  const ranges: SymbolMetadata[] = []
+
+  for (
+    let candidateIndex = symbolIndex;
+    candidateIndex < symbolMetadata.length;
+    candidateIndex += 1
+  ) {
+    const range = symbolMetadata[candidateIndex]!
+
+    if (range.start >= tokenEnd) {
+      break
+    }
+
+    if (range.start >= tokenStart && range.end <= tokenEnd) {
+      ranges.push(range)
+      continue
+    }
+
+    if (range.end > tokenEnd) {
+      break
+    }
+  }
+
+  return {
+    ranges,
+    nextIndex: symbolIndex,
+  }
+}
+
+function normalizeTokenDiagnostics(
+  diagnostics: Diagnostic<ts.Diagnostic>[]
+): NormalizedTokenDiagnostic[] {
+  const normalizedDiagnostics: NormalizedTokenDiagnostic[] = []
+
+  for (const diagnostic of diagnostics) {
+    const start = diagnostic.getStart()
+    const length = diagnostic.getLength()
+
+    if (!start || !length) {
+      continue
+    }
+
+    normalizedDiagnostics.push({
+      start,
+      end: start + length,
+      value: {
+        code: diagnostic.getCode(),
+        message: getDiagnosticMessageText(diagnostic.getMessageText()),
+      },
+    })
+  }
+
+  if (normalizedDiagnostics.length > 1) {
+    normalizedDiagnostics.sort(sortRangesByStart)
+  }
+
+  return normalizedDiagnostics
+}
+
+function collectTokenDiagnostics(
+  diagnostics: NormalizedTokenDiagnostic[],
+  tokenStart: number,
+  tokenEnd: number,
+  nextIndex: number,
+  activeDiagnostics: NormalizedTokenDiagnostic[]
+): {
+  diagnostics: TokenDiagnostic[] | undefined
+  nextIndex: number
+} {
+  let diagnosticIndex = nextIndex
+
+  while (
+    diagnosticIndex < diagnostics.length &&
+    diagnostics[diagnosticIndex]!.start <= tokenStart
+  ) {
+    activeDiagnostics.push(diagnostics[diagnosticIndex]!)
+    diagnosticIndex += 1
+  }
+
+  if (activeDiagnostics.length > 0) {
+    let activeCount = 0
+
+    for (const diagnostic of activeDiagnostics) {
+      if (diagnostic.end > tokenStart) {
+        activeDiagnostics[activeCount] = diagnostic
+        activeCount += 1
+      }
+    }
+
+    activeDiagnostics.length = activeCount
+  }
+
+  let matchingDiagnostics: TokenDiagnostic[] | undefined
+
+  for (const diagnostic of activeDiagnostics) {
+    if (tokenEnd <= diagnostic.end) {
+      matchingDiagnostics ??= []
+      matchingDiagnostics.push(diagnostic.value)
+    }
+  }
+
+  return {
+    diagnostics: matchingDiagnostics,
+    nextIndex: diagnosticIndex,
+  }
+}
 
 /** Get the quick info a token */
 function getQuickInfo(
   sourceFile: SourceFile,
   filePath: string,
   tokenStart: number,
-  rootDirectory: string,
-  baseDirectory: string
+  quickInfoCache: Map<string, QuickInfoEntry>
 ) {
   const cacheKey = `${filePath}:${tokenStart}`
-  const cachedQuickInfo = getCachedQuickInfo(cacheKey)
+  const cachedQuickInfo = getCachedQuickInfo(quickInfoCache, cacheKey)
 
   if (cachedQuickInfo) {
     return cachedQuickInfo
@@ -535,29 +789,25 @@ function getQuickInfo(
     return
   }
 
-  const displayParts = quickInfo.displayParts || []
-  const displayText = displayParts
-    .map((part) => part.text)
-    .join('')
-    // First, replace root directory to handle root node_modules
-    .replaceAll(rootDirectory, '.')
-    // Next, replace base directory for on-disk paths
-    .replaceAll(baseDirectory, '')
-    // Finally, replace the in-memory renoun directory
-    .replaceAll('/renoun', '')
+  const displayText = formatQuickInfoDisplayText(
+    (quickInfo.displayParts || []).map((part) => part.text).join('')
+  )
   const documentation = quickInfo.documentation || []
-  const documentationText = formatDocumentationText(documentation)
+  const documentationText = formatQuickInfoDocumentationText(documentation)
   const result: QuickInfoEntry = {
     displayText,
     documentationText,
   }
 
-  setCachedQuickInfo(cacheKey, result)
+  setCachedQuickInfo(quickInfoCache, cacheKey, result)
 
   return result
 }
 
-function getCachedQuickInfo(cacheKey: string) {
+function getCachedQuickInfo(
+  quickInfoCache: Map<string, QuickInfoEntry>,
+  cacheKey: string
+) {
   const cachedQuickInfo = quickInfoCache.get(cacheKey)
 
   if (!cachedQuickInfo) {
@@ -571,7 +821,11 @@ function getCachedQuickInfo(cacheKey: string) {
   return cachedQuickInfo
 }
 
-function setCachedQuickInfo(cacheKey: string, value: QuickInfoEntry) {
+function setCachedQuickInfo(
+  quickInfoCache: Map<string, QuickInfoEntry>,
+  cacheKey: string,
+  value: QuickInfoEntry
+) {
   if (
     MAX_QUICK_INFO_CACHE_SIZE !== Number.POSITIVE_INFINITY &&
     quickInfoCache.size >= MAX_QUICK_INFO_CACHE_SIZE

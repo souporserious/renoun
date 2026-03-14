@@ -16,10 +16,23 @@ import {
 
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import { trimTrailingSlashes } from '../utils/path.ts'
+import { retry } from '../utils/retry.ts'
+import {
+  isRetryableNetworkTypeError,
+  RenounNetworkError,
+} from '../utils/errors.ts'
+import { forEachConcurrent } from '../utils/concurrency.ts'
+import {
+  normalizeSlashes,
+  trimLeadingCurrentDirPrefix,
+  trimLeadingDotPrefix,
+  trimTrailingSlashes,
+} from '../utils/path.ts'
 
 const MAX_WAIT_TIME = 30_000
 const PING_INTERVAL = 2_000
+const LIVE_FETCH_MAX_ATTEMPTS = 3
+const LIVE_LINK_CHECK_CONCURRENCY = 20
 
 const MDX_EXTENSIONS = new Set(['.mdx'])
 const PROTOCOL_PATTERN = /^[a-zA-Z][a-zA-Z+-.]*:/
@@ -517,7 +530,7 @@ async function discoverFrameworkProjects(
     frameworks: FrameworkKind[]
   }> = []
   const workspaceRelative = (path: string) =>
-    relativePath(workspaceRoot, path).replace(/^\.\//, '')
+    trimLeadingCurrentDirPrefix(relativePath(workspaceRoot, path))
 
   const workspaceGlobs = await readWorkspacePackageGlobs(workspaceRoot)
   const roots = workspaceGlobs
@@ -893,7 +906,7 @@ function computeRouteFromFilePath(
 ): string {
   // Create a probable route from file path by removing numeric prefixes and extensions.
   let relative = relativePath(rootDirectory, filePath)
-  relative = relative.replace(/\\+/g, '/').replace(/^\.\/?/, '')
+  relative = trimLeadingDotPrefix(normalizeSlashes(relative))
 
   const segments = relative
     .split('/')
@@ -1150,6 +1163,70 @@ function isLikelyUrl(value: string): boolean {
   }
 }
 
+function isRetryableLiveFetchStatus(status: number): boolean {
+  return (
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    (status >= 500 && status !== 501)
+  )
+}
+
+async function fetchLiveWithRetry(
+  url: string,
+  init: RequestInit = {},
+  options: { maxAttempts?: number } = {}
+): Promise<Response> {
+  const maxAttempts = Math.max(
+    1,
+    options.maxAttempts ?? LIVE_FETCH_MAX_ATTEMPTS
+  )
+  const method = String(init.method ?? 'GET').toUpperCase()
+
+  return retry(
+    async () => {
+      const response = await fetch(url, init)
+      if (isRetryableLiveFetchStatus(response.status)) {
+        throw new RenounNetworkError(
+          `[renoun] Live validation request failed with status ${response.status}.`,
+          {
+            status: response.status,
+            url,
+            method,
+            retryable: true,
+          }
+        )
+      }
+      return response
+    },
+    {
+      retries: Math.max(0, maxAttempts - 1),
+      minDelayMs: 150,
+      maxDelayMs: 2_000,
+      factor: 2,
+      jitter: 0.25,
+      shouldRetry: (error) => {
+        if (error instanceof RenounNetworkError) {
+          return error.retryable !== false
+        }
+        return isRetryableNetworkTypeError(error)
+      },
+    }
+  )
+}
+
+function getLiveValidationErrorStatus(error: unknown): number | string {
+  if (error instanceof RenounNetworkError && typeof error.status === 'number') {
+    return error.status
+  }
+
+  if (error instanceof Error) {
+    return error.message
+  }
+
+  return 'network error'
+}
+
 function formatLinkPosition(position?: LinkPosition) {
   if (
     !position ||
@@ -1183,7 +1260,7 @@ async function runLiveValidation(
     const currentTrace = [...trace, normalizedUrl]
 
     try {
-      const response = await fetch(normalizedUrl)
+      const response = await fetchLiveWithRetry(normalizedUrl)
       if (!response.ok) {
         brokenLinks.push({
           url: normalizedUrl,
@@ -1206,10 +1283,12 @@ async function runLiveValidation(
       const internalLinks = links.filter((link) =>
         isSameOrigin(link.url, baseOrigin)
       )
-      await Promise.all(
-        links.map((link) =>
-          checkLiveLink(link, checkedLinks, brokenLinks, currentTrace)
-        )
+      await forEachConcurrent(
+        links,
+        {
+          concurrency: LIVE_LINK_CHECK_CONCURRENCY,
+        },
+        (link) => checkLiveLink(link, checkedLinks, brokenLinks, currentTrace)
       )
 
       for (const link of internalLinks) {
@@ -1220,7 +1299,7 @@ async function runLiveValidation(
         url: normalizedUrl,
         originUrl: trace.at(-1) ?? normalizedUrl,
         html: '',
-        status: error instanceof Error ? error.message : 'network error',
+        status: getLiveValidationErrorStatus(error),
         trace: currentTrace,
       })
     }
@@ -1240,7 +1319,11 @@ async function waitForServerReady(baseUrl: string) {
 
   while (Date.now() <= deadline) {
     try {
-      const response = await fetch(baseUrl, { method: 'GET' })
+      const response = await fetchLiveWithRetry(
+        baseUrl,
+        { method: 'GET' },
+        { maxAttempts: 1 }
+      )
       if (response.ok) {
         return
       }
@@ -1307,7 +1390,7 @@ async function checkLiveLink(
   checked.add(normalized)
 
   try {
-    const response = await fetch(normalized)
+    const response = await fetchLiveWithRetry(normalized)
     if (!response.ok) {
       brokenLinks.push({
         url: normalized,
@@ -1322,7 +1405,7 @@ async function checkLiveLink(
       url: normalized,
       originUrl: link.originUrl,
       html: link.html,
-      status: error instanceof Error ? error.message : 'network error',
+      status: getLiveValidationErrorStatus(error),
       trace,
     })
   }

@@ -9,6 +9,7 @@ import { toRegExp } from 'oniguruma-to-es'
 
 import type { Languages, ScopeName } from '../grammars/index.ts'
 import { grammars } from '../grammars/index.ts'
+import { mapConcurrent } from './concurrency.ts'
 
 /** The options for the TextMate registry. */
 export interface RegistryOptions<Theme extends string> {
@@ -224,6 +225,7 @@ export class Registry<Theme extends string> {
   #options: RegistryOptions<Theme>
   #registry: TextMateRegistry<ScopeName>
   #theme: TextMateThemeRaw | undefined
+  #grammarByLanguage = new Map<Languages, Promise<TextMateGrammar | null>>()
 
   constructor(options: RegistryOptions<Theme>) {
     this.#options = options
@@ -244,19 +246,36 @@ export class Registry<Theme extends string> {
   }
 
   async loadGrammar(language: Languages): Promise<TextMateGrammar | null> {
-    let scopeName = Object.keys(grammars).find((scopeName) =>
-      (grammars[scopeName as ScopeName] as readonly Languages[]).includes(
-        language
-      )
-    ) as ScopeName | undefined
-
-    if (!scopeName) {
-      throw new Error(
-        `[renoun] The grammar for language "${language}" could not be found. Ensure this language is included in the \`languages\` prop on \`RootProvider\`.`
-      )
+    const cachedGrammar = this.#grammarByLanguage.get(language)
+    if (cachedGrammar) {
+      return cachedGrammar
     }
 
-    return this.#registry.loadGrammar(scopeName)
+    let loadPromise: Promise<TextMateGrammar | null>
+
+    loadPromise = (async () => {
+      let scopeName = Object.keys(grammars).find((scopeName) =>
+        (grammars[scopeName as ScopeName] as readonly Languages[]).includes(
+          language
+        )
+      ) as ScopeName | undefined
+
+      if (!scopeName) {
+        throw new Error(
+          `[renoun] The grammar for language "${language}" could not be found. Ensure this language is included in the \`languages\` prop on \`RootProvider\`.`
+        )
+      }
+
+      return this.#registry.loadGrammar(scopeName)
+    })().catch((error) => {
+      if (this.#grammarByLanguage.get(language) === loadPromise) {
+        this.#grammarByLanguage.delete(language)
+      }
+      throw error
+    })
+
+    this.#grammarByLanguage.set(language, loadPromise)
+    return loadPromise
   }
 
   async fetchTheme(name: Theme): Promise<TextMateThemeRaw> {
@@ -292,11 +311,42 @@ const FontStyle = {
 export class Tokenizer<Theme extends string> {
   #baseColors: Map<string, string> = new Map()
   #registries: Map<string, Registry<Theme>> = new Map()
+  #registryLoadByTheme = new Map<string, Promise<Registry<Theme>>>()
   #registryOptions: RegistryOptions<Theme>
   #grammarState: GrammarState = []
 
   constructor(registryOptions: RegistryOptions<Theme>) {
     this.#registryOptions = registryOptions
+  }
+
+  async #getOrCreateRegistry(themeName: Theme): Promise<Registry<Theme>> {
+    const existingRegistry = this.#registries.get(themeName)
+    if (existingRegistry) {
+      return existingRegistry
+    }
+
+    const pendingRegistry = this.#registryLoadByTheme.get(themeName)
+    if (pendingRegistry) {
+      return pendingRegistry
+    }
+
+    let loadRegistryPromise: Promise<Registry<Theme>>
+
+    loadRegistryPromise = (async () => {
+      const registry = new Registry(this.#registryOptions)
+      const theme = await registry.fetchTheme(themeName)
+      registry.setTheme(theme)
+      this.#baseColors.set(themeName, theme.colors?.['foreground'] ?? '')
+      this.#registries.set(themeName, registry)
+      return registry
+    })().finally(() => {
+      if (this.#registryLoadByTheme.get(themeName) === loadRegistryPromise) {
+        this.#registryLoadByTheme.delete(themeName)
+      }
+    })
+
+    this.#registryLoadByTheme.set(themeName, loadRegistryPromise)
+    return loadRegistryPromise
   }
 
   /**
@@ -319,17 +369,13 @@ export class Tokenizer<Theme extends string> {
     const themeColorMaps: string[][] = []
     const states: StateStack[] = []
 
-    const themeInitializationResults = await Promise.all(
-      themes.map(async (themeName, themeIndex) => {
-        let registry = this.#registries.get(themeName)
-
-        if (!registry) {
-          registry = new Registry(this.#registryOptions)
-          const theme = await registry.fetchTheme(themeName)
-          registry.setTheme(theme)
-          this.#baseColors.set(themeName, theme.colors!['foreground'])
-          this.#registries.set(themeName, registry)
-        }
+    const themeInitializationResults = await mapConcurrent(
+      themes,
+      {
+        concurrency: 4,
+      },
+      async (themeName, themeIndex) => {
+        const registry = await this.#getOrCreateRegistry(themeName)
 
         let loadedGrammar: TextMateGrammar | null
         try {
@@ -352,7 +398,7 @@ export class Tokenizer<Theme extends string> {
           registry,
           themeIndex,
         }
-      })
+      }
     )
 
     for (const {
@@ -374,32 +420,33 @@ export class Tokenizer<Theme extends string> {
       }> = []
       const boundarySet = new Set<number>()
 
-      const lineTokenizationResults = await Promise.all(
-        themeGrammars.map((grammar, themeIndex) => {
+      const lineTokenizationResults = await mapConcurrent(
+        themeGrammars,
+        {
+          concurrency: 4,
+        },
+        async (grammar, themeIndex) => {
           if (!grammar) {
-            return Promise.resolve({
+            return {
               themeIndex,
               ruleStack: states[themeIndex],
               tokens: new Uint32Array(),
-            })
+            }
           }
 
           const previousState = states[themeIndex]
+          const lineResult = grammar.tokenizeLine2(
+            lineText,
+            previousState,
+            timeLimit
+          )
 
-          return Promise.resolve().then(() => {
-            const lineResult = grammar.tokenizeLine2(
-              lineText,
-              previousState,
-              timeLimit
-            )
-
-            return {
-              themeIndex,
-              ruleStack: lineResult.ruleStack,
-              tokens: lineResult.tokens,
-            }
-          })
-        })
+          return {
+            themeIndex,
+            ruleStack: lineResult.ruleStack,
+            tokens: lineResult.tokens,
+          }
+        }
       )
 
       for (const { themeIndex, tokens, ruleStack } of lineTokenizationResults) {

@@ -7,6 +7,8 @@
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
     "module": "Node16",
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "rootDir": "./src",
     "outDir": "./dist",
     "declaration": true

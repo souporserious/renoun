@@ -24,8 +24,49 @@ import {
   vi,
 } from 'vitest'
 
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
+
 const BLOG_APP_PATH = fileURLToPath(
   new URL('../../../../apps/blog', import.meta.url)
+)
+
+type WatchRegistration = {
+  directory: string
+  listener: (eventType: string, fileName: string | Buffer | null) => void
+  watcher: {
+    close: ReturnType<typeof vi.fn>
+  }
+}
+
+const watchRegistrations: WatchRegistration[] = []
+const watchMock = vi.fn(
+  (
+    directory: string | Buffer | URL,
+    options: unknown,
+    listener?: (eventType: string, fileName: string | Buffer | null) => void
+  ) => {
+    const resolvedListener =
+      typeof options === 'function'
+        ? options
+        : listener
+
+    if (!resolvedListener) {
+      throw new Error('Expected fs.watch listener in test mock')
+    }
+
+    const watcher = {
+      close: vi.fn(),
+    }
+
+    watchRegistrations.push({
+      directory: String(directory),
+      listener: resolvedListener,
+      watcher,
+    })
+
+    return watcher
+  }
 )
 
 const spawnMock = vi.fn(
@@ -62,7 +103,7 @@ const createServerMock = vi.fn(async () => ({
   cleanup: serverCleanupMock,
 }))
 
-vi.mock('../project/server.ts', () => ({
+vi.mock('../analysis/server.ts', () => ({
   createServer: createServerMock,
 }))
 
@@ -72,9 +113,78 @@ vi.mock('./framework.ts', () => ({
   resolveFrameworkBinFile: resolveFrameworkBinFileMock,
 }))
 
+const runPrewarmSafelyMock = vi.fn(async () => undefined)
+
+vi.mock('./prewarm-runner.ts', () => ({
+  createDefaultPrewarmOptions: (rootPath = process.cwd()) => ({
+    analysisOptions: {
+      tsConfigFilePath: join(rootPath, 'tsconfig.json'),
+    },
+  }),
+  runPrewarmSafely: runPrewarmSafelyMock,
+}))
+
 let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
+const originalEnvironment = captureProcessEnv([
+  PROCESS_ENV_KEYS.renounServerPort,
+  PROCESS_ENV_KEYS.renounServerId,
+  PROCESS_ENV_KEYS.renounServerHost,
+  PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective,
+])
+
+async function waitForAssertion(
+  assertion: () => void,
+  options: { timeoutMs?: number; intervalMs?: number } = {}
+): Promise<void> {
+  const timeoutMs = options.timeoutMs ?? 2_000
+  const intervalMs = options.intervalMs ?? 20
+  const deadline = Date.now() + timeoutMs
+
+  while (true) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      if (Date.now() >= deadline) {
+        throw error
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+}
+
+async function waitForOverrideCleanup(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 75))
+}
+
+async function assertNoWatchersRecreatedAfterCleanup(): Promise<void> {
+  const watcherCountBeforeLateEvents = watchMock.mock.calls.length
+  expect(watcherCountBeforeLateEvents).toBeGreaterThan(0)
+
+  const initialRegistrations = watchRegistrations.slice(
+    0,
+    watcherCountBeforeLateEvents
+  )
+  for (const registration of initialRegistrations) {
+    registration.listener('change', 'posts/hello-from-override.mdx')
+  }
+
+  await waitForOverrideCleanup()
+
+  expect(watchMock).toHaveBeenCalledTimes(watcherCountBeforeLateEvents)
+  for (const registration of initialRegistrations) {
+    expect(registration.watcher.close).toHaveBeenCalledTimes(1)
+  }
+}
 
 beforeAll(async () => {
+  vi.doMock('node:fs', async () => {
+    const actual = await vi.importActual<typeof import('node:fs')>('node:fs')
+    return {
+      ...actual,
+      watch: watchMock,
+    }
+  })
   ;({ runAppCommand: runAppCommand } = await import('./app.ts'))
 })
 
@@ -83,10 +193,12 @@ let originalCwd: string
 beforeEach(() => {
   originalCwd = process.cwd()
   vi.clearAllMocks()
+  watchRegistrations.length = 0
 })
 
 afterEach(() => {
   process.chdir(originalCwd)
+  restoreProcessEnv(originalEnvironment)
 })
 
 describe('runAppCommand integration', () => {
@@ -135,6 +247,18 @@ describe('runAppCommand integration', () => {
     const rootOverridePath = join(projectRoot, 'root-config.ts')
     await writeFile(rootOverridePath, 'export const root = true\n')
 
+    createServerMock.mockImplementationOnce(async () => {
+      process.env[PROCESS_ENV_KEYS.renounServerHost] = '127.0.0.1'
+      process.env[PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective] =
+        '0'
+
+      return {
+        getPort: getPortMock,
+        getId: getIdMock,
+        cleanup: serverCleanupMock,
+      }
+    })
+
     let resolveExit!: (code: number) => void
     let exitResolved = false
     const exitPromise = new Promise<number>((resolve) => {
@@ -176,13 +300,28 @@ describe('runAppCommand integration', () => {
       await runAppCommand({ command: 'dev', args: ['--port', '4000'] })
       const exitCode = await exitPromise
       expect(exitCode).toBe(0)
+      await waitForOverrideCleanup()
+      await assertNoWatchersRecreatedAfterCleanup()
+
+      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
 
       expect(createServerMock).toHaveBeenCalledTimes(1)
+      await waitForAssertion(() => {
+        expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
+      })
+      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+        {
+          analysisOptions: {
+            tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
+          },
+        },
+        {
+          allowInlineFallback: false,
+        }
+      )
       expect(getPortMock).toHaveBeenCalled()
       expect(getIdMock).toHaveBeenCalled()
       expect(serverCleanupMock).toHaveBeenCalledTimes(1)
-
-      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
 
       expect(resolveFrameworkBinFileMock).toHaveBeenCalledWith('next', {
         fromDirectory: runtimeRoot,
@@ -201,6 +340,10 @@ describe('runAppCommand integration', () => {
       expect(spawnOptions?.cwd).toBe(runtimeRoot)
       expect(spawnOptions?.env).toMatchObject({
         RENOUN_RUNTIME_DIRECTORY: runtimeRoot,
+        [PROCESS_ENV_KEYS.renounServerPort]: '4321',
+        [PROCESS_ENV_KEYS.renounServerId]: 'integration-test-server',
+        [PROCESS_ENV_KEYS.renounServerHost]: '127.0.0.1',
+        [PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]: '0',
       })
 
       const runtimePackageJson = JSON.parse(
@@ -330,6 +473,8 @@ describe('runAppCommand integration', () => {
       await runAppCommand({ command: 'dev', args: [] })
       const exitCode = await exitPromise
       expect(exitCode).toBe(0)
+      await waitForOverrideCleanup()
+      await assertNoWatchersRecreatedAfterCleanup()
 
       const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
       await expect(

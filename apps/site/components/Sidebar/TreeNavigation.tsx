@@ -1,11 +1,15 @@
-import { Children, Fragment, cloneElement, isValidElement } from 'react'
+import {
+  Children,
+  Fragment,
+  cloneElement,
+  isValidElement,
+  type ComponentProps,
+} from 'react'
 import {
   Directory,
   isDirectory,
   isJavaScriptFile,
-  isMDXFile,
   Navigation,
-  ModuleExportNotFoundError,
   type FileSystemEntry,
   type NavigationComponents,
   type NavigationProps,
@@ -15,7 +19,12 @@ import {
   SidebarCollapseContent,
   SidebarCollapseProvider,
 } from './SidebarCollapseProvider'
+import { getEntryMetadata } from './get-entry-metadata'
 import { SidebarLink } from './SidebarLink'
+
+type TreeNavigationLinkProps = ComponentProps<NavigationComponents['Link']> & {
+  collapsible?: boolean
+}
 
 const components: Partial<NavigationComponents> = {
   Root: Fragment,
@@ -64,8 +73,8 @@ const components: Partial<NavigationComponents> = {
       return <li>{children}</li>
     }
 
-    const link = isValidElement(firstChild)
-      ? cloneElement<any>(firstChild, { collapsible: true })
+    const link = isValidElement<TreeNavigationLinkProps>(firstChild)
+      ? cloneElement(firstChild, { collapsible: true })
       : firstChild
 
     const directoryPathname = entry.getPathname()
@@ -81,8 +90,7 @@ const components: Partial<NavigationComponents> = {
       </li>
     )
   },
-  Link: async (props) => {
-    const { entry, pathname, collapsible } = props as any
+  Link: async ({ entry, pathname, collapsible }: TreeNavigationLinkProps) => {
     const metadata = await getEntryMetadata(entry)
     let label: string
 
@@ -111,21 +119,6 @@ const components: Partial<NavigationComponents> = {
 
 export function TreeNavigation(props: Omit<NavigationProps, 'components'>) {
   return <Navigation {...props} components={components} />
-}
-
-async function getEntryMetadata(entry: FileSystemEntry<any>) {
-  if (!(isJavaScriptFile(entry) || isMDXFile(entry))) {
-    return undefined
-  }
-
-  try {
-    return await entry.getExportValue('metadata')
-  } catch (error) {
-    if (error instanceof ModuleExportNotFoundError) {
-      return undefined
-    }
-    throw error
-  }
 }
 
 async function getFileLabel(entry: FileSystemEntry<any>) {

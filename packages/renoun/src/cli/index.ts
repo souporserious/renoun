@@ -1,54 +1,111 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { isRenounDebugEnabled } from '../utils/env.ts'
+import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
 
-import { createServer } from '../project/server.ts'
-import { getDebugLogger } from '../utils/debug.ts'
-import { runAppCommand } from './app.ts'
-import { resolveFrameworkBinFile, type Framework } from './framework.ts'
-import { runEjectCommand } from './eject.ts'
-import { runOverrideCommand } from './override.ts'
-import { reorderEntries } from './reorder.ts'
-import { runThemeCommand } from './theme.ts'
-import { runValidateCommand } from './validate.ts'
+type Framework = 'next' | 'vite' | 'waku'
+type AnalysisCliRuntime = {
+  createServer: typeof import('../analysis/server.ts').createServer
+  getDebugLogger: typeof import('../utils/debug.ts').getDebugLogger
+  createDefaultPrewarmOptions: typeof import('./prewarm-runner.ts').createDefaultPrewarmOptions
+  runPrewarmSafely: typeof import('./prewarm-runner.ts').runPrewarmSafely
+}
 
 const [firstArgument, secondArgument, ...restArguments] = process.argv.slice(2)
 
-if (firstArgument === 'help') {
-  const usageMessage =
-    `Usage:   renoun <framework> <command>    Run a framework with renoun\n` +
-    `         renoun dev                      Run a renoun app (auto-detect)\n` +
-    `         renoun <app> dev                Run a specific renoun app\n` +
-    `         renoun eject [app]              Eject a renoun app into your project\n` +
-    `         renoun override <pattern>       Copy files from app template (supports globs)\n` +
-    `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
-    `         renoun validate [path|url]      Check for broken links\n` +
-    `\n` +
-    `Examples:\n` +
-    `  renoun next dev              Run Next.js with renoun\n` +
-    `  renoun dev                   Run auto-detected renoun app\n` +
-    `  renoun @renoun/blog dev      Run @renoun/blog app\n` +
-    `  renoun eject                 Eject app into your project\n` +
-    `  renoun override tsconfig.json    Copy tsconfig.json from app\n` +
-    `  renoun override "ui/*.tsx"       Copy all UI components from app`
+const usageMessage =
+  `Usage:   renoun <framework> <command>    Run a framework with renoun\n` +
+  `         renoun dev                      Run a renoun app (auto-detect)\n` +
+  `         renoun <app> dev                Run a specific renoun app\n` +
+  `         renoun eject [app]              Eject a renoun app into your project\n` +
+  `         renoun override <pattern>       Copy files from app template (supports globs)\n` +
+  `         renoun theme <path>             Prune a VS Code theme JSON file\n` +
+  `         renoun cache-token [--json]     Print deterministic cache token for CI\n` +
+  `         renoun cache-maintenance [...]  Run SQLite cache checkpoint/health/vacuum maintenance\n` +
+  `         renoun validate [path|url]      Check for broken links\n` +
+  `\n` +
+  `Examples:\n` +
+  `  renoun next dev              Run Next.js with renoun\n` +
+  `  renoun dev                   Run auto-detected renoun app\n` +
+  `  renoun @renoun/blog dev      Run @renoun/blog app\n` +
+  `  renoun eject                 Eject app into your project\n` +
+  `  renoun cache-token           Print the renoun cache token\n` +
+  `  renoun override tsconfig.json    Copy tsconfig.json from app\n` +
+  `  renoun override "ui/*.tsx"       Copy all UI components from app`
+
+function toStringArguments(values: Array<string | undefined>): Array<string> {
+  return values.filter((value): value is string => typeof value === 'string')
+}
+
+async function loadAnalysisCliRuntime(): Promise<AnalysisCliRuntime> {
+  const [
+    { createServer },
+    { getDebugLogger },
+    { createDefaultPrewarmOptions, runPrewarmSafely },
+  ] = await Promise.all([
+    import('../analysis/server.ts'),
+    import('../utils/debug.ts'),
+    import('./prewarm-runner.ts'),
+  ])
+
+  return {
+    createServer,
+    getDebugLogger,
+    createDefaultPrewarmOptions,
+    runPrewarmSafely,
+  }
+}
+
+function exitWithCommandError(error: unknown): never {
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(message)
+  process.exit(1)
+}
+
+if (
+  firstArgument === 'help' ||
+  firstArgument === '--help' ||
+  firstArgument === '-h'
+) {
   console.log(usageMessage)
   process.exit(0)
 }
 
 if (firstArgument === 'validate') {
-  const args = [secondArgument, ...restArguments].filter(
-    (value): value is string => typeof value === 'string'
-  )
+  const { runValidateCommand } = await import('./validate.ts')
+  const args = toStringArguments([secondArgument, ...restArguments])
   await runValidateCommand(args)
   process.exit(process.exitCode ?? 0)
 } else if (firstArgument === 'theme') {
+  const { runThemeCommand } = await import('./theme.ts')
   await runThemeCommand(secondArgument)
   process.exit(0)
+} else if (firstArgument === 'cache-token') {
+  const { runCacheTokenCommand } = await import('./cache-token.ts')
+  const args = toStringArguments([secondArgument, ...restArguments])
+
+  try {
+    await runCacheTokenCommand(args)
+    process.exit(0)
+  } catch (error) {
+    exitWithCommandError(error)
+  }
+} else if (firstArgument === 'cache-maintenance') {
+  const { runCacheMaintenanceCommand } = await import('./cache-maintenance.ts')
+  const args = toStringArguments([secondArgument, ...restArguments])
+
+  try {
+    await runCacheMaintenanceCommand(args)
+    process.exit(0)
+  } catch (error) {
+    exitWithCommandError(error)
+  }
 } else if (firstArgument === 'dev' || firstArgument === 'build') {
+  const { runAppCommand } = await import('./app.ts')
   // Auto-detect app mode: `renoun dev` or `renoun build`
   // Forward all args as framework args (no app name detection in this mode)
-  const forwardedArgs = [secondArgument, ...restArguments].filter(
-    (value): value is string => typeof value === 'string'
-  )
+  const forwardedArgs = toStringArguments([secondArgument, ...restArguments])
   await runAppCommand({
     command: firstArgument,
     args: forwardedArgs,
@@ -60,6 +117,14 @@ if (firstArgument === 'validate') {
   firstArgument === 'vite' ||
   firstArgument === 'waku'
 ) {
+  const {
+    createServer,
+    getDebugLogger,
+    createDefaultPrewarmOptions,
+    runPrewarmSafely,
+  } = await loadAnalysisCliRuntime()
+  const { resolveFrameworkBinFile } = await import('./framework.ts')
+
   let subProcess: ReturnType<typeof spawn> | undefined
 
   function cleanupAndExit(code: number) {
@@ -79,8 +144,10 @@ if (firstArgument === 'validate') {
 
   const isProduction = secondArgument === 'build'
 
-  if (process.env['NODE_ENV'] === undefined) {
-    process.env['NODE_ENV'] = isProduction ? 'production' : 'development'
+  if (process.env[PROCESS_ENV_KEYS.nodeEnv] === undefined) {
+    process.env[PROCESS_ENV_KEYS.nodeEnv] = isProduction
+      ? 'production'
+      : 'development'
   }
 
   getDebugLogger().info('Starting renoun CLI', () => ({
@@ -88,10 +155,8 @@ if (firstArgument === 'validate') {
       framework: firstArgument,
       command: secondArgument,
       isProduction,
-      nodeEnv: process.env['NODE_ENV'],
-      debugEnabled:
-        process.env['RENOUN_DEBUG'] !== undefined &&
-        process.env['RENOUN_DEBUG'].toLowerCase() !== 'false',
+      nodeEnv: process.env[PROCESS_ENV_KEYS.nodeEnv],
+      debugEnabled: isRenounDebugEnabled(),
     },
   }))
 
@@ -100,12 +165,23 @@ if (firstArgument === 'validate') {
       'cli.runSubProcess',
       async () => {
         const server = await createServer()
+        const serverHost = process.env[PROCESS_ENV_KEYS.renounServerHost]
+        const serverRefreshNotificationsEffective =
+          process.env[
+            PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
+          ]
         const port = String(await server.getPort())
         const id = server.getId()
 
         getDebugLogger().info('renoun server created', () => ({
           data: { port, serverId: id },
         }))
+
+        if (!isProduction) {
+          void runPrewarmSafely(createDefaultPrewarmOptions(), {
+            allowInlineFallback: false,
+          })
+        }
 
         const frameworkBinPath = resolveFrameworkBinFile(
           firstArgument as Framework
@@ -127,8 +203,20 @@ if (firstArgument === 'validate') {
           shell: false,
           env: {
             ...process.env,
-            RENOUN_SERVER_PORT: port,
-            RENOUN_SERVER_ID: id,
+            ...createServerRuntimeProcessEnv({
+              port,
+              id,
+              ...(typeof serverHost === 'string' && serverHost.length > 0
+                ? { host: serverHost }
+                : {}),
+              ...(typeof serverRefreshNotificationsEffective === 'string' &&
+              serverRefreshNotificationsEffective.length > 0
+                ? {
+                    emitRefreshNotifications:
+                      serverRefreshNotificationsEffective === '1',
+                  }
+                : {}),
+            }),
           },
         })
 
@@ -226,24 +314,23 @@ if (firstArgument === 'validate') {
   secondArgument === 'dev' ||
   secondArgument === 'build'
 ) {
-  const appArgs = [firstArgument, ...restArguments].filter(
-    (value): value is string => typeof value === 'string'
-  )
+  const { runAppCommand } = await import('./app.ts')
+  const appArgs = toStringArguments([firstArgument, ...restArguments])
   await runAppCommand({
     command: secondArgument as 'dev' | 'build',
     args: appArgs,
   })
   process.exit(process.exitCode ?? 0)
 } else if (firstArgument === 'eject') {
+  const { runEjectCommand } = await import('./eject.ts')
   try {
     await runEjectCommand({ appName: secondArgument })
     process.exit(0)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(message)
-    process.exit(1)
+    exitWithCommandError(error)
   }
 } else if (firstArgument === 'override') {
+  const { runOverrideCommand } = await import('./override.ts')
   if (!secondArgument) {
     console.error(
       '[renoun] Missing pattern. Usage: renoun override <pattern>\n' +
@@ -257,46 +344,67 @@ if (firstArgument === 'validate') {
     await runOverrideCommand({ pattern: secondArgument })
     process.exit(0)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.error(message)
-    process.exit(1)
+    exitWithCommandError(error)
   }
 } else if (firstArgument === 'reorder') {
+  const { reorderEntries } = await import('./reorder.ts')
   try {
     await reorderEntries(secondArgument)
     process.exit(0)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    console.error('Failed to reorder entries:', message)
-    process.exit(1)
+    exitWithCommandError(`Failed to reorder entries: ${message}`)
   }
 } else if (firstArgument === 'watch') {
-  if (process.env['NODE_ENV'] === undefined) {
-    process.env['NODE_ENV'] = 'development'
+  const {
+    createServer,
+    getDebugLogger,
+    createDefaultPrewarmOptions,
+    runPrewarmSafely,
+  } = await loadAnalysisCliRuntime()
+
+  if (process.env[PROCESS_ENV_KEYS.nodeEnv] === undefined) {
+    process.env[PROCESS_ENV_KEYS.nodeEnv] = 'development'
   }
 
   getDebugLogger().info('Starting renoun watch mode', () => ({
     data: {
-      nodeEnv: process.env['NODE_ENV'],
-      debugEnabled:
-        process.env['RENOUN_DEBUG'] !== undefined &&
-        process.env['RENOUN_DEBUG'].toLowerCase() !== 'false',
+      nodeEnv: process.env[PROCESS_ENV_KEYS.nodeEnv],
+      debugEnabled: isRenounDebugEnabled(),
     },
   }))
 
-  getDebugLogger().trackOperation(
-    'cli.watch',
-    async () => {
-      const server = await createServer()
+  try {
+    await getDebugLogger().trackOperation(
+      'cli.watch',
+      async () => {
+        const server = await createServer()
 
-      if (getDebugLogger().isEnabled('info')) {
-        const port = await server.getPort()
-        getDebugLogger().info('Watch server created', () => ({
-          data: { port },
-        }))
-      }
-      return server
-    },
-    { data: { mode: 'watch' } }
-  )
+        if (getDebugLogger().isEnabled('info')) {
+          const port = await server.getPort()
+          getDebugLogger().info('Watch server created', () => ({
+            data: { port },
+          }))
+        }
+
+        void runPrewarmSafely(createDefaultPrewarmOptions(), {
+          allowInlineFallback: false,
+        })
+
+        return server
+      },
+      { data: { mode: 'watch' } }
+    )
+  } catch (error) {
+    exitWithCommandError(error)
+  }
+} else {
+  if (firstArgument) {
+    console.error(
+      `[renoun] Unknown command "${firstArgument}".\n${usageMessage}`
+    )
+  } else {
+    console.error(`[renoun] Missing command.\n${usageMessage}`)
+  }
+  process.exit(1)
 }

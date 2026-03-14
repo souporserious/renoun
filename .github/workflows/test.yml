@@ -19,6 +19,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      has_renoun: ${{ steps.affected.outputs.has_renoun }}
     steps:
       - name: Checkout Repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -38,6 +40,11 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      - name: Restore renoun cache
+        uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -71,21 +78,83 @@ jobs:
 
           # Count affected packages, excluding screenshot (handled by separate workflow)
           PACKAGE_COUNT=$(echo "$AFFECTED" | jq '[.packages.items[] | select(.name != "@renoun/screenshot")] | length')
+          HAS_RENOUN=$(echo "$AFFECTED" | jq -r 'any(.packages.items[]?; (.name // "") == "renoun" or (.name // "") == "@renoun/mdx")')
+          RUN_ALL_PACKAGE_TESTS=false
+          if git diff --name-only "$TURBO_SCM_BASE"...HEAD | grep -Eq '^(package\.json|pnpm-(lock|workspace)\.yaml|turbo\.json|[^/]+\.config\.[^.]+|tsconfig[^/]*\.json)$'; then
+            RUN_ALL_PACKAGE_TESTS=true
+            HAS_RENOUN=true
+          fi
           echo "package_count=$PACKAGE_COUNT" >> $GITHUB_OUTPUT
+          echo "has_renoun=$HAS_RENOUN" >> $GITHUB_OUTPUT
+          echo "run_all_package_tests=$RUN_ALL_PACKAGE_TESTS" >> $GITHUB_OUTPUT
           echo "turbo_scm_base=$TURBO_SCM_BASE" >> $GITHUB_OUTPUT
 
           if [[ "$PACKAGE_COUNT" -gt 0 ]]; then
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
             echo "$AFFECTED" | jq -r '.packages.items[].name' >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          elif [[ "$RUN_ALL_PACKAGE_TESTS" == "true" ]]; then
+            echo "_No directly affected packages reported by Turbo_" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Root dependency/config files changed, so all package tests will run." >> $GITHUB_STEP_SUMMARY
           else
             echo "_No packages affected_" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "✅ No tests to run" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Run tests for affected packages
-        if: steps.affected.outputs.package_count != '0'
+      - name: Run package tests
+        if: steps.affected.outputs.package_count != '0' || steps.affected.outputs.run_all_package_tests == 'true'
         env:
           TURBO_SCM_BASE: ${{ steps.affected.outputs.turbo_scm_base }}
-        run: pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!//" --filter="!@renoun/screenshot"
+          RUN_ALL_PACKAGE_TESTS: ${{ steps.affected.outputs.run_all_package_tests }}
+        run: |
+          if [[ "$RUN_ALL_PACKAGE_TESTS" == "true" ]]; then
+            pnpm test --filter="!//" --filter="!@renoun/screenshot"
+          else
+            pnpm test --filter="...[$TURBO_SCM_BASE]" --filter="!//" --filter="!@renoun/screenshot"
+          fi
+
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22
+
+  renoun-browser:
+    needs: test
+    if: needs.test.outputs.has_renoun == 'true'
+    runs-on: macos-14
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Restore renoun cache
+        uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run renoun browser regression tests
+        run: pnpm turbo run test:browser --filter renoun
+
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

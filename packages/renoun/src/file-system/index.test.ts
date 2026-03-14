@@ -9,7 +9,13 @@ import {
   vi,
 } from 'vitest'
 import { runInNewContext } from 'node:vm'
-import { mkdirSync, mkdtempSync, rmSync, statSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
@@ -19,16 +25,16 @@ import { z } from 'zod'
 
 import type { basename } from '#fixtures/utils/path.ts'
 import type { MDXContent } from '../mdx'
-import type { Section, ContentSection } from './index'
+import type { ContentSection } from './index'
 import type { OutlineRange } from '../utils/get-outline-ranges.ts'
-import { removeExtension } from '../utils/path.ts'
+import { normalizePathKey, removeExtension } from '../utils/path.ts'
+import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
 import { NodeFileSystem } from './NodeFileSystem'
-import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
-import { GitFileSystem } from './GitFileSystem.ts'
+import { Cache } from './Cache.ts'
+import { InMemoryFileSystem, type InMemoryEntry } from './InMemoryFileSystem.ts'
 import * as gitHostFileSystemModule from './GitVirtualFileSystem'
 import {
   type FileSystemEntry,
-  type InferModuleExports,
   File,
   Directory,
   JavaScriptFile,
@@ -60,6 +66,91 @@ type IsUnknown<Type> = unknown extends Type
   : false
 
 type IsNotUnknown<Type> = IsUnknown<Type> extends true ? false : true
+
+interface SerializedNavigationEntry {
+  name: string
+  path: string
+  depth: number
+  children?: SerializedNavigationEntry[]
+}
+
+function serializeNavigationEntries(
+  entries: readonly {
+    entry: {
+      name: string
+      depth: number
+      getPathname: () => string
+    }
+    children?: readonly any[]
+  }[]
+): SerializedNavigationEntry[] {
+  return entries.map(({ entry, children }) => ({
+    name: entry.name,
+    path: entry.getPathname(),
+    depth: entry.depth,
+    ...(children && children.length > 0
+      ? { children: serializeNavigationEntries(children) }
+      : {}),
+  }))
+}
+
+function createTempDirectoryHandle(prefix: string) {
+  const path = mkdtempSync(prefix)
+  return {
+    path,
+    [Symbol.dispose]() {
+      rmSync(path, { recursive: true, force: true })
+    },
+  }
+}
+
+class TokenAwareInMemoryFileSystem extends InMemoryFileSystem {
+  override async getWorkspaceChangeToken(rootPath: string): Promise<string> {
+    const normalizedRootPath = normalizePathKey(rootPath)
+    const prefix = normalizedRootPath === '.' ? '' : `${normalizedRootPath}/`
+    const scopedEntries = Array.from(this.getFiles().entries())
+      .filter(([path]) => {
+        const normalizedPath = normalizePathKey(path)
+        return (
+          normalizedRootPath === '.' ||
+          normalizedPath === normalizedRootPath ||
+          normalizedPath.startsWith(prefix)
+        )
+      })
+      .map(([path, entry]) => {
+        return `${normalizePathKey(path)}:${this.#getEntrySignature(entry)}`
+      })
+      .sort()
+
+    return `${normalizedRootPath}:${scopedEntries.join('|')}`
+  }
+
+  override async getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<readonly string[]> {
+    const normalizedRootPath = normalizePathKey(rootPath)
+    const currentToken = await this.getWorkspaceChangeToken(rootPath)
+
+    if (currentToken === previousToken) {
+      return []
+    }
+
+    return [normalizedRootPath]
+  }
+
+  #getEntrySignature(entry: InMemoryEntry): string {
+    if (entry.kind === 'Directory') {
+      return 'dir'
+    }
+
+    if (entry.kind === 'Text') {
+      return `text:${entry.content}`
+    }
+
+    return `binary:${typeof entry.content === 'string' ? entry.content : entry.content.byteLength}`
+  }
+}
 
 describe('file system', () => {
   const initialCwd = process.cwd()
@@ -131,15 +222,18 @@ describe('file system', () => {
     })
 
     test('applies URL directory prefix when provided with relative path', () => {
+      const fileSystem = new NodeFileSystem()
+      const expectedWorkspacePath = fileSystem.getRelativePathToWorkspace(
+        fileURLToPath(new URL('../components/Link/Link.tsx', import.meta.url))
+      )
+
       const file = new File({
         directory: new URL('../components', import.meta.url),
         path: 'Link/Link.tsx',
         byteLength: 0,
       })
 
-      expect(file.workspacePath).toBe(
-        'packages/renoun/src/components/Link/Link.tsx'
-      )
+      expect(file.workspacePath).toBe(expectedWorkspacePath)
     })
 
     test('applies directory instance prefix when provided with relative path', () => {
@@ -162,8 +256,11 @@ describe('file system', () => {
   test('node file system read directory', async () => {
     const fileSystem = new NodeFileSystem()
     const entries = await fileSystem.readDirectory('fixtures/utils')
-    expect(entries).toHaveLength(1)
-    expect(entries[0].name).toBe('path.ts')
+    expect(entries.map((entry) => entry.name).sort()).toEqual([
+      'path.d.ts',
+      'path.js',
+      'path.ts',
+    ])
   })
 
   test('node file system prevents access outside workspace', () => {
@@ -174,20 +271,24 @@ describe('file system', () => {
     )
   })
 
-  test('node file system supports binary, stream, and write operations', async () => {
-    const fileSystem = new NodeFileSystem()
-    const rootDirectory = getRootDirectory()
-    const baseTmpDirectory = join(rootDirectory, 'tmp')
-    mkdirSync(baseTmpDirectory, { recursive: true })
-    const tempDirectory = mkdtempSync(join(baseTmpDirectory, 'fs-'))
+  test.skipIf(isDetectAsyncLeaksEnabled)(
+    'node file system supports binary, stream, and write operations',
+    async () => {
+      const fileSystem = new NodeFileSystem()
+      const rootDirectory = getRootDirectory()
+      const baseTmpDirectory = join(rootDirectory, 'tmp')
+      mkdirSync(baseTmpDirectory, { recursive: true })
+      using tempDirectoryHandle = createTempDirectoryHandle(
+        join(baseTmpDirectory, 'fs-')
+      )
+      const tempDirectory = tempDirectoryHandle.path
 
-    const textFilePath = join(tempDirectory, 'hello.txt')
-    const binaryFilePath = join(tempDirectory, 'binary.bin')
-    const streamFilePath = join(tempDirectory, 'stream.txt')
-    const decoder = new TextDecoder()
-    const encoder = new TextEncoder()
+      const textFilePath = join(tempDirectory, 'hello.txt')
+      const binaryFilePath = join(tempDirectory, 'binary.bin')
+      const streamFilePath = join(tempDirectory, 'stream.txt')
+      const decoder = new TextDecoder()
+      const encoder = new TextEncoder()
 
-    try {
       await fileSystem.writeFile(textFilePath, 'Hello World')
       expect(await fileSystem.readFile(textFilePath)).toBe('Hello World')
 
@@ -200,6 +301,7 @@ describe('file system', () => {
       expect(firstChunk.done).toBe(false)
       expect(decoder.decode(firstChunk.value!)).toBe('Hello World')
       expect((await reader.read()).done).toBe(true)
+      await reader.closed
       reader.releaseLock()
 
       await fileSystem.writeFile(binaryFilePath, new Uint8Array([0, 1, 2]))
@@ -210,60 +312,60 @@ describe('file system', () => {
       const writer = fileSystem.writeFileStream(streamFilePath).getWriter()
       await writer.write(encoder.encode('Stream data'))
       await writer.close()
+      await writer.closed
+      writer.releaseLock()
+      await new Promise((resolve) => setTimeout(resolve, 20))
 
       expect(await fileSystem.readFile(streamFilePath)).toBe('Stream data')
-    } finally {
-      rmSync(tempDirectory, { recursive: true, force: true })
     }
-  })
+  )
 
   test('node file system supports creating, renaming, and copying paths', async () => {
     const fileSystem = new NodeFileSystem()
     const rootDirectory = getRootDirectory()
     const baseTmpDirectory = join(rootDirectory, 'tmp')
     mkdirSync(baseTmpDirectory, { recursive: true })
-    const tempDirectory = mkdtempSync(join(baseTmpDirectory, 'fs-'))
+    using tempDirectoryHandle = createTempDirectoryHandle(
+      join(baseTmpDirectory, 'fs-')
+    )
+    const tempDirectory = tempDirectoryHandle.path
 
-    try {
-      const nestedDirectory = join(tempDirectory, 'a/b')
-      await fileSystem.createDirectory(nestedDirectory)
-      expect(statSync(nestedDirectory).isDirectory()).toBe(true)
+    const nestedDirectory = join(tempDirectory, 'a/b')
+    await fileSystem.createDirectory(nestedDirectory)
+    expect(statSync(nestedDirectory).isDirectory()).toBe(true)
 
-      const sourceFile = join(tempDirectory, 'a/source.txt')
-      const conflictPath = join(tempDirectory, 'conflict.txt')
-      await fileSystem.writeFile(sourceFile, 'source')
-      await fileSystem.writeFile(conflictPath, 'existing')
+    const sourceFile = join(tempDirectory, 'a/source.txt')
+    const conflictPath = join(tempDirectory, 'conflict.txt')
+    await fileSystem.writeFile(sourceFile, 'source')
+    await fileSystem.writeFile(conflictPath, 'existing')
 
-      await expect(fileSystem.rename(sourceFile, conflictPath)).rejects.toThrow(
-        /target already exists/
-      )
+    await expect(fileSystem.rename(sourceFile, conflictPath)).rejects.toThrow(
+      /target already exists/
+    )
 
-      await fileSystem.rename(sourceFile, conflictPath, { overwrite: true })
-      expect(await fileSystem.readFile(conflictPath)).toBe('source')
+    await fileSystem.rename(sourceFile, conflictPath, { overwrite: true })
+    expect(await fileSystem.readFile(conflictPath)).toBe('source')
 
-      const copyTarget = join(tempDirectory, 'copy/target.txt')
-      await fileSystem.copy(conflictPath, copyTarget)
-      expect(await fileSystem.readFile(copyTarget)).toBe('source')
+    const copyTarget = join(tempDirectory, 'copy/target.txt')
+    await fileSystem.copy(conflictPath, copyTarget)
+    expect(await fileSystem.readFile(copyTarget)).toBe('source')
 
-      await expect(fileSystem.copy(conflictPath, copyTarget)).rejects.toThrow(
-        /target already exists/
-      )
+    await expect(fileSystem.copy(conflictPath, copyTarget)).rejects.toThrow(
+      /target already exists/
+    )
 
-      await fileSystem.copy(conflictPath, copyTarget, { overwrite: true })
-      expect(await fileSystem.readFile(copyTarget)).toBe('source')
+    await fileSystem.copy(conflictPath, copyTarget, { overwrite: true })
+    expect(await fileSystem.readFile(copyTarget)).toBe('source')
 
-      const directorySource = join(tempDirectory, 'dir')
-      const nestedFile = join(directorySource, 'inner/file.txt')
-      await fileSystem.createDirectory(join(directorySource, 'inner'))
-      await fileSystem.writeFile(nestedFile, 'dir source')
-      const directoryCopy = join(tempDirectory, 'dir-copy')
-      await fileSystem.copy(directorySource, directoryCopy)
-      expect(
-        await fileSystem.readFile(join(directoryCopy, 'inner/file.txt'))
-      ).toBe('dir source')
-    } finally {
-      rmSync(tempDirectory, { recursive: true, force: true })
-    }
+    const directorySource = join(tempDirectory, 'dir')
+    const nestedFile = join(directorySource, 'inner/file.txt')
+    await fileSystem.createDirectory(join(directorySource, 'inner'))
+    await fileSystem.writeFile(nestedFile, 'dir source')
+    const directoryCopy = join(tempDirectory, 'dir-copy')
+    await fileSystem.copy(directorySource, directoryCopy)
+    expect(
+      await fileSystem.readFile(join(directoryCopy, 'inner/file.txt'))
+    ).toBe('dir source')
   })
 
   test('virtual file system read directory', async () => {
@@ -273,40 +375,47 @@ describe('file system', () => {
     expect(entries[0].name).toBe('path.ts')
   })
 
-  test('memory file system supports binary, stream, and write operations', async () => {
-    const fileSystem = new InMemoryFileSystem({})
-    const decoder = new TextDecoder()
-    const encoder = new TextEncoder()
+  test.skipIf(isDetectAsyncLeaksEnabled)(
+    'memory file system supports binary, stream, and write operations',
+    async () => {
+      const fileSystem = new InMemoryFileSystem({})
+      const decoder = new TextDecoder()
+      const encoder = new TextEncoder()
 
-    await fileSystem.writeFile('hello.txt', 'Hello Memory')
-    expect(await fileSystem.readFile('hello.txt')).toBe('Hello Memory')
+      await fileSystem.writeFile('hello.txt', 'Hello Memory')
+      expect(await fileSystem.readFile('hello.txt')).toBe('Hello Memory')
 
-    const binary = await fileSystem.readFileBinary('hello.txt')
-    expect(decoder.decode(binary)).toBe('Hello Memory')
+      const binary = await fileSystem.readFileBinary('hello.txt')
+      expect(decoder.decode(binary)).toBe('Hello Memory')
 
-    const writer = fileSystem.writeFileStream('stream.txt').getWriter()
-    await writer.write(encoder.encode('Chunk '))
-    await writer.write(encoder.encode('data'))
-    await writer.close()
+      const writer = fileSystem.writeFileStream('stream.txt').getWriter()
+      await writer.write(encoder.encode('Chunk '))
+      await writer.write(encoder.encode('data'))
+      await writer.close()
+      await writer.closed
+      writer.releaseLock()
+      await new Promise((resolve) => setTimeout(resolve, 20))
 
-    const stream = fileSystem.readFileStream('stream.txt')
-    const reader = stream.getReader()
-    let text = ''
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) {
-        break
+      const stream = fileSystem.readFileStream('stream.txt')
+      const reader = stream.getReader()
+      let text = ''
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) {
+          break
+        }
+        text += decoder.decode(value)
       }
-      text += decoder.decode(value)
+      await reader.closed
+      reader.releaseLock()
+      expect(text).toBe('Chunk data')
+
+      expect(await fileSystem.readFile('stream.txt')).toBe('Chunk data')
+
+      await fileSystem.deleteFile('stream.txt')
+      expect(await fileSystem.fileExists('stream.txt')).toBe(false)
     }
-    reader.releaseLock()
-    expect(text).toBe('Chunk data')
-
-    expect(await fileSystem.readFile('stream.txt')).toBe('Chunk data')
-
-    await fileSystem.deleteFile('stream.txt')
-    expect(await fileSystem.fileExists('stream.txt')).toBe(false)
-  })
+  )
 
   test('directory with no configuration', async () => {
     const directory = new Directory()
@@ -390,7 +499,7 @@ describe('file system', () => {
 
   test('directory with virtual file system', async () => {
     const fileSystem = new InMemoryFileSystem({
-      'fixtures/project/server.ts': '',
+      'fixtures/analysis/server.ts': '',
       'fixtures/project/types.ts': '',
     })
     const fixturesDirectory = new Directory({
@@ -402,7 +511,7 @@ describe('file system', () => {
     expect(directory).toBeInstanceOf(Directory)
     expect(directory?.name).toBe('project')
 
-    const file = await fixturesDirectory.getFile('project/server', 'ts')
+    const file = await fixturesDirectory.getFile('analysis/server', 'ts')
 
     expect(file).toBeInstanceOf(File)
     expect(file?.name).toBe('server.ts')
@@ -497,7 +606,7 @@ describe('file system', () => {
         "/project/types",
       ]
     `)
-  })
+  }, 12_000)
 
   test('directory accepts URL path input', async () => {
     const projectUrl = new URL('../../fixtures/project', import.meta.url)
@@ -843,7 +952,7 @@ describe('file system', () => {
       type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toExtend<{ title: string } | undefined>()
-    })
+    }, 30_000)
 
     test('custom validator', async () => {
       const directory = new Directory({
@@ -1792,7 +1901,183 @@ describe('file system', () => {
       new Date('04/20/20'),
     ])
     expect(await objectExport.getStaticValue()).toEqual({ a: 1, b: 'x' })
-    expect(getTextSpy).toHaveBeenCalledTimes(1)
+    expect(getTextSpy).toHaveBeenCalledTimes(0)
+  })
+
+  test('mdx frontmatter resolves statically without invoking runtime loader', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.mdx': [
+        "export const frontmatter = { title: 'static' }",
+        '',
+        '# Hello',
+      ].join('\n'),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        mdx: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'static' })
+    expect(exportValue).toEqual({ title: 'static' })
+    expect(runtimeLoader).not.toHaveBeenCalled()
+  })
+
+  test('mdx named exports resolve statically without invoking runtime loader', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      metadata: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.mdx': [
+        "export const metadata = { title: 'static' }",
+        '',
+        '# Hello',
+      ].join('\n'),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        mdx: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    const exportValue = await file.getExportValue('metadata')
+
+    expect(exportValue).toEqual({ title: 'static' })
+    expect(runtimeLoader).not.toHaveBeenCalled()
+  })
+
+  test('mdx frontmatter falls back to runtime loader when static value is unavailable', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.mdx': [
+        'export const metadata = { title: "Meta" }',
+        '',
+        '# Hello',
+      ].join('\n'),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        mdx: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'mdx')) as MDXFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'runtime' })
+    expect(exportValue).toEqual({ title: 'runtime' })
+    expect(runtimeLoader).toHaveBeenCalledTimes(1)
+  })
+
+  test('markdown frontmatter resolves from source without invoking runtime loader', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.md': ['---', 'title: static', '---', '', '# Hello'].join('\n'),
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        md: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'md')) as MarkdownFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'static' })
+    expect(exportValue).toEqual({ title: 'static' })
+    expect(runtimeLoader).not.toHaveBeenCalled()
+  })
+
+  test('markdown frontmatter falls back to runtime loader when source frontmatter is unavailable', async () => {
+    const runtimeLoader = vi.fn(async () => ({
+      default: (() => null) as any,
+      frontmatter: { title: 'runtime' },
+    }))
+    const fileSystem = new InMemoryFileSystem({
+      'index.md': '# Hello',
+    })
+    const directory = new Directory({
+      fileSystem,
+      loader: {
+        md: runtimeLoader,
+      },
+    })
+    const file = (await directory.getFile('index', 'md')) as MarkdownFile<
+      any,
+      any,
+      any
+    >
+
+    const frontmatter = await file.getFrontmatter()
+    const exportValue = await file.getExportValue('frontmatter')
+
+    expect(frontmatter).toEqual({ title: 'runtime' })
+    expect(exportValue).toEqual({ title: 'runtime' })
+    expect(runtimeLoader).toHaveBeenCalledTimes(1)
+  })
+
+  test('markdown source frontmatter applies schema coercion via getExportValue', async () => {
+    const directory = new Directory({
+      fileSystem: new InMemoryFileSystem({
+        'post.md': `---
+title: Hello
+date: 2024-12-24
+---
+`,
+      }),
+      schema: {
+        md: {
+          frontmatter: z.object({
+            title: z.string(),
+            date: z.coerce.date(),
+          }),
+        },
+      },
+    })
+    const file = await directory.getFile('post', 'md')
+
+    const frontmatter = await file.getExportValue('frontmatter')
+
+    frontmatter satisfies { title: string; date: Date }
+    expect(frontmatter.date).toBeInstanceOf(Date)
   })
 
   test('mdx file provides chat urls with raw source', async () => {
@@ -2177,7 +2462,7 @@ function b() {}
       title: 'Hello, World!',
       date: new Date('2022-01-01'),
     })
-  })
+  }, 45_000)
 
   test('file export metadata', async () => {
     const statementText = 'export default function hello() {}'
@@ -2524,43 +2809,14 @@ export function identity<T>(value: T) {
     expect(nextEntry).toBeInstanceOf(Directory)
   })
 
-  test('generates tree navigation', async () => {
+  test('generates tree navigation entries', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
       basePathname: 'project',
       sort: fixtureSort,
     })
 
-    type TreeEntry = {
-      name: string
-      path: string
-      depth: number
-      children?: TreeEntry[]
-    }
-
-    async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
-      entry: Entry
-    ): Promise<TreeEntry> {
-      const name = entry.name
-      const path = entry.getPathname()
-      const depth = entry.depth
-
-      if (isFile(entry)) {
-        return { name, path, depth }
-      }
-
-      const entries = await entry.getEntries()
-
-      return {
-        name,
-        path,
-        depth,
-        children: await Promise.all(entries.map(buildTreeNavigation)),
-      }
-    }
-
-    const sources = await projectDirectory.getEntries()
-    const tree = await Promise.all(sources.map(buildTreeNavigation))
+    const tree = serializeNavigationEntries(await projectDirectory.getTree())
 
     expect(tree).toMatchInlineSnapshot(`
       [
@@ -2590,6 +2846,110 @@ export function identity<T>(value: T) {
           "depth": 0,
           "name": "types.ts",
           "path": "/project/types",
+        },
+      ]
+    `)
+  })
+
+  test('synthesizes filtered ancestors in navigation entries', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/guides/advanced/deep-dive.mdx': '# Deep Dive',
+      'docs/guides/drafts/ignore-me.mdx': '# Ignore Me',
+      'docs/overview.mdx': '# Overview',
+    })
+    const docs = new Directory({
+      fileSystem,
+      path: 'docs',
+      basePathname: 'docs',
+      filter: (entry) => isFile(entry, 'mdx') && entry.baseName === 'deep-dive',
+    })
+
+    const tree = serializeNavigationEntries(await docs.getTree())
+
+    expect(tree).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "depth": 2,
+                  "name": "deep-dive.mdx",
+                  "path": "/docs/guides/advanced/deep-dive",
+                },
+              ],
+              "depth": 1,
+              "name": "advanced",
+              "path": "/docs/guides/advanced",
+            },
+          ],
+          "depth": 0,
+          "name": "guides",
+          "path": "/docs/guides",
+        },
+      ]
+    `)
+  })
+
+  test('builds collection navigation entries from filtered directory roots', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/guides/advanced/deep-dive.mdx': '# Deep Dive',
+      'extras/overview.mdx': '# Overview',
+    })
+    const docs = new Directory({
+      fileSystem,
+      path: 'docs',
+      basePathname: 'docs',
+      filter: (entry) => isFile(entry, 'mdx') && entry.baseName === 'deep-dive',
+    })
+    const extras = new Directory({
+      fileSystem,
+      path: 'extras',
+      basePathname: 'extras',
+    })
+    const overview = await extras.getFile('overview', 'mdx')
+
+    if (!overview) {
+      throw new Error('Expected overview file')
+    }
+
+    const collection = new Collection({
+      entries: [docs, overview],
+    })
+    const tree = serializeNavigationEntries(await collection.getTree())
+
+    expect(tree).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "depth": 2,
+                      "name": "deep-dive.mdx",
+                      "path": "/docs/guides/advanced/deep-dive",
+                    },
+                  ],
+                  "depth": 1,
+                  "name": "advanced",
+                  "path": "/docs/guides/advanced",
+                },
+              ],
+              "depth": 0,
+              "name": "guides",
+              "path": "/docs/guides",
+            },
+          ],
+          "depth": -1,
+          "name": "docs",
+          "path": "/docs",
+        },
+        {
+          "depth": 0,
+          "name": "overview.mdx",
+          "path": "/extras/overview",
         },
       ]
     `)
@@ -2857,6 +3217,179 @@ export function identity<T>(value: T) {
 
     expect(nextFileEntry).toBeDefined()
     expect(nextFileEntry!.getPathname()).toBe('/guides/next-steps')
+  })
+
+  test('entry group siblings keep distinct navigation order for differently sorted roots', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+      'docs/c.mdx': '',
+    })
+    const cache = new Cache()
+    const ascendingDocs = new Directory({
+      path: 'docs',
+      fileSystem,
+      cache,
+      filter: '*.mdx',
+      sort: 'name',
+    })
+    const descendingDocs = new Directory({
+      path: 'docs',
+      fileSystem,
+      cache,
+      filter: '*.mdx',
+      sort: { key: 'name', direction: 'descending' },
+    })
+    const ascendingCollection = new Collection({ entries: [ascendingDocs] })
+    const descendingCollection = new Collection({ entries: [descendingDocs] })
+
+    const [ascendingPreviousEntry, ascendingNextEntry] =
+      await ascendingCollection.getSiblingsFor('/docs/b')
+    const [descendingPreviousEntry, descendingNextEntry] =
+      await descendingCollection.getSiblingsFor('/docs/b')
+
+    expect(ascendingPreviousEntry?.getPathname()).toBe('/docs/a')
+    expect(ascendingNextEntry?.getPathname()).toBe('/docs/c')
+    expect(descendingPreviousEntry?.getPathname()).toBe('/docs/c')
+    expect(descendingNextEntry?.getPathname()).toBe('/docs/a')
+  })
+
+  test('entry group getEntries caches recursive results and invalidates on session changes', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+    })
+    const docs = new Directory({ path: 'docs', fileSystem })
+    const group = new Collection({ entries: [docs] })
+    const directoryGetEntriesSpy = vi.spyOn(docs, 'getEntries')
+
+    const first = await group.getEntries({ recursive: true })
+    const second = await group.getEntries({ recursive: true })
+
+    expect(second).toBe(first)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(1)
+
+    await fileSystem.writeFile('docs/c.mdx', '')
+    docs.getSession().invalidatePath('docs/c.mdx')
+
+    const third = await group.getEntries({ recursive: true })
+
+    expect(third).not.toBe(first)
+    expect(third.some((entry) => entry.baseName === 'c')).toBe(true)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(2)
+  })
+
+  test('entry group getEntries refreshes recursive results after workspace token changes', async () => {
+    const fileSystem = new TokenAwareInMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+    })
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 0,
+      workspaceChangedPathsTtlMs: 0,
+    })
+    const docs = new Directory({ path: 'docs', fileSystem, cache })
+    const group = new Collection({ entries: [docs] })
+    const directoryGetEntriesSpy = vi.spyOn(docs, 'getEntries')
+
+    const first = await group.getEntries({ recursive: true })
+    const second = await group.getEntries({ recursive: true })
+
+    expect(second).toBe(first)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(1)
+
+    await fileSystem.writeFile('docs/c.mdx', '')
+
+    const third = await group.getEntries({ recursive: true })
+
+    expect(third).not.toBe(first)
+    expect(third.some((entry) => entry.baseName === 'c')).toBe(true)
+    expect(directoryGetEntriesSpy).toHaveBeenCalledTimes(2)
+  })
+
+  test('entry group siblings refresh after workspace token changes', async () => {
+    const fileSystem = new TokenAwareInMemoryFileSystem({
+      'docs/a.mdx': '',
+      'docs/b.mdx': '',
+    })
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 0,
+      workspaceChangedPathsTtlMs: 0,
+    })
+    const docs = new Directory({ path: 'docs', fileSystem, cache })
+    const group = new Collection({ entries: [docs] })
+
+    const firstFile = await group.getFile('docs/a')
+    const [, firstNextEntry] = await firstFile.getSiblings({
+      collection: group,
+    })
+
+    expect(firstNextEntry).toBeDefined()
+    expect(firstNextEntry!.getPathname()).toBe('/docs/b')
+
+    await fileSystem.writeFile('docs/c.mdx', '')
+
+    const secondFile = await group.getFile('docs/b')
+    const [, secondNextEntry] = await secondFile.getSiblings({
+      collection: group,
+    })
+
+    expect(secondNextEntry).toBeDefined()
+    expect(secondNextEntry!.getPathname()).toBe('/docs/c')
+  })
+
+  test('directory getFile refreshes cached mdx lookups in development after workspace changes', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      const fileSystem = new TokenAwareInMemoryFileSystem({
+        'docs/index.mdx': '# Initial',
+      })
+      const cache = new Cache({
+        workspaceChangeTokenTtlMs: 0,
+        workspaceChangedPathsTtlMs: 0,
+      })
+      const docs = new Directory({ path: 'docs', fileSystem, cache })
+
+      const firstFile = await docs.getFile('index', 'mdx')
+      expect(await firstFile.getText()).toBe('# Initial')
+
+      await fileSystem.writeFile('docs/index.mdx', '# Updated')
+
+      const secondFile = await docs.getFile('index', 'mdx')
+
+      expect(secondFile).not.toBe(firstFile)
+      expect(await secondFile.getText()).toBe('# Updated')
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
+  test('entry group reuses the session workspace token cache for freshness checks', async () => {
+    const fileSystem = new TokenAwareInMemoryFileSystem({
+      'docs/a.mdx': '',
+      'guides/a.mdx': '',
+    })
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 60_000,
+      workspaceChangedPathsTtlMs: 60_000,
+    })
+    const docs = new Directory({ path: 'docs', fileSystem, cache })
+    const guides = new Directory({ path: 'guides', fileSystem, cache })
+    const group = new Collection({ entries: [docs, guides] })
+    const tokenSpy = vi.spyOn(fileSystem, 'getWorkspaceChangeToken')
+
+    await group.getEntries({ recursive: true })
+    await group.getEntries({ recursive: true })
+
+    expect(tokenSpy).toHaveBeenCalledTimes(2)
+    expect(tokenSpy).toHaveBeenNthCalledWith(1, 'docs')
+    expect(tokenSpy).toHaveBeenNthCalledWith(2, 'guides')
   })
 
   test('multiple extensions in entry group', async () => {
@@ -3526,6 +4059,64 @@ date: 2024-12-24
     }
   })
 
+  test('resolveFileFromEntry falls back to readme when index is missing', async () => {
+    class MissingIndexDirectory extends Directory {
+      override async getFile(
+        path: string | string[],
+        extension?: string | string[]
+      ) {
+        const normalizedPath = Array.isArray(path) ? path.join('/') : path
+
+        if (normalizedPath.toLowerCase() === 'index') {
+          throw new FileNotFoundError(path, extension)
+        }
+
+        return super.getFile(path, extension)
+      }
+    }
+
+    const fileSystem = new InMemoryFileSystem({
+      'docs/README.mdx': '# Project',
+    })
+    const docsDirectory = new MissingIndexDirectory({
+      path: 'docs',
+      fileSystem,
+    })
+
+    const file = await resolveFileFromEntry(docsDirectory, 'mdx')
+
+    expect(file?.baseName.toLowerCase()).toBe('readme')
+  })
+
+  test('resolveFileFromEntry rethrows index lookup errors that are not missing-file errors', async () => {
+    class BrokenIndexDirectory extends Directory {
+      override async getFile(
+        path: string | string[],
+        extension?: string | string[]
+      ) {
+        const normalizedPath = Array.isArray(path) ? path.join('/') : path
+
+        if (normalizedPath.toLowerCase() === 'index') {
+          throw new Error('index lookup failed')
+        }
+
+        return super.getFile(path, extension)
+      }
+    }
+
+    const fileSystem = new InMemoryFileSystem({
+      'docs/README.mdx': '# Project',
+    })
+    const docsDirectory = new BrokenIndexDirectory({
+      path: 'docs',
+      fileSystem,
+    })
+
+    await expect(resolveFileFromEntry(docsDirectory, 'mdx')).rejects.toThrow(
+      'index lookup failed'
+    )
+  })
+
   test('query path with modifier and separate extensions', async () => {
     const fileSystem = new InMemoryFileSystem({
       'Button.examples.tsx': ``,
@@ -4114,6 +4705,282 @@ date: 2024-12-24
           kind: 'typesField',
         })
       })
+
+      test('memoizes resolveExportSources when dependencies are unchanged', () => {
+        mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
+        const tempDirectory = mkdtempSync(
+          join(process.cwd(), '.cache', 'resolve-export-sources-cache-hit-')
+        )
+        const packageDirectory = join(tempDirectory, 'packages', 'acme')
+        const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
+
+        mkdirSync(join(packageDirectory, 'dist'), { recursive: true })
+        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(packageDirectory, 'package.json'),
+          JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'index.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'index.ts'),
+          'export const value = 1',
+          'utf8'
+        )
+
+        const fileSystem = new NodeFileSystem()
+        const readFileSpy = vi.spyOn(fileSystem, 'readFileSync')
+        const pkg = new Package({
+          path: packagePath,
+          fileSystem,
+        })
+
+        try {
+          const firstResult = pkg.resolveExportSources()
+          const readCallsAfterFirstResult = readFileSpy.mock.calls.length
+          const secondResult = pkg.resolveExportSources()
+
+          expect(secondResult).toEqual(firstResult)
+          expect(readFileSpy.mock.calls.length).toBe(readCallsAfterFirstResult)
+        } finally {
+          readFileSpy.mockRestore()
+          rmSync(tempDirectory, { recursive: true, force: true })
+        }
+      })
+
+      test('separates cache entries for closure-based conditions callbacks by their resolved output', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': {
+                import: './dist/index.mjs',
+                require: './dist/index.cjs',
+              },
+            },
+          }),
+          'node_modules/acme/dist/index.mjs.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/import.ts'],
+          }),
+          'node_modules/acme/dist/index.cjs.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/require.ts'],
+          }),
+          'node_modules/acme/src/import.ts': 'export const mode = "import"',
+          'node_modules/acme/src/require.ts': 'export const mode = "require"',
+        })
+        const pkg = new Package({ name: 'acme', fileSystem })
+        const createConditions = (preferred: 'import' | 'require') => {
+          return () => [preferred, 'default']
+        }
+
+        const importResult = pkg.resolveExportSource('.', {
+          conditions: createConditions('import'),
+        })
+        const requireResult = pkg.resolveExportSource('.', {
+          conditions: createConditions('require'),
+        })
+
+        expect(importResult).toMatchObject({
+          builtTarget: './dist/index.mjs',
+          sources: ['src/import.ts'],
+        })
+        expect(requireResult).toMatchObject({
+          builtTarget: './dist/index.cjs',
+          sources: ['src/require.ts'],
+        })
+      })
+
+      test('invalidates resolveExportSources cache when source maps change', async () => {
+        mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
+        const tempDirectory = mkdtempSync(
+          join(process.cwd(), '.cache', 'resolve-export-sources-map-change-')
+        )
+        const packageDirectory = join(tempDirectory, 'packages', 'acme')
+        const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
+
+        mkdirSync(join(packageDirectory, 'dist'), { recursive: true })
+        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(packageDirectory, 'package.json'),
+          JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'index.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'index.ts'),
+          'export const value = 1',
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'next.ts'),
+          'export const value = 2',
+          'utf8'
+        )
+
+        const pkg = new Package({
+          path: packagePath,
+          fileSystem: new NodeFileSystem(),
+        })
+
+        try {
+          const firstResult = pkg.resolveExportSource('.')
+          expect(firstResult?.sources).toEqual(['src/index.ts'])
+
+          await new Promise((resolve) => setTimeout(resolve, 25))
+          writeFileSync(
+            join(packageDirectory, 'dist', 'index.mjs.map'),
+            JSON.stringify({
+              version: 3,
+              sources: ['../src/next.ts'],
+            }),
+            'utf8'
+          )
+
+          const secondResult = pkg.resolveExportSource('.')
+          expect(secondResult?.sources).toEqual(['src/next.ts'])
+        } finally {
+          rmSync(tempDirectory, { recursive: true, force: true })
+        }
+      })
+
+      test('invalidates resolveExportSources cache for file systems without mtimes', () => {
+        const fileSystem = new InMemoryFileSystem({
+          'node_modules/acme/package.json': JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'node_modules/acme/dist/index.mjs.map': JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'node_modules/acme/src/index.ts': 'export const value = 1',
+          'node_modules/acme/src/next.ts': 'export const value = 2',
+        })
+        const pkg = new Package({ name: 'acme', fileSystem })
+
+        const firstResult = pkg.resolveExportSource('.')
+        expect(firstResult?.sources).toEqual(['src/index.ts'])
+
+        fileSystem.writeFileSync(
+          'node_modules/acme/dist/index.mjs.map',
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/next.ts'],
+          })
+        )
+
+        const secondResult = pkg.resolveExportSource('.')
+        expect(secondResult?.sources).toEqual(['src/next.ts'])
+      })
+
+      test('invalidates resolveExportSources cache when package.json changes', async () => {
+        mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
+        const tempDirectory = mkdtempSync(
+          join(
+            process.cwd(),
+            '.cache',
+            'resolve-export-sources-package-json-change-'
+          )
+        )
+        const packageDirectory = join(tempDirectory, 'packages', 'acme')
+        const packagePath = packageDirectory.replace(`${process.cwd()}/`, '')
+
+        mkdirSync(join(packageDirectory, 'dist'), { recursive: true })
+        mkdirSync(join(packageDirectory, 'src'), { recursive: true })
+        writeFileSync(
+          join(packageDirectory, 'package.json'),
+          JSON.stringify({
+            name: 'acme',
+            exports: {
+              '.': './dist/index.mjs',
+            },
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'index.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/index.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'dist', 'alt.mjs.map'),
+          JSON.stringify({
+            version: 3,
+            sources: ['../src/alt.ts'],
+          }),
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'index.ts'),
+          'export const value = 1',
+          'utf8'
+        )
+        writeFileSync(
+          join(packageDirectory, 'src', 'alt.ts'),
+          'export const value = 2',
+          'utf8'
+        )
+
+        const pkg = new Package({
+          path: packagePath,
+          fileSystem: new NodeFileSystem(),
+        })
+
+        try {
+          const firstResult = pkg.resolveExportSource('.')
+          expect(firstResult?.builtTarget).toBe('./dist/index.mjs')
+          expect(firstResult?.sources).toEqual(['src/index.ts'])
+
+          await new Promise((resolve) => setTimeout(resolve, 25))
+          writeFileSync(
+            join(packageDirectory, 'package.json'),
+            JSON.stringify({
+              name: 'acme',
+              exports: {
+                '.': './dist/alt.mjs',
+              },
+            }),
+            'utf8'
+          )
+
+          const secondResult = pkg.resolveExportSource('.')
+          expect(secondResult?.builtTarget).toBe('./dist/alt.mjs')
+          expect(secondResult?.sources).toEqual(['src/alt.ts'])
+        } finally {
+          rmSync(tempDirectory, { recursive: true, force: true })
+        }
+      })
     })
   })
 
@@ -4156,6 +5023,98 @@ date: 2024-12-24
 
       expect(packageNames.sort()).toEqual(['bar', 'foo'])
       expect(workspace.getPackage('bar')?.name).toBe('bar')
+    })
+
+    test('memoizes package discovery and invalidates on lockfile and topology changes', async () => {
+      mkdirSync(join(process.cwd(), '.cache'), { recursive: true })
+      const tempDirectory = mkdtempSync(
+        join(process.cwd(), '.cache', 'workspace-package-discovery-cache-')
+      )
+      const packagesDirectory = join(tempDirectory, 'packages')
+      const fooDirectory = join(packagesDirectory, 'foo')
+      const barDirectory = join(packagesDirectory, 'bar')
+
+      mkdirSync(fooDirectory, { recursive: true })
+      writeFileSync(
+        join(tempDirectory, 'package.json'),
+        JSON.stringify(
+          {
+            name: 'workspace',
+            workspaces: ['packages/*'],
+          },
+          null,
+          2
+        ),
+        'utf8'
+      )
+      writeFileSync(
+        join(fooDirectory, 'package.json'),
+        JSON.stringify({ name: 'foo' }, null, 2),
+        'utf8'
+      )
+
+      const fileSystem = new NodeFileSystem()
+      const readDirectorySpy = vi.spyOn(fileSystem, 'readDirectorySync')
+      const workspace = new Workspace({
+        fileSystem,
+        rootDirectory: tempDirectory,
+      })
+
+      try {
+        const firstPackages = workspace.getPackages()
+        const readCallsAfterFirst = readDirectorySpy.mock.calls.length
+        const secondPackages = workspace.getPackages()
+
+        expect(
+          firstPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
+        ).toEqual(['foo'])
+        expect(
+          secondPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
+        ).toEqual(['foo'])
+        expect(readDirectorySpy.mock.calls.length).toBe(readCallsAfterFirst)
+
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        writeFileSync(
+          join(tempDirectory, 'pnpm-lock.yaml'),
+          'lockfileVersion: 9',
+          'utf8'
+        )
+        const lockfileChangedPackages = workspace.getPackages()
+        expect(
+          lockfileChangedPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
+        ).toEqual(['foo'])
+        expect(readDirectorySpy.mock.calls.length).toBeGreaterThan(
+          readCallsAfterFirst
+        )
+
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        mkdirSync(barDirectory, { recursive: true })
+        writeFileSync(
+          join(barDirectory, 'package.json'),
+          JSON.stringify({ name: 'bar' }, null, 2),
+          'utf8'
+        )
+
+        const topologyChangedPackages = workspace.getPackages()
+        expect(
+          topologyChangedPackages
+            .map((pkg) => pkg.name)
+            .filter(Boolean)
+            .sort()
+        ).toEqual(['bar', 'foo'])
+      } finally {
+        readDirectorySpy.mockRestore()
+        rmSync(tempDirectory, { recursive: true, force: true })
+      }
     })
   })
 

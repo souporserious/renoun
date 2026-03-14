@@ -1,8 +1,38 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
+import { Cache } from './Cache'
 import { GitFileSystem } from './GitFileSystem'
 import { GitVirtualFileSystem } from './GitVirtualFileSystem'
 import { Repository, type RepositoryConfig } from './Repository'
+
+function closeRepositoryFileSystem(repository: Repository) {
+  const fileSystem = repository.getFileSystem()
+  if (fileSystem instanceof GitFileSystem) {
+    fileSystem.close()
+  }
+}
+
+function createDisposeHandle(dispose: () => void) {
+  return {
+    [Symbol.dispose]() {
+      dispose()
+    },
+  }
+}
+
+function restoreNavigator(originalNavigator: unknown) {
+  if (originalNavigator === undefined) {
+    delete (globalThis as any).navigator
+  } else {
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: originalNavigator,
+    })
+  }
+}
 
 describe('Repository', () => {
   describe('constructor', () => {
@@ -63,6 +93,26 @@ describe('Repository', () => {
       ).toEqual('https://github.com/owner/repo/blob/main/README.md')
     })
 
+    test('passes outputDirectory through to cloned git file systems', () => {
+      const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-repository-'))
+      const cacheDirectory = join(tmpDirectory, 'custom-cache')
+      const repo = new Repository({
+        path: 'https://github.com/owner/repo',
+        cache: new Cache({ outputDirectory: cacheDirectory }),
+      })
+
+      try {
+        const fileSystem = repo.getFileSystem()
+        expect(fileSystem).toBeInstanceOf(GitFileSystem)
+        expect((fileSystem as GitFileSystem).cacheDirectory).toBe(
+          resolve(cacheDirectory, 'git')
+        )
+      } finally {
+        closeRepositoryFileSystem(repo)
+        rmSync(tmpDirectory, { recursive: true, force: true })
+      }
+    })
+
     test('throws an error for unsupported hosts', () => {
       const config: RepositoryConfig = {
         baseUrl: 'https://example.com/owner/repo',
@@ -87,6 +137,9 @@ describe('Repository', () => {
       const repo = new Repository({
         path: 'https://github.com/owner/repo',
       })
+      using _closeRepositoryFileSystem = createDisposeHandle(() => {
+        closeRepositoryFileSystem(repo)
+      })
       const getFileSystemSpy = vi.spyOn(repo, 'getFileSystem')
 
       const directory = repo.getDirectory('src/nodes')
@@ -96,18 +149,65 @@ describe('Repository', () => {
       const fileSystem = directory.getFileSystem()
       expect(getFileSystemSpy).toHaveBeenCalledTimes(1)
       expect(fileSystem).toBeInstanceOf(GitFileSystem)
-      expect(
-        (fileSystem as GitFileSystem).prepareScopeDirectories
-      ).toContain('src/nodes')
+      expect((fileSystem as GitFileSystem).prepareScopeDirectories).toContain(
+        'src/nodes'
+      )
     })
 
-    test('uses the virtual file system when clone is false', () => {
+    test('uses the virtual file system when clone is false', async () => {
+      const originalFetch = globalThis.fetch
+      const mockFetch = vi.fn(async (input: string | URL) => {
+        const url = String(input)
+        const parsedUrl = new URL(url)
+        if (parsedUrl.pathname === '/repos/owner/repo') {
+          return {
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            headers: new Headers({
+              'content-type': 'application/json',
+            }),
+            json: async () => ({ default_branch: 'main' }),
+          }
+        }
+
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: new Headers({
+            'content-type': 'application/octet-stream',
+            'content-length': '1024',
+          }),
+          arrayBuffer: async () => new Uint8Array(1024).buffer,
+        }
+      }) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+      using _restoreFetch = createDisposeHandle(() => {
+        globalThis.fetch = originalFetch
+      })
+
       const repo = new Repository({
         path: 'https://github.com/owner/repo',
         clone: false,
       })
+
       const fileSystem = repo.getFileSystem()
       expect(fileSystem).toBeInstanceOf(GitVirtualFileSystem)
+      await expect(fileSystem.readDirectory('.')).resolves.toEqual([])
+      await new Promise((resolve) => setTimeout(resolve, 20))
+    })
+  })
+
+  describe('getFile', () => {
+    test('preserves nested workspace paths', () => {
+      const repo = new Repository('.')
+      using _closeRepositoryFileSystem = createDisposeHandle(() => {
+        closeRepositoryFileSystem(repo)
+      })
+      const file = repo.getFile('packages/renoun/package.json')
+
+      expect(file.workspacePath).toBe('packages/renoun/package.json')
     })
   })
 
@@ -775,6 +875,124 @@ describe('Repository', () => {
       vi.restoreAllMocks()
     })
 
+    test('does not call fetch in local release mode', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local',
+          version: '11.3.0',
+        },
+      })
+
+      await repository.getRelease({
+        packageName: 'renoun',
+      })
+
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    test('builds package-scoped release metadata and URL from local version in local mode', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local',
+          version: '11.3.0',
+        },
+      })
+
+      const release = await repository.getRelease({
+        packageName: 'renoun',
+      })
+
+      expect(release.tagName).toBe('renoun@11.3.0')
+      expect(release.name).toBe('renoun@11.3.0')
+      expect(release.htmlUrl).toBe(
+        'https://github.com/owner/repo/releases/tag/renoun@11.3.0'
+      )
+      await expect(
+        repository.getReleaseUrl({ packageName: 'renoun' })
+      ).resolves.toBe(
+        'https://github.com/owner/repo/releases/tag/renoun@11.3.0'
+      )
+      expect(release.isFallback).toBe(false)
+      await expect(repository.getReleaseUrl()).resolves.toBe(
+        'https://github.com/owner/repo/releases/tag/v11.3.0'
+      )
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    test('encodes scoped package release tag URLs in local mode', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local',
+          version: '11.3.0',
+        },
+      })
+
+      const release = await repository.getRelease({
+        packageName: '@scope/renoun',
+      })
+
+      expect(release.tagName).toBe('@scope/renoun@11.3.0')
+      expect(release.name).toBe('@scope/renoun@11.3.0')
+      expect(release.htmlUrl).toBe(
+        'https://github.com/owner/repo/releases/tag/@scope%2Frenoun@11.3.0'
+      )
+      await expect(
+        repository.getReleaseUrl({ packageName: '@scope/renoun' })
+      ).resolves.toBe(
+        'https://github.com/owner/repo/releases/tag/@scope%2Frenoun@11.3.0'
+      )
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
+    test('flags local prereleases from the version for package names with digits', async () => {
+      const mockFetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => [],
+      })) as unknown as typeof fetch
+      globalThis.fetch = mockFetch
+
+      const repository = new Repository({
+        path: 'owner/repo',
+        releaseSource: {
+          mode: 'local',
+          version: '1.0.0-beta.1',
+        },
+      })
+
+      const release = await repository.getRelease({
+        packageName: '@scope2/pkg2',
+      })
+
+      expect(release.tagName).toBe('@scope2/pkg2@1.0.0-beta.1')
+      expect(release.isPrerelease).toBe(true)
+      expect(mockFetch).not.toHaveBeenCalled()
+    })
+
     test('fetches release metadata from GitHub and caches results', async () => {
       const releasesPayload = [
         {
@@ -863,25 +1081,17 @@ describe('Repository', () => {
       )
 
       const originalNavigator = (globalThis as any).navigator
-      try {
-        Object.defineProperty(globalThis, 'navigator', {
-          configurable: true,
-          value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
-        })
+      using _restoreNavigator = createDisposeHandle(() => {
+        restoreNavigator(originalNavigator)
+      })
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: { userAgent: 'Mozilla/5.0 (X11; Linux x86_64)' },
+      })
 
-        await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
-          'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz'
-        )
-      } finally {
-        if (originalNavigator === undefined) {
-          delete (globalThis as any).navigator
-        } else {
-          Object.defineProperty(globalThis, 'navigator', {
-            configurable: true,
-            value: originalNavigator,
-          })
-        }
-      }
+      await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
+        'https://github.com/owner/repo/releases/download/v1.2.3/cli-linux.tar.gz'
+      )
       await expect(repository.getReleaseUrl({ source: 'zip' })).resolves.toBe(
         'https://github.com/owner/repo/zipball/v1.2.3'
       )
@@ -1027,34 +1237,26 @@ describe('Repository', () => {
       globalThis.fetch = mockFetch
 
       const originalNavigator = (globalThis as any).navigator
+      using _restoreNavigator = createDisposeHandle(() => {
+        restoreNavigator(originalNavigator)
+      })
 
-      try {
-        Object.defineProperty(globalThis, 'navigator', {
-          configurable: true,
-          value: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5)' },
-        })
+      Object.defineProperty(globalThis, 'navigator', {
+        configurable: true,
+        value: { userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5)' },
+      })
 
-        const repository = new Repository('owner/repo')
+      const repository = new Repository('owner/repo')
 
-        await expect(
-          repository.getReleaseUrl({ asset: /linux/, refresh: true })
-        ).resolves.toBe(
-          'https://github.com/owner/repo/releases/download/v1.0.0/tool-linux.tar.gz'
-        )
+      await expect(
+        repository.getReleaseUrl({ asset: /linux/, refresh: true })
+      ).resolves.toBe(
+        'https://github.com/owner/repo/releases/download/v1.0.0/tool-linux.tar.gz'
+      )
 
-        await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
-          'https://github.com/owner/repo/releases/download/v1.0.0/tool-mac.dmg'
-        )
-      } finally {
-        if (originalNavigator === undefined) {
-          delete (globalThis as any).navigator
-        } else {
-          Object.defineProperty(globalThis, 'navigator', {
-            configurable: true,
-            value: originalNavigator,
-          })
-        }
-      }
+      await expect(repository.getReleaseUrl({ asset: true })).resolves.toBe(
+        'https://github.com/owner/repo/releases/download/v1.0.0/tool-mac.dmg'
+      )
     })
 
     test('throws a descriptive error when asset selection fails', async () => {

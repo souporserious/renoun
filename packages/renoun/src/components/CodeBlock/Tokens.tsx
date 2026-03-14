@@ -2,9 +2,23 @@ import React, { Fragment, Suspense } from 'react'
 import type { CSSObject } from 'restyle'
 import { css } from 'restyle/css'
 
-import { getSourceTextMetadata, getTokens } from '../../project/client.ts'
+import {
+  getSourceTextMetadata,
+  getTokens,
+} from '../../analysis/node-client.ts'
+import { getServerRuntimeFromProcessEnv } from '../../analysis/runtime-env.ts'
+import {
+  isProductionEnvironment,
+  isTestEnvironment,
+  isVitestRuntime,
+} from '../../utils/env.ts'
+import { hasSourceTextFormatterParser } from '../../utils/format-source-text.ts'
 import type { Languages } from '../../utils/get-language.ts'
-import type { SourceTextMetadata } from '../../utils/get-source-text-metadata.ts'
+import {
+  getSourceTextValueSignature,
+  type SourceTextHydrationMetadata,
+  type SourceTextMetadata,
+} from '../../analysis/query/source-text-metadata.ts'
 import type {
   Token,
   TokenDiagnostic,
@@ -29,12 +43,159 @@ import { getConfig } from '../Config/ServerConfigContext.tsx'
 import type { ConfigurationOptions } from '../Config/types.ts'
 import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
-import { QuickInfo, QuickInfoLoading } from './QuickInfo.tsx'
-import { QuickInfoProvider } from './QuickInfoProvider.tsx'
+import { createQuickInfoTheme } from './QuickInfoContent.tsx'
+import {
+  QuickInfoProvider,
+  type QuickInfoEntry,
+} from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
 import { Symbol } from './Symbol.tsx'
 
 type ThemeColors = Awaited<ReturnType<typeof getThemeColors>>
+
+function toQuickInfoEntryId(lineIndex: number, tokenIndex: number): string {
+  return `${lineIndex}:${tokenIndex}`
+}
+
+function toQuickInfoRequestCacheKey({
+  filePath,
+  position,
+  valueSignature,
+}: {
+  filePath: string
+  position: number
+  valueSignature?: string
+}): string {
+  return valueSignature
+    ? `${filePath}:${position}:${valueSignature}`
+    : `${filePath}:${position}`
+}
+
+interface QuickInfoRequestSource {
+  filePath: string
+  sourceMetadata: SourceTextHydrationMetadata
+  valueSignature?: string
+}
+
+async function createQuickInfoEntriesById({
+  tokens,
+  themeConfiguration,
+  languages,
+  waitForWarmResult,
+  quickInfoRequestSource,
+}: {
+  tokens: TokenizedLines
+  themeConfiguration: ConfigurationOptions['theme']
+  languages: ConfigurationOptions['languages']
+  waitForWarmResult: boolean
+  quickInfoRequestSource?: QuickInfoRequestSource
+}): Promise<Map<string, QuickInfoEntry>> {
+  const entriesById = new Map<string, QuickInfoEntry>()
+  const displayTokensByText = new Map<string, Promise<TokenizedLines | undefined>>()
+
+  for (let lineIndex = 0; lineIndex < tokens.length; lineIndex++) {
+    const line = tokens[lineIndex]!
+
+    for (let tokenIndex = 0; tokenIndex < line.length; tokenIndex++) {
+      const token = line[tokenIndex]!
+      if (!token.quickInfo && (!token.isSymbol || !quickInfoRequestSource)) {
+        continue
+      }
+
+      const id = toQuickInfoEntryId(lineIndex, tokenIndex)
+      if (entriesById.has(id)) {
+        continue
+      }
+
+      let displayTokens: TokenizedLines | undefined
+
+      if (token.quickInfo) {
+        const displayText = token.quickInfo.displayText
+        let displayTokensPromise = displayTokensByText.get(displayText)
+
+        if (!displayTokensPromise) {
+          displayTokensPromise = Promise.resolve(
+            getTokens({
+              value: displayText,
+              language: 'typescript',
+              languages,
+              theme: themeConfiguration,
+              allowErrors: true,
+              waitForWarmResult,
+            })
+          ).catch(() => {
+            return undefined
+          })
+          displayTokensByText.set(displayText, displayTokensPromise)
+        }
+
+        displayTokens = await displayTokensPromise
+      }
+
+      entriesById.set(id, {
+        id,
+        quickInfo: token.quickInfo,
+        displayTokens,
+        request:
+          token.isSymbol && quickInfoRequestSource
+            ? {
+                cacheKey: toQuickInfoRequestCacheKey({
+                  filePath: quickInfoRequestSource.filePath,
+                  position: token.start,
+                  valueSignature: quickInfoRequestSource.valueSignature,
+                }),
+                filePath: quickInfoRequestSource.filePath,
+                position: token.start,
+                sourceMetadata: quickInfoRequestSource.sourceMetadata,
+              }
+            : undefined,
+        diagnostics: token.diagnostics,
+      })
+    }
+  }
+
+  return entriesById
+}
+
+const SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES = new Set([
+  'javascript',
+  'js',
+  'jsx',
+  'typescript',
+  'ts',
+  'tsx',
+  'mjs',
+  'cjs',
+  'mts',
+  'cts',
+  'mdx',
+])
+
+export function shouldSkipInlineSourceMetadataLookup({
+  resolvedPath,
+  language,
+  supportsSourceFormattingInCurrentContext,
+  shouldUseInlineSourceMetadataFastPath,
+  isFormattingExplicit,
+  shouldFormat,
+}: {
+  resolvedPath: string | undefined
+  language: Languages | undefined
+  supportsSourceFormattingInCurrentContext: boolean
+  shouldUseInlineSourceMetadataFastPath: boolean
+  isFormattingExplicit: boolean
+  shouldFormat: boolean
+}): boolean {
+  return (
+    resolvedPath === undefined &&
+    typeof language === 'string' &&
+    !SOURCE_METADATA_REQUIRED_INLINE_LANGUAGES.has(language.toLowerCase()) &&
+    (!supportsSourceFormattingInCurrentContext ||
+      (shouldUseInlineSourceMetadataFastPath &&
+        isFormattingExplicit &&
+        shouldFormat === false))
+  )
+}
 
 export type AnnotationRenderer = React.ComponentType<
   Record<string, any> & { children?: React.ReactNode }
@@ -107,7 +268,122 @@ export interface TokensProps {
 }
 
 /** Renders syntax highlighted tokens for the `CodeBlock` component. */
-export async function Tokens({
+export function Tokens(props: TokensProps) {
+  if (isProductionEnvironment() || isTestEnvironment() || isVitestRuntime()) {
+    return TokensAsync(props)
+  }
+
+  return (
+    <Suspense fallback={<TokensFallback {...props} />}>
+      <TokensAsync {...props} />
+    </Suspense>
+  )
+}
+
+function TokensFallback({
+  children,
+  path,
+  baseDirectory,
+  renderLine,
+  className = {},
+  style = {},
+  annotations,
+}: TokensProps) {
+  const sourceText = resolveFallbackSourceText({
+    children,
+    path,
+    baseDirectory,
+  })
+  const value = stripFallbackAnnotationMarkers(sourceText, annotations)
+  const tokenClassName = className.token
+  const tokenStyle = style.token
+
+  if (!renderLine) {
+    if (tokenClassName || tokenStyle) {
+      return (
+        <QuickInfoProvider>
+          <span className={tokenClassName} style={tokenStyle}>
+            {value}
+          </span>
+        </QuickInfoProvider>
+      )
+    }
+
+    return <QuickInfoProvider>{value}</QuickInfoProvider>
+  }
+
+  const lines = value.split('\n')
+  const lastLineIndex = lines.length - 1
+
+  return (
+    <QuickInfoProvider>
+      {lines.map((line, index) => {
+        const isLast = index === lastLineIndex
+        const lineNode =
+          tokenClassName || tokenStyle ? (
+            <span className={tokenClassName} style={tokenStyle}>
+              {line}
+            </span>
+          ) : (
+            line
+          )
+        const renderedLine = renderLine({
+          children: lineNode,
+          index,
+          isLast,
+        })
+
+        if (renderedLine) {
+          return renderedLine
+        }
+
+        return (
+          <Fragment key={index}>
+            {lineNode}
+            {isLast ? null : '\n'}
+          </Fragment>
+        )
+      })}
+    </QuickInfoProvider>
+  )
+}
+
+function resolveFallbackSourceText(options: {
+  children: TokensProps['children']
+  path: TokensProps['path']
+  baseDirectory: TokensProps['baseDirectory']
+}): string {
+  if (typeof options.children === 'string') {
+    return options.children
+  }
+
+  if (options.path !== undefined && options.path !== null) {
+    return `// Loading ${pathLikeToString(options.path)}...`
+  }
+
+  return '// Loading code...'
+}
+
+function stripFallbackAnnotationMarkers(
+  value: string,
+  annotations: TokensProps['annotations']
+): string {
+  if (!annotations) {
+    return value
+  }
+
+  const annotationTags = Object.keys(annotations)
+  if (
+    annotationTags.length === 0 ||
+    !hasAnnotationCandidates(value, annotationTags)
+  ) {
+    return value
+  }
+
+  return parseAnnotations(value, annotationTags).value
+}
+
+async function TokensAsync({
   children,
   language: languageProp,
   allowErrors: allowErrorsProp,
@@ -124,210 +400,344 @@ export async function Tokens({
   annotations,
 }: TokensProps) {
   const context = getContext(Context)
-  const config = await getConfig()
-  const theme = await getThemeColors(config.theme)
-  const language = languageProp || context?.language
-  const themeConfiguration = themeProp ?? config.theme
-  const baseTokenClassName = hasMultipleThemes(themeConfiguration)
-    ? BASE_TOKEN_CLASS_NAME
-    : undefined
-  let value
-
-  if (children !== undefined && children !== null) {
-    if (typeof children === 'string') {
-      value = children
-    } else {
-      value = await children
+  const shouldInheritContextMetadata = path !== null
+  const isDevelopmentRuntime =
+    !isProductionEnvironment() && !isTestEnvironment() && !isVitestRuntime()
+  let didSettleContext = false
+  const resolveContext = (resolved: Required<SourceTextMetadata>) => {
+    if (!context || didSettleContext) {
+      return
     }
-  }
 
-  if (value === undefined) {
-    if (path !== undefined && path !== null) {
-      value = await readCodeFromPath(path, baseDirectory)
-    } else {
-      throw new Error(
-        '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
-      )
+    context.resolved = resolved
+    didSettleContext = true
+    context.resolvers.resolve()
+  }
+  const rejectContext = (error: unknown) => {
+    if (!context || didSettleContext) {
+      return
     }
-  }
 
-  let annotationParseResult: AnnotationParseResult | null = null
-  let annotationInstructions: AnnotationInstructions | null = null
-  let processedValue = value
-
-  if (annotations) {
-    const annotationTags = Object.keys(annotations)
-    if (
-      annotationTags.length > 0 &&
-      hasAnnotationCandidates(value, annotationTags)
-    ) {
-      annotationParseResult = parseAnnotations(value, annotationTags)
-      processedValue = annotationParseResult.value
-      annotationInstructions = {
-        block: annotationParseResult.block,
-        inline: annotationParseResult.inline,
-      }
-    }
-  }
-
-  const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
-  const shouldFormat = shouldFormatProp ?? context?.shouldFormat ?? true
-  const isFormattingExplicit =
-    shouldFormatProp !== undefined || context?.shouldFormat !== undefined
-  const metadata: SourceTextMetadata = {} as SourceTextMetadata
-
-  if (shouldAnalyze) {
-    const result = await getSourceTextMetadata({
-      filePath: path ? pathLikeToString(path) : undefined,
-      baseDirectory: baseDirectory
-        ? pathLikeToString(baseDirectory)
-        : undefined,
-      value: processedValue,
-      language,
-      shouldFormat,
-      isFormattingExplicit,
-    })
-    metadata.value = result.value
-    metadata.language = result.language
-    metadata.filePath = result.filePath
-    metadata.label = result.label
-  } else {
-    metadata.value = processedValue
-    metadata.language = language
-    metadata.label = context?.label
-  }
-
-  if (annotationInstructions && annotationParseResult) {
-    annotationInstructions = remapAnnotationInstructions(
-      annotationInstructions,
-      annotationParseResult.value,
-      metadata.value
+    didSettleContext = true
+    context.resolvers.reject(
+      error instanceof Error
+        ? error
+        : new Error('[renoun] Failed to resolve code block context.')
     )
   }
+  const resolvedPath =
+    path !== undefined && path !== null ? pathLikeToString(path) : undefined
+  const resolvedBaseDirectory =
+    baseDirectory !== undefined ? pathLikeToString(baseDirectory) : undefined
+  try {
+    const config = await getConfig()
+    const theme = await getThemeColors(config.theme)
+    const serverRuntime = getServerRuntimeFromProcessEnv()
+    const language = languageProp || context?.language
+    const themeConfiguration = themeProp ?? config.theme
+    const baseTokenClassName = hasMultipleThemes(themeConfiguration)
+      ? BASE_TOKEN_CLASS_NAME
+      : undefined
+    let value
 
-  // Now we can resolve the context values for other components like `LineNumbers`, `CopyButton`, etc.
-  if (context) {
-    context.resolved = {
+    if (children !== undefined && children !== null) {
+      if (typeof children === 'string') {
+        value = children
+      } else {
+        value = await children
+      }
+    }
+
+    if (value === undefined) {
+      if (path !== undefined && path !== null) {
+        value = await readCodeFromPath(path, baseDirectory)
+      } else {
+        throw new Error(
+          '[renoun] No code value provided to Tokens component. Pass a string, a promise that resolves to a string, or wrap within a `CodeBlock` component that defines `path` and `baseDirectory` props.'
+        )
+      }
+    }
+
+    let annotationParseResult: AnnotationParseResult | null = null
+    let annotationInstructions: AnnotationInstructions | null = null
+    let processedValue = value
+
+    if (annotations) {
+      const annotationTags = Object.keys(annotations)
+      if (
+        annotationTags.length > 0 &&
+        hasAnnotationCandidates(value, annotationTags)
+      ) {
+        annotationParseResult = parseAnnotations(value, annotationTags)
+        processedValue = annotationParseResult.value
+        annotationInstructions = {
+          block: annotationParseResult.block,
+          inline: annotationParseResult.inline,
+        }
+      }
+    }
+
+    const shouldAnalyze = shouldAnalyzeProp ?? context?.shouldAnalyze ?? true
+    const shouldFormat = shouldFormatProp ?? context?.shouldFormat ?? true
+    const isFormattingExplicit =
+      shouldFormatProp !== undefined || context?.shouldFormat !== undefined
+    const hasExplicitSourceValue = children !== undefined && children !== null
+    const metadata: SourceTextMetadata = {} as SourceTextMetadata
+    const supportsSourceFormattingInCurrentContext =
+      typeof language === 'string'
+        ? hasSourceTextFormatterParser(
+            resolvedPath ?? `inline.${language}`,
+            language
+          )
+        : false
+    const shouldUseInlineSourceMetadataFastPath = isDevelopmentRuntime
+    const shouldSkipInlineSourceMetadata =
+      shouldSkipInlineSourceMetadataLookup({
+        resolvedPath,
+        language,
+        supportsSourceFormattingInCurrentContext,
+        shouldUseInlineSourceMetadataFastPath,
+        isFormattingExplicit,
+        shouldFormat,
+      })
+
+    if (shouldAnalyze && !shouldSkipInlineSourceMetadata) {
+      // Generated inline snippets still need the host project's tsconfig so
+      // JSX runtime and package imports resolve correctly.
+      const result = await getSourceTextMetadata({
+        filePath: resolvedPath,
+        baseDirectory: resolvedBaseDirectory,
+        value: processedValue,
+        language,
+        shouldFormat,
+        isFormattingExplicit,
+        virtualizeFilePath:
+          hasExplicitSourceValue && resolvedPath !== undefined,
+      })
+      metadata.value = result.value
+      metadata.language = result.language
+      metadata.filePath = result.filePath
+      metadata.label = result.label
+      metadata.valueSignature =
+        result.valueSignature ?? getSourceTextValueSignature(result.value)
+    } else {
+      metadata.value = processedValue
+      metadata.language = language
+      metadata.filePath = resolvedPath
+        ? resolvedPath
+        : shouldInheritContextMetadata
+          ? context?.filePath
+          : undefined
+      metadata.label = shouldInheritContextMetadata ? context?.label : undefined
+      metadata.valueSignature = getSourceTextValueSignature(processedValue)
+    }
+
+    if (annotationInstructions && annotationParseResult) {
+      annotationInstructions = remapAnnotationInstructions(
+        annotationInstructions,
+        annotationParseResult.value,
+        metadata.value
+      )
+    }
+
+    resolveContext({
       value: metadata.value,
       language: metadata.language!,
       filePath: metadata.filePath!,
       label: metadata.label!,
+      valueSignature: metadata.valueSignature!,
+    })
+
+    const showErrors =
+      showErrorsProp === undefined ? context?.showErrors : showErrorsProp
+    const allowErrors =
+      allowErrorsProp === undefined
+        ? context?.allowErrors === undefined
+          ? showErrors
+            ? true
+            : undefined
+          : context.allowErrors
+        : allowErrorsProp
+    const shouldDeferQuickInfoUntilHover =
+      isDevelopmentRuntime && shouldAnalyze
+    const tokens = await getTokens({
+      value: metadata.value,
+      language: metadata.language,
+      filePath: metadata.filePath,
+      allowErrors,
+      showErrors,
+      theme: themeConfiguration,
+      languages: config.languages,
+      deferQuickInfoUntilHover: shouldDeferQuickInfoUntilHover,
+      // In development, wait for the warmed analysis result so the streamed
+      // update replaces the plain-text fallback with real highlighting and
+      // symbol quick info.
+      waitForWarmResult: isDevelopmentRuntime,
+    })
+    const quickInfoRequestSource =
+      shouldDeferQuickInfoUntilHover && metadata.filePath
+        ? {
+            filePath: metadata.filePath,
+            sourceMetadata: {
+              value: metadata.value,
+              language: metadata.language,
+            },
+            valueSignature: metadata.valueSignature,
+          }
+        : undefined
+    const quickInfoEntriesById = await createQuickInfoEntriesById({
+      tokens,
+      themeConfiguration,
+      languages: config.languages,
+      waitForWarmResult: isDevelopmentRuntime,
+      quickInfoRequestSource,
+    })
+    const registerQuickInfoEntry = (entry: QuickInfoEntry) => {
+      const existingEntry = quickInfoEntriesById.get(entry.id)
+
+      if (!existingEntry) {
+        quickInfoEntriesById.set(entry.id, entry)
+        return
+      }
+
+      quickInfoEntriesById.set(entry.id, {
+        ...existingEntry,
+        quickInfo: existingEntry.quickInfo ?? entry.quickInfo,
+        displayTokens: existingEntry.displayTokens ?? entry.displayTokens,
+        request: existingEntry.request ?? entry.request,
+        diagnostics: existingEntry.diagnostics ?? entry.diagnostics,
+      })
     }
-    context.resolvers.resolve()
-  }
+    const quickInfoTheme = createQuickInfoTheme(theme)
+    const lastLineIndex = tokens.length - 1
+    const hasAnnotations =
+      annotationInstructions !== null &&
+      (annotationInstructions.block.length > 0 ||
+        annotationInstructions.inline.length > 0)
 
-  const showErrors =
-    showErrorsProp === undefined ? context?.showErrors : showErrorsProp
-  const allowErrors =
-    allowErrorsProp === undefined
-      ? context?.allowErrors === undefined
-        ? showErrors
-          ? true
-          : undefined
-        : context.allowErrors
-      : allowErrorsProp
-
-  const tokens = await getTokens({
-    value: metadata.value,
-    language: metadata.language,
-    filePath: metadata.filePath,
-    allowErrors,
-    showErrors,
-    theme: themeConfiguration,
-    languages: config.languages,
-  })
-  const lastLineIndex = tokens.length - 1
-  const hasAnnotations =
-    annotationInstructions !== null &&
-    (annotationInstructions.block.length > 0 ||
-      annotationInstructions.inline.length > 0)
-
-  if (!hasAnnotations) {
-    return (
-      <QuickInfoProvider>
-        {tokens.map((line, lineIndex) => {
-          const lineChildren = line.map((token, tokenIndex) =>
-            renderToken({
-              token,
-              tokenIndex,
-              lineIndex,
-              baseTokenClassName,
-              theme,
-              css,
-              className,
-              style,
-            })
-          )
-          const diagnostics = getUniqueDiagnostics(line)
-          const diagnosticNodes = renderDiagnostics({
-            diagnostics,
+    if (!hasAnnotations) {
+      const renderedLines = tokens.map((line, lineIndex) => {
+        const lineChildren = line.map((token, tokenIndex) =>
+          renderToken({
+            token,
+            tokenIndex,
             lineIndex,
             baseTokenClassName,
+            quickInfoRequestPosition: token.start,
+            quickInfoRequestSource,
+            registerQuickInfoEntry,
             theme,
+            css,
             className,
             style,
           })
-          const lineChildrenWithDiagnostics = diagnosticNodes.length
-            ? lineChildren.concat(diagnosticNodes)
-            : lineChildren
-          const isLastLine = lineIndex === lastLineIndex
-          // If diagnostics are rendered with display: block, avoid adding the
-          // trailing newline after the line; the block element will naturally
-          // place subsequent content on the next line, and adding a newline
-          // would introduce extra vertical space below the diagnostic.
-          const hasDiagnostics = diagnosticNodes.length > 0
-          const explicitDiagnosticDisplay =
-            css?.error?.display ?? style?.error?.display
-          const diagnosticsAreBlock = explicitDiagnosticDisplay
-            ? explicitDiagnosticDisplay !== 'inline' &&
-              explicitDiagnosticDisplay !== 'inline-block'
-            : true
-          const shouldAppendLineBreak =
-            !isLastLine && !(hasDiagnostics && diagnosticsAreBlock)
-          const renderedLine = renderLine
-            ? renderLine({
-                children: lineChildrenWithDiagnostics,
-                index: lineIndex,
-                isLast: isLastLine,
-              })
-            : lineChildrenWithDiagnostics
+        )
+        const diagnostics = getUniqueDiagnostics(line)
+        const diagnosticNodes = renderDiagnostics({
+          diagnostics,
+          lineIndex,
+          baseTokenClassName,
+          theme,
+          className,
+          style,
+        })
+        const lineChildrenWithDiagnostics = diagnosticNodes.length
+          ? lineChildren.concat(diagnosticNodes)
+          : lineChildren
+        const isLastLine = lineIndex === lastLineIndex
+        // If diagnostics are rendered with display: block, avoid adding the
+        // trailing newline after the line; the block element will naturally
+        // place subsequent content on the next line, and adding a newline
+        // would introduce extra vertical space below the diagnostic.
+        const hasDiagnostics = diagnosticNodes.length > 0
+        const explicitDiagnosticDisplay =
+          css?.error?.display ?? style?.error?.display
+        const diagnosticsAreBlock = explicitDiagnosticDisplay
+          ? explicitDiagnosticDisplay !== 'inline' &&
+            explicitDiagnosticDisplay !== 'inline-block'
+          : true
+        const shouldAppendLineBreak =
+          !isLastLine && !(hasDiagnostics && diagnosticsAreBlock)
+        const renderedLine = renderLine
+          ? renderLine({
+              children: lineChildrenWithDiagnostics,
+              index: lineIndex,
+              isLast: isLastLine,
+            })
+          : lineChildrenWithDiagnostics
 
-          if (renderLine && renderedLine) {
-            return renderedLine
-          }
+        if (renderLine && renderedLine) {
+          return renderedLine
+        }
 
-          return (
-            <Fragment key={lineIndex}>
-              {lineChildrenWithDiagnostics}
-              {shouldAppendLineBreak ? '\n' : null}
-            </Fragment>
-          )
-        })}
+        return (
+          <Fragment key={lineIndex}>
+            {lineChildrenWithDiagnostics}
+            {shouldAppendLineBreak ? '\n' : null}
+          </Fragment>
+        )
+      })
+      const quickInfoEntries = Array.from(quickInfoEntriesById.values())
+
+      return (
+        <QuickInfoProvider
+          entries={quickInfoEntries}
+          popoverTheme={quickInfoTheme}
+          popoverCss={css?.popover}
+          popoverClassName={className?.popover}
+          popoverStyle={style?.popover}
+          tokenThemeConfig={themeConfiguration}
+          tokenRuntime={serverRuntime}
+          tokenLanguages={config.languages}
+        >
+          {renderedLines}
+        </QuickInfoProvider>
+      )
+    }
+
+    const annotatedNodes = renderWithAnnotations({
+      annotations: annotations!,
+      block: annotationInstructions!.block,
+      inline: annotationInstructions!.inline,
+      tokens,
+      value: metadata.value,
+      baseTokenClassName,
+      quickInfoRequestSource,
+      registerQuickInfoEntry,
+      theme,
+      css,
+      className,
+      style,
+    })
+
+    return (
+      <QuickInfoProvider
+        entries={Array.from(quickInfoEntriesById.values())}
+        popoverTheme={quickInfoTheme}
+        popoverCss={css?.popover}
+        popoverClassName={className?.popover}
+        popoverStyle={style?.popover}
+        tokenThemeConfig={themeConfiguration}
+        tokenRuntime={serverRuntime}
+        tokenLanguages={config.languages}
+      >
+        {annotatedNodes}
       </QuickInfoProvider>
     )
+  } catch (error) {
+    rejectContext(error)
+    throw error
   }
-
-  const annotatedNodes = renderWithAnnotations({
-    annotations: annotations!,
-    block: annotationInstructions!.block,
-    inline: annotationInstructions!.inline,
-    tokens,
-    value: metadata.value,
-    baseTokenClassName,
-    theme,
-    css,
-    className,
-    style,
-  })
-
-  return <QuickInfoProvider>{annotatedNodes}</QuickInfoProvider>
 }
 
 interface RenderTokenOptions {
   token: Token
   tokenIndex: number
   lineIndex: number
+  quickInfoRequestPosition?: number
   baseTokenClassName?: string
+  quickInfoRequestSource?: QuickInfoRequestSource
+  registerQuickInfoEntry?: (entry: QuickInfoEntry) => void
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -351,6 +761,8 @@ interface RenderWithAnnotationsOptions {
   tokens: TokenizedLines
   value: string
   baseTokenClassName?: string
+  quickInfoRequestSource?: QuickInfoRequestSource
+  registerQuickInfoEntry?: (entry: QuickInfoEntry) => void
   theme: ThemeColors
   css?: TokensProps['css']
   className?: TokensProps['className']
@@ -361,7 +773,10 @@ function renderToken({
   token,
   tokenIndex,
   lineIndex,
+  quickInfoRequestPosition = token.start,
   baseTokenClassName,
+  quickInfoRequestSource,
+  registerQuickInfoEntry,
   theme,
   css: cssProp,
   className,
@@ -369,10 +784,14 @@ function renderToken({
 }: RenderTokenOptions): React.ReactNode {
   const hasDiagnostics = Boolean(token.diagnostics?.length)
   const hasQuickInfo = Boolean(token.quickInfo)
+  const hasQuickInfoRequest = Boolean(
+    token.isSymbol && quickInfoRequestSource?.filePath
+  )
+  const hasInteractiveQuickInfo = hasQuickInfo || hasQuickInfoRequest
 
   if (
     token.isWhiteSpace ||
-    (!hasQuickInfo &&
+    (!hasInteractiveQuickInfo &&
       !hasDiagnostics &&
       !token.hasTextStyles &&
       token.isBaseColor)
@@ -402,29 +821,32 @@ function renderToken({
     className?.token
   )
 
-  if (hasQuickInfo) {
+  if (hasInteractiveQuickInfo) {
+    const quickInfoId = toQuickInfoEntryId(lineIndex, tokenIndex)
+    registerQuickInfoEntry?.({
+      id: quickInfoId,
+      quickInfo: token.quickInfo,
+      request:
+        hasQuickInfoRequest && quickInfoRequestSource
+          ? {
+              cacheKey: toQuickInfoRequestCacheKey({
+                filePath: quickInfoRequestSource.filePath,
+                position: quickInfoRequestPosition,
+                valueSignature: quickInfoRequestSource.valueSignature,
+              }),
+              filePath: quickInfoRequestSource.filePath,
+              position: quickInfoRequestPosition,
+              sourceMetadata: quickInfoRequestSource.sourceMetadata,
+            }
+          : undefined,
+      diagnostics: token.diagnostics,
+    })
+
     return (
       <Symbol
         key={`${lineIndex}-${tokenIndex}`}
         highlightColor={theme.editor.hoverHighlightBackground}
-        popover={
-          <Suspense
-            fallback={
-              <QuickInfoLoading
-                css={cssProp?.popover}
-                className={className?.popover}
-                style={style?.popover}
-              />
-            }
-          >
-            <QuickInfo
-              quickInfo={token.quickInfo}
-              css={cssProp?.popover}
-              className={className?.popover}
-              style={style?.popover}
-            />
-          </Suspense>
-        }
+        quickInfoId={quickInfoId}
         className={tokenClassName}
         style={style?.token}
       >
@@ -529,6 +951,8 @@ function renderWithAnnotations({
   tokens,
   value,
   baseTokenClassName,
+  quickInfoRequestSource,
+  registerQuickInfoEntry,
   theme,
   css,
   className,
@@ -709,7 +1133,10 @@ function renderWithAnnotations({
           },
           tokenIndex,
           lineIndex,
+          quickInfoRequestPosition: token.start,
           baseTokenClassName,
+          quickInfoRequestSource,
+          registerQuickInfoEntry,
           theme,
           css,
           className,
@@ -805,4 +1232,8 @@ function joinClassNames(
     else out += ' ' + value
   }
   return out
+}
+
+export const __TEST_ONLY__ = {
+  renderToken,
 }

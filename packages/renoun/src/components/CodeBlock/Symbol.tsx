@@ -9,13 +9,13 @@ import { getScrollableAncestors } from './utils.ts'
  * @internal
  */
 export function Symbol({
-  popover,
+  quickInfoId,
   children,
   highlightColor = '#87add7',
   className,
   style,
 }: {
-  popover: React.ReactNode
+  quickInfoId?: string
   children: React.ReactNode
   highlightColor?: string
   className?: string
@@ -27,30 +27,35 @@ export function Symbol({
   const isHighlighted = quickInfo?.anchorId === anchorId
 
   useEffect(() => {
-    if (symbolRef.current && quickInfo) {
-      function handleScroll() {
-        resetQuickInfo(true)
-      }
-      const controller = new AbortController()
-      const scrollTargets = getScrollableAncestors(symbolRef.current)
-      scrollTargets.forEach((target) => {
-        target.addEventListener('scroll', handleScroll, {
-          passive: true,
-          signal: controller.signal,
-        })
-      })
-      return () => {
-        controller.abort()
-      }
+    if (!symbolRef.current || !isHighlighted) {
+      return
     }
-  }, [quickInfo, resetQuickInfo])
+
+    function handleScroll() {
+      resetQuickInfo(true)
+    }
+    const controller = new AbortController()
+    const scrollTargets = getScrollableAncestors(symbolRef.current)
+    scrollTargets.forEach((target) => {
+      target.addEventListener('scroll', handleScroll, {
+        passive: true,
+        signal: controller.signal,
+      })
+    })
+
+    return () => {
+      controller.abort()
+    }
+  }, [isHighlighted, resetQuickInfo])
 
   return (
     <span
       id={anchorId}
       ref={symbolRef}
       onPointerEnter={() => {
-        setQuickInfo({ anchorId, popover })
+        if (quickInfoId) {
+          setQuickInfo({ anchorId, entryId: quickInfoId })
+        }
       }}
       onPointerDown={() => {
         resetQuickInfo()

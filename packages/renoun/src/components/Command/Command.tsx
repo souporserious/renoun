@@ -12,6 +12,7 @@ import {
   normalizeSlotComponents,
   type SlotComponentOrProps,
 } from '../../utils/slot-components.ts'
+import { mapConcurrent } from '../../utils/concurrency.ts'
 import { Tokens } from '../CodeBlock/Tokens.ts'
 import { getConfig } from '../Config/ServerConfigContext.tsx'
 import { CopyCommand } from './CopyCommand.ts'
@@ -110,7 +111,13 @@ async function validatePackages(variant: CommandVariant, subject: string) {
     return
   }
 
-  await Promise.all(specs.map((spec) => validatePackage(spec)))
+  await mapConcurrent(
+    specs,
+    {
+      concurrency: 6,
+    },
+    (spec) => validatePackage(spec)
+  )
 }
 
 function buildCommand(

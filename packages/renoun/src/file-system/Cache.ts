@@ -1,0 +1,3809 @@
+import { resolve } from 'node:path'
+import { AsyncLocalStorage } from 'node:async_hooks'
+
+import { delay } from '../utils/delay.ts'
+import { ReactiveDependencyGraph } from '../utils/reactive-dependency-graph.ts'
+import { getDebugLogger } from '../utils/debug.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
+import { raceAbort } from '../utils/concurrency.ts'
+import {
+  normalizeNonNegativeInteger,
+  normalizePositiveInteger,
+} from '../utils/normalize-number.ts'
+import { getContext, throwIfAborted } from '../utils/operation-context.ts'
+import { hashString } from '../utils/stable-serialization.ts'
+import {
+  DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT,
+  DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL,
+  DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT,
+  DEFAULT_INVALIDATED_PATH_TTL_MS,
+  DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS,
+  DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS,
+} from '../utils/cache-constants.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryEvent,
+  emitTelemetryHistogram,
+  getGlobalTelemetry,
+} from '../utils/telemetry.ts'
+import type { Telemetry } from '../utils/telemetry.ts'
+import type { Snapshot } from './Snapshot.ts'
+import { summarizePersistedValue } from './cache-persistence-debug.ts'
+import { isTrustedWorkspaceChangeToken } from './workspace-change-token.ts'
+
+export interface CacheDependency {
+  depKey: string
+  depVersion: string
+}
+
+export interface CacheEntry<Value = unknown> {
+  value: Value
+  deps: CacheDependency[]
+  fingerprint: string
+  persist: boolean
+  updatedAt: number
+  workspaceChangeToken?: string | null
+}
+
+export interface CacheDependencyEvictionResult {
+  deletedNodeKeys: string[]
+  usedDependencyIndex: boolean
+  hasMissingDependencyMetadata: boolean
+  missingDependencyNodeKeys?: string[]
+  invalidationSeq?: number
+  invalidationMode?: 'structured'
+}
+
+export interface CacheStorePersistence {
+  load(
+    nodeKey: string,
+    options?: {
+      skipFingerprintCheck?: boolean
+      skipLastAccessedUpdate?: boolean
+      includeValue?: boolean
+      includeDeps?: boolean
+    }
+  ): Promise<CacheEntry | undefined>
+  save(nodeKey: string, entry: CacheEntry): Promise<void>
+  saveWithRevision?(nodeKey: string, entry: CacheEntry): Promise<number>
+  saveWithRevisionGuarded?(
+    nodeKey: string,
+    entry: CacheEntry,
+    options: {
+      expectedRevision: number | 'missing'
+    }
+  ): Promise<{ applied: boolean; revision: number }>
+  delete(nodeKey: string): Promise<void>
+  deleteMany?(nodeKeys: string[]): Promise<void>
+  deleteByDependencyPath?(
+    dependencyPathKey: string
+  ): Promise<CacheDependencyEvictionResult>
+  deleteByDependencyPaths?(
+    dependencyPathKeys: string[]
+  ): Promise<CacheDependencyEvictionResult>
+  listNodeKeysByPrefix?(prefix: string): Promise<string[]>
+  /**
+   * Returns whether persistence is currently usable. This may flip to `false`
+   * when an optional backend (for example SQLite) fails to initialize.
+   */
+  isAvailable?(): boolean
+}
+
+export interface CacheStoreGetOrComputeOptions {
+  persist?: boolean
+  constDeps?: CacheStoreConstDependency[]
+  signal?: AbortSignal
+  staleWhileRevalidate?: boolean | CacheStoreStaleWhileRevalidateOptions
+  onBackgroundRefreshComplete?: (
+    context: CacheStoreBackgroundRefreshCompleteContext
+  ) => void | Promise<void>
+}
+
+export interface CacheStorePutOptions {
+  persist?: boolean
+  deps?: CacheDependency[]
+}
+
+export interface CacheStoreStaleWhileRevalidateOptions {
+  /**
+   * Maximum age of stale entries that can be served while a background
+   * refresh runs. Defaults to the store's stale retention TTL.
+   */
+  maxStaleAgeMs?: number
+}
+
+export interface CacheStoreBackgroundRefreshCompleteContext {
+  nodeKey: string
+}
+
+export interface CacheStoreComputeContext {
+  readonly snapshot: Snapshot
+  readonly signal?: AbortSignal
+  recordDep(depKey: string, depVersion: string): void
+  recordConstDep(name: string, version: string): void
+  disablePersist(): void
+  recordFileDep(path: string): Promise<string>
+  recordDirectoryDep(path: string): Promise<string>
+  recordNodeDep(nodeKey: string): Promise<string>
+}
+
+export interface CacheStoreFreshnessMismatch {
+  depKey: string
+  expectedVersion: string
+  currentVersion: string | undefined
+}
+
+export interface CacheStoreGetWithFreshnessOptions {
+  includeStaleReason?: boolean
+}
+
+export interface CacheStoreGetWithFreshnessResult<Value> {
+  value: Value | undefined
+  fresh: boolean
+  staleReason?: CacheStoreFreshnessMismatch | 'graph-dirty'
+}
+
+export interface CacheStoreConstDependency {
+  name: string
+  version: string
+}
+
+export interface CacheStoreOptions {
+  snapshot: Snapshot
+  persistence?: CacheStorePersistence
+  inflight?: Map<string, Promise<unknown>>
+  telemetry?: Telemetry
+  computeSlotTtlMs?: number
+  computeSlotPollMs?: number
+  staleRetentionTtlMs?: number
+  persistedVerificationAttempts?: number
+  debugPersistenceFailure?: boolean
+}
+
+export interface CacheOptions {
+  persistence?: CacheStorePersistence
+  telemetry?: Telemetry
+  /** Optional base directory for persisted cache files. */
+  outputDirectory?: string
+  /** Enable cache metric collection for directory snapshots. */
+  cacheMetricsEnabled?: boolean
+  /** Maximum number of hot paths tracked when logging cache metrics. */
+  cacheMetricsTopKeysLimit?: number
+  /** Soft cap for hot-key tracking set size before trimming. */
+  cacheMetricsTopKeysTrackingLimit?: number
+  /** Number of events before emitting hot-key metrics. */
+  cacheMetricsTopKeysLogInterval?: number
+  /** TTL for cached workspace change tokens in milliseconds. Set to 0 to disable caching. */
+  workspaceChangeTokenTtlMs?: number
+  /** TTL for cached changed-path lookups in milliseconds. Set to 0 to disable caching. */
+  workspaceChangedPathsTtlMs?: number
+  /** TTL for recently invalidated paths cache in milliseconds. */
+  invalidatedPathTtlMs?: number
+  /** TTL for persisted compute slots in milliseconds. */
+  computeSlotTtlMs?: number
+  /** Poll interval for waiting on persisted compute slots in milliseconds. */
+  computeSlotPollMs?: number
+  /** TTL for stale cache entries retained for stale-while-revalidate reads. */
+  staleRetentionTtlMs?: number
+  /** Number of persisted read-back attempts after a write. Set to 0 to skip verification. */
+  persistedVerificationAttempts?: number
+  /**
+   * Override for targeted missing dependency invalidation fallback behavior.
+   * When omitted, Session keeps targeted fallback enabled.
+   */
+  targetedMissingDependencyFallback?: boolean
+  /**
+   * Override strict hermetic cache mode.
+   * When omitted, file-system logic defaults to strict mode in production.
+   */
+  strictHermetic?: boolean
+  /**
+   * Maximum number of prefix keys tracked by the directory snapshot path index.
+   * Larger values use more memory but reduce fallback scans.
+   */
+  directorySnapshotPrefixIndexMaxKeys?: number
+  /** Log detailed cache persistence failures during debugging. */
+  debugCachePersistence?: boolean
+  /** Enable debug logging related to cache root/path resolution. */
+  debugSessionRoot?: boolean
+}
+
+const CACHE_STORE_DEFAULTS = {
+  computeSlotTtlMs: 20_000,
+  computeSlotPollMs: 25,
+  computeSlotOwnerGraceMaxMs: 5_000,
+  computeSlotOwnerGraceTtlMultiplier: 8,
+  staleRetentionTtlMs: 5_000,
+  persistedVerificationAttempts: 3,
+  memoryOnlyCacheStoreId: 'memory-only-cache-store',
+} as const
+
+const NO_COMPUTE_SLOT_SHARED_VALUE = Symbol(
+  'renoun.fs.cache.no-compute-slot-shared-value'
+)
+
+const CACHE_STORE_SENTINELS = {
+  neverAbortSignal: new AbortController().signal,
+} as const
+
+interface CacheStoreFactoryOptions {
+  snapshot: Snapshot
+  persistence?: CacheStorePersistence
+  inflight?: Map<string, Promise<unknown>>
+  telemetry?: Telemetry
+  computeSlotTtlMs?: number
+  computeSlotPollMs?: number
+  staleRetentionTtlMs?: number
+  persistedVerificationAttempts?: number
+  debugPersistenceFailure?: boolean
+}
+
+function createUnsupportedMemoryOnlySnapshotReadError(method: string): never {
+  throw new Error(
+    `[renoun] Memory-only cache snapshots do not support ${method}.`
+  )
+}
+
+function createMemoryOnlySnapshot(id: string): Snapshot {
+  const invalidateListeners = new Set<(path: string) => void>()
+
+  return {
+    id,
+    async readDirectory() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readDirectory')
+    },
+    async readFile() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readFile')
+    },
+    async readFileBinary() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readFileBinary')
+    },
+    readFileStream() {
+      return createUnsupportedMemoryOnlySnapshotReadError('readFileStream')
+    },
+    async fileExists() {
+      return createUnsupportedMemoryOnlySnapshotReadError('fileExists')
+    },
+    async getFileLastModifiedMs() {
+      return createUnsupportedMemoryOnlySnapshotReadError(
+        'getFileLastModifiedMs'
+      )
+    },
+    async getFileByteLength() {
+      return createUnsupportedMemoryOnlySnapshotReadError('getFileByteLength')
+    },
+    isFilePathGitIgnored() {
+      return false
+    },
+    async isFilePathExcludedFromTsConfigAsync() {
+      return false
+    },
+    getRelativePathToWorkspace(path: string) {
+      return normalizeCachePathKey(path)
+    },
+    async contentId(path: string) {
+      return `memory:${normalizeCachePathKey(path)}`
+    },
+    invalidatePath(path: string) {
+      for (const listener of invalidateListeners) {
+        listener(path)
+      }
+    },
+    invalidateAll() {
+      for (const listener of invalidateListeners) {
+        listener('.')
+      }
+    },
+    onInvalidate(listener: (path: string) => void) {
+      invalidateListeners.add(listener)
+      return () => {
+        invalidateListeners.delete(listener)
+      }
+    },
+  }
+}
+
+export function createMemoryOnlyCacheStore(
+  options: {
+    id?: string
+    staleRetentionTtlMs?: number
+    telemetry?: Telemetry
+  } = {}
+) {
+  return new CacheStore({
+    snapshot: createMemoryOnlySnapshot(
+      options.id ?? CACHE_STORE_DEFAULTS.memoryOnlyCacheStoreId
+    ),
+    staleRetentionTtlMs: options.staleRetentionTtlMs,
+    telemetry: options.telemetry,
+  })
+}
+
+export class Cache {
+  readonly outputDirectory?: string
+  readonly telemetry?: Telemetry
+  readonly cacheMetricsEnabled: boolean
+  readonly cacheMetricsTopKeysLimit: number
+  readonly cacheMetricsTopKeysTrackingLimit: number
+  readonly cacheMetricsTopKeysLogInterval: number
+  readonly workspaceChangeTokenTtlMs: number
+  readonly workspaceChangedPathsTtlMs: number
+  readonly invalidatedPathTtlMs: number
+  readonly computeSlotTtlMs: number
+  readonly computeSlotPollMs: number
+  readonly staleRetentionTtlMs: number
+  readonly persistedVerificationAttempts: number
+  readonly targetedMissingDependencyFallback?: boolean
+  readonly strictHermetic?: boolean
+  readonly directorySnapshotPrefixIndexMaxKeys?: number
+  readonly persistence?: CacheStorePersistence
+  readonly debugCachePersistence: boolean
+  readonly debugSessionRoot: boolean
+
+  constructor(options: CacheOptions = {}) {
+    this.outputDirectory =
+      typeof options.outputDirectory === 'string' &&
+      options.outputDirectory.trim() !== ''
+        ? resolve(options.outputDirectory)
+        : undefined
+    this.persistence = options.persistence
+    this.telemetry = options.telemetry
+    this.cacheMetricsEnabled = options.cacheMetricsEnabled === true
+    this.cacheMetricsTopKeysLimit = normalizePositiveInteger(
+      options.cacheMetricsTopKeysLimit,
+      DEFAULT_CACHE_METRICS_TOP_KEYS_LIMIT
+    )
+    this.cacheMetricsTopKeysTrackingLimit = Math.max(
+      this.cacheMetricsTopKeysLimit,
+      normalizePositiveInteger(
+        options.cacheMetricsTopKeysTrackingLimit,
+        DEFAULT_CACHE_METRICS_TOP_KEYS_TRACKING_LIMIT
+      )
+    )
+    this.cacheMetricsTopKeysLogInterval = normalizePositiveInteger(
+      options.cacheMetricsTopKeysLogInterval,
+      DEFAULT_CACHE_METRICS_TOP_KEYS_LOG_INTERVAL
+    )
+    this.workspaceChangeTokenTtlMs = normalizeNonNegativeInteger(
+      options.workspaceChangeTokenTtlMs,
+      DEFAULT_WORKSPACE_CHANGE_TOKEN_TTL_MS
+    )
+    this.workspaceChangedPathsTtlMs = normalizeNonNegativeInteger(
+      options.workspaceChangedPathsTtlMs,
+      DEFAULT_WORKSPACE_CHANGED_PATHS_TTL_MS
+    )
+    this.invalidatedPathTtlMs = normalizePositiveInteger(
+      options.invalidatedPathTtlMs,
+      DEFAULT_INVALIDATED_PATH_TTL_MS
+    )
+    this.computeSlotTtlMs = normalizePositiveInteger(
+      options.computeSlotTtlMs,
+      CACHE_STORE_DEFAULTS.computeSlotTtlMs
+    )
+    this.computeSlotPollMs = normalizePositiveInteger(
+      options.computeSlotPollMs,
+      CACHE_STORE_DEFAULTS.computeSlotPollMs
+    )
+    this.staleRetentionTtlMs = normalizeNonNegativeInteger(
+      options.staleRetentionTtlMs,
+      CACHE_STORE_DEFAULTS.staleRetentionTtlMs
+    )
+    this.persistedVerificationAttempts = normalizeNonNegativeInteger(
+      options.persistedVerificationAttempts,
+      CACHE_STORE_DEFAULTS.persistedVerificationAttempts
+    )
+    this.targetedMissingDependencyFallback =
+      typeof options.targetedMissingDependencyFallback === 'boolean'
+        ? options.targetedMissingDependencyFallback
+        : undefined
+    this.strictHermetic =
+      typeof options.strictHermetic === 'boolean'
+        ? options.strictHermetic
+        : undefined
+    this.directorySnapshotPrefixIndexMaxKeys =
+      typeof options.directorySnapshotPrefixIndexMaxKeys === 'number' &&
+      Number.isFinite(options.directorySnapshotPrefixIndexMaxKeys) &&
+      options.directorySnapshotPrefixIndexMaxKeys > 0
+        ? Math.floor(options.directorySnapshotPrefixIndexMaxKeys)
+        : undefined
+    this.debugCachePersistence = options.debugCachePersistence === true
+    this.debugSessionRoot = options.debugSessionRoot === true
+  }
+
+  get usesPersistentCache(): boolean {
+    return isCacheStorePersistenceAvailable(this.persistence)
+  }
+
+  createStore(options: CacheStoreFactoryOptions): CacheStore {
+    return new CacheStore({
+      snapshot: options.snapshot,
+      persistence: options.persistence ?? this.persistence,
+      inflight: options.inflight,
+      telemetry: options.telemetry ?? this.telemetry,
+      computeSlotTtlMs: options.computeSlotTtlMs ?? this.computeSlotTtlMs,
+      computeSlotPollMs: options.computeSlotPollMs ?? this.computeSlotPollMs,
+      staleRetentionTtlMs:
+        options.staleRetentionTtlMs ?? this.staleRetentionTtlMs,
+      persistedVerificationAttempts:
+        options.persistedVerificationAttempts ??
+        this.persistedVerificationAttempts,
+      debugPersistenceFailure: this.debugCachePersistence,
+    })
+  }
+}
+
+const failedPersistenceEntries = new WeakMap<
+  CacheStorePersistence,
+  Set<string>
+>()
+const snapshotDependencyPathWatchers = new WeakMap<
+  Snapshot,
+  Set<{
+    invalidateDependencyPaths(dependencyPathKeys: Iterable<string>): void
+  }>
+>()
+const snapshotInvalidationUnsubscribeBySnapshot = new WeakMap<
+  Snapshot,
+  () => void
+>()
+const CONST_DEPENDENCY_PREFIX = 'const:'
+const WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX = 'workspace-token-unsafe:'
+
+interface CacheStorePersistenceComputeSlot {
+  acquireComputeSlot(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number
+  ): Promise<boolean>
+  refreshComputeSlot?(
+    nodeKey: string,
+    owner: string,
+    ttlMs: number
+  ): Promise<boolean>
+  releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
+  getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
+  /**
+   * Optional per-instance compute-slot lease duration override used by custom
+   * persistence implementations.
+   */
+  computeSlotTtlMs?: number
+}
+
+interface PersistedCacheEntry<Value = unknown> extends CacheEntry<Value> {
+  revision?: number
+}
+
+type PersistedRevisionPrecondition = number | 'missing' | undefined
+
+interface StaleCacheEntry<Value = unknown> {
+  entry: CacheEntry<Value>
+  staleAt: number
+  expiresAt: number
+}
+
+interface NormalizedStaleWhileRevalidateOptions {
+  enabled: boolean
+  maxStaleAgeMs?: number
+}
+
+function getComputeSlotTtlMs(
+  persistence: CacheStorePersistenceComputeSlot | undefined,
+  fallbackMs: number
+): number {
+  const configured = persistence?.computeSlotTtlMs
+  if (typeof configured !== 'number' || !Number.isFinite(configured)) {
+    return fallbackMs
+  }
+
+  return Math.max(1, Math.floor(configured))
+}
+
+function getComputeSlotHeartbeatMs(slotTtlMs: number): number {
+  return Math.min(1000, Math.max(1, Math.floor(slotTtlMs / 4)))
+}
+
+function getComputeSlotOwnerGraceMs(slotTtlMs: number): number {
+  const scaledGraceMs =
+    slotTtlMs * CACHE_STORE_DEFAULTS.computeSlotOwnerGraceTtlMultiplier
+  if (!Number.isFinite(scaledGraceMs) || scaledGraceMs <= 0) {
+    return 0
+  }
+
+  return Math.max(
+    0,
+    Math.min(
+      CACHE_STORE_DEFAULTS.computeSlotOwnerGraceMaxMs,
+      Math.floor(scaledGraceMs)
+    )
+  )
+}
+
+function isCacheStorePersistenceComputeSlot(
+  persistence: CacheStorePersistence | undefined
+): persistence is CacheStorePersistence & CacheStorePersistenceComputeSlot {
+  if (!isCacheStorePersistenceAvailable(persistence)) {
+    return false
+  }
+
+  const candidate = persistence as Partial<CacheStorePersistenceComputeSlot>
+  return (
+    typeof candidate.acquireComputeSlot === 'function' &&
+    typeof candidate.releaseComputeSlot === 'function' &&
+    typeof candidate.getComputeSlotOwner === 'function'
+  )
+}
+
+function isCacheStorePersistenceAvailable(
+  persistence: CacheStorePersistence | undefined
+): persistence is CacheStorePersistence {
+  if (!persistence) {
+    return false
+  }
+
+  if (typeof persistence.isAvailable !== 'function') {
+    return true
+  }
+
+  try {
+    return persistence.isAvailable() !== false
+  } catch {
+    return false
+  }
+}
+
+function getFailedPersistenceEntries(
+  persistence: CacheStorePersistence
+): Set<string> {
+  let failedEntries = failedPersistenceEntries.get(persistence)
+  if (!failedEntries) {
+    failedEntries = new Set()
+    failedPersistenceEntries.set(persistence, failedEntries)
+  }
+  return failedEntries
+}
+
+function markPersistedEntryInvalid(
+  persistence: CacheStorePersistence | undefined,
+  nodeKey: string
+): void {
+  if (!persistence) {
+    return
+  }
+  getFailedPersistenceEntries(persistence).add(nodeKey)
+}
+
+function isPersistedEntryInvalid(
+  persistence: CacheStorePersistence | undefined,
+  nodeKey: string
+): boolean {
+  if (!persistence) {
+    return false
+  }
+
+  const failedEntries = failedPersistenceEntries.get(persistence)
+  return failedEntries?.has(nodeKey) ?? false
+}
+
+function clearPersistedEntryInvalidation(
+  persistence: CacheStorePersistence | undefined,
+  nodeKey: string
+): void {
+  if (!persistence) {
+    return
+  }
+
+  const failedEntries = failedPersistenceEntries.get(persistence)
+  failedEntries?.delete(nodeKey)
+}
+
+function toConstDependencyKey(name: string): string {
+  return `${CONST_DEPENDENCY_PREFIX}${encodeURIComponent(name)}`
+}
+
+function toWorkspaceTokenUnsafeConstDependencyKey(path: string): string {
+  return toConstDependencyKey(
+    `${WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX}${normalizeCachePathKey(path)}`
+  )
+}
+
+function parseConstDependencyKey(
+  depKey: string
+): { name: string; legacyVersion?: string } | undefined {
+  if (!depKey.startsWith(CONST_DEPENDENCY_PREFIX)) {
+    return undefined
+  }
+
+  const payload = depKey.slice(CONST_DEPENDENCY_PREFIX.length)
+  if (!payload) {
+    return undefined
+  }
+
+  const separatorIndex = payload.lastIndexOf(':')
+  if (separatorIndex > 0) {
+    const legacyName = payload.slice(0, separatorIndex)
+    const legacyVersion = payload.slice(separatorIndex + 1)
+    return {
+      name: legacyName,
+      legacyVersion,
+    }
+  }
+
+  try {
+    return {
+      name: decodeURIComponent(payload),
+    }
+  } catch {
+    return {
+      name: payload,
+    }
+  }
+}
+
+function isWorkspaceTokenUnsafeSnapshotPath(
+  snapshot: Snapshot,
+  candidatePaths: Iterable<string>
+): boolean {
+  for (const candidatePath of candidatePaths) {
+    try {
+      if (snapshot.isFilePathGitIgnored(candidatePath)) {
+        return true
+      }
+    } catch {
+      continue
+    }
+  }
+
+  return false
+}
+
+export class CacheStore {
+  readonly #snapshot: Snapshot
+  readonly #persistence?: CacheStorePersistence
+  readonly #telemetry?: Telemetry
+  readonly #entries = new Map<string, CacheEntry>()
+  readonly #staleEntries = new Map<string, StaleCacheEntry>()
+  readonly #inflight: Map<string, Promise<unknown>>
+  readonly #dependencyGraph = new ReactiveDependencyGraph()
+  readonly #constDepVersionByName = new Map<string, string>()
+  readonly #activeComputeScope = new AsyncLocalStorage<{
+    nodeKey: string
+    deps: Map<string, string>
+  }>()
+  readonly #persistenceOperationByKey = new Map<string, Promise<void>>()
+  readonly #persistenceIntentVersionByKey = new Map<string, number>()
+  readonly #persistedRevisionPreconditionByKey = new Map<
+    string,
+    number | 'missing'
+  >()
+  readonly #invalidationEpochByNodeKey = new Map<string, number>()
+  #globalInvalidationEpoch = 0
+  readonly #computeSlotTtlMs: number
+  readonly #computeSlotPollMs: number
+  readonly #staleRetentionTtlMs: number
+  readonly #persistedVerificationAttempts: number
+  readonly #debugPersistenceFailure: boolean
+  #warnedAboutPersistenceFailure = false
+  #warnedAboutUnserializableValue = false
+  #disposed = false
+
+  constructor(options: CacheStoreOptions) {
+    this.#snapshot = options.snapshot
+    this.#persistence = options.persistence
+    this.#telemetry = options.telemetry
+    this.#inflight = options.inflight ?? new Map<string, Promise<unknown>>()
+    this.#computeSlotTtlMs = normalizePositiveInteger(
+      options.computeSlotTtlMs,
+      CACHE_STORE_DEFAULTS.computeSlotTtlMs
+    )
+    this.#computeSlotPollMs = normalizePositiveInteger(
+      options.computeSlotPollMs,
+      CACHE_STORE_DEFAULTS.computeSlotPollMs
+    )
+    this.#staleRetentionTtlMs = normalizeNonNegativeInteger(
+      options.staleRetentionTtlMs,
+      CACHE_STORE_DEFAULTS.staleRetentionTtlMs
+    )
+    this.#persistedVerificationAttempts = normalizeNonNegativeInteger(
+      options.persistedVerificationAttempts,
+      CACHE_STORE_DEFAULTS.persistedVerificationAttempts
+    )
+    this.#debugPersistenceFailure = options.debugPersistenceFailure === true
+
+    const stores =
+      snapshotDependencyPathWatchers.get(this.#snapshot) ?? new Set()
+    stores.add(this)
+    snapshotDependencyPathWatchers.set(this.#snapshot, stores)
+
+    if (snapshotInvalidationUnsubscribeBySnapshot.has(this.#snapshot)) {
+      return
+    }
+
+    const snapshot = this.#snapshot
+    const unsubscribe = snapshot.onInvalidate((path: string) => {
+      const linkedStores = snapshotDependencyPathWatchers.get(snapshot)
+      if (!linkedStores) {
+        return
+      }
+
+      for (const store of linkedStores) {
+        store.invalidateDependencyPaths([path])
+      }
+    })
+    snapshotInvalidationUnsubscribeBySnapshot.set(this.#snapshot, unsubscribe)
+  }
+
+  get usesPersistentCache(): boolean {
+    return isCacheStorePersistenceAvailable(this.#persistence)
+  }
+
+  #getPersistence(): CacheStorePersistence | undefined {
+    if (!isCacheStorePersistenceAvailable(this.#persistence)) {
+      return undefined
+    }
+
+    return this.#persistence
+  }
+
+  dispose(options: { skipClearMemory?: boolean } = {}): void {
+    if (this.#disposed) {
+      return
+    }
+    this.#disposed = true
+    this.#persistenceIntentVersionByKey.clear()
+    this.#persistedRevisionPreconditionByKey.clear()
+
+    const stores = snapshotDependencyPathWatchers.get(this.#snapshot)
+    if (stores) {
+      stores.delete(this)
+      if (stores.size === 0) {
+        snapshotDependencyPathWatchers.delete(this.#snapshot)
+        const unsubscribe = snapshotInvalidationUnsubscribeBySnapshot.get(
+          this.#snapshot
+        )
+        snapshotInvalidationUnsubscribeBySnapshot.delete(this.#snapshot)
+        if (unsubscribe) {
+          try {
+            unsubscribe()
+          } catch (error) {
+            reportBestEffortError('file-system/cache', error)
+          }
+        }
+      }
+    }
+
+    if (options.skipClearMemory !== true) {
+      this.clearMemory()
+    }
+  }
+
+  #assertNotDisposed(operation: string): void {
+    if (!this.#disposed) {
+      return
+    }
+
+    throw new Error(
+      `[renoun] Cache store operation "${operation}" cannot continue because the store has been disposed.`
+    )
+  }
+
+  async getOrCompute<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
+  ): Promise<Value> {
+    this.#assertNotDisposed('getOrCompute')
+    const waitSignal = options.signal ?? getContext()?.signal
+    throwIfAborted(waitSignal)
+    this.#registerConstDependencies(options.constDeps)
+
+    const staleWhileRevalidate = this.#normalizeStaleWhileRevalidateOptions(
+      options.staleWhileRevalidate
+    )
+    if (staleWhileRevalidate.enabled) {
+      const freshEntry = await this.#getFreshEntry(nodeKey)
+      if (freshEntry) {
+        await this.#recordAutomaticNodeDependency(
+          nodeKey,
+          freshEntry.fingerprint
+        )
+        return freshEntry.value as Value
+      }
+
+      const staleEntry = this.#getRetainedStaleEntry(
+        nodeKey,
+        staleWhileRevalidate.maxStaleAgeMs
+      )
+      if (staleEntry) {
+        const namespace = getCacheTelemetryNamespace(nodeKey)
+        this.#scheduleBackgroundRefresh(nodeKey, options, compute)
+        this.#logCacheOperation('hit', nodeKey, {
+          source: 'swr',
+          stale: true,
+        })
+        await this.#recordAutomaticNodeDependency(
+          nodeKey,
+          staleEntry.fingerprint
+        )
+        emitTelemetryEvent({
+          name: 'renoun.cache.swr_serve',
+          tags: {
+            namespace,
+          },
+          fields: {
+            ageMs: Math.max(0, Date.now() - staleEntry.updatedAt),
+            nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
+          },
+          telemetry: this.#telemetry,
+        })
+        emitTelemetryCounter({
+          name: 'renoun.cache.swr_serve_count',
+          tags: {
+            namespace,
+          },
+          telemetry: this.#telemetry,
+        })
+        return staleEntry.value as Value
+      }
+    }
+
+    const operation = this.#ensureInflightComputation(
+      nodeKey,
+      options,
+      compute,
+      {
+        forceRefresh: false,
+      }
+    )
+    const value = await raceAbort(operation, waitSignal)
+    await this.#recordAutomaticNodeDependency(nodeKey)
+    return value
+  }
+
+  async refresh<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
+  ): Promise<Value> {
+    this.#assertNotDisposed('refresh')
+    const waitSignal = options.signal ?? getContext()?.signal
+    throwIfAborted(waitSignal)
+    this.#registerConstDependencies(options.constDeps)
+
+    const operation = this.#ensureInflightComputation(
+      nodeKey,
+      options,
+      compute,
+      {
+        forceRefresh: true,
+      }
+    )
+    const value = await raceAbort(operation, waitSignal)
+    await this.#recordAutomaticNodeDependency(nodeKey)
+    return value
+  }
+
+  #normalizeStaleWhileRevalidateOptions(
+    staleWhileRevalidate:
+      | boolean
+      | CacheStoreStaleWhileRevalidateOptions
+      | undefined
+  ): NormalizedStaleWhileRevalidateOptions {
+    if (!staleWhileRevalidate) {
+      return { enabled: false }
+    }
+
+    if (staleWhileRevalidate === true) {
+      return {
+        enabled: true,
+      }
+    }
+
+    const maxStaleAgeMs =
+      typeof staleWhileRevalidate.maxStaleAgeMs === 'number' &&
+      Number.isFinite(staleWhileRevalidate.maxStaleAgeMs)
+        ? Math.max(0, Math.floor(staleWhileRevalidate.maxStaleAgeMs))
+        : undefined
+
+    return {
+      enabled: true,
+      maxStaleAgeMs,
+    }
+  }
+
+  #scheduleBackgroundRefresh<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value
+  ): void {
+    if (this.#disposed) {
+      return
+    }
+
+    if (this.#inflight.has(nodeKey)) {
+      return
+    }
+
+    emitTelemetryEvent({
+      name: 'renoun.cache.swr_refresh',
+      tags: {
+        namespace: getCacheTelemetryNamespace(nodeKey),
+      },
+      fields: {
+        background: true,
+        nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
+      },
+      telemetry: this.#telemetry,
+    })
+
+    const backgroundOptions: CacheStoreGetOrComputeOptions = {
+      ...options,
+      signal: CACHE_STORE_SENTINELS.neverAbortSignal,
+    }
+    const onBackgroundRefreshComplete = options.onBackgroundRefreshComplete
+
+    void this.#ensureInflightComputation(nodeKey, backgroundOptions, compute, {
+      forceRefresh: true,
+    })
+      .then(async () => {
+        if (!onBackgroundRefreshComplete) {
+          return
+        }
+
+        await onBackgroundRefreshComplete({ nodeKey })
+      })
+      .catch((error) => {
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'swr',
+          reason: 'background-refresh-error',
+        })
+        emitTelemetryEvent({
+          name: 'renoun.cache.swr_refresh_error',
+          tags: {
+            namespace: getCacheTelemetryNamespace(nodeKey),
+          },
+          fields: {
+            nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
+            message:
+              error instanceof Error
+                ? error.message
+                : String(error ?? 'unknown'),
+          },
+          telemetry: this.#telemetry,
+        })
+        reportBestEffortError('file-system/cache', error)
+      })
+  }
+
+  #ensureInflightComputation<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value,
+    executionOptions: {
+      forceRefresh: boolean
+    }
+  ): Promise<Value> {
+    const inFlight = this.#inflight.get(nodeKey)
+    if (inFlight) {
+      this.#logCacheOperation('hit', nodeKey, {
+        source: 'inflight',
+      })
+      return inFlight as Promise<Value>
+    }
+
+    const operation = this.#computeAndStore(
+      nodeKey,
+      options,
+      compute,
+      executionOptions
+    )
+    this.#inflight.set(nodeKey, operation as Promise<unknown>)
+    void operation
+      .finally(() => {
+        if (this.#inflight.get(nodeKey) === operation) {
+          this.#inflight.delete(nodeKey)
+        }
+      })
+      .catch(() => {})
+
+    return operation
+  }
+
+  async getFingerprint(nodeKey: string): Promise<string | undefined> {
+    this.#assertNotDisposed('getFingerprint')
+    const entry = await this.#getFreshEntry(nodeKey)
+    return entry?.fingerprint
+  }
+
+  async get<Value>(nodeKey: string): Promise<Value | undefined> {
+    this.#assertNotDisposed('get')
+    const entry = await this.#getFreshEntry(nodeKey)
+    await this.#recordAutomaticNodeDependency(nodeKey, entry?.fingerprint)
+    return entry?.value as Value | undefined
+  }
+
+  /**
+   * Return the latest cached value without running freshness checks.
+   * Useful for development stale-first paths that revalidate asynchronously.
+   */
+  async getPossiblyStale<Value>(nodeKey: string): Promise<Value | undefined> {
+    this.#assertNotDisposed('getPossiblyStale')
+
+    const memoryEntry = this.#entries.get(nodeKey)
+    if (memoryEntry) {
+      await this.#recordAutomaticNodeDependency(
+        nodeKey,
+        memoryEntry.fingerprint
+      )
+      return memoryEntry.value as Value
+    }
+
+    const persistedEntry = await this.#loadPersistedEntry(nodeKey)
+    await this.#recordAutomaticNodeDependency(
+      nodeKey,
+      persistedEntry?.fingerprint
+    )
+    return persistedEntry?.value as Value | undefined
+  }
+
+  async getWithFreshness<Value>(
+    nodeKey: string,
+    options: CacheStoreGetWithFreshnessOptions = {}
+  ): Promise<CacheStoreGetWithFreshnessResult<Value>> {
+    this.#assertNotDisposed('getWithFreshness')
+    const includeStaleReason = options.includeStaleReason === true
+
+    const staleMismatch: { value?: CacheStoreFreshnessMismatch } = {}
+    const captureMismatch = includeStaleReason
+      ? (mismatch: CacheStoreFreshnessMismatch) => {
+          if (!staleMismatch.value) {
+            staleMismatch.value = mismatch
+          }
+        }
+      : undefined
+
+    const createResult = (
+      value: Value | undefined,
+      fresh: boolean
+    ): CacheStoreGetWithFreshnessResult<Value> => {
+      if (fresh || !includeStaleReason) {
+        return { value, fresh }
+      }
+
+      return {
+        value,
+        fresh,
+        staleReason: staleMismatch.value ?? 'graph-dirty',
+      }
+    }
+
+    const memoryEntry = this.#entries.get(nodeKey)
+    if (memoryEntry) {
+      const fresh = await this.#isEntryFresh(
+        nodeKey,
+        memoryEntry,
+        new Set(),
+        captureMismatch
+      )
+      await this.#recordAutomaticNodeDependency(
+        nodeKey,
+        memoryEntry.fingerprint
+      )
+      return createResult(memoryEntry.value as Value, fresh)
+    }
+
+    const persistedEntry = await this.#loadPersistedEntry(nodeKey)
+    if (!persistedEntry) {
+      await this.#recordAutomaticNodeDependency(nodeKey, undefined)
+      return createResult(undefined, false)
+    }
+
+    const fresh = await this.#isEntryFresh(
+      nodeKey,
+      persistedEntry,
+      new Set(),
+      captureMismatch
+    )
+    await this.#recordAutomaticNodeDependency(
+      nodeKey,
+      persistedEntry.fingerprint
+    )
+    return createResult(persistedEntry.value as Value, fresh)
+  }
+
+  #getRetainedStaleEntry(
+    nodeKey: string,
+    maxStaleAgeMs?: number
+  ): CacheEntry | undefined {
+    this.#pruneRetainedStaleEntries()
+    const staleEntry = this.#staleEntries.get(nodeKey)
+    if (!staleEntry) {
+      return undefined
+    }
+
+    const now = Date.now()
+    if (staleEntry.expiresAt <= now) {
+      this.#staleEntries.delete(nodeKey)
+      return undefined
+    }
+
+    if (typeof maxStaleAgeMs === 'number') {
+      const ageMs = now - staleEntry.staleAt
+      if (ageMs > maxStaleAgeMs) {
+        return undefined
+      }
+    }
+
+    return staleEntry.entry
+  }
+
+  #retainStaleEntry(
+    nodeKey: string,
+    entry: CacheEntry | undefined,
+    reason: string
+  ): void {
+    if (!entry) {
+      return
+    }
+
+    if (this.#staleRetentionTtlMs <= 0) {
+      return
+    }
+
+    this.#pruneRetainedStaleEntries()
+    const now = Date.now()
+    this.#staleEntries.set(nodeKey, {
+      entry,
+      staleAt: now,
+      expiresAt: now + this.#staleRetentionTtlMs,
+    })
+    this.#logCacheOperation('set', nodeKey, {
+      source: 'swr',
+      reason,
+      staleRetentionTtlMs: this.#staleRetentionTtlMs,
+    })
+  }
+
+  #deleteRetainedStaleEntry(nodeKey: string): void {
+    this.#staleEntries.delete(nodeKey)
+  }
+
+  #pruneRetainedStaleEntries(now = Date.now()): void {
+    for (const [key, staleEntry] of this.#staleEntries) {
+      if (staleEntry.expiresAt <= now) {
+        this.#staleEntries.delete(key)
+      }
+    }
+  }
+
+  #registerConstDependencies(
+    constDeps: CacheStoreConstDependency[] | undefined
+  ): void {
+    if (!constDeps || constDeps.length === 0) {
+      return
+    }
+
+    for (const constDep of constDeps) {
+      this.#constDepVersionByName.set(constDep.name, constDep.version)
+    }
+  }
+
+  #registerConstDependencyRecords(
+    dependencies: CacheDependency[] | undefined
+  ): void {
+    if (!dependencies || dependencies.length === 0) {
+      return
+    }
+
+    for (const dependency of dependencies) {
+      const parsed = parseConstDependencyKey(dependency.depKey)
+      if (!parsed) {
+        continue
+      }
+      this.#constDepVersionByName.set(parsed.name, dependency.depVersion)
+    }
+  }
+
+  async #capturePersistedRevisionPrecondition(
+    nodeKey: string,
+    options: {
+      allowLoad?: boolean
+    } = {}
+  ): Promise<PersistedRevisionPrecondition> {
+    const cachedPrecondition =
+      this.#persistedRevisionPreconditionByKey.get(nodeKey)
+    if (cachedPrecondition !== undefined) {
+      return cachedPrecondition
+    }
+
+    if (options.allowLoad === false) {
+      return undefined
+    }
+
+    const persistence = this.#getPersistence()
+    if (!persistence) {
+      return undefined
+    }
+
+    try {
+      const persistedEntry = (await persistence.load(nodeKey, {
+        skipFingerprintCheck: true,
+        skipLastAccessedUpdate: true,
+        includeValue: false,
+        includeDeps: false,
+      })) as PersistedCacheEntry | undefined
+      if (!persistedEntry) {
+        this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
+        return 'missing'
+      }
+
+      const revision =
+        typeof persistedEntry.revision === 'number' &&
+        Number.isFinite(persistedEntry.revision)
+          ? persistedEntry.revision
+          : undefined
+      if (typeof revision === 'number') {
+        this.#persistedRevisionPreconditionByKey.set(nodeKey, revision)
+      }
+      return revision
+    } catch {
+      return undefined
+    }
+  }
+
+  async put<Value>(
+    nodeKey: string,
+    value: Value,
+    options: CacheStorePutOptions = {}
+  ): Promise<void> {
+    this.#assertNotDisposed('put')
+    this.#registerConstDependencyRecords(options.deps)
+    const expectedPersistedRevision =
+      options.persist === true
+        ? await this.#capturePersistedRevisionPrecondition(nodeKey)
+        : undefined
+    const dependencyEntries = (options.deps ?? [])
+      .map((dependency) => ({
+        depKey: dependency.depKey,
+        depVersion: dependency.depVersion,
+      }))
+      .sort((first, second) => first.depKey.localeCompare(second.depKey))
+    const entry: CacheEntry<Value> = {
+      value,
+      deps: dependencyEntries,
+      fingerprint: createFingerprint(dependencyEntries),
+      persist: options.persist ?? false,
+      updatedAt: Date.now(),
+    }
+    const workspaceTokenRootPath =
+      resolveWorkspaceTokenRootPath(dependencyEntries)
+    if (entry.persist && workspaceTokenRootPath) {
+      entry.workspaceChangeToken = await this.#getWorkspaceChangeToken(
+        workspaceTokenRootPath
+      )
+    }
+    if (entry.persist && dependencyEntries.length === 0) {
+      this.#emitMissingDependencyMetadataSignal(nodeKey, 'manual-put')
+    }
+
+    this.#logCacheOperation('set', nodeKey, {
+      source: 'manual-put',
+      persist: entry.persist,
+      dependencies: dependencyEntries.length,
+    })
+
+    this.#entries.set(nodeKey, entry)
+    this.#deleteRetainedStaleEntry(nodeKey)
+    this.#registerEntryInGraph(nodeKey, entry)
+    await this.#savePersistedEntry(nodeKey, entry, {
+      expectedRevision: expectedPersistedRevision,
+    })
+  }
+
+  async delete(nodeKey: string): Promise<void> {
+    this.#assertNotDisposed('delete')
+    this.#logCacheOperation('clear', nodeKey, {
+      source: 'explicit',
+    })
+
+    this.#bumpNodeInvalidationEpoch(nodeKey)
+    this.#dependencyGraph.markNodeDirty(nodeKey)
+    this.#dependencyGraph.unregisterNode(nodeKey)
+    this.#entries.delete(nodeKey)
+    this.#deleteRetainedStaleEntry(nodeKey)
+    this.#inflight.delete(nodeKey)
+    this.#persistenceOperationByKey.delete(nodeKey)
+    this.#persistenceIntentVersionByKey.delete(nodeKey)
+    this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+    const persistence = this.#getPersistence()
+    if (!persistence) {
+      return
+    }
+
+    markPersistedEntryInvalid(persistence, nodeKey)
+    await this.#withPersistenceIntent(nodeKey, () =>
+      this.#clearPersistedCacheEntry(nodeKey)
+    )
+  }
+
+  async deleteMany(nodeKeys: Iterable<string>): Promise<number> {
+    this.#assertNotDisposed('deleteMany')
+    const uniqueNodeKeys = Array.from(
+      new Set(
+        Array.from(nodeKeys).filter((nodeKey): nodeKey is string => {
+          return typeof nodeKey === 'string' && nodeKey.length > 0
+        })
+      )
+    )
+
+    if (uniqueNodeKeys.length === 0) {
+      return 0
+    }
+
+    this.#dependencyGraph.markNodesDirty(uniqueNodeKeys)
+    for (const nodeKey of uniqueNodeKeys) {
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'explicit-batch',
+      })
+      this.#bumpNodeInvalidationEpoch(nodeKey)
+      this.#dependencyGraph.unregisterNode(nodeKey)
+      this.#entries.delete(nodeKey)
+      this.#deleteRetainedStaleEntry(nodeKey)
+      this.#inflight.delete(nodeKey)
+      this.#persistenceOperationByKey.delete(nodeKey)
+      this.#persistenceIntentVersionByKey.delete(nodeKey)
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+    }
+
+    const persistence = this.#getPersistence()
+    if (!persistence) {
+      return uniqueNodeKeys.length
+    }
+
+    for (const nodeKey of uniqueNodeKeys) {
+      markPersistedEntryInvalid(persistence, nodeKey)
+    }
+
+    if (persistence.deleteMany) {
+      try {
+        await persistence.deleteMany(uniqueNodeKeys)
+        for (const nodeKey of uniqueNodeKeys) {
+          clearPersistedEntryInvalidation(persistence, nodeKey)
+        }
+        return uniqueNodeKeys.length
+      } catch (error) {
+        this.#warnPersistenceFailure(
+          `deleteMany(${String(uniqueNodeKeys.length)})`,
+          error
+        )
+      }
+    }
+
+    for (const nodeKey of uniqueNodeKeys) {
+      await this.#withPersistenceIntent(nodeKey, () =>
+        this.#clearPersistedCacheEntry(nodeKey)
+      )
+    }
+
+    return uniqueNodeKeys.length
+  }
+
+  async deleteByDependencyPath(
+    dependencyPathKey: string
+  ): Promise<CacheDependencyEvictionResult> {
+    return this.deleteByDependencyPaths([dependencyPathKey])
+  }
+
+  async deleteByDependencyPaths(
+    dependencyPathKeys: Iterable<string>
+  ): Promise<CacheDependencyEvictionResult> {
+    this.#assertNotDisposed('deleteByDependencyPaths')
+    const persistence = this.#getPersistence()
+    const defaultResult: CacheDependencyEvictionResult = {
+      deletedNodeKeys: [],
+      usedDependencyIndex: false,
+      hasMissingDependencyMetadata: false,
+      missingDependencyNodeKeys: [],
+    }
+
+    if (!persistence) {
+      return defaultResult
+    }
+
+    const dependencyPathCandidates =
+      this.#getDependencyPathCandidatesForMany(dependencyPathKeys)
+    const deletedNodeKeys = new Set<string>()
+    const missingDependencyNodeKeys = new Set<string>()
+    let usedDependencyIndex = false
+    let hasMissingDependencyMetadata = false
+    let invalidationSeq: number | undefined
+    let invalidationMode: CacheDependencyEvictionResult['invalidationMode']
+
+    if (dependencyPathCandidates.size === 0) {
+      return defaultResult
+    }
+
+    const dependencyPathCandidateList = Array.from(dependencyPathCandidates)
+    let batchResult: CacheDependencyEvictionResult | undefined
+
+    if (persistence.deleteByDependencyPaths) {
+      try {
+        batchResult = await persistence.deleteByDependencyPaths(
+          dependencyPathCandidateList
+        )
+      } catch (error) {
+        this.#warnPersistenceFailure(
+          `deleteByDependencyPaths(${String(dependencyPathCandidateList.length)})`,
+          error
+        )
+      }
+    }
+
+    if (batchResult) {
+      for (const nodeKey of batchResult.deletedNodeKeys) {
+        deletedNodeKeys.add(nodeKey)
+      }
+      for (const nodeKey of batchResult.missingDependencyNodeKeys ?? []) {
+        missingDependencyNodeKeys.add(nodeKey)
+      }
+      usedDependencyIndex ||= batchResult.usedDependencyIndex
+      hasMissingDependencyMetadata ||= batchResult.hasMissingDependencyMetadata
+      if (typeof batchResult.invalidationSeq === 'number') {
+        invalidationSeq = Math.max(
+          invalidationSeq ?? Number.NEGATIVE_INFINITY,
+          batchResult.invalidationSeq
+        )
+      }
+      if (batchResult.invalidationMode) {
+        invalidationMode = batchResult.invalidationMode
+      }
+    } else if (persistence.deleteByDependencyPath) {
+      for (const normalizedPath of dependencyPathCandidateList) {
+        let result: CacheDependencyEvictionResult
+        try {
+          result = await persistence.deleteByDependencyPath(normalizedPath)
+        } catch (error) {
+          this.#warnPersistenceFailure(
+            `deleteByDependencyPath(${normalizedPath})`,
+            error
+          )
+          continue
+        }
+
+        for (const nodeKey of result.deletedNodeKeys) {
+          deletedNodeKeys.add(nodeKey)
+        }
+        for (const nodeKey of result.missingDependencyNodeKeys ?? []) {
+          missingDependencyNodeKeys.add(nodeKey)
+        }
+        usedDependencyIndex ||= result.usedDependencyIndex
+        hasMissingDependencyMetadata ||= result.hasMissingDependencyMetadata
+        if (typeof result.invalidationSeq === 'number') {
+          invalidationSeq = Math.max(
+            invalidationSeq ?? Number.NEGATIVE_INFINITY,
+            result.invalidationSeq
+          )
+        }
+        if (result.invalidationMode) {
+          invalidationMode = result.invalidationMode
+        }
+      }
+    } else {
+      return defaultResult
+    }
+
+    if (deletedNodeKeys.size === 0) {
+      const evictionMetadata: Partial<CacheDependencyEvictionResult> = {}
+      if (
+        typeof invalidationSeq === 'number' &&
+        Number.isFinite(invalidationSeq)
+      ) {
+        evictionMetadata.invalidationSeq = invalidationSeq
+      }
+      if (invalidationMode) {
+        evictionMetadata.invalidationMode = invalidationMode
+      }
+
+      return {
+        ...defaultResult,
+        usedDependencyIndex,
+        hasMissingDependencyMetadata,
+        missingDependencyNodeKeys: Array.from(missingDependencyNodeKeys),
+        ...evictionMetadata,
+      }
+    }
+
+    this.#dependencyGraph.markNodesDirty(deletedNodeKeys)
+
+    for (const nodeKey of deletedNodeKeys) {
+      this.#retainStaleEntry(
+        nodeKey,
+        this.#entries.get(nodeKey),
+        'delete-by-dependency-path'
+      )
+      this.#bumpNodeInvalidationEpoch(nodeKey)
+      this.#dependencyGraph.unregisterNode(nodeKey)
+      this.#entries.delete(nodeKey)
+      this.#inflight.delete(nodeKey)
+      this.#persistenceOperationByKey.delete(nodeKey)
+      this.#persistenceIntentVersionByKey.delete(nodeKey)
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+      clearPersistedEntryInvalidation(persistence, nodeKey)
+    }
+
+    const evictionMetadata: Partial<CacheDependencyEvictionResult> = {}
+    if (
+      typeof invalidationSeq === 'number' &&
+      Number.isFinite(invalidationSeq)
+    ) {
+      evictionMetadata.invalidationSeq = invalidationSeq
+    }
+    if (invalidationMode) {
+      evictionMetadata.invalidationMode = invalidationMode
+    }
+
+    return {
+      deletedNodeKeys: Array.from(deletedNodeKeys),
+      usedDependencyIndex,
+      hasMissingDependencyMetadata,
+      missingDependencyNodeKeys: Array.from(missingDependencyNodeKeys),
+      ...evictionMetadata,
+    }
+  }
+
+  #getDependencyPathCandidates(dependencyPathKey: string): Set<string> {
+    const candidates = new Set<string>()
+
+    const addPathCandidate = (path: string) => {
+      candidates.add(normalizeDepPath(path))
+      candidates.add(normalizeDepPathPreservingAbsolute(path))
+    }
+
+    addPathCandidate(dependencyPathKey)
+
+    let relativePath = dependencyPathKey
+    try {
+      relativePath =
+        this.#snapshot.getRelativePathToWorkspace(dependencyPathKey)
+    } catch {
+      return candidates
+    }
+
+    addPathCandidate(relativePath)
+
+    return candidates
+  }
+
+  #getDependencyPathCandidatesForMany(
+    dependencyPathKeys: Iterable<string>
+  ): Set<string> {
+    const candidates = new Set<string>()
+
+    for (const dependencyPathKey of dependencyPathKeys) {
+      if (
+        typeof dependencyPathKey !== 'string' ||
+        dependencyPathKey.length === 0
+      ) {
+        continue
+      }
+
+      for (const candidatePath of this.#getDependencyPathCandidates(
+        dependencyPathKey
+      )) {
+        candidates.add(candidatePath)
+      }
+    }
+
+    return candidates
+  }
+
+  invalidateDependencyPath(dependencyPathKey: string): void {
+    this.invalidateDependencyPaths([dependencyPathKey])
+  }
+
+  invalidateDependencyPaths(dependencyPathKeys: Iterable<string>): void {
+    this.#assertNotDisposed('invalidateDependencyPaths')
+    const dependencyPathCandidates =
+      this.#getDependencyPathCandidatesForMany(dependencyPathKeys)
+    if (dependencyPathCandidates.size === 0) {
+      return
+    }
+
+    const affectedNodeKeys = new Set<string>()
+
+    for (const nodeKey of this.#dependencyGraph.touchPathDependenciesMany(
+      dependencyPathCandidates
+    )) {
+      affectedNodeKeys.add(nodeKey)
+    }
+
+    if (affectedNodeKeys.size === 0) {
+      return
+    }
+
+    for (const nodeKey of affectedNodeKeys) {
+      this.#retainStaleEntry(
+        nodeKey,
+        this.#entries.get(nodeKey),
+        'invalidate-dependency-path'
+      )
+      this.#bumpNodeInvalidationEpoch(nodeKey)
+      this.#dependencyGraph.unregisterNode(nodeKey)
+      this.#entries.delete(nodeKey)
+      this.#inflight.delete(nodeKey)
+      this.#persistenceOperationByKey.delete(nodeKey)
+      this.#persistenceIntentVersionByKey.delete(nodeKey)
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+      markPersistedEntryInvalid(this.#getPersistence(), nodeKey)
+    }
+  }
+
+  async listNodeKeysByPrefix(prefix: string): Promise<string[]> {
+    this.#assertNotDisposed('listNodeKeysByPrefix')
+    const normalizedPrefix = normalizeCacheSlashes(prefix)
+    const memoryKeys = Array.from(this.#entries.keys()).filter((nodeKey) =>
+      nodeKey.startsWith(normalizedPrefix)
+    )
+
+    const persistence = this.#getPersistence()
+    if (!persistence?.listNodeKeysByPrefix) {
+      return Array.from(new Set(memoryKeys)).sort()
+    }
+
+    try {
+      const persistedKeys =
+        await persistence.listNodeKeysByPrefix(normalizedPrefix)
+      return Array.from(new Set([...memoryKeys, ...persistedKeys])).sort()
+    } catch (error) {
+      this.#warnPersistenceFailure(
+        `listNodeKeysByPrefix(${normalizedPrefix})`,
+        error
+      )
+      return Array.from(new Set(memoryKeys)).sort()
+    }
+  }
+
+  async withComputeSlot(
+    nodeKey: string,
+    options: {
+      leader: () => Promise<void>
+      follower?: () => Promise<void>
+      ttlMs?: number
+    }
+  ): Promise<'leader' | 'follower'> {
+    this.#assertNotDisposed('withComputeSlot')
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      await options.leader()
+      return 'leader'
+    }
+
+    const slotTtlMs = getComputeSlotTtlMs(
+      persistence,
+      options.ttlMs ?? this.#computeSlotTtlMs
+    )
+    const owner = this.#createComputeSlotOwner()
+    const acquired = await this.#acquireComputeSlot(nodeKey, owner, slotTtlMs)
+
+    if (!acquired) {
+      await this.#waitForComputeSlotRelease(nodeKey)
+      if (options.follower) {
+        await options.follower()
+      }
+      return 'follower'
+    }
+
+    const computeSlotHeartbeat = this.#startComputeSlotHeartbeat(
+      nodeKey,
+      owner,
+      slotTtlMs
+    )
+
+    try {
+      await options.leader()
+    } finally {
+      computeSlotHeartbeat.stop()
+      await this.#releaseComputeSlot(nodeKey, owner)
+    }
+
+    return 'leader'
+  }
+
+  async #withPersistenceIntent(
+    nodeKey: string,
+    task: () => Promise<void>
+  ): Promise<void> {
+    const previous =
+      this.#persistenceOperationByKey.get(nodeKey) ?? Promise.resolve()
+    const currentVersion =
+      (this.#persistenceIntentVersionByKey.get(nodeKey) ?? 0) + 1
+    this.#persistenceIntentVersionByKey.set(nodeKey, currentVersion)
+
+    const operation = previous
+      .catch(() => {})
+      .then(async () => {
+        if (this.#disposed) {
+          return
+        }
+
+        if (
+          this.#persistenceIntentVersionByKey.get(nodeKey) !== currentVersion
+        ) {
+          return
+        }
+
+        let taskError: unknown
+        let hasTaskError = false
+        try {
+          await task()
+        } catch (error) {
+          taskError = error
+          hasTaskError = true
+        } finally {
+          if (this.#disposed) {
+            try {
+              await this.#clearPersistedCacheEntry(nodeKey)
+            } catch (error) {
+              reportBestEffortError('file-system/cache', error)
+            }
+          }
+        }
+
+        if (hasTaskError) {
+          throw taskError
+        }
+      })
+
+    this.#persistenceOperationByKey.set(nodeKey, operation)
+
+    try {
+      await operation
+    } finally {
+      if (this.#persistenceOperationByKey.get(nodeKey) === operation) {
+        this.#persistenceOperationByKey.delete(nodeKey)
+        this.#persistenceIntentVersionByKey.delete(nodeKey)
+      }
+    }
+  }
+
+  async #clearPersistedCacheEntry(nodeKey: string): Promise<void> {
+    const persistence = this.#getPersistence()
+    if (!persistence) {
+      return
+    }
+
+    try {
+      await persistence.delete(nodeKey)
+    } catch (error) {
+      this.#warnPersistenceFailure(`cleanup(${nodeKey})`, error)
+      markPersistedEntryInvalid(persistence, nodeKey)
+      return
+    }
+
+    this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
+    clearPersistedEntryInvalidation(persistence, nodeKey)
+  }
+
+  #cleanupPersistedEntry(nodeKey: string): Promise<void> {
+    const persistence = this.#getPersistence()
+    markPersistedEntryInvalid(persistence, nodeKey)
+    if (!persistence) {
+      return Promise.resolve()
+    }
+
+    return this.#clearPersistedCacheEntry(nodeKey)
+  }
+
+  #getComputeSlotPersistence(): CacheStorePersistenceComputeSlot | undefined {
+    const persistence = this.#getPersistence()
+    if (!isCacheStorePersistenceComputeSlot(persistence)) {
+      return undefined
+    }
+
+    return persistence
+  }
+
+  async #acquireComputeSlot(
+    nodeKey: string,
+    owner: string,
+    slotTtlMs: number
+  ): Promise<boolean> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return true
+    }
+
+    try {
+      return await persistence.acquireComputeSlot(nodeKey, owner, slotTtlMs)
+    } catch (error) {
+      if (isComputeSlotTransientError(error)) {
+        return false
+      }
+
+      throw error
+    }
+  }
+
+  #startComputeSlotHeartbeat(
+    nodeKey: string,
+    owner: string,
+    slotTtlMs: number
+  ): { stop: () => void; hasLostOwnership: () => boolean } {
+    const persistence = this.#getComputeSlotPersistence()
+    const heartbeatMs = getComputeSlotHeartbeatMs(slotTtlMs)
+    if (!persistence?.refreshComputeSlot || heartbeatMs <= 0) {
+      return {
+        stop: () => {},
+        hasLostOwnership: () => false,
+      }
+    }
+
+    let stopped = false
+    let lostOwnership = false
+    const heartbeat = setInterval(() => {
+      void this.#refreshComputeSlot(nodeKey, owner, slotTtlMs).then(
+        (retainedOwnership) => {
+          if (stopped || retainedOwnership !== false) {
+            return
+          }
+
+          lostOwnership = true
+          clearInterval(heartbeat)
+        }
+      )
+    }, heartbeatMs)
+    ;(heartbeat as NodeJS.Timeout).unref?.()
+
+    return {
+      stop: () => {
+        stopped = true
+        clearInterval(heartbeat)
+      },
+      hasLostOwnership: () => lostOwnership,
+    }
+  }
+
+  async #refreshComputeSlot(
+    nodeKey: string,
+    owner: string,
+    slotTtlMs: number
+  ): Promise<boolean> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence?.refreshComputeSlot) {
+      return true
+    }
+
+    try {
+      return await persistence.refreshComputeSlot(nodeKey, owner, slotTtlMs)
+    } catch (error) {
+      reportBestEffortError('file-system/cache', error)
+      return false
+    }
+  }
+
+  async #releaseComputeSlot(nodeKey: string, owner: string): Promise<void> {
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return
+    }
+
+    try {
+      await persistence.releaseComputeSlot(nodeKey, owner)
+    } catch {
+      return
+    }
+  }
+
+  async #waitForInFlightValue<Value>(
+    nodeKey: string,
+    slotTtlMs: number
+  ): Promise<Value | typeof NO_COMPUTE_SLOT_SHARED_VALUE> {
+    const signal = getContext()?.signal
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return NO_COMPUTE_SLOT_SHARED_VALUE
+    }
+    const ownerGraceMs = getComputeSlotOwnerGraceMs(slotTtlMs)
+    let lastObservedOwnerAt: number | undefined
+
+    while (true) {
+      throwIfAborted(signal)
+      const freshEntry = await this.#getFreshEntry(nodeKey)
+      if (freshEntry) {
+        return freshEntry.value as Value
+      }
+
+      let inFlightOwner: string | undefined
+      try {
+        inFlightOwner = await persistence.getComputeSlotOwner(nodeKey)
+      } catch {
+        return NO_COMPUTE_SLOT_SHARED_VALUE
+      }
+
+      const now = Date.now()
+
+      if (inFlightOwner) {
+        lastObservedOwnerAt = now
+      } else if (
+        lastObservedOwnerAt === undefined ||
+        ownerGraceMs <= 0 ||
+        now - lastObservedOwnerAt >= ownerGraceMs
+      ) {
+        const settledEntry = await this.#getFreshEntry(nodeKey)
+        if (settledEntry) {
+          return settledEntry.value as Value
+        }
+
+        return NO_COMPUTE_SLOT_SHARED_VALUE
+      }
+
+      const sleep =
+        lastObservedOwnerAt === undefined || ownerGraceMs <= 0
+          ? this.#computeSlotPollMs
+          : Math.max(
+              1,
+              Math.min(
+                this.#computeSlotPollMs,
+                ownerGraceMs - Math.max(0, now - lastObservedOwnerAt)
+              )
+            )
+      if (sleep > 0) {
+        await raceAbort(delay(sleep), signal)
+      }
+      continue
+    }
+  }
+
+  async #waitForComputeSlotRelease(nodeKey: string): Promise<void> {
+    const signal = getContext()?.signal
+    const persistence = this.#getComputeSlotPersistence()
+    if (!persistence) {
+      return
+    }
+
+    while (true) {
+      throwIfAborted(signal)
+      let inFlightOwner: string | undefined
+      try {
+        inFlightOwner = await persistence.getComputeSlotOwner(nodeKey)
+      } catch {
+        return
+      }
+
+      if (!inFlightOwner) {
+        return
+      }
+
+      const sleep = this.#computeSlotPollMs
+      if (sleep > 0) {
+        await raceAbort(delay(sleep), signal)
+      }
+    }
+  }
+
+  #createComputeSlotOwner(): string {
+    const randomSuffix = Math.random().toString(36).slice(2)
+    return `${process.pid}:${Date.now()}:${randomSuffix}`
+  }
+
+  hasSync(nodeKey: string): boolean {
+    this.#assertNotDisposed('hasSync')
+    return this.#entries.has(nodeKey)
+  }
+
+  hasInFlight(nodeKey: string): boolean {
+    this.#assertNotDisposed('hasInFlight')
+    return this.#inflight.has(nodeKey)
+  }
+
+  getSync<Value>(nodeKey: string): Value | undefined {
+    this.#assertNotDisposed('getSync')
+    const entry = this.#entries.get(nodeKey)
+    if (!entry) {
+      this.#logCacheOperation('miss', nodeKey, {
+        source: 'memory-sync',
+      })
+      return undefined
+    }
+
+    this.#logCacheOperation('hit', nodeKey, {
+      source: 'memory-sync',
+      persist: entry.persist,
+    })
+    return entry.value as Value
+  }
+
+  setSync<Value>(nodeKey: string, value: Value): void {
+    this.#assertNotDisposed('setSync')
+    const entry: CacheEntry<Value> = {
+      value,
+      deps: [],
+      fingerprint: createFingerprint([]),
+      persist: false,
+      updatedAt: Date.now(),
+    }
+
+    this.#logCacheOperation('set', nodeKey, {
+      source: 'manual-put-sync',
+      persist: false,
+      dependencies: 0,
+    })
+
+    this.#entries.set(nodeKey, entry)
+    this.#deleteRetainedStaleEntry(nodeKey)
+    this.#registerEntryInGraph(nodeKey, entry)
+  }
+
+  getOrComputeSync<Value>(nodeKey: string, compute: () => Value): Value {
+    this.#assertNotDisposed('getOrComputeSync')
+    if (this.#entries.has(nodeKey)) {
+      return this.getSync<Value>(nodeKey)!
+    }
+
+    const value = compute()
+    this.setSync(nodeKey, value)
+    return value
+  }
+
+  deleteSync(nodeKey: string): void {
+    this.#assertNotDisposed('deleteSync')
+    this.#logCacheOperation('clear', nodeKey, {
+      source: 'explicit-sync',
+    })
+
+    this.#bumpNodeInvalidationEpoch(nodeKey)
+    this.#dependencyGraph.markNodeDirty(nodeKey)
+    this.#dependencyGraph.unregisterNode(nodeKey)
+    this.#entries.delete(nodeKey)
+    this.#deleteRetainedStaleEntry(nodeKey)
+    this.#inflight.delete(nodeKey)
+    this.#persistenceOperationByKey.delete(nodeKey)
+    this.#persistenceIntentVersionByKey.delete(nodeKey)
+    this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+  }
+
+  clearMemory(): void {
+    this.#logCacheOperation('clear', '__cache_memory__', {
+      source: 'memory',
+      size: this.#entries.size,
+    })
+
+    this.#globalInvalidationEpoch += 1
+    this.#entries.clear()
+    this.#staleEntries.clear()
+    this.#inflight.clear()
+    this.#dependencyGraph.clear()
+    this.#invalidationEpochByNodeKey.clear()
+  }
+
+  async #computeAndStore<Value>(
+    nodeKey: string,
+    options: CacheStoreGetOrComputeOptions,
+    compute: (context: CacheStoreComputeContext) => Promise<Value> | Value,
+    executionOptions: {
+      forceRefresh: boolean
+    }
+  ): Promise<Value> {
+    if (!executionOptions.forceRefresh) {
+      const cachedEntry = await this.#getFreshEntry(nodeKey)
+      if (cachedEntry) {
+        return cachedEntry.value as Value
+      }
+    }
+
+    const expectedPersistedRevision =
+      options.persist === true
+        ? await this.#capturePersistedRevisionPrecondition(nodeKey)
+        : undefined
+
+    const computeWriteGuard = this.#captureNodeWriteGuard(nodeKey)
+    let shouldPersist = options.persist ?? false
+    const dependencyVersions = new Map<string, string>()
+    const computeSignal = options.signal ?? getContext()?.signal
+    const recordWorkspaceTokenUnsafeDependency = (path: string) => {
+      dependencyVersions.set(
+        toWorkspaceTokenUnsafeConstDependencyKey(path),
+        '1'
+      )
+    }
+    const context: CacheStoreComputeContext = {
+      snapshot: this.#snapshot,
+      signal: computeSignal,
+      recordDep(depKey, depVersion) {
+        dependencyVersions.set(depKey, depVersion)
+      },
+      recordConstDep: (name, version) => {
+        this.#constDepVersionByName.set(name, version)
+        dependencyVersions.set(toConstDependencyKey(name), version)
+      },
+      disablePersist: () => {
+        shouldPersist = false
+      },
+      recordFileDep: async (path: string) => {
+        const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
+        const normalizedPath = normalizeDepPath(relativePath)
+        const depVersion = await this.#snapshot.contentId(normalizedPath)
+        dependencyVersions.set(`file:${normalizedPath}`, depVersion)
+        if (
+          isWorkspaceTokenUnsafeSnapshotPath(this.#snapshot, [
+            path,
+            normalizedPath,
+          ])
+        ) {
+          recordWorkspaceTokenUnsafeDependency(normalizedPath)
+        }
+        return depVersion
+      },
+      recordDirectoryDep: async (path: string) => {
+        const relativePath = this.#snapshot.getRelativePathToWorkspace(path)
+        const normalizedPath = normalizeDepPath(relativePath)
+        const depVersion = await this.#snapshot.contentId(normalizedPath)
+        dependencyVersions.set(`dir:${normalizedPath}`, depVersion)
+        if (
+          isWorkspaceTokenUnsafeSnapshotPath(this.#snapshot, [
+            path,
+            normalizedPath,
+          ])
+        ) {
+          recordWorkspaceTokenUnsafeDependency(normalizedPath)
+        }
+        return depVersion
+      },
+      recordNodeDep: async (childNodeKey: string) => {
+        const depVersion =
+          await this.#resolveNodeDependencyVersion(childNodeKey)
+        dependencyVersions.set(`node:${childNodeKey}`, depVersion)
+        return depVersion
+      },
+    }
+
+    const persistence = this.#getPersistence()
+    const shouldCoordinate =
+      options.persist === true &&
+      !!persistence &&
+      !isPersistedEntryInvalid(persistence, nodeKey)
+    const computeSlotTtlMs = getComputeSlotTtlMs(
+      this.#getComputeSlotPersistence(),
+      this.#computeSlotTtlMs
+    )
+    let computeSlotOwner: string | undefined
+    let computeSlotHeartbeat:
+      | {
+          stop: () => void
+          hasLostOwnership: () => boolean
+        }
+      | undefined
+    if (shouldCoordinate) {
+      const candidateOwner = this.#createComputeSlotOwner()
+
+      const acquired = await this.#acquireComputeSlot(
+        nodeKey,
+        candidateOwner,
+        computeSlotTtlMs
+      )
+      if (!acquired) {
+        const sharedValue = await this.#waitForInFlightValue<Value>(
+          nodeKey,
+          computeSlotTtlMs
+        )
+        if (sharedValue !== NO_COMPUTE_SLOT_SHARED_VALUE) {
+          return sharedValue
+        }
+      } else {
+        computeSlotOwner = candidateOwner
+        computeSlotHeartbeat = this.#startComputeSlotHeartbeat(
+          nodeKey,
+          computeSlotOwner,
+          computeSlotTtlMs
+        )
+      }
+    }
+
+    try {
+      const computeStartedAt = Date.now()
+      const value = await this.#activeComputeScope.run(
+        { nodeKey, deps: dependencyVersions },
+        async () => compute(context)
+      )
+      const computeDurationMs = Date.now() - computeStartedAt
+
+      const dependencyEntries = Array.from(dependencyVersions.entries())
+        .map(([depKey, depVersion]) => ({ depKey, depVersion }))
+        .sort((first, second) => first.depKey.localeCompare(second.depKey))
+      const fingerprint = createFingerprint(dependencyEntries)
+
+      const entry: CacheEntry<Value> = {
+        value,
+        deps: dependencyEntries,
+        fingerprint,
+        persist: shouldPersist,
+        updatedAt: Date.now(),
+      }
+      const workspaceTokenRootPath =
+        resolveWorkspaceTokenRootPath(dependencyEntries)
+      if (entry.persist && workspaceTokenRootPath) {
+        entry.workspaceChangeToken = await this.#getWorkspaceChangeToken(
+          workspaceTokenRootPath
+        )
+      }
+      if (entry.persist && dependencyEntries.length === 0) {
+        this.#emitMissingDependencyMetadataSignal(nodeKey, 'compute')
+      }
+
+      this.#logCacheOperation('set', nodeKey, {
+        source: 'compute',
+        persist: entry.persist,
+        dependencies: dependencyEntries.length,
+      })
+      const namespace = getCacheTelemetryNamespace(nodeKey)
+      emitTelemetryEvent({
+        name: 'renoun.cache.compute',
+        tags: {
+          namespace,
+          persist: String(entry.persist),
+        },
+        fields: {
+          nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
+          durationMs: computeDurationMs,
+          dependencies: dependencyEntries.length,
+        },
+        telemetry: this.#telemetry,
+      })
+      emitTelemetryHistogram({
+        name: 'renoun.cache.compute_ms',
+        value: computeDurationMs,
+        tags: {
+          namespace,
+          persist: String(entry.persist),
+        },
+        telemetry: this.#telemetry,
+      })
+      emitTelemetryCounter({
+        name: 'renoun.cache.compute_count',
+        tags: {
+          namespace,
+          persist: String(entry.persist),
+        },
+        telemetry: this.#telemetry,
+      })
+
+      if (!this.#isNodeWriteGuardCurrent(nodeKey, computeWriteGuard)) {
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'compute',
+          reason: 'stale-after-invalidation',
+        })
+        return value
+      }
+
+      if (computeSlotHeartbeat?.hasLostOwnership()) {
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'compute',
+          reason: 'lost-compute-slot-ownership',
+        })
+        return value
+      }
+
+      this.#entries.set(nodeKey, entry)
+      this.#deleteRetainedStaleEntry(nodeKey)
+      this.#registerEntryInGraph(nodeKey, entry)
+      await this.#savePersistedEntry(nodeKey, entry, {
+        expectedRevision: expectedPersistedRevision,
+      })
+
+      return value
+    } finally {
+      if (computeSlotOwner) {
+        computeSlotHeartbeat?.stop()
+        await this.#releaseComputeSlot(nodeKey, computeSlotOwner)
+      }
+    }
+  }
+
+  #emitMissingDependencyMetadataSignal(
+    nodeKey: string,
+    source: 'compute' | 'manual-put'
+  ): void {
+    const namespace = getCacheTelemetryNamespace(nodeKey)
+    emitTelemetryCounter({
+      name: 'renoun.cache.persisted_missing_dependency_metadata_count',
+      tags: {
+        namespace,
+        source,
+      },
+      telemetry: this.#telemetry,
+    })
+    emitTelemetryEvent({
+      name: 'renoun.cache.persisted_missing_dependency_metadata',
+      tags: {
+        namespace,
+        source,
+      },
+      fields: {
+        nodeKeyHash: getCacheTelemetryNodeKeyHash(nodeKey),
+      },
+      telemetry: this.#telemetry,
+    })
+  }
+
+  #bumpNodeInvalidationEpoch(nodeKey: string): void {
+    const nextEpoch = (this.#invalidationEpochByNodeKey.get(nodeKey) ?? 0) + 1
+    this.#invalidationEpochByNodeKey.set(nodeKey, nextEpoch)
+  }
+
+  #captureNodeWriteGuard(nodeKey: string): {
+    globalEpoch: number
+    nodeEpoch: number
+  } {
+    return {
+      globalEpoch: this.#globalInvalidationEpoch,
+      nodeEpoch: this.#invalidationEpochByNodeKey.get(nodeKey) ?? 0,
+    }
+  }
+
+  #isNodeWriteGuardCurrent(
+    nodeKey: string,
+    guard: {
+      globalEpoch: number
+      nodeEpoch: number
+    }
+  ): boolean {
+    return (
+      guard.globalEpoch === this.#globalInvalidationEpoch &&
+      guard.nodeEpoch === (this.#invalidationEpochByNodeKey.get(nodeKey) ?? 0)
+    )
+  }
+
+  async #getEntry(nodeKey: string): Promise<CacheEntry | undefined> {
+    const memoryEntry = this.#entries.get(nodeKey)
+    if (memoryEntry) {
+      this.#logCacheOperation('hit', nodeKey, {
+        source: 'memory',
+        persist: memoryEntry.persist,
+      })
+      return memoryEntry
+    }
+
+    return this.#loadPersistedEntry(nodeKey)
+  }
+
+  async #loadPersistedEntry(nodeKey: string): Promise<CacheEntry | undefined> {
+    const persistence = this.#getPersistence()
+    if (!persistence) {
+      return undefined
+    }
+
+    if (isPersistedEntryInvalid(persistence, nodeKey)) {
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'persisted-entry',
+        reason: 'in-process-invalid',
+      })
+      return undefined
+    }
+
+    let persistedEntry: PersistedCacheEntry | undefined
+    try {
+      persistedEntry = await persistence.load(nodeKey)
+    } catch (error) {
+      this.#warnPersistenceFailure(`load(${nodeKey})`, error)
+      return undefined
+    }
+
+    if (!persistedEntry) {
+      this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
+    } else if (
+      typeof persistedEntry.revision === 'number' &&
+      Number.isFinite(persistedEntry.revision)
+    ) {
+      this.#persistedRevisionPreconditionByKey.set(
+        nodeKey,
+        persistedEntry.revision
+      )
+    } else {
+      this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+    }
+
+    if (persistedEntry && !persistedEntry.persist) {
+      await this.#withPersistenceIntent(nodeKey, () =>
+        this.#clearPersistedCacheEntry(nodeKey)
+      )
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'persisted-entry',
+        reason: 'not-persist-flag',
+      })
+      return undefined
+    }
+
+    if (persistedEntry) {
+      this.#entries.set(nodeKey, persistedEntry)
+      this.#deleteRetainedStaleEntry(nodeKey)
+      this.#registerEntryInGraph(nodeKey, persistedEntry)
+    }
+
+    return persistedEntry
+  }
+
+  async #getFreshEntry(nodeKey: string): Promise<CacheEntry | undefined> {
+    const memoryEntry = this.#entries.get(nodeKey)
+    if (memoryEntry) {
+      if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+        this.#retainStaleEntry(nodeKey, memoryEntry, 'memory-graph-dirty')
+        this.#entries.delete(nodeKey)
+        this.#dependencyGraph.unregisterNode(nodeKey)
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'memory',
+          reason: 'graph-dirty',
+        })
+      } else {
+        const memoryIsFresh = await this.#isEntryFresh(
+          nodeKey,
+          memoryEntry,
+          new Set()
+        )
+
+        if (memoryIsFresh) {
+          this.#logCacheOperation('hit', nodeKey, {
+            source: 'memory',
+            persist: memoryEntry.persist,
+          })
+          return memoryEntry
+        }
+
+        this.#retainStaleEntry(nodeKey, memoryEntry, 'memory-stale')
+        this.#entries.delete(nodeKey)
+        this.#dependencyGraph.unregisterNode(nodeKey)
+        this.#logCacheOperation('clear', nodeKey, {
+          source: 'memory',
+          reason: 'stale',
+        })
+      }
+    }
+
+    if (!this.#getPersistence()) {
+      this.#logCacheOperation('miss', nodeKey, {
+        source: 'memory',
+      })
+      return undefined
+    }
+
+    const persistedEntry = await this.#loadPersistedEntry(nodeKey)
+    if (!persistedEntry) {
+      this.#logCacheOperation('miss', nodeKey, {
+        source: 'persisted',
+      })
+      return undefined
+    }
+
+    if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+      await this.delete(nodeKey)
+      this.#retainStaleEntry(nodeKey, persistedEntry, 'persisted-graph-dirty')
+      this.#logCacheOperation('clear', nodeKey, {
+        source: 'persisted',
+        reason: 'graph-dirty',
+      })
+      return undefined
+    }
+
+    const persistedIsFresh = await this.#isEntryFresh(
+      nodeKey,
+      persistedEntry,
+      new Set()
+    )
+
+    if (persistedIsFresh) {
+      this.#logCacheOperation('hit', nodeKey, {
+        source: 'persisted',
+        persist: persistedEntry.persist,
+      })
+      return persistedEntry
+    }
+
+    await this.delete(nodeKey)
+    this.#retainStaleEntry(nodeKey, persistedEntry, 'persisted-stale')
+    this.#logCacheOperation('clear', nodeKey, {
+      source: 'persisted',
+      reason: 'stale',
+    })
+    return undefined
+  }
+
+  #logCacheOperation(
+    operation: 'hit' | 'miss' | 'set' | 'clear',
+    nodeKey: string,
+    data?: Record<string, unknown>
+  ): void {
+    const debugLogger = getDebugLogger()
+    const debugEnabled = debugLogger.isEnabled('debug')
+    const telemetry =
+      this.#telemetry ?? getContext()?.telemetry ?? getGlobalTelemetry()
+
+    let telemetryEnabled = false
+    if (telemetry) {
+      if (typeof telemetry.enabled === 'function') {
+        try {
+          telemetryEnabled = telemetry.enabled('metrics')
+        } catch {
+          telemetryEnabled = true
+        }
+      } else {
+        telemetryEnabled = true
+      }
+    } else if (debugEnabled) {
+      telemetryEnabled = true
+    }
+
+    if (!debugEnabled && !telemetryEnabled) {
+      return
+    }
+
+    if (telemetryEnabled) {
+      const source =
+        typeof data?.['source'] === 'string' && data['source'].length > 0
+          ? data['source']
+          : undefined
+      const tags: Record<string, string> = {
+        namespace: getCacheTelemetryNamespace(nodeKey),
+        operation,
+      }
+      if (source) {
+        tags['source'] = source
+      }
+
+      const fields: Record<string, unknown> = {}
+      if (data) {
+        for (const [key, value] of Object.entries(data)) {
+          if (
+            typeof value === 'number' ||
+            typeof value === 'string' ||
+            typeof value === 'boolean'
+          ) {
+            fields[key] = value
+          }
+        }
+      }
+      fields['nodeKeyHash'] = getCacheTelemetryNodeKeyHash(nodeKey)
+
+      emitTelemetryCounter({
+        name: 'renoun.cache.operation_count',
+        tags,
+        telemetry,
+      })
+
+      emitTelemetryEvent({
+        name: `renoun.cache.${operation}`,
+        tags,
+        fields,
+        telemetry,
+      })
+    }
+
+    if (debugEnabled) {
+      debugLogger.logCacheOperation(operation, nodeKey, data)
+    }
+  }
+
+  async #resolveNodeDependencyVersion(nodeKey: string): Promise<string> {
+    const entry = await this.#getFreshEntry(nodeKey)
+    return entry?.fingerprint ?? 'missing'
+  }
+
+  async #recordAutomaticNodeDependency(
+    childNodeKey: string,
+    fingerprint?: string
+  ): Promise<void> {
+    const computeScope = this.#activeComputeScope.getStore()
+    if (!computeScope || computeScope.nodeKey === childNodeKey) {
+      return
+    }
+
+    const depVersion =
+      fingerprint ?? (await this.#resolveNodeDependencyVersion(childNodeKey))
+    computeScope.deps.set(`node:${childNodeKey}`, depVersion)
+  }
+
+  async #getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
+    const tokenGetter = this.#snapshot.getWorkspaceChangeToken
+    if (typeof tokenGetter !== 'function') {
+      return null
+    }
+
+    const lookupRootPath = this.#resolveWorkspaceTokenLookupPath(rootPath)
+
+    try {
+      const token = await tokenGetter.call(this.#snapshot, lookupRootPath)
+      return typeof token === 'string' ? token : null
+    } catch {
+      return null
+    }
+  }
+
+  async #getWorkspaceChangedPathsSinceToken(
+    rootPath: string,
+    previousToken: string
+  ): Promise<ReadonlySet<string> | null> {
+    const changedPathsGetter = this.#snapshot.getWorkspaceChangedPathsSinceToken
+    if (typeof changedPathsGetter !== 'function') {
+      return null
+    }
+
+    const lookupRootPath = this.#resolveWorkspaceTokenLookupPath(rootPath)
+
+    try {
+      const changedPaths = await changedPathsGetter.call(
+        this.#snapshot,
+        lookupRootPath,
+        previousToken
+      )
+      if (!changedPaths) {
+        return null
+      }
+
+      return normalizeWorkspaceChangedPathKeys(changedPaths, this.#snapshot)
+    } catch {
+      return null
+    }
+  }
+
+  #getRecentlyInvalidatedPathKeys(): ReadonlySet<string> | undefined {
+    const recentlyInvalidatedPathsGetter =
+      this.#snapshot.getRecentlyInvalidatedPaths
+    if (typeof recentlyInvalidatedPathsGetter !== 'function') {
+      return undefined
+    }
+
+    try {
+      const paths = recentlyInvalidatedPathsGetter.call(this.#snapshot)
+      if (!paths || paths.size === 0) {
+        return undefined
+      }
+
+      return (
+        normalizeWorkspaceChangedPathKeys(paths, this.#snapshot) ?? undefined
+      )
+    } catch {
+      return undefined
+    }
+  }
+
+  #resolveWorkspaceTokenLookupPath(rootPath: string): string {
+    const normalizedRootPath = normalizeCachePathKey(rootPath)
+
+    let cwdPathKey = '.'
+    try {
+      cwdPathKey = normalizeCachePathKey(
+        this.#snapshot.getRelativePathToWorkspace('.')
+      )
+    } catch {
+      return normalizedRootPath
+    }
+
+    return toRelativePathFromBasePath(normalizedRootPath, cwdPathKey)
+  }
+
+  async #resolveWorkspaceTokenValidatedPathDependencies(
+    entry: CacheEntry
+  ): Promise<Set<string> | undefined> {
+    if (!entry.persist) {
+      return undefined
+    }
+
+    const previousToken = entry.workspaceChangeToken
+    if (!isTrustedWorkspaceChangeToken(previousToken)) {
+      return undefined
+    }
+
+    const dependencyPathKeys = collectDependencyPathKeysFromCacheDependencies(
+      entry.deps
+    )
+    const workspaceTokenRootPath = resolveWorkspaceTokenRootPath(entry.deps)
+    if (
+      dependencyPathKeys.pathKeys.size === 0 ||
+      dependencyPathKeys.depKeys.size === 0 ||
+      !workspaceTokenRootPath
+    ) {
+      return undefined
+    }
+
+    if (
+      hasWorkspaceTokenUnsafePathKey(dependencyPathKeys.pathKeys) ||
+      hasWorkspaceTokenUnsafeDependency(entry.deps)
+    ) {
+      return undefined
+    }
+
+    const recentlyInvalidatedPathKeys = this.#getRecentlyInvalidatedPathKeys()
+    if (
+      recentlyInvalidatedPathKeys &&
+      pathKeySetsIntersect(
+        dependencyPathKeys.pathKeys,
+        recentlyInvalidatedPathKeys
+      )
+    ) {
+      return undefined
+    }
+
+    const currentToken = await this.#getWorkspaceChangeToken(
+      workspaceTokenRootPath
+    )
+    if (!isTrustedWorkspaceChangeToken(currentToken)) {
+      return undefined
+    }
+
+    if (currentToken === previousToken) {
+      return dependencyPathKeys.depKeys
+    }
+
+    const changedPathKeys = await this.#getWorkspaceChangedPathsSinceToken(
+      workspaceTokenRootPath,
+      previousToken
+    )
+    const knownChangedPathKeys = mergeKnownPathKeySets(
+      changedPathKeys,
+      recentlyInvalidatedPathKeys
+    )
+    if (!knownChangedPathKeys) {
+      return undefined
+    }
+
+    if (
+      !pathKeySetsIntersect(dependencyPathKeys.pathKeys, knownChangedPathKeys)
+    ) {
+      entry.workspaceChangeToken = currentToken
+      return dependencyPathKeys.depKeys
+    }
+
+    return undefined
+  }
+
+  #registerEntryInGraph(nodeKey: string, entry: CacheEntry): void {
+    this.#dependencyGraph.batch(() => {
+      for (const dependency of entry.deps) {
+        if (dependency.depKey.startsWith('node:')) {
+          continue
+        }
+
+        this.#dependencyGraph.setDependencyVersion(
+          dependency.depKey,
+          dependency.depVersion
+        )
+      }
+
+      this.#dependencyGraph.registerNode(
+        nodeKey,
+        entry.deps.map((dependency) => dependency.depKey)
+      )
+      this.#dependencyGraph.markNodeVersion(nodeKey, entry.fingerprint)
+    })
+  }
+
+  async #isEntryFresh(
+    nodeKey: string,
+    entry: CacheEntry,
+    visitedNodeKeys: Set<string>,
+    onMismatch?: (mismatch: CacheStoreFreshnessMismatch) => void
+  ): Promise<boolean> {
+    if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
+      if (onMismatch) {
+        const probeVisitedNodeKeys = new Set(visitedNodeKeys)
+        probeVisitedNodeKeys.add(nodeKey)
+        for (const dependency of entry.deps) {
+          const currentVersion = await this.#resolveDepVersion(
+            dependency.depKey,
+            probeVisitedNodeKeys,
+            dependency.depVersion
+          )
+          if (currentVersion !== dependency.depVersion) {
+            onMismatch({
+              depKey: dependency.depKey,
+              expectedVersion: dependency.depVersion,
+              currentVersion,
+            })
+            break
+          }
+        }
+      }
+      return false
+    }
+
+    if (visitedNodeKeys.has(nodeKey)) {
+      return true
+    }
+
+    visitedNodeKeys.add(nodeKey)
+    const tokenValidatedPathDependencies =
+      await this.#resolveWorkspaceTokenValidatedPathDependencies(entry)
+    const dependencyVersionsToUpdate: Array<{
+      depKey: string
+      depVersion: string
+    }> = []
+
+    for (const dependency of entry.deps) {
+      if (tokenValidatedPathDependencies?.has(dependency.depKey)) {
+        dependencyVersionsToUpdate.push({
+          depKey: dependency.depKey,
+          depVersion: dependency.depVersion,
+        })
+        continue
+      }
+
+      const currentVersion = await this.#resolveDepVersion(
+        dependency.depKey,
+        visitedNodeKeys,
+        dependency.depVersion
+      )
+
+      if (currentVersion !== dependency.depVersion) {
+        onMismatch?.({
+          depKey: dependency.depKey,
+          expectedVersion: dependency.depVersion,
+          currentVersion,
+        })
+
+        this.#dependencyGraph.batch(() => {
+          for (const versionUpdate of dependencyVersionsToUpdate) {
+            this.#dependencyGraph.setDependencyVersion(
+              versionUpdate.depKey,
+              versionUpdate.depVersion
+            )
+          }
+          this.#dependencyGraph.markNodeDirty(nodeKey)
+          this.#dependencyGraph.touchDependency(dependency.depKey)
+          if (currentVersion !== undefined) {
+            this.#dependencyGraph.setDependencyVersion(
+              dependency.depKey,
+              currentVersion
+            )
+          }
+        })
+        return false
+      }
+
+      if (
+        currentVersion !== undefined &&
+        !dependency.depKey.startsWith('node:')
+      ) {
+        dependencyVersionsToUpdate.push({
+          depKey: dependency.depKey,
+          depVersion: currentVersion,
+        })
+      }
+    }
+
+    if (dependencyVersionsToUpdate.length > 0) {
+      this.#dependencyGraph.batch(() => {
+        for (const versionUpdate of dependencyVersionsToUpdate) {
+          this.#dependencyGraph.setDependencyVersion(
+            versionUpdate.depKey,
+            versionUpdate.depVersion
+          )
+        }
+      })
+    }
+
+    return true
+  }
+
+  async #resolveDepVersion(
+    depKey: string,
+    visitedNodeKeys: Set<string>,
+    fallbackVersion?: string
+  ): Promise<string | undefined> {
+    if (depKey.startsWith('file:')) {
+      const filePath = depKey.slice('file:'.length)
+      if (!filePath) {
+        return undefined
+      }
+
+      return this.#snapshot.contentId(filePath)
+    }
+
+    if (depKey.startsWith('dir:')) {
+      const directoryPath = depKey.slice('dir:'.length)
+      if (!directoryPath) {
+        return undefined
+      }
+
+      return this.#snapshot.contentId(directoryPath)
+    }
+
+    if (depKey.startsWith('node:')) {
+      const nodeKey = depKey.slice('node:'.length)
+      const childEntry = await this.#getEntry(nodeKey)
+
+      if (!childEntry) {
+        this.#dependencyGraph.markNodeDirty(nodeKey)
+        return 'missing'
+      }
+
+      const childIsFresh = await this.#isEntryFresh(
+        nodeKey,
+        childEntry,
+        visitedNodeKeys
+      )
+
+      if (!childIsFresh) {
+        this.#dependencyGraph.markNodeDirty(nodeKey)
+        return 'stale'
+      }
+
+      return childEntry.fingerprint
+    }
+
+    if (depKey.startsWith('const:')) {
+      const parsedConstDependency = parseConstDependencyKey(depKey)
+      if (!parsedConstDependency) {
+        return undefined
+      }
+
+      const currentVersion = this.#constDepVersionByName.get(
+        parsedConstDependency.name
+      )
+      if (currentVersion !== undefined) {
+        return currentVersion
+      }
+
+      return parsedConstDependency.legacyVersion ?? fallbackVersion
+    }
+
+    return undefined
+  }
+
+  async #savePersistedEntry(
+    nodeKey: string,
+    entry: CacheEntry,
+    options: {
+      expectedRevision?: PersistedRevisionPrecondition
+    } = {}
+  ): Promise<void> {
+    const persistence = this.#getPersistence()
+    clearPersistedEntryInvalidation(persistence, nodeKey)
+    if (!persistence) {
+      return
+    }
+
+    if (!entry.persist) {
+      await this.#withPersistenceIntent(nodeKey, () =>
+        this.#clearPersistedCacheEntry(nodeKey)
+      )
+      return
+    }
+
+    const expectedPersistedRevision = options.expectedRevision
+
+    await this.#withPersistenceIntent(nodeKey, async () => {
+      const shouldDebugPersistenceFailure =
+        this.#shouldDebugCachePersistenceFailure(nodeKey)
+
+      const attempt = async (
+        value: unknown
+      ): Promise<'verified' | 'superseded'> => {
+        const persistenceWithRevision = persistence as CacheStorePersistence & {
+          saveWithRevision?(nodeKey: string, entry: CacheEntry): Promise<number>
+          saveWithRevisionGuarded?(
+            nodeKey: string,
+            entry: CacheEntry,
+            options: {
+              expectedRevision: number | 'missing'
+            }
+          ): Promise<{ applied: boolean; revision: number }>
+        }
+        const persisted = {
+          ...entry,
+          value,
+          persist: true,
+        }
+        let persistedRevision: number | undefined
+        if (
+          (expectedPersistedRevision === 'missing' ||
+            typeof expectedPersistedRevision === 'number') &&
+          persistenceWithRevision.saveWithRevisionGuarded
+        ) {
+          const guardedResult =
+            await persistenceWithRevision.saveWithRevisionGuarded(
+              nodeKey,
+              persisted,
+              {
+                expectedRevision: expectedPersistedRevision,
+              }
+            )
+          persistedRevision = guardedResult.revision
+          this.#persistedRevisionPreconditionByKey.set(
+            nodeKey,
+            guardedResult.revision > 0 ? guardedResult.revision : 'missing'
+          )
+          if (!guardedResult.applied) {
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: `guarded-write-not-applied expectedRevision=${String(expectedPersistedRevision)} currentRevision=${String(guardedResult.revision)}`,
+                entry,
+                expectedRevision: expectedPersistedRevision,
+                actualRevision: guardedResult.revision,
+              })
+            }
+            return 'superseded'
+          }
+        } else if (persistenceWithRevision.saveWithRevision) {
+          persistedRevision = await persistenceWithRevision.saveWithRevision(
+            nodeKey,
+            persisted
+          )
+          this.#persistedRevisionPreconditionByKey.set(
+            nodeKey,
+            persistedRevision
+          )
+        } else {
+          await persistence.save(nodeKey, persisted)
+          this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+        }
+
+        const maxVerificationAttempts = this.#persistedVerificationAttempts
+        if (maxVerificationAttempts === 0) {
+          if (shouldDebugPersistenceFailure) {
+            this.#logPersistenceDebug(nodeKey, {
+              phase: 'save-verify',
+              details: 'verification-skipped',
+              entry,
+              expectedRevision: expectedPersistedRevision,
+            })
+          }
+          return 'verified'
+        }
+
+        for (
+          let verifyAttempt = 0;
+          verifyAttempt < maxVerificationAttempts;
+          verifyAttempt += 1
+        ) {
+          const verified = (await persistence.load(nodeKey, {
+            skipFingerprintCheck: true,
+            skipLastAccessedUpdate: true,
+            includeValue: false,
+            includeDeps: false,
+          })) as PersistedCacheEntry | undefined
+
+          if (!verified) {
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: `verification-load-miss attempt=${verifyAttempt + 1} of ${maxVerificationAttempts} expectedFingerprint=${entry.fingerprint}`,
+                entry,
+                expectedRevision: expectedPersistedRevision,
+              })
+            }
+
+            if (verifyAttempt + 1 < maxVerificationAttempts) {
+              await delay(Math.pow(2, verifyAttempt) * 25)
+              continue
+            }
+
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: 'superseded-by-load-miss',
+                entry,
+                expectedRevision: expectedPersistedRevision,
+              })
+            }
+
+            this.#persistedRevisionPreconditionByKey.set(nodeKey, 'missing')
+            return 'superseded'
+          }
+
+          if (!verified.persist) {
+            throw new Error(
+              'cache persistence verification failed: load returned non-persistent entry'
+            )
+          }
+
+          const setVerifiedRevisionPrecondition = () => {
+            if (
+              typeof verified.revision === 'number' &&
+              Number.isFinite(verified.revision)
+            ) {
+              this.#persistedRevisionPreconditionByKey.set(
+                nodeKey,
+                verified.revision
+              )
+            } else {
+              this.#persistedRevisionPreconditionByKey.delete(nodeKey)
+            }
+          }
+
+          const isRevisionSuperseding =
+            typeof persistedRevision === 'number' &&
+            typeof verified.revision === 'number' &&
+            verified.revision > persistedRevision
+
+          if (verified.fingerprint === entry.fingerprint) {
+            if (isRevisionSuperseding) {
+              if (shouldDebugPersistenceFailure) {
+                this.#logPersistenceDebug(nodeKey, {
+                  phase: 'save-verify',
+                  details: `superseded-by-revision-fingerprint-match expectedRevision=${persistedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint}`,
+                  entry,
+                  verified,
+                  expectedRevision: expectedPersistedRevision,
+                  actualRevision: verified.revision,
+                })
+              }
+              setVerifiedRevisionPrecondition()
+              return 'superseded'
+            }
+
+            if (shouldDebugPersistenceFailure) {
+              this.#logPersistenceDebug(nodeKey, {
+                phase: 'save-verify',
+                details: 'verification-match',
+                entry,
+                verified,
+                expectedRevision: expectedPersistedRevision,
+                actualRevision: verified.revision,
+              })
+            }
+            setVerifiedRevisionPrecondition()
+            return 'verified'
+          }
+
+          const hasWinnerTimestamp = verified.updatedAt >= entry.updatedAt
+          const isSuperseded = isRevisionSuperseding || hasWinnerTimestamp
+          const supersedeReason = isRevisionSuperseding
+            ? 'superseded-by-revision'
+            : hasWinnerTimestamp
+              ? 'superseded-by-updated-at'
+              : 'fingerprint-drift'
+
+          if (shouldDebugPersistenceFailure) {
+            this.#logPersistenceDebug(nodeKey, {
+              phase: 'save-verify',
+              entry,
+              verified,
+              details:
+                supersedeReason === 'fingerprint-drift'
+                  ? `fingerprint-drift expected=${entry.fingerprint} actual=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`
+                  : `${supersedeReason} expectedRevision=${persistedRevision} actualRevision=${verified.revision} expectedFingerprint=${entry.fingerprint} actualFingerprint=${verified.fingerprint} expectedUpdatedAt=${entry.updatedAt} actualUpdatedAt=${verified.updatedAt}`,
+              expectedRevision: expectedPersistedRevision,
+              actualRevision: verified.revision,
+            })
+          }
+
+          if (isSuperseded) {
+            setVerifiedRevisionPrecondition()
+            return 'superseded'
+          }
+
+          throw new Error(
+            `cache persistence fingerprint drift: expected=${
+              entry.fingerprint
+            } actual=${verified.fingerprint}`
+          )
+        }
+
+        return 'superseded'
+      }
+
+      try {
+        const result = await attempt(entry.value)
+
+        if (result === 'verified') {
+          clearPersistedEntryInvalidation(persistence, nodeKey)
+          return
+        }
+
+        const persistedWinner = await this.#loadPersistedEntry(nodeKey)
+        if (!persistedWinner) {
+          entry.persist = false
+        }
+        clearPersistedEntryInvalidation(persistence, nodeKey)
+        return
+      } catch (error) {
+        if (shouldDebugPersistenceFailure) {
+          this.#logPersistenceDebug(nodeKey, {
+            phase: 'save-verify',
+            error,
+            entry,
+          })
+        }
+
+        if (isUnserializablePersistenceValueError(error)) {
+          this.#warnUnserializableValue(nodeKey, error)
+          await this.#clearPersistedCacheEntry(nodeKey)
+          entry.persist = false
+          markPersistedEntryInvalid(persistence, nodeKey)
+          return
+        }
+
+        const cleanupError =
+          error instanceof Error ? error : new Error(String(error))
+
+        await this.#cleanupPersistedEntry(nodeKey)
+        entry.persist = false
+        markPersistedEntryInvalid(persistence, nodeKey)
+        if (
+          cleanupError &&
+          !isUnserializablePersistenceValueError(cleanupError)
+        ) {
+          this.#warnPersistenceFailure(`save(${nodeKey})`, cleanupError)
+        }
+      }
+    })
+  }
+
+  #logPersistenceDebug(
+    nodeKey: string,
+    payload: {
+      phase: 'save-verify' | 'load'
+      error?: unknown
+      entry?: CacheEntry
+      verified?: CacheEntry
+      details?: string
+      expectedRevision?: number | 'missing'
+      actualRevision?: number
+    }
+  ) {
+    if (!this.#debugPersistenceFailure) {
+      return
+    }
+
+    const lines: string[] = []
+    lines.push(`phase=${payload.phase}`)
+
+    if (payload.error instanceof Error) {
+      lines.push(`error=${payload.error.message}`)
+    } else if (payload.error !== undefined) {
+      lines.push(`error=${String(payload.error)}`)
+    }
+
+    if (payload.details) {
+      lines.push(`details=${payload.details}`)
+    }
+
+    if (payload.entry) {
+      lines.push(
+        `deps=${payload.entry.deps.length} fingerprint=${payload.entry.fingerprint}`
+      )
+      lines.push(`value=${summarizePersistedValue(payload.entry.value)}`)
+    }
+
+    if (payload.verified) {
+      lines.push(
+        `verifiedDeps=${payload.verified.deps.length} verifiedFingerprint=${payload.verified.fingerprint} verifiedUpdatedAt=${payload.verified.updatedAt}`
+      )
+    }
+
+    if (payload.expectedRevision !== undefined) {
+      lines.push(`expectedRevision=${payload.expectedRevision}`)
+    }
+    if (payload.actualRevision !== undefined) {
+      lines.push(`actualRevision=${payload.actualRevision}`)
+    }
+
+    console.warn(
+      `[renoun-debug] cache persistence failure for ${nodeKey} ${lines.join(' ')}`
+    )
+  }
+
+  #shouldDebugCachePersistenceFailure(nodeKey: string): boolean {
+    if (!this.#debugPersistenceFailure) {
+      return false
+    }
+
+    return (
+      nodeKey.startsWith('js.exports:') || nodeKey.startsWith('mdx.sections:')
+    )
+  }
+
+  #warnPersistenceFailure(operation: string, error: unknown) {
+    if (this.#warnedAboutPersistenceFailure) {
+      return
+    }
+
+    this.#warnedAboutPersistenceFailure = true
+    getDebugLogger().warn(
+      `[renoun] Cache persistence failed during ${operation}. Continuing with in-memory cache and retrying persistence: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
+
+  #warnUnserializableValue(nodeKey: string, error: unknown) {
+    if (this.#warnedAboutUnserializableValue) {
+      return
+    }
+
+    this.#warnedAboutUnserializableValue = true
+    getDebugLogger().warn(
+      `[renoun] Cache persistence skipped for ${nodeKey} because the value is not serializable: ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
+}
+
+export { hashString, stableStringify } from '../utils/stable-serialization.ts'
+
+export function createFingerprint(dependencies: CacheDependency[]): string {
+  if (dependencies.length === 0) {
+    return hashString('empty')
+  }
+
+  const lines = dependencies.map((dependency) => {
+    return `${dependency.depKey}=${dependency.depVersion}`
+  })
+
+  return hashString(lines.join('\n'))
+}
+
+function getCacheTelemetryNodeKeyHash(nodeKey: string): string {
+  return hashString(nodeKey).slice(0, 12)
+}
+
+function isLikelyCacheNodeHash(segment: string): boolean {
+  return /^[a-f0-9]{8,}$/i.test(segment)
+}
+
+function isLikelyCacheVersion(segment: string): boolean {
+  return (
+    segment.length > 0 &&
+    segment.length <= 32 &&
+    /^[a-z0-9._-]+$/i.test(segment) &&
+    !isLikelyCacheNodeHash(segment)
+  )
+}
+
+function getCacheTelemetryNamespace(nodeKey: string): string {
+  const segments = nodeKey.split(':')
+  if (segments.length === 0) {
+    return 'unknown'
+  }
+
+  if (
+    segments.length >= 4 &&
+    isLikelyCacheVersion(segments[1] ?? '') &&
+    isLikelyCacheNodeHash(segments[segments.length - 1] ?? '')
+  ) {
+    return `${segments[0]}:${segments[2]}`
+  }
+
+  if (
+    segments.length === 3 &&
+    isLikelyCacheNodeHash(segments[2] ?? '') &&
+    segments[0] &&
+    segments[1]
+  ) {
+    return `${segments[0]}:${segments[1]}`
+  }
+
+  return segments[0] ?? 'unknown'
+}
+
+function normalizeDepPath(path: string): string {
+  return normalizeCachePathKey(path)
+}
+
+function trimTrailingSlashesPreservingRootForCache(value: string): string {
+  let end = value.length
+  while (end > 1 && value.charCodeAt(end - 1) === 47) {
+    end--
+  }
+  return value.slice(0, end)
+}
+
+function normalizeDepPathPreservingAbsolute(path: string): string {
+  const normalizedSlashes = normalizeCacheSlashes(path)
+  const trimmedTrailing =
+    trimTrailingSlashesPreservingRootForCache(normalizedSlashes)
+  if (trimmedTrailing.length === 0) {
+    return '.'
+  }
+
+  if (
+    trimmedTrailing.length >= 2 &&
+    trimmedTrailing.charCodeAt(0) === 46 &&
+    trimmedTrailing.charCodeAt(1) === 47
+  ) {
+    let start = 2
+    while (
+      start < trimmedTrailing.length &&
+      trimmedTrailing.charCodeAt(start) === 47
+    ) {
+      start++
+    }
+    const relative = trimmedTrailing.slice(start)
+    return relative.length > 0 ? relative : '.'
+  }
+
+  return trimmedTrailing
+}
+
+function normalizeCacheSlashes(path: string): string {
+  return path.replaceAll('\\', '/')
+}
+
+function trimLeadingDotSlashForCache(path: string): string {
+  const normalized = normalizeCacheSlashes(path)
+  if (
+    normalized.length >= 2 &&
+    normalized.charCodeAt(0) === 46 &&
+    normalized.charCodeAt(1) === 47
+  ) {
+    let start = 2
+    while (start < normalized.length && normalized.charCodeAt(start) === 47) {
+      start++
+    }
+    return normalized.slice(start)
+  }
+
+  return normalized
+}
+
+function trimLeadingSlashesForCache(value: string): string {
+  let start = 0
+  while (start < value.length && value.charCodeAt(start) === 47) {
+    start++
+  }
+  return value.slice(start)
+}
+
+function trimTrailingSlashesForCache(value: string): string {
+  let end = value.length
+  while (end > 0 && value.charCodeAt(end - 1) === 47) {
+    end--
+  }
+  return value.slice(0, end)
+}
+
+function normalizeCachePathKey(path: string): string {
+  const key = trimTrailingSlashesForCache(
+    trimLeadingSlashesForCache(trimLeadingDotSlashForCache(path))
+  )
+  return key === '' ? '.' : key
+}
+
+function isAbsoluteCachePath(path: string): boolean {
+  const normalized = normalizeCacheSlashes(path)
+  return (
+    normalized.startsWith('/') ||
+    /^[A-Za-z]:\//.test(normalized) ||
+    normalized.startsWith('//')
+  )
+}
+
+function normalizeWorkspaceChangedPathKeys(
+  changedPaths: ReadonlySet<string> | readonly string[],
+  snapshot: Snapshot
+): ReadonlySet<string> | null {
+  const normalizedPaths = new Set<string>()
+  for (const changedPath of changedPaths) {
+    if (typeof changedPath !== 'string') {
+      continue
+    }
+
+    let normalizedPath: string
+    try {
+      normalizedPath = isAbsoluteCachePath(changedPath)
+        ? normalizeCachePathKey(
+            snapshot.getRelativePathToWorkspace(changedPath)
+          )
+        : normalizeCachePathKey(changedPath)
+    } catch {
+      continue
+    }
+
+    normalizedPaths.add(normalizedPath)
+  }
+
+  return normalizedPaths
+}
+
+function extractDependencyPathKey(depKey: string): string | undefined {
+  if (depKey.startsWith('file:')) {
+    return normalizeCachePathKey(depKey.slice('file:'.length))
+  }
+
+  if (depKey.startsWith('dir:')) {
+    return normalizeCachePathKey(depKey.slice('dir:'.length))
+  }
+
+  if (depKey.startsWith('dir-mtime:')) {
+    return normalizeCachePathKey(depKey.slice('dir-mtime:'.length))
+  }
+
+  return undefined
+}
+
+function collectDependencyPathKeysFromCacheDependencies(
+  dependencies: CacheDependency[]
+): {
+  depKeys: Set<string>
+  pathKeys: Set<string>
+} {
+  const depKeys = new Set<string>()
+  const pathKeys = new Set<string>()
+
+  for (const dependency of dependencies) {
+    const dependencyPathKey = extractDependencyPathKey(dependency.depKey)
+    if (!dependencyPathKey) {
+      continue
+    }
+
+    depKeys.add(dependency.depKey)
+    pathKeys.add(dependencyPathKey)
+  }
+
+  return {
+    depKeys,
+    pathKeys,
+  }
+}
+
+function toWorkspaceTokenScopePath(depKey: string): string | undefined {
+  if (depKey.startsWith('file:')) {
+    const filePath = normalizeCachePathKey(depKey.slice('file:'.length))
+    return getParentPathKey(filePath)
+  }
+
+  if (depKey.startsWith('dir:')) {
+    return normalizeCachePathKey(depKey.slice('dir:'.length))
+  }
+
+  if (depKey.startsWith('dir-mtime:')) {
+    return normalizeCachePathKey(depKey.slice('dir-mtime:'.length))
+  }
+
+  return undefined
+}
+
+function hasWorkspaceTokenUnsafePathKey(pathKeys: Iterable<string>): boolean {
+  for (const pathKey of pathKeys) {
+    if (pathKey.includes('.__renoun_snippet_')) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function hasWorkspaceTokenUnsafeDependency(
+  dependencies: Iterable<CacheDependency>
+): boolean {
+  for (const dependency of dependencies) {
+    if (
+      dependency.depKey.includes('.__renoun_snippet_') ||
+      parseConstDependencyKey(dependency.depKey)?.name.startsWith(
+        WORKSPACE_TOKEN_UNSAFE_CONST_DEPENDENCY_PREFIX
+      )
+    ) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function resolveWorkspaceTokenRootPath(
+  dependencies: CacheDependency[]
+): string | undefined {
+  const scopePaths = dependencies
+    .map((dependency) => toWorkspaceTokenScopePath(dependency.depKey))
+    .filter((scopePath): scopePath is string => {
+      return typeof scopePath === 'string' && scopePath.length > 0
+    })
+
+  if (scopePaths.length === 0) {
+    return undefined
+  }
+
+  let commonScopePath = scopePaths[0]!
+  for (let index = 1; index < scopePaths.length; index += 1) {
+    commonScopePath = intersectPathPrefixes(commonScopePath, scopePaths[index]!)
+    if (commonScopePath === '.') {
+      break
+    }
+  }
+
+  return commonScopePath
+}
+
+function getParentPathKey(path: string): string {
+  const normalizedPath = normalizeCachePathKey(path)
+  if (normalizedPath === '.') {
+    return '.'
+  }
+
+  const lastSlashIndex = normalizedPath.lastIndexOf('/')
+  if (lastSlashIndex <= 0) {
+    return '.'
+  }
+
+  return normalizedPath.slice(0, lastSlashIndex)
+}
+
+function toRelativePathFromBasePath(
+  targetPath: string,
+  basePath: string
+): string {
+  const normalizedTargetPath = normalizeCachePathKey(targetPath)
+  const normalizedBasePath = normalizeCachePathKey(basePath)
+  const targetSegments =
+    normalizedTargetPath === '.'
+      ? []
+      : normalizedTargetPath.split('/').filter((segment) => segment.length > 0)
+  const baseSegments =
+    normalizedBasePath === '.'
+      ? []
+      : normalizedBasePath.split('/').filter((segment) => segment.length > 0)
+
+  let sharedSegmentCount = 0
+  while (
+    sharedSegmentCount < targetSegments.length &&
+    sharedSegmentCount < baseSegments.length &&
+    targetSegments[sharedSegmentCount] === baseSegments[sharedSegmentCount]
+  ) {
+    sharedSegmentCount += 1
+  }
+
+  const relativeSegments: string[] = []
+  for (
+    let index = sharedSegmentCount;
+    index < baseSegments.length;
+    index += 1
+  ) {
+    relativeSegments.push('..')
+  }
+  for (
+    let index = sharedSegmentCount;
+    index < targetSegments.length;
+    index += 1
+  ) {
+    relativeSegments.push(targetSegments[index]!)
+  }
+
+  if (relativeSegments.length === 0) {
+    return '.'
+  }
+
+  return relativeSegments.join('/')
+}
+
+function intersectPathPrefixes(firstPath: string, secondPath: string): string {
+  const firstParts = normalizeCachePathKey(firstPath)
+    .split('/')
+    .filter((segment) => segment.length > 0)
+  const secondParts = normalizeCachePathKey(secondPath)
+    .split('/')
+    .filter((segment) => segment.length > 0)
+  const sharedParts: string[] = []
+  const maxLength = Math.min(firstParts.length, secondParts.length)
+
+  for (let index = 0; index < maxLength; index += 1) {
+    if (firstParts[index] !== secondParts[index]) {
+      break
+    }
+
+    sharedParts.push(firstParts[index]!)
+  }
+
+  if (sharedParts.length === 0) {
+    return '.'
+  }
+
+  return sharedParts.join('/')
+}
+
+function mergeKnownPathKeySets(
+  firstSet: ReadonlySet<string> | null | undefined,
+  secondSet: ReadonlySet<string> | null | undefined
+): ReadonlySet<string> | null {
+  if (!firstSet && !secondSet) {
+    return null
+  }
+
+  const merged = new Set<string>()
+  for (const path of firstSet ?? []) {
+    merged.add(path)
+  }
+  for (const path of secondSet ?? []) {
+    merged.add(path)
+  }
+
+  return merged
+}
+
+function pathKeySetsIntersect(
+  firstSet: ReadonlySet<string>,
+  secondSet: ReadonlySet<string>
+): boolean {
+  if (firstSet.size === 0 || secondSet.size === 0) {
+    return false
+  }
+
+  const [smallerSet, largerSet] =
+    firstSet.size <= secondSet.size
+      ? [firstSet, secondSet]
+      : [secondSet, firstSet]
+
+  for (const firstPath of smallerSet) {
+    for (const secondPath of largerSet) {
+      if (pathKeysIntersect(firstPath, secondPath)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+function pathKeysIntersect(firstPath: string, secondPath: string): boolean {
+  const firstKey = normalizeCachePathKey(firstPath)
+  const secondKey = normalizeCachePathKey(secondPath)
+  if (firstKey === '.' || secondKey === '.') {
+    return true
+  }
+
+  return (
+    firstKey === secondKey ||
+    firstKey.startsWith(`${secondKey}/`) ||
+    secondKey.startsWith(`${firstKey}/`)
+  )
+}
+
+function isUnserializablePersistenceValueError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  return /could not be cloned|cannot be serialized|datacloneerror/i.test(
+    error.message
+  )
+}
+
+function isComputeSlotTransientError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const candidateError = error as {
+    code?: number | string
+    errno?: number | string
+    resultCode?: number | string
+    extendedResultCode?: number | string
+  }
+
+  const isCodeMatched = (code: unknown): boolean => {
+    if (typeof code === 'number') {
+      return code === 5 || code === 6
+    }
+
+    if (typeof code === 'string') {
+      const normalizedCode = code.toUpperCase()
+      if (
+        normalizedCode.includes('SQLITE_BUSY') ||
+        normalizedCode.includes('SQLITE_LOCKED')
+      ) {
+        return true
+      }
+
+      const codeNumber = Number.parseInt(code, 10)
+      if (codeNumber === 5 || codeNumber === 6) {
+        return true
+      }
+    }
+
+    return false
+  }
+
+  if (
+    isCodeMatched(candidateError.code) ||
+    isCodeMatched(candidateError.errno) ||
+    isCodeMatched(candidateError.resultCode) ||
+    isCodeMatched(candidateError.extendedResultCode)
+  ) {
+    return true
+  }
+
+  const normalizedMessage = error.message.toLowerCase()
+  return (
+    normalizedMessage.includes('database is locked') ||
+    normalizedMessage.includes('database table is locked') ||
+    normalizedMessage.includes('database is busy')
+  )
+}

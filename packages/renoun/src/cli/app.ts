@@ -14,13 +14,19 @@ import {
 } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
+import { spawn } from 'node:child_process'
 
-import { createServer } from '../project/server.ts'
+import { createServer } from '../analysis/server.ts'
+import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
-import { spawn } from 'node:child_process'
+import {
+  createDefaultPrewarmOptions,
+  runPrewarmSafely,
+} from './prewarm-runner.ts'
 
 function mergeDependencySections(
   appPackageJson: Record<string, unknown>,
@@ -428,6 +434,12 @@ export async function runAppCommand({
     const port = String(await server.getPort())
     const id = server.getId()
 
+    if (command === 'dev') {
+      void runPrewarmSafely(createDefaultPrewarmOptions(runtimeDirectory), {
+        allowInlineFallback: false,
+      })
+    }
+
     if (resolvedExample.framework === 'next') {
       const runtimeNext = await getInstalledPackageVersion({
         packageName: 'next',
@@ -484,6 +496,10 @@ export async function runAppCommand({
 
     const frameworkArgs = [frameworkBinPath, command]
     frameworkArgs.push(...forwardedArgs)
+    const serverHost =
+      process.env[PROCESS_ENV_KEYS.renounServerHost]
+    const serverRefreshNotificationsEffective =
+      process.env[PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective]
 
     subProcess = spawn(process.execPath, frameworkArgs, {
       stdio: ['inherit', 'pipe', 'pipe'],
@@ -492,8 +508,20 @@ export async function runAppCommand({
       env: {
         ...process.env,
         RENOUN_RUNTIME_DIRECTORY: runtimeDirectory,
-        RENOUN_SERVER_PORT: port,
-        RENOUN_SERVER_ID: id,
+        ...createServerRuntimeProcessEnv({
+          port,
+          id,
+          ...(typeof serverHost === 'string' && serverHost.length > 0
+            ? { host: serverHost }
+            : {}),
+          ...(typeof serverRefreshNotificationsEffective === 'string' &&
+          serverRefreshNotificationsEffective.length > 0
+            ? {
+                emitRefreshNotifications:
+                  serverRefreshNotificationsEffective === '1',
+              }
+            : {}),
+        }),
       },
     })
 
@@ -1204,7 +1232,9 @@ class OverrideManager {
   #runtimeRoot: string
   #overriddenPaths: Set<string> = new Set()
   #watchers: Map<string, ReturnType<typeof watch>> = new Map()
+  #stopped = false
   #syncScheduled = false
+  #syncTimer: ReturnType<typeof setTimeout> | undefined
   #isSyncing = false
   #pendingSync = false
 
@@ -1220,10 +1250,18 @@ class OverrideManager {
   }
 
   async start() {
+    this.#stopped = false
     await this.#syncOverrides()
   }
 
   stop() {
+    this.#stopped = true
+    this.#pendingSync = false
+    this.#syncScheduled = false
+    if (this.#syncTimer) {
+      clearTimeout(this.#syncTimer)
+      this.#syncTimer = undefined
+    }
     for (const watcher of this.#watchers.values()) {
       watcher.close()
     }
@@ -1235,14 +1273,24 @@ class OverrideManager {
   }
 
   #scheduleSync() {
+    if (this.#stopped) {
+      return
+    }
+
     if (this.#syncScheduled) {
       this.#pendingSync = true
       return
     }
 
     this.#syncScheduled = true
-    setTimeout(() => {
+    this.#syncTimer = setTimeout(() => {
+      this.#syncTimer = undefined
       this.#syncScheduled = false
+      if (this.#stopped) {
+        this.#pendingSync = false
+        return
+      }
+
       this.#syncOverrides().catch((error) => {
         getDebugLogger().error('Failed to synchronize app overrides', () => ({
           data: {
@@ -1254,6 +1302,11 @@ class OverrideManager {
   }
 
   async #syncOverrides() {
+    if (this.#stopped) {
+      this.#pendingSync = false
+      return
+    }
+
     if (this.#isSyncing) {
       this.#pendingSync = true
       return
@@ -1273,12 +1326,23 @@ class OverrideManager {
         directoryOverrides,
         fileOverrides
       )
+      if (this.#stopped) {
+        return
+      }
 
       const validOverrides = await this.#applyOverrides(fileOverrides)
+      if (this.#stopped) {
+        return
+      }
       this.#cleanupObsoleteOverrides(validOverrides)
       this.#cleanupObsoleteWatchers(absoluteDirectories)
     } finally {
       this.#isSyncing = false
+
+      if (this.#stopped) {
+        this.#pendingSync = false
+        return
+      }
 
       if (this.#pendingSync) {
         this.#pendingSync = false
@@ -1293,6 +1357,10 @@ class OverrideManager {
     directoryOverrides: Set<string>,
     fileOverrides: Set<string>
   ) {
+    if (this.#stopped) {
+      return
+    }
+
     const absoluteDirectory = join(this.#projectRoot, relativeDirectory)
     absoluteDirectories.add(absoluteDirectory)
 
@@ -1301,6 +1369,10 @@ class OverrideManager {
     const entries = await readdir(absoluteDirectory, { withFileTypes: true })
 
     for (const entry of entries) {
+      if (this.#stopped) {
+        return
+      }
+
       const entryRelativePath =
         relativeDirectory === '.'
           ? entry.name
@@ -1354,12 +1426,15 @@ class OverrideManager {
   }
 
   #ensureWatcher(directory: string) {
-    if (this.#watchers.has(directory)) {
+    if (this.#stopped || this.#watchers.has(directory)) {
       return
     }
 
     try {
       const watcher = watch(directory, { persistent: false }, () => {
+        if (this.#stopped) {
+          return
+        }
         this.#scheduleSync()
       })
       this.#watchers.set(directory, watcher)
@@ -1386,6 +1461,9 @@ class OverrideManager {
     )
 
     for (const relativePath of sortedFiles) {
+      if (this.#stopped) {
+        break
+      }
       await this.#ensureFileOverride(relativePath)
       validPaths.add(relativePath)
     }

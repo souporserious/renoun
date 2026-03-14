@@ -56,6 +56,14 @@ const nextDirectory = new Directory({
 - You need git history from a local or cloned repository.
 - You want deterministic reads at a fixed ref.
 
+## Cache persistence behavior
+
+The cache layer works without SQLite. When `node:sqlite` is available, renoun can persist cache entries to disk and coordinate cache work across workers.
+
+If SQLite is unavailable, renoun falls back to in-memory cache automatically. File queries stay correct, but cache state is process-local and does not persist across restarts.
+
+Cached clone repositories default to `<workspaceRoot>/.renoun/cache/git`.
+
 ## Security
 
 - Cloning untrusted repositories can expose you to git-level CVEs. Keep your git client updated.

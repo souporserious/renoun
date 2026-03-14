@@ -1,0 +1,60 @@
+# SQLite Cache Telemetry Reference
+
+This reference covers SQLite cache metrics emitted from [`CacheSqlite.ts`](./CacheSqlite.ts).
+
+## Metric catalog
+
+| Metric name                                              | Type      | Tags                           | Notes                                                                                                                                |
+| -------------------------------------------------------- | --------- | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `renoun.cache.sqlite.fallback_to_memory_count`           | counter   | `reason`                       | Incremented when SQLite initialization fails and renoun falls back to in-memory cache behavior.                                      |
+| `renoun.cache.sqlite.auto_reset_count`                   | counter   | `reason`                       | Emitted when renoun detects a malformed/corrupt SQLite cache, deletes the DB plus WAL/SHM sidecars, and retries initialization once. |
+| `renoun.cache.sqlite.fingerprint_mismatch_cleanup_count` | counter   | `namespace`                    | Incremented when a persisted row is deleted because stored and recomputed dependency fingerprints differ.                            |
+| `renoun.cache.sqlite.busy_retry_count`                   | counter   | `operation`, `retry`, `reason` | Emitted on each SQLITE_BUSY/SQLITE_LOCKED retry.                                                                                     |
+| `renoun.cache.sqlite.busy_retry_exhausted_count`         | counter   | `operation`, `reason`          | Emitted when retry budget is exhausted and the operation still fails due to lock contention.                                         |
+| `renoun.cache.sqlite.busy_retry_attempts`                | histogram | `operation`                    | Number of attempts used before retries are exhausted.                                                                                |
+| `renoun.cache.sqlite.prune_count`                        | counter   | `retries`, `compaction`        | One per successful prune execution.                                                                                                  |
+| `renoun.cache.sqlite.prune_ms`                           | histogram | `retries`, `compaction`        | End-to-end prune latency in milliseconds.                                                                                            |
+| `renoun.cache.sqlite.prune_deleted_rows`                 | counter   | `table`                        | Rows deleted during prune. `table` is `cache_entries` or `cache_inflight`.                                                           |
+| `renoun.cache.sqlite.compaction_count`                   | counter   | `retries`                      | One per successful structured dependency compaction.                                                                                 |
+| `renoun.cache.sqlite.compaction_ms`                      | histogram | `retries`                      | Structured dependency compaction latency in milliseconds.                                                                            |
+| `renoun.cache.sqlite.schema_migration_count`             | counter   | `from`, `to`                   | Emitted when schema migration work runs during initialization.                                                                       |
+| `renoun.cache.sqlite.schema_migration_ms`                | histogram | `from`, `to`                   | Schema migration duration in milliseconds.                                                                                           |
+| `renoun.cache.sqlite.maintenance_checkpoint_count`       | counter   | `mode`                         | Emitted when `runMaintenance` runs checkpoint.                                                                                       |
+| `renoun.cache.sqlite.maintenance_checkpoint_ms`          | histogram | `mode`                         | Checkpoint duration in milliseconds.                                                                                                 |
+| `renoun.cache.sqlite.maintenance_health_check_count`     | counter   | `mode`, `ok`                   | Emitted when `runMaintenance` runs `quick_check` or `integrity_check`.                                                               |
+| `renoun.cache.sqlite.maintenance_health_check_ms`        | histogram | `mode`, `ok`                   | Health-check duration in milliseconds.                                                                                               |
+| `renoun.cache.sqlite.maintenance_vacuum_count`           | counter   | _none_                         | Emitted when `runMaintenance` runs `VACUUM`.                                                                                         |
+| `renoun.cache.sqlite.maintenance_vacuum_ms`              | histogram | _none_                         | `VACUUM` duration in milliseconds.                                                                                                   |
+
+## Suggested dashboard panels
+
+- `Fallbacks`: sum of `renoun.cache.sqlite.fallback_to_memory_count` by `reason`.
+- `Busy retries`: sum of `renoun.cache.sqlite.busy_retry_count` by `operation`.
+- `Retry exhaustion`: sum of `renoun.cache.sqlite.busy_retry_exhausted_count` by `operation`.
+- `Prune latency`: p50/p95/p99 of `renoun.cache.sqlite.prune_ms`.
+- `Compaction latency`: p50/p95 of `renoun.cache.sqlite.compaction_ms`.
+- `Prune deletes`: rate of `renoun.cache.sqlite.prune_deleted_rows` split by `table`.
+- `Fingerprint cleanup`: rate of `renoun.cache.sqlite.fingerprint_mismatch_cleanup_count` by `namespace`.
+- `Health checks`: sum of `renoun.cache.sqlite.maintenance_health_check_count` by `mode` and `ok`.
+
+## Suggested alerts
+
+- **Critical**: `renoun.cache.sqlite.fallback_to_memory_count > 0` over 5m.
+- **Critical**: `renoun.cache.sqlite.auto_reset_count > 0` over 5m.
+- **Warning**: `renoun.cache.sqlite.busy_retry_exhausted_count > 0` over 5m.
+- **Warning**: p95 `renoun.cache.sqlite.prune_ms` above your warm-start SLO for 15m.
+- **Warning**: sudden spike in `renoun.cache.sqlite.fingerprint_mismatch_cleanup_count` (possible persistence corruption or dependency signature bug).
+- **Warning**: `renoun.cache.sqlite.maintenance_health_check_count{ok="false"} > 0` over 5m.
+
+## Maintenance controls
+
+Use the CLI to run SQLite maintenance explicitly:
+
+```bash
+pnpm exec renoun cache-maintenance --checkpoint --checkpoint-mode passive
+pnpm exec renoun cache-maintenance --quick-check --no-checkpoint
+pnpm exec renoun cache-maintenance --integrity-check --no-checkpoint
+pnpm exec renoun cache-maintenance --checkpoint --checkpoint-mode truncate --no-vacuum
+pnpm exec renoun cache-maintenance --vacuum
+pnpm exec renoun cache-maintenance --json
+```

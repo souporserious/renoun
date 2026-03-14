@@ -79,6 +79,49 @@ const registryOptions: RegistryOptions<ThemeName> = {
 }
 
 describe('Tokenizer', () => {
+  test.concurrent('dedupes concurrent theme and grammar initialization', async () => {
+    const grammarLoadsByScope = new Map<string, number>()
+    let themeLoads = 0
+    const tokenizer = new Tokenizer<ThemeName>({
+      async getGrammar(scopeName) {
+        grammarLoadsByScope.set(
+          scopeName,
+          (grammarLoadsByScope.get(scopeName) ?? 0) + 1
+        )
+        await new Promise((resolve) => setTimeout(resolve, 20))
+
+        if (scopeName === 'source.css') {
+          return cssGrammar as TextMateGrammarRaw
+        }
+
+        throw new Error(`Missing grammar for scope: ${scopeName}`)
+      },
+      async getTheme(theme) {
+        themeLoads += 1
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        const themeDefinition = themeFixtures[theme]
+        if (!themeDefinition) {
+          throw new Error(`Missing theme: ${theme}`)
+        }
+
+        return themeDefinition
+      },
+    })
+
+    await Promise.all(
+      Array.from({ length: 8 }, (_, index) =>
+        tokenizer.tokenize(
+          `/* comment ${index} */\n.button-${index} { color: red; }`,
+          'css',
+          ['light']
+        )
+      )
+    )
+
+    expect(themeLoads).toBe(1)
+    expect(grammarLoadsByScope.get('source.css')).toBe(1)
+  })
+
   test.concurrent('tokenizes multiple themes without altering merged output', async () => {
     const tokenizer = new Tokenizer<ThemeName>(registryOptions)
     const source = '/* comment line 1\ncomment line 2 */'

@@ -54,6 +54,12 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Restore renoun cache
+        if: steps.detect.outputs.changed == 'true'
+        uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
+
       - name: Install dependencies
         if: steps.detect.outputs.changed == 'true'
         run: pnpm install --frozen-lockfile --ignore-scripts
@@ -67,3 +73,9 @@ jobs:
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: pnpm build --filter=@examples/*
+
+      - name: Save renoun cache
+        if: steps.detect.outputs.changed == 'true'
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { trimLeadingCurrentDirPrefix } from '../utils/path.ts'
 
 export type Framework = 'next' | 'vite' | 'waku'
 
@@ -12,7 +13,9 @@ export function resolveFrameworkBinFile(
   // App mode (`renoun dev`) intentionally `chdir`s into a runtime directory,
   // and we must resolve the framework from that runtime's dependency graph.
   const fromDirectory = options?.fromDirectory ?? process.cwd()
-  const requireFromDirectory = createRequire(join(fromDirectory, 'package.json'))
+  const requireFromDirectory = createRequire(
+    join(fromDirectory, 'package.json')
+  )
 
   const packageJsonPath = requireFromDirectory.resolve(
     `${framework}/package.json`
@@ -37,5 +40,8 @@ export function resolveFrameworkBinFile(
   }
 
   const packageJsonDirectory = dirname(packageJsonPath)
-  return join(packageJsonDirectory, binRelativePath.replace(/^\.\//, ''))
+  return join(
+    packageJsonDirectory,
+    trimLeadingCurrentDirPrefix(binRelativePath)
+  )
 }

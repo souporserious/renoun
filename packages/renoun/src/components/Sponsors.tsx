@@ -1,4 +1,6 @@
 import React from 'react'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
+import { hashString } from '../utils/stable-serialization.ts'
 
 interface SponsorEntity {
   username: string
@@ -27,10 +29,110 @@ interface PublicSponsor {
 
 interface FetchSponsorsOptions {
   amount: number
+  cacheTtlMs?: number
 }
 
 const AVATAR_MIN = 64
 const AVATAR_MAX = 512
+const DEFAULT_SPONSORS_CACHE_TTL_MS = 10 * 60_000
+const SPONSORS_CACHE_MAX_ENTRIES = 32
+type FetchSponsorsAndTierLinksResult = Awaited<
+  ReturnType<typeof fetchSponsorsAndTierLinksUncached>
+>
+
+interface SponsorsCacheEntry {
+  expiresAt: number
+  value?: FetchSponsorsAndTierLinksResult
+  promise?: Promise<FetchSponsorsAndTierLinksResult>
+}
+
+const sponsorsCache = new Map<string, SponsorsCacheEntry>()
+
+function normalizeCacheTtlMs(value: number | undefined): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+
+  return Math.max(0, Math.floor(value))
+}
+
+function resolveSponsorsCacheTtlMs(cacheTtlMs?: number): number {
+  const configuredTtl = normalizeCacheTtlMs(cacheTtlMs)
+  if (configuredTtl !== undefined) {
+    return configuredTtl
+  }
+
+  return DEFAULT_SPONSORS_CACHE_TTL_MS
+}
+
+function getTokenCacheKey(token: string): string {
+  return hashString(token)
+}
+
+function createSponsorsCacheKey(payload: unknown): string {
+  return hashString(JSON.stringify(payload))
+}
+
+function touchSponsorsCacheEntry(
+  cacheKey: string,
+  entry: SponsorsCacheEntry
+): SponsorsCacheEntry {
+  sponsorsCache.delete(cacheKey)
+  sponsorsCache.set(cacheKey, entry)
+  return entry
+}
+
+function pruneSponsorsCache(
+  now: number,
+  protectedCacheKey?: string
+): void {
+  for (const [cacheKey, entry] of sponsorsCache) {
+    if (cacheKey === protectedCacheKey || entry.promise) {
+      continue
+    }
+
+    if (entry.expiresAt <= now) {
+      sponsorsCache.delete(cacheKey)
+    }
+  }
+
+  if (sponsorsCache.size <= SPONSORS_CACHE_MAX_ENTRIES) {
+    return
+  }
+
+  for (const [cacheKey, entry] of sponsorsCache) {
+    if (cacheKey === protectedCacheKey || entry.promise) {
+      continue
+    }
+
+    sponsorsCache.delete(cacheKey)
+    if (sponsorsCache.size <= SPONSORS_CACHE_MAX_ENTRIES) {
+      return
+    }
+  }
+
+  // Keep the cap hard even when the cache is saturated with in-flight loads.
+  for (const [cacheKey] of sponsorsCache) {
+    if (cacheKey === protectedCacheKey) {
+      continue
+    }
+
+    sponsorsCache.delete(cacheKey)
+    if (sponsorsCache.size <= SPONSORS_CACHE_MAX_ENTRIES) {
+      return
+    }
+  }
+}
+
+/** @internal */
+export function clearSponsorsCacheForTests(): void {
+  sponsorsCache.clear()
+}
+
+/** @internal */
+export function getSponsorsCacheSizeForTests(): number {
+  return sponsorsCache.size
+}
 
 /** Clamp and sanitize avatar size. */
 function parseAvatarSize(sizeInPixels: number): number {
@@ -104,7 +206,7 @@ type TierResolved<Data extends object> = {
 type TierWithAmount<Data extends object> = TierInput<Data> & { amount: number }
 
 /** Single network call: fetch sponsors + sponsorable login + map tier HTML → closest tier_id link. */
-async function fetchSponsorsAndTierLinks(
+async function fetchSponsorsAndTierLinksUncached(
   options: FetchSponsorsOptions & {
     avatarSizes: readonly number[]
     manualTierIds?: ReadonlyMap<string, string>
@@ -115,7 +217,7 @@ async function fetchSponsorsAndTierLinks(
   defaultHref: string
   descriptionByTitle: Map<string, string>
 }> {
-  const token = process.env['GITHUB_SPONSORS_TOKEN']
+  const token = process.env[PROCESS_ENV_KEYS.githubSponsorsToken]
 
   if (!token) {
     // Skip erroring in Vercel/Netlify previews and CI environments
@@ -210,7 +312,7 @@ async function fetchSponsorsAndTierLinks(
   const graphqlResponseJson = await graphqlResponse.json()
 
   if (graphqlResponseJson.errors) {
-    if (process.env['NODE_ENV'] === 'development') {
+    if (process.env[PROCESS_ENV_KEYS.nodeEnv] === 'development') {
       throw new Error(
         `[renoun] GitHub Sponsors GraphQL request failed with the following errors: ${JSON.stringify(
           graphqlResponseJson.errors
@@ -420,6 +522,92 @@ async function fetchSponsorsAndTierLinks(
   }
 }
 
+async function fetchSponsorsAndTierLinks(
+  options: FetchSponsorsOptions & {
+    avatarSizes: readonly number[]
+    manualTierIds?: ReadonlyMap<string, string>
+  }
+): Promise<{
+  hrefByTitle: Map<string, string>
+  sponsors: MaintainerSponsor[]
+  defaultHref: string
+  descriptionByTitle: Map<string, string>
+}> {
+  const normalizedAmount = Math.max(1, Math.min(100, Math.floor(options.amount)))
+  const normalizedAvatarSizes = Array.from(
+    new Set(options.avatarSizes.map((size) => parseAvatarSize(size)))
+  ).sort((left, right) => left - right)
+  const normalizedManualTierIds = options.manualTierIds
+    ? Array.from(options.manualTierIds.entries())
+        .map(([title, tierId]) => [title.toLowerCase(), String(tierId)] as const)
+        .sort(([left], [right]) => left.localeCompare(right))
+    : []
+  const normalizedManualTierMap =
+    normalizedManualTierIds.length > 0
+      ? new Map<string, string>(normalizedManualTierIds)
+      : undefined
+
+  const normalizedOptions = {
+    ...options,
+    amount: normalizedAmount,
+    avatarSizes: normalizedAvatarSizes,
+    manualTierIds: normalizedManualTierMap,
+  }
+
+  const ttlMs = resolveSponsorsCacheTtlMs(options.cacheTtlMs)
+  if (ttlMs <= 0) {
+    return fetchSponsorsAndTierLinksUncached(normalizedOptions)
+  }
+
+  const token = process.env[PROCESS_ENV_KEYS.githubSponsorsToken]
+  if (!token) {
+    return fetchSponsorsAndTierLinksUncached(normalizedOptions)
+  }
+
+  const cacheKey = createSponsorsCacheKey({
+    amount: normalizedAmount,
+    avatarSizes: normalizedAvatarSizes,
+    cacheTtlMs: ttlMs,
+    manualTierIds: normalizedManualTierIds,
+    token: getTokenCacheKey(token),
+  })
+  const now = Date.now()
+  pruneSponsorsCache(now, cacheKey)
+  const cachedEntry = sponsorsCache.get(cacheKey)
+
+  if (cachedEntry?.value && cachedEntry.expiresAt > now) {
+    return touchSponsorsCacheEntry(cacheKey, cachedEntry).value!
+  }
+
+  if (cachedEntry?.promise) {
+    return touchSponsorsCacheEntry(cacheKey, cachedEntry).promise!
+  }
+
+  const loadPromise = fetchSponsorsAndTierLinksUncached(normalizedOptions)
+    .then((result) => {
+      touchSponsorsCacheEntry(cacheKey, {
+        expiresAt: Date.now() + ttlMs,
+        value: result,
+      })
+      pruneSponsorsCache(Date.now(), cacheKey)
+      return result
+    })
+    .catch((error) => {
+      if (sponsorsCache.get(cacheKey)?.promise === loadPromise) {
+        sponsorsCache.delete(cacheKey)
+      }
+      throw error
+    })
+
+  touchSponsorsCacheEntry(cacheKey, {
+    expiresAt: now + ttlMs,
+    promise: loadPromise,
+  })
+  pruneSponsorsCache(now, cacheKey)
+
+  return loadPromise
+}
+
 async function fetchSponsorTiers<const Data extends object>(
   tiers: ReadonlyArray<TierWithAmount<Data>>,
   options: FetchSponsorsOptions
@@ -545,6 +733,12 @@ export interface SponsorsProps<Data extends object> {
   /** A list of tiers with the minimum monthly amount (in USD). */
   tiers: ReadonlyArray<TierWithAmount<Data>>
 
+  /**
+   * Optional cache TTL override in milliseconds.
+   * When omitted, the component's default TTL is used.
+   */
+  cacheTtlMs?: number
+
   /** Receives tiers (with your Data) and sanitized sponsors. */
   children: (tiers: Array<TierResolved<Data>>) => React.ReactNode
 }
@@ -552,8 +746,12 @@ export interface SponsorsProps<Data extends object> {
 /** Renders a list of GitHub sponsors grouped by tier. */
 export async function Sponsors<const Data extends object>({
   tiers,
+  cacheTtlMs,
   children,
 }: SponsorsProps<Data>) {
-  const resolvedTiers = await fetchSponsorTiers<Data>(tiers, { amount: 100 })
+  const resolvedTiers = await fetchSponsorTiers<Data>(tiers, {
+    amount: 100,
+    cacheTtlMs,
+  })
   return children(resolvedTiers)
 }

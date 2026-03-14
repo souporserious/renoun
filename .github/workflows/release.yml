@@ -43,6 +43,11 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      - name: Restore renoun cache
+        uses: ./.github/actions/restore-renoun-cache
+        with:
+          node-version: 22
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
@@ -111,3 +116,8 @@ jobs:
           PUBLISHED_PACKAGES: ${{ steps.publish.outputs.publishedPackages }}
           WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: node .github/scripts/notify-discord.mjs
+
+      - name: Save renoun cache
+        uses: ./.github/actions/save-renoun-cache
+        with:
+          node-version: 22

@@ -7,6 +7,7 @@ import {
   type TypeFilter,
   type TypeOfKind,
 } from '../../utils/resolve-type.ts'
+import { mapConcurrent } from '../../utils/concurrency.ts'
 import { BaseDirectoryContext } from '../Context.tsx'
 import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
@@ -280,10 +281,12 @@ async function ReferenceAsync({
   let resolvedType: Kind | Kind[] | undefined
 
   if (source instanceof JavaScriptFile) {
-    const exported = await Promise.all(
-      (await source.getExports()).map((fileExport) =>
-        fileExport.getType(filter)
-      )
+    const exported = await mapConcurrent(
+      await source.getExports(),
+      {
+        concurrency: 8,
+      },
+      (fileExport) => fileExport.getType(filter)
     )
     resolvedType = exported.filter(Boolean) as Kind[]
   } else {

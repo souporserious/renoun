@@ -4,9 +4,19 @@ import {
   directoryName,
   joinPaths,
   normalizePath,
+  normalizePathKey,
   normalizeSlashes,
+  trimLeadingDotsSegment,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
 } from '../utils/path.ts'
-import { Semaphore } from '../utils/Semaphore.ts'
+import { forEachConcurrent, mapConcurrent } from '../utils/concurrency.ts'
+import { retry } from '../utils/retry.ts'
+import {
+  isRetryableNetworkTypeError,
+  RenounNetworkError,
+  RenounTimeoutError,
+} from '../utils/errors.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -15,7 +25,15 @@ import {
   InMemoryFileSystem,
   type InMemoryFileContent,
 } from './InMemoryFileSystem.ts'
+import { GIT_VIRTUAL_HISTORY_CACHE_VERSION } from './cache-key.ts'
+import {
+  createGitVirtualPersistentCacheNodeKey,
+  sanitizeCredentialedGitRemote,
+} from './git-cache-key.ts'
+import { resolveGitHubUsername, toGitHubProfileUrl } from './git-author.ts'
+import type { Cache } from './Cache.ts'
 import type { AsyncFileSystem, WritableFileSystem } from './FileSystem.ts'
+import { Session } from './Session.ts'
 import type {
   DirectoryEntry,
   ExportHistoryOptions,
@@ -36,11 +54,10 @@ import {
   INDEX_FILE_CANDIDATES,
   parseExportId,
   formatExportId,
+  getParserFlavorFromFileName,
   scanModuleExports,
   isUnderScope,
   looksLikeFilePath,
-  LRUMap,
-  mapWithLimit,
   buildExportComparisonMaps,
   detectSameFileRenames,
   detectCrossFileRenames,
@@ -95,6 +112,9 @@ interface GitVirtualFileSystemOptions {
   include?: string[]
 
   exclude?: string[]
+
+  /** Optional cache provider for this filesystem's internal caches. */
+  cache?: Cache
 }
 
 const repoPattern = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
@@ -111,7 +131,14 @@ const MAX_FILE_BYTES = 8 * 1024 * 1024
 const MAX_GITHUB_BLAME_LINE = 1_000_000
 
 const MAX_GITHUB_BLAME_BATCH = 20
-const GITHUB_BLAME_BATCH_DELAY_MS = 15
+const GIT_VIRTUAL_REF_IDENTITY_TTL_MS = 60_000
+const GIT_VIRTUAL_EXPORT_METADATA_CONCURRENCY = 8
+const GIT_VIRTUAL_SUBSET_FETCH_CONCURRENCY = 8
+const GIT_VIRTUAL_ENTRY_RESOLUTION_CONCURRENCY = 8
+const GIT_VIRTUAL_HISTORY_FETCH_CONCURRENCY = 10
+const GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY = 6
+const GIT_VIRTUAL_MODULE_RESOLUTION_CONCURRENCY = 8
+const GIT_VIRTUAL_CHILD_EXPORT_COLLECTION_CONCURRENCY = 5
 
 const TAR_TYPE_FLAGS = {
   NormalFile: 0x00,
@@ -132,6 +159,7 @@ type GitMetadataState = {
     string,
     {
       name: string
+      githubProfileUrl?: string
       commitCount: number
       firstCommitDate: Date
       lastCommitDate: Date
@@ -141,6 +169,11 @@ type GitMetadataState = {
   lastCommitDate?: Date
   firstCommitHash?: string
   lastCommitHash?: string
+}
+
+type GitFileMetadataPayload = {
+  metadata: GitMetadata
+  commitHashes: { firstCommitHash?: string; lastCommitHash?: string }
 }
 
 type NormalizedExportHistoryRefScope = {
@@ -201,8 +234,63 @@ const clamp = (ms: number, max = 60_000) => Math.min(Math.max(ms, 0), max)
 const RATE_LIMIT_GUIDANCE =
   'Try providing a personal access token or retry later.'
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
+interface FetchRetryFailureRateLimit {
+  type: 'rateLimit'
+  status: number
+  retryAfterMs?: number
+}
+
+interface FetchRetryFailureResponse {
+  type: 'response'
+  status: number
+  url: string
+}
+
+interface FetchRetryFailureError {
+  type: 'error'
+  error: unknown
+}
+
+type FetchRetryFailure =
+  | FetchRetryFailureRateLimit
+  | FetchRetryFailureResponse
+  | FetchRetryFailureError
+
+type FetchAuthMode = 'auto' | 'none' | 'force'
+
+interface FetchWithRetryOptions {
+  maxAttempts?: number
+  init?: Omit<RequestInit, 'headers' | 'signal' | 'redirect' | 'referrerPolicy'>
+  headers?: HeadersInit
+  authMode?: FetchAuthMode
+}
+
+class GitVirtualFetchRetryError extends RenounNetworkError {
+  readonly failureType:
+    | FetchRetryFailureRateLimit['type']
+    | FetchRetryFailureResponse['type']
+  readonly retryAfterMs?: number
+
+  constructor(options: {
+    failureType: 'rateLimit' | 'response'
+    status: number
+    url: string
+    retryAfterMs?: number
+  }) {
+    super(
+      options.failureType === 'rateLimit'
+        ? `[renoun] Request was rate limited with status ${options.status}.`
+        : `[renoun] Request failed with status ${options.status}.`,
+      {
+        status: options.status,
+        url: options.url,
+        retryable: true,
+      }
+    )
+    this.name = 'GitVirtualFetchRetryError'
+    this.failureType = options.failureType
+    this.retryAfterMs = options.retryAfterMs
+  }
 }
 
 function getResetDelayMs(
@@ -257,7 +345,7 @@ export class GitVirtualFileSystem
   #originPolicy: { fetch: Set<string>; auth: Set<string> }
   #ownerEncoded?: string
   #repoEncoded?: string
-  #currentFetch?: AbortController
+  #activeFetchAbortControllers = new Set<AbortController>()
   #initId = 0
   #initialized = false
   #initPromise?: Promise<void>
@@ -269,12 +357,8 @@ export class GitVirtualFileSystem
   #symlinkMap: Map<string, string>
   #include?: string[]
   #exclude?: string[]
-  #gitMetadataCache: Map<string, GitMetadata>
-  #gitFileMetadataCache: Map<
-    string,
-    { firstCommitHash?: string; lastCommitHash?: string }
-  >
-  #gitBlameCache: Map<string, Promise<GitHubBlameRange[] | null>>
+  #cache?: Cache
+  #session?: Session
   #ghBlameBatchQueue?: {
     path: string
     startLine?: number
@@ -282,7 +366,9 @@ export class GitVirtualFileSystem
     resolve: (ranges: any[] | null) => void
     reject: (error: unknown) => void
   }[]
-  #ghBlameBatchTimer?: any
+  #ghBlameAbortControllers = new Set<AbortController>()
+  #ghBlameBatchFlushScheduled = false
+  #ghBlameBatchFlushing = false
 
   constructor(options: GitVirtualFileSystemOptions) {
     if (!options.host) {
@@ -312,6 +398,7 @@ export class GitVirtualFileSystem
     if (this.#token && /[\r\n]/.test(this.#token)) {
       throw new Error('[renoun] Invalid token')
     }
+    this.#cache = options.cache
     const requestedTimeout = options.timeoutMs ?? 30_000
     this.#timeoutMs = Math.min(Math.max(requestedTimeout, 0), 300_000)
     this.#maxArchiveBytes =
@@ -342,13 +429,19 @@ export class GitVirtualFileSystem
     this.#exclude = options.exclude
 
     this.#symlinkMap = new Map()
-    this.#gitMetadataCache = new Map()
-    this.#gitFileMetadataCache = new Map()
-    this.#gitBlameCache = new Map()
-    this.#initPromise = this.#loadArchive().catch((error) => {
-      this.#initPromise = undefined
-      throw error
-    })
+    this.#initPromise = this.#createInitPromise()
+  }
+
+  override usesPersistentCacheByDefault(): boolean {
+    return true
+  }
+
+  override usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return false
+  }
+
+  override validatesPersistedFileDependenciesByDefault(): boolean {
+    return false
   }
 
   async #extractTarFromStream(
@@ -389,14 +482,14 @@ export class GitVirtualFileSystem
         continue
       }
 
-      fullPath = fullPath.replace(/\\+/g, '/').replace(/^\.\/+/, '')
+      fullPath = trimLeadingDotSlash(fullPath)
       if (!rootPrefix) {
         rootPrefix = fullPath.split('/')[0]
       }
       if (rootPrefix && fullPath.startsWith(`${rootPrefix}/`)) {
         fullPath = fullPath.slice(rootPrefix.length + 1)
       }
-      fullPath = fullPath.replace(/^\/+/, '')
+      fullPath = trimLeadingSlashes(fullPath)
       if (!fullPath || fullPath.endsWith('/')) {
         await discard()
         continue
@@ -479,11 +572,11 @@ export class GitVirtualFileSystem
 
       if (isSymLink) {
         const rawTarget = this.#sanitizeTarPath(paxLinkPath) || ''
-        const target = normalizeSlashes(rawTarget).replace(/^\/+/, '')
+        const target = trimLeadingSlashes(normalizeSlashes(rawTarget))
         const directory = effectiveSegments.slice(0, -1).join('/') || '.'
-        const resolvedTarget = normalizeSlashes(
-          joinPaths(directory, target)
-        ).replace(/^\/+/, '')
+        const resolvedTarget = trimLeadingSlashes(
+          normalizeSlashes(joinPaths(directory, target))
+        )
         const key = normalizePath(relativePath)
         const value = normalizePath(resolvedTarget)
         this.#symlinkMap.set(key, value)
@@ -568,15 +661,67 @@ export class GitVirtualFileSystem
     }
   }
 
-  clearCache() {
-    if (this.#currentFetch) {
-      this.#currentFetch.abort()
-      this.#currentFetch = undefined
+  #clearRefCaches(cancelMessage: string) {
+    const pendingBlameQueue = this.#ghBlameBatchQueue ?? []
+    if (pendingBlameQueue.length > 0) {
+      const error = new Error(cancelMessage)
+      for (const queued of pendingBlameQueue) {
+        queued.reject(error)
+      }
     }
+
+    for (const controller of this.#ghBlameAbortControllers) {
+      controller.abort()
+    }
+    this.#ghBlameAbortControllers.clear()
+
+    this.#ghBlameBatchQueue = []
+    this.#ghBlameBatchFlushScheduled = false
+    this.#ghBlameBatchFlushing = false
+  }
+
+  #resetSession(force = false) {
+    if (this.#session) {
+      const snapshotId = this.#session.snapshot.id
+      this.#session = undefined
+
+      if (!force) {
+        Session.reset(this, snapshotId)
+        return
+      }
+    }
+
+    if (force) {
+      Session.reset(this)
+      return
+    }
+  }
+
+  #setResolvedRef(nextRef: string) {
+    if (nextRef === this.#ref) {
+      return
+    }
+
+    this.#ref = nextRef
+    this.#clearRefCaches(
+      '[renoun] Git blame request was cancelled because the active Git ref changed.'
+    )
+    this.#resetSession(true)
+  }
+
+  clearCache() {
+    for (const controller of this.#activeFetchAbortControllers) {
+      controller.abort()
+    }
+    this.#activeFetchAbortControllers.clear()
+
     this.#initId++
     const files = this.getFiles()
     files.clear()
-    this.#gitMetadataCache.clear()
+    this.#clearRefCaches(
+      '[renoun] Git blame request was cancelled because the cache was cleared.'
+    )
+    this.#resetSession(true)
     this.#initialized = false
     this.#initPromise = undefined
   }
@@ -627,33 +772,308 @@ export class GitVirtualFileSystem
     return headers
   }
 
+  #getSession(): Session {
+    if (!this.#session) {
+      this.#session = Session.for(this, undefined, this.#cache)
+    }
+
+    return this.#session
+  }
+
+  getCacheIdentity() {
+    return {
+      host: this.#host,
+      apiBaseUrl: this.#apiBaseUrl,
+      repository: this.#repository,
+      ref: this.#ref,
+    }
+  }
+
+  isPersistentCacheDeterministic(): boolean {
+    return isFullCommitSha(this.#ref)
+  }
+
+  #createPersistentCacheNodeKey(scope: string, payload: unknown): string {
+    return createGitVirtualPersistentCacheNodeKey({
+      domainVersion: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+      host: this.#host,
+      apiBaseUrl: this.#apiBaseUrl,
+      repository: this.#repository,
+      namespace: scope,
+      payload,
+    })
+  }
+
+  #createBlameRangeKeyPrefix(refIdentity: string, path: string): string {
+    const normalizedPath = normalizeSlashes(path)
+    const cacheApiBaseUrl = sanitizeCredentialedGitRemote(this.#apiBaseUrl)
+    const cacheRepository = sanitizeCredentialedGitRemote(this.#repository)
+    const namespacePrefix = [
+      'blame-range',
+      encodeURIComponent(this.#host),
+      encodeURIComponent(cacheApiBaseUrl),
+      encodeURIComponent(cacheRepository),
+      encodeURIComponent(refIdentity),
+      encodeURIComponent(normalizedPath),
+      '',
+    ].join(':')
+    return `git-virtual:${GIT_VIRTUAL_HISTORY_CACHE_VERSION}:${namespacePrefix}`
+  }
+
+  #createBlameRangeNodeKey(
+    refIdentity: string,
+    path: string,
+    startLine: number | undefined,
+    endLine: number | undefined
+  ): string {
+    const normalizedPath = normalizeSlashes(path)
+    const cacheApiBaseUrl = sanitizeCredentialedGitRemote(this.#apiBaseUrl)
+    const cacheRepository = sanitizeCredentialedGitRemote(this.#repository)
+    const namespace = [
+      'blame-range',
+      encodeURIComponent(this.#host),
+      encodeURIComponent(cacheApiBaseUrl),
+      encodeURIComponent(cacheRepository),
+      encodeURIComponent(refIdentity),
+      encodeURIComponent(normalizedPath),
+      startLine === undefined ? 'all' : String(startLine),
+      endLine === undefined ? 'all' : String(endLine),
+    ].join(':')
+
+    return this.#createPersistentCacheNodeKey(namespace, null)
+  }
+
+  #parseBlameRangeFromNodeKey(
+    nodeKey: string,
+    keyPrefix: string
+  ): { startLine?: number; endLine?: number } | undefined {
+    if (!nodeKey.startsWith(keyPrefix)) {
+      return undefined
+    }
+
+    const remainder = nodeKey.slice(keyPrefix.length)
+    const hashSeparatorIndex = remainder.lastIndexOf(':')
+    if (hashSeparatorIndex === -1) {
+      return undefined
+    }
+    const rangePayload = remainder.slice(0, hashSeparatorIndex)
+    const separatorIndex = rangePayload.indexOf(':')
+    if (separatorIndex === -1) {
+      return undefined
+    }
+
+    const startSegment = rangePayload.slice(0, separatorIndex)
+    const endSegment = rangePayload.slice(separatorIndex + 1)
+
+    const startLine =
+      startSegment === 'all' ? undefined : Number.parseInt(startSegment, 10)
+    const endLine =
+      endSegment === 'all' ? undefined : Number.parseInt(endSegment, 10)
+
+    if (
+      (startLine !== undefined && !Number.isFinite(startLine)) ||
+      (endLine !== undefined && !Number.isFinite(endLine))
+    ) {
+      return undefined
+    }
+
+    return { startLine, endLine }
+  }
+
+  async #getRefCacheIdentity(ref: string): Promise<{
+    identity: string
+    deterministic: boolean
+  }> {
+    const normalizedRef = ref.trim()
+    const now = Date.now()
+    const nodeKey = this.#createPersistentCacheNodeKey('ref-identity', {
+      ref: normalizedRef,
+    })
+    const session = this.#getSession()
+    const cached = await session.cache.get<{
+      identity: string
+      deterministic: boolean
+      checkedAt: number
+    }>(nodeKey)
+
+    if (cached && now - cached.checkedAt < GIT_VIRTUAL_REF_IDENTITY_TTL_MS) {
+      return cached
+    }
+
+    const next = await this.#resolveRefCacheIdentity(normalizedRef, cached)
+    await this.#getSession().cache.put(nodeKey, next, {
+      persist: true,
+      deps: [
+        {
+          depKey: `const:git-virtual-cache:${GIT_VIRTUAL_HISTORY_CACHE_VERSION}`,
+          depVersion: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+        },
+      ],
+    })
+
+    return next
+  }
+
+  async #resolveRefCacheIdentity(
+    ref: string,
+    cached?: {
+      identity: string
+      deterministic: boolean
+      checkedAt: number
+    }
+  ): Promise<{
+    identity: string
+    deterministic: boolean
+    checkedAt: number
+  }> {
+    const isCommitSha = isFullCommitSha(ref)
+    let identity = ref
+    let deterministic = false
+
+    try {
+      const resolved = await this.#resolveRefToCommit(ref)
+      if (resolved) {
+        identity = resolved
+        deterministic = isCommitSha
+      }
+    } catch {
+      if (cached !== undefined) {
+        return {
+          ...cached,
+          checkedAt: Date.now(),
+        }
+      }
+    }
+
+    const next = {
+      identity,
+      deterministic,
+      checkedAt: Date.now(),
+    }
+
+    if (cached && cached.identity !== next.identity) {
+      this.#clearRefCaches(
+        '[renoun] Git ref identity changed; invalidating in-memory ref caches.'
+      )
+    }
+
+    return next
+  }
+
+  async #resolveRefToCommit(ref: string): Promise<string | null> {
+    const normalizedRef = ref.trim()
+    if (isFullCommitSha(normalizedRef)) {
+      return normalizedRef
+    }
+
+    switch (this.#host) {
+      case 'github': {
+        const project = `${this.#ownerEncoded}/${this.#repoEncoded}`
+        const response = await this.#fetchWithRetry(
+          `${this.#apiBaseUrl}/repos/${project}/commits/${encodeURIComponent(
+            normalizedRef
+          )}`
+        )
+        if (!response.ok) {
+          return null
+        }
+        const data = await response.json()
+        const sha = typeof data?.sha === 'string' ? data.sha : undefined
+        if (sha && isFullCommitSha(sha)) {
+          return sha
+        }
+        const parentSha =
+          typeof data?.commit?.sha === 'string' ? data.commit.sha : undefined
+        if (parentSha && isFullCommitSha(parentSha)) {
+          return parentSha
+        }
+        return null
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        const response = await this.#fetchWithRetry(
+          `${this.#apiBaseUrl}/projects/${project}/repository/commits/${encodeURIComponent(
+            normalizedRef
+          )}`
+        )
+        if (!response.ok) {
+          return null
+        }
+        const data = await response.json()
+        const id = typeof data?.id === 'string' ? data.id : undefined
+        return id && isFullCommitSha(id) ? id : null
+      }
+      case 'bitbucket': {
+        const response = await this.#fetchWithRetry(
+          `${this.#apiBaseUrl}/repositories/${this.#ownerEncoded}/${this.#repoEncoded}/commit/${encodeURIComponent(
+            normalizedRef
+          )}`
+        )
+        if (!response.ok) {
+          return null
+        }
+        const data = await response.json()
+        const hash = typeof data?.hash === 'string' ? data.hash : undefined
+        return hash && isFullCommitSha(hash) ? hash : null
+      }
+    }
+  }
+
+  async #getGitFileMetadataPayload(
+    normalizedPath: string
+  ): Promise<GitFileMetadataPayload> {
+    const { identity: refIdentity, deterministic } =
+      await this.#getRefCacheIdentity(this.#ref)
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('file-metadata', {
+      refIdentity,
+      path: normalizedPath,
+    })
+
+    try {
+      const payload = await session.cache.getOrCompute<GitFileMetadataPayload>(
+        nodeKey,
+        {
+          persist: deterministic,
+          constDeps: [
+            {
+              name: 'git-virtual-cache',
+              version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
+        async (ctx) => {
+          ctx.recordConstDep(
+            'git-virtual-cache',
+            GIT_VIRTUAL_HISTORY_CACHE_VERSION
+          )
+
+          const result =
+            await this.#fetchGitMetadataForHostWithHashes(normalizedPath)
+          return {
+            metadata: result.metadata,
+            commitHashes: {
+              firstCommitHash: result.firstCommitHash,
+              lastCommitHash: result.lastCommitHash,
+            },
+          }
+        }
+      )
+      return payload
+    } catch {
+      return {
+        metadata: this.#createEmptyGitMetadata(),
+        commitHashes: {},
+      }
+    }
+  }
+
   async getGitFileMetadata(path: string): Promise<GitMetadata> {
     await this.#ensureInitialized()
 
     const normalizedPath = this.#normalizeGitMetadataPath(path)
-    const cacheKey = `${this.#ref}::${normalizedPath}`
-
-    if (this.#gitMetadataCache.has(cacheKey)) {
-      return this.#gitMetadataCache.get(cacheKey)!
-    }
-
-    let metadata: GitMetadata
-    let commitHashes: { firstCommitHash?: string; lastCommitHash?: string } = {}
-    try {
-      const result =
-        await this.#fetchGitMetadataForHostWithHashes(normalizedPath)
-      metadata = result.metadata
-      commitHashes = {
-        firstCommitHash: result.firstCommitHash,
-        lastCommitHash: result.lastCommitHash,
-      }
-    } catch {
-      metadata = this.#createEmptyGitMetadata()
-    }
-
-    this.#gitMetadataCache.set(cacheKey, metadata)
-    this.#gitFileMetadataCache.set(cacheKey, commitHashes)
-    return metadata
+    const payload = await this.#getGitFileMetadataPayload(normalizedPath)
+    return payload.metadata
   }
 
   async getGitExportMetadata(
@@ -729,16 +1149,14 @@ export class GitVirtualFileSystem
     await this.#ensureInitialized()
 
     const normalizedPath = this.#normalizeGitMetadataPath(filePath)
-    const gitMetadata = await this.getGitFileMetadata(normalizedPath)
-    const cacheKey = `${this.#ref}::${normalizedPath}`
-    const commitHashes = this.#gitFileMetadataCache.get(cacheKey)
+    const payload = await this.#getGitFileMetadataPayload(normalizedPath)
+    const gitMetadata = payload.metadata
+    const commitHashes = payload.commitHashes
 
-    // Convert authors from GitMetadata format to GitAuthor format
-    // GitMetadata.authors has: { name, commitCount, firstCommitDate, lastCommitDate }
-    // GitAuthor needs: { name, email, commitCount, firstCommitDate?, lastCommitDate? }
+    // Convert authors from GitMetadata format to GitAuthor format.
     const authors: GitAuthor[] = gitMetadata.authors.map((author) => ({
       name: author.name,
-      email: '', // Not available from the host API author data
+      githubProfileUrl: author.githubProfileUrl,
       commitCount: author.commitCount,
       firstCommitDate: author.firstCommitDate,
       lastCommitDate: author.lastCommitDate,
@@ -815,15 +1233,19 @@ export class GitVirtualFileSystem
 
     // Process exports with line numbers in parallel (batched blame)
     if (exportsWithLines.length > 0) {
-      const blameResults = await Promise.all(
-        exportsWithLines.map(async (exportItem) => {
+      const blameResults = await mapConcurrent(
+        exportsWithLines,
+        {
+          concurrency: GIT_VIRTUAL_EXPORT_METADATA_CONCURRENCY,
+        },
+        async (exportItem) => {
           const metadata = await this.getGitExportMetadata(
             base.path,
             exportItem.startLine!,
             exportItem.endLine!
           )
           return { name: exportItem.name, metadata }
-        })
+        }
       )
 
       for (const { name, metadata } of blameResults) {
@@ -859,31 +1281,9 @@ export class GitVirtualFileSystem
 
   #normalizeGitMetadataPath(path: string): string {
     const relative = normalizeSlashes(this.getRelativePathToWorkspace(path))
-    if (!relative || relative === '.' || relative === './') {
-      return ''
-    }
-    // Trim leading "./" segments
-    let normalized = relative
-    while (normalized.startsWith('./')) {
-      normalized = normalized.slice(2)
-    }
-    // Trim leading slashes
-    let start = 0
-    while (start < normalized.length && normalized.charCodeAt(start) === 47) {
-      start++
-    }
-    if (start > 0) {
-      normalized = normalized.slice(start)
-    }
-    // Trim trailing slashes
-    let end = normalized.length
-    while (end > 0 && normalized.charCodeAt(end - 1) === 47) {
-      end--
-    }
-    if (end < normalized.length) {
-      normalized = normalized.slice(0, end)
-    }
-    return normalized
+    const normalized = normalizePathKey(relative)
+
+    return normalized === '.' ? '' : normalized
   }
 
   #createGitMetadataState(): GitMetadataState {
@@ -923,19 +1323,26 @@ export class GitVirtualFileSystem
     }
 
     startLine = normalizedStart
+    const { identity: refIdentity, deterministic } =
+      await this.#getRefCacheIdentity(this.#ref)
+    const session = this.#getSession()
+    const keyPrefix = this.#createBlameRangeKeyPrefix(refIdentity, path)
+    const candidateNodeKeys =
+      await session.cache.listNodeKeysByPrefix(keyPrefix)
 
-    const cacheKey = `${this.#ref}::${path}::${startLine ?? ''}-${
-      normalizedEnd ?? ''
-    }`
+    let bestCandidateNodeKey: string | undefined
+    let bestCandidateWidth = Number.POSITIVE_INFINITY
 
-    const rangePrefix = `${this.#ref}::${path}::`
-    for (const [key, promise] of this.#gitBlameCache) {
-      if (!key.startsWith(rangePrefix)) continue
-      const [, , range] = key.split('::')
-      const [cachedStartStr, cachedEndStr] = range.split('-')
-      const cachedStart = cachedStartStr ? Number(cachedStartStr) : undefined
-      const cachedEnd = cachedEndStr ? Number(cachedEndStr) : undefined
+    for (const candidateNodeKey of candidateNodeKeys) {
+      const range = this.#parseBlameRangeFromNodeKey(
+        candidateNodeKey,
+        keyPrefix
+      )
+      if (!range) {
+        continue
+      }
 
+      const { startLine: cachedStart, endLine: cachedEnd } = range
       const coversRequestedStart =
         startLine === undefined
           ? cachedStart === undefined
@@ -945,27 +1352,60 @@ export class GitVirtualFileSystem
           ? cachedEnd === undefined
           : cachedEnd === undefined || cachedEnd >= normalizedEnd
 
-      if (coversRequestedStart && coversRequestedEnd) {
-        this.#gitBlameCache.set(cacheKey, promise)
-        const cached = await promise
+      if (!coversRequestedStart || !coversRequestedEnd) {
+        continue
+      }
+
+      const spanStart = cachedStart ?? 1
+      const spanEnd = cachedEnd ?? Number.MAX_SAFE_INTEGER
+      const width = spanEnd - spanStart
+
+      if (width < bestCandidateWidth) {
+        bestCandidateWidth = width
+        bestCandidateNodeKey = candidateNodeKey
+      }
+    }
+
+    if (bestCandidateNodeKey) {
+      const cached = await session.cache.get<GitHubBlameRange[] | null>(
+        bestCandidateNodeKey
+      )
+      if (cached !== undefined) {
         return cached ?? null
       }
     }
 
-    if (!this.#gitBlameCache.has(cacheKey)) {
-      this.#gitBlameCache.set(
-        cacheKey,
-        this.#enqueueGitHubBlameRequest(path, startLine, normalizedEnd).catch(
-          () => null
-        )
-      )
-    }
+    const exactNodeKey = this.#createBlameRangeNodeKey(
+      refIdentity,
+      path,
+      startLine,
+      normalizedEnd
+    )
 
-    const cached = this.#gitBlameCache.get(cacheKey)
-    if (!cached) {
+    try {
+      const ranges = await session.cache.getOrCompute(
+        exactNodeKey,
+        {
+          persist: deterministic,
+          constDeps: [
+            {
+              name: 'git-virtual-cache',
+              version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
+        async (ctx) => {
+          ctx.recordConstDep(
+            'git-virtual-cache',
+            GIT_VIRTUAL_HISTORY_CACHE_VERSION
+          )
+          return this.#enqueueGitHubBlameRequest(path, startLine, normalizedEnd)
+        }
+      )
+      return ranges ?? null
+    } catch {
       return null
     }
-    return (await cached) ?? null
   }
 
   #summarizeGitHubBlameRanges(
@@ -1018,43 +1458,51 @@ export class GitVirtualFileSystem
     name: string | undefined,
     email: string | undefined,
     date: Date,
-    commitHash?: string
+    commitHash?: string,
+    githubLogin?: string
   ) {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
       return
     }
 
-    const normalizedEmail =
-      typeof email === 'string' && email.trim()
-        ? email.trim().toLowerCase()
-        : undefined
+    const githubUsername = resolveGitHubUsername({
+      githubLogin,
+      email,
+    })
+    const githubProfileUrl = toGitHubProfileUrl(githubUsername)
     const normalizedName =
       typeof name === 'string' && name.trim()
         ? name.trim()
-        : normalizedEmail
-          ? normalizedEmail
+        : githubUsername
+          ? githubUsername
           : 'Unknown'
 
-    const key = normalizedEmail ?? normalizedName.toLowerCase() ?? 'unknown'
+    const key = githubUsername
+      ? `github:${githubUsername.toLowerCase()}`
+      : normalizedName.toLowerCase()
     const author = state.authors.get(key)
 
     if (!author) {
       state.authors.set(key, {
         name: normalizedName,
+        githubProfileUrl,
         commitCount: 1,
         firstCommitDate: date,
         lastCommitDate: date,
       })
     } else {
+      if (author.name === 'Unknown' && normalizedName !== 'Unknown') {
+        author.name = normalizedName
+      }
+      if (!author.githubProfileUrl && githubProfileUrl) {
+        author.githubProfileUrl = githubProfileUrl
+      }
       author.commitCount += 1
       if (date < author.firstCommitDate) {
         author.firstCommitDate = date
       }
       if (date > author.lastCommitDate) {
         author.lastCommitDate = date
-      }
-      if (!author.name && normalizedName) {
-        author.name = normalizedName
       }
     }
 
@@ -1151,6 +1599,11 @@ export class GitVirtualFileSystem
 
     const firstResponse = await this.#fetchWithRetry(url)
     if (!firstResponse.ok) {
+      if (isTransientHttpStatus(firstResponse.status)) {
+        throw new Error(
+          `[renoun] Git metadata request failed with status ${firstResponse.status}.`
+        )
+      }
       return
     }
     await this.#accumulateGitHubCommitsIntoState(firstResponse, state)
@@ -1162,6 +1615,11 @@ export class GitVirtualFileSystem
     }
     const lastResp = await this.#fetchWithRetry(lastLink)
     if (!lastResp.ok) {
+      if (isTransientHttpStatus(lastResp.status)) {
+        throw new Error(
+          `[renoun] Git metadata request failed with status ${lastResp.status}.`
+        )
+      }
       return
     }
     await this.#accumulateGitHubCommitsIntoState(lastResp, state)
@@ -1198,21 +1656,35 @@ export class GitVirtualFileSystem
       }
       const author = commit?.author
       const email = typeof author?.email === 'string' ? author.email : undefined
+      const githubLogin =
+        typeof author?.user?.login === 'string' ? author.user.login : undefined
       const name =
         (typeof author?.name === 'string' ? author.name : undefined) ??
-        (typeof author?.user?.login === 'string'
-          ? author.user.login
-          : undefined)
+        githubLogin
       // Only count each commit once to approximate commit counts.
       if (oid && seenCommitOids.has(oid)) {
         // Update last/first dates even if we do not increment count again.
-        this.#updateGitMetadataState(state, name, email, date, oid)
+        this.#updateGitMetadataState(
+          state,
+          name,
+          email,
+          date,
+          oid,
+          githubLogin
+        )
         continue
       }
       if (oid) {
         seenCommitOids.add(oid)
       }
-      this.#updateGitMetadataState(state, name, email, date, oid)
+      this.#updateGitMetadataState(
+        state,
+        name,
+        email,
+        date,
+        oid,
+        githubLogin
+      )
     }
     return state.authors.size > 0
   }
@@ -1261,13 +1733,21 @@ export class GitVirtualFileSystem
         (typeof commitData?.committer?.name === 'string'
           ? commitData.committer.name
           : undefined)
+      const githubLoginCandidate =
+        (typeof commit?.author?.login === 'string'
+          ? commit.author.login
+          : undefined) ??
+        (typeof commit?.committer?.login === 'string'
+          ? commit.committer.login
+          : undefined)
 
       this.#updateGitMetadataState(
         state,
         nameCandidate,
         emailCandidate,
         date,
-        commitSha
+        commitSha,
+        githubLoginCandidate
       )
     }
   }
@@ -1288,53 +1768,58 @@ export class GitVirtualFileSystem
         resolve,
         reject,
       })
-      if (!this.#ghBlameBatchTimer) {
-        this.#ghBlameBatchTimer = setTimeout(() => {
-          this.#ghBlameBatchTimer = undefined
+      if (!this.#ghBlameBatchFlushScheduled) {
+        this.#ghBlameBatchFlushScheduled = true
+        queueMicrotask(() => {
+          this.#ghBlameBatchFlushScheduled = false
           this.#flushGitHubBlameBatch().catch((error) => {
-            // Reject all pending in case of a top-level failure
             const pending = this.#ghBlameBatchQueue ?? []
             this.#ghBlameBatchQueue = []
             for (const item of pending) {
               item.reject(error)
             }
           })
-        }, GITHUB_BLAME_BATCH_DELAY_MS)
-      }
-      if (this.#ghBlameBatchQueue!.length >= MAX_GITHUB_BLAME_BATCH) {
-        clearTimeout(this.#ghBlameBatchTimer)
-        this.#ghBlameBatchTimer = undefined
-        // Flush immediately
-        this.#flushGitHubBlameBatch().catch((error) => {
-          const pending = this.#ghBlameBatchQueue ?? []
-          this.#ghBlameBatchQueue = []
-          for (const item of pending) {
-            item.reject(error)
-          }
         })
       }
     })
   }
 
   async #flushGitHubBlameBatch(): Promise<void> {
-    const queue = this.#ghBlameBatchQueue ?? []
-    if (queue.length === 0) {
+    if (this.#ghBlameBatchFlushing) {
       return
     }
-    // Take up to batch size
-    const batch = queue.splice(0, MAX_GITHUB_BLAME_BATCH)
-    // If more remain, schedule another flush
-    if (queue.length > 0 && !this.#ghBlameBatchTimer) {
-      this.#ghBlameBatchTimer = setTimeout(() => {
-        this.#ghBlameBatchTimer = undefined
-        this.#flushGitHubBlameBatch().catch((error) => {
-          const pending = this.#ghBlameBatchQueue ?? []
-          this.#ghBlameBatchQueue = []
-          for (const item of pending) {
-            item.reject(error)
-          }
-        })
-      }, GITHUB_BLAME_BATCH_DELAY_MS)
+
+    this.#ghBlameBatchFlushing = true
+    try {
+      while (true) {
+        const queue = this.#ghBlameBatchQueue ?? []
+        if (queue.length === 0) {
+          return
+        }
+
+        const batch = queue.splice(0, MAX_GITHUB_BLAME_BATCH)
+        if (batch.length === 0) {
+          return
+        }
+
+        await this.#flushGitHubBlameBatchChunk(batch)
+      }
+    } finally {
+      this.#ghBlameBatchFlushing = false
+    }
+  }
+
+  async #flushGitHubBlameBatchChunk(
+    batch: {
+      path: string
+      startLine?: number
+      endLine?: number
+      resolve: (ranges: any[] | null) => void
+      reject: (error: unknown) => void
+    }[]
+  ): Promise<void> {
+    if (batch.length === 0) {
+      return
     }
 
     // Construct GraphQL query with aliases and variables
@@ -1383,18 +1868,38 @@ export class GitVirtualFileSystem
     const graphqlUrl = 'https://api.github.com/graphql'
     this.#assertAllowed(graphqlUrl)
     const controller = new AbortController()
+    this.#ghBlameAbortControllers.add(controller)
     const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
     try {
-      const response = await fetch(graphqlUrl, {
-        method: 'POST',
-        headers: {
-          ...this.#apiHeaders,
-          'Content-Type': 'application/json',
+      const response = await retry(
+        async () => {
+          const nextResponse = await fetch(graphqlUrl, {
+            method: 'POST',
+            headers: {
+              ...this.#apiHeaders,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ query, variables }),
+            signal: controller.signal,
+            referrerPolicy: 'no-referrer',
+          })
+          if (!nextResponse.ok && isTransientHttpStatus(nextResponse.status)) {
+            throw new RenounNetworkError(
+              `[renoun] GitHub blame request failed with status ${nextResponse.status}.`,
+              {
+                status: nextResponse.status,
+                url: graphqlUrl,
+                retryable: true,
+              }
+            )
+          }
+          return nextResponse
         },
-        body: JSON.stringify({ query, variables }),
-        signal: controller.signal,
-        referrerPolicy: 'no-referrer',
-      })
+        {
+          retries: 0,
+          signal: controller.signal,
+        }
+      )
       if (!response.ok) {
         for (const item of batch) {
           item.resolve(null)
@@ -1414,10 +1919,11 @@ export class GitVirtualFileSystem
       })
     } catch (error) {
       for (const item of batch) {
-        item.resolve(null)
+        item.reject(error)
       }
     } finally {
       clearTimeout(timer)
+      this.#ghBlameAbortControllers.delete(controller)
     }
   }
 
@@ -1438,6 +1944,11 @@ export class GitVirtualFileSystem
 
       const response = await this.#fetchWithRetry(url)
       if (!response.ok) {
+        if (isTransientHttpStatus(response.status)) {
+          throw new Error(
+            `[renoun] Git metadata request failed with status ${response.status}.`
+          )
+        }
         return
       }
 
@@ -1470,9 +1981,9 @@ export class GitVirtualFileSystem
             ? commit.author_email
             : undefined
         const name =
-          (typeof commit?.author_name === 'string'
+          typeof commit?.author_name === 'string'
             ? commit.author_name
-            : undefined) ?? email
+            : undefined
 
         this.#updateGitMetadataState(state, name, email, date, commitSha)
       }
@@ -1508,6 +2019,11 @@ export class GitVirtualFileSystem
       visited.add(url)
       const response = await this.#fetchWithRetry(url)
       if (!response.ok) {
+        if (isTransientHttpStatus(response.status)) {
+          throw new Error(
+            `[renoun] Git metadata request failed with status ${response.status}.`
+          )
+        }
         return
       }
 
@@ -1669,212 +2185,298 @@ export class GitVirtualFileSystem
   }
 
   /** Fetch with retry and rate-limit handling. */
-  async #fetchWithRetry(url: string, maxAttempts = 3): Promise<Response> {
-    type FetchFailure =
-      | { type: 'rateLimit'; status: number; retryAfterMs?: number }
-      | { type: 'response'; status: number; url: string }
-      | { type: 'error'; error: unknown }
-
-    let lastFailure: FetchFailure | undefined
+  async #fetchWithRetry(
+    url: string,
+    options: number | FetchWithRetryOptions = 3
+  ): Promise<Response> {
+    const normalizedOptions: FetchWithRetryOptions =
+      typeof options === 'number' ? { maxAttempts: options } : options
+    const maxAttempts = Math.max(1, normalizedOptions.maxAttempts ?? 3)
+    const authMode = normalizedOptions.authMode ?? 'auto'
+    const requestInit = normalizedOptions.init
+    const requestHeaders: Record<string, string> = {}
+    new Headers(normalizedOptions.headers).forEach((value, key) => {
+      requestHeaders[key] = value
+    })
+    let lastFailure: FetchRetryFailure | undefined
     let notifiedFirstRetryFailure = false
     let notifiedRateLimit = false
 
-    for (let attempt = 0; attempt < Math.max(1, maxAttempts); attempt++) {
-      let skipBackoff = false
-      const controller = new AbortController()
-      this.#currentFetch = controller
-      const timer = setTimeout(() => controller.abort(), this.#timeoutMs)
+    try {
+      return await retry(
+        async (attempt) => {
+          const controller = new AbortController()
+          this.#activeFetchAbortControllers.add(controller)
+          let timedOut = false
+          const timer = setTimeout(() => {
+            timedOut = true
+            controller.abort()
+          }, this.#timeoutMs)
 
-      try {
-        this.#assertAllowed(url)
-        let currentUrl = url
-        let redirects = 0
-        while (true) {
-          const origin = new URL(currentUrl).origin
-          const useAuth = this.#originPolicy.auth.has(origin)
-          const response = await fetch(currentUrl, {
-            headers: useAuth ? this.#apiHeaders : this.#noAuthHeaders,
-            signal: controller.signal,
-            referrerPolicy: 'no-referrer',
-            redirect: 'manual',
-          })
+          try {
+            this.#assertAllowed(url)
+            let currentUrl = url
+            let redirects = 0
 
-          if (!response) {
-            throw new Error('[renoun] Too many redirects')
-          }
+            while (true) {
+              const origin = new URL(currentUrl).origin
+              const useAuth =
+                authMode === 'force'
+                  ? true
+                  : authMode === 'none'
+                    ? false
+                    : this.#originPolicy.auth.has(origin)
+              const headers = {
+                ...(useAuth ? this.#apiHeaders : this.#noAuthHeaders),
+                ...requestHeaders,
+              }
 
-          if (response.status >= 300 && response.status < 400) {
-            const loc = response.headers.get('Location')
-            if (!loc) {
-              throw new Error('[renoun] Missing redirect location')
-            }
-            const nextUrl = new URL(loc, currentUrl).toString()
-            this.#assertAllowed(nextUrl)
-            currentUrl = nextUrl
-            redirects++
-            if (redirects > 2) {
-              throw new Error('[renoun] Too many redirects')
-            }
-            continue
-          }
+              const response = await fetch(currentUrl, {
+                ...requestInit,
+                headers,
+                signal: controller.signal,
+                referrerPolicy: 'no-referrer',
+                redirect: 'manual',
+              })
 
-          // If we already followed too many redirects and still didn't land, fail
-          if (redirects >= 2) {
-            throw new Error('[renoun] Too many redirects')
-          }
+              if (!response) {
+                throw new Error('[renoun] Too many redirects')
+              }
 
-          if (this.#isRateLimited(response)) {
-            let rawMs: number | undefined
-            const retryAfterHeader = response.headers.get('Retry-After')
-            if (retryAfterHeader) {
-              const seconds = Number(retryAfterHeader)
-              if (!Number.isNaN(seconds)) {
-                rawMs = seconds * 1_000
-              } else {
-                const date = Date.parse(retryAfterHeader)
-                if (!Number.isNaN(date)) {
-                  rawMs = Math.max(date - Date.now(), 0)
+              if (response.status >= 300 && response.status < 400) {
+                const location = response.headers.get('Location')
+                if (!location) {
+                  throw new Error('[renoun] Missing redirect location')
                 }
+                const nextUrl = new URL(location, currentUrl).toString()
+                this.#assertAllowed(nextUrl)
+                currentUrl = nextUrl
+                redirects += 1
+                if (redirects > 2) {
+                  throw new Error('[renoun] Too many redirects')
+                }
+                continue
               }
-            }
-            if (rawMs === undefined) {
-              const resetMs = getResetDelayMs(response, this.#host)
-              if (resetMs !== undefined) {
-                rawMs = resetMs
-              }
-            }
-            const retryAfter = rawMs !== undefined ? clamp(rawMs) : undefined
 
-            if (retryAfter !== undefined) {
-              lastFailure = {
-                type: 'rateLimit',
-                status: response.status,
-                retryAfterMs: retryAfter,
+              if (redirects >= 2) {
+                throw new Error('[renoun] Too many redirects')
               }
-              if (!notifiedRateLimit) {
-                const hostName = this.#formatHostName()
-                const waitSeconds = Math.ceil(retryAfter / 1_000)
+
+              if (this.#isRateLimited(response)) {
+                let retryAfterMs = getResetDelayMs(response, this.#host)
+                const retryAfterHeader = response.headers.get('Retry-After')
+                if (retryAfterHeader) {
+                  const seconds = Number(retryAfterHeader)
+                  if (!Number.isNaN(seconds)) {
+                    retryAfterMs = seconds * 1_000
+                  } else {
+                    const date = Date.parse(retryAfterHeader)
+                    if (!Number.isNaN(date)) {
+                      retryAfterMs = Math.max(date - Date.now(), 0)
+                    }
+                  }
+                }
+                const retryAfter =
+                  retryAfterMs !== undefined ? clamp(retryAfterMs) : undefined
+
+                lastFailure = {
+                  type: 'rateLimit',
+                  status: response.status,
+                  retryAfterMs: retryAfter,
+                }
+                throw new GitVirtualFetchRetryError({
+                  failureType: 'rateLimit',
+                  status: response.status,
+                  url: response.url || currentUrl,
+                  retryAfterMs: retryAfter,
+                })
+              }
+
+              if (response.status >= 500 && response.status !== 501) {
+                lastFailure = {
+                  type: 'response',
+                  status: response.status,
+                  url: response.url || currentUrl,
+                }
+                if (attempt >= maxAttempts) {
+                  return response
+                }
+                throw new GitVirtualFetchRetryError({
+                  failureType: 'response',
+                  status: response.status,
+                  url: response.url || currentUrl,
+                })
+              }
+
+              return response
+            }
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              (error.message.includes('Too many redirects') ||
+                error.message.includes('Missing redirect location') ||
+                error.message.includes('Redirected to disallowed origin'))
+            ) {
+              throw error
+            }
+
+            if (error instanceof GitVirtualFetchRetryError) {
+              throw error
+            }
+
+            const mappedError =
+              timedOut && !(error instanceof RenounTimeoutError)
+                ? new RenounTimeoutError(
+                    `Request timed out after ${this.#timeoutMs}ms`,
+                    {
+                      timeoutMs: this.#timeoutMs,
+                      cause: error,
+                    }
+                  )
+                : error
+            lastFailure = { type: 'error', error: mappedError }
+            throw mappedError
+          } finally {
+            clearTimeout(timer)
+            this.#activeFetchAbortControllers.delete(controller)
+          }
+        },
+        {
+          retries: Math.max(0, maxAttempts - 1),
+          minDelayMs: 200,
+          maxDelayMs: 60_000,
+          factor: 2,
+          jitter: 0.35,
+          shouldRetry: (error) => {
+            if (error instanceof GitVirtualFetchRetryError) {
+              return true
+            }
+
+            if (this.#isIgnorableNetworkAbortError(error)) {
+              return false
+            }
+
+            if (
+              error instanceof RenounNetworkError &&
+              error.retryable === false
+            ) {
+              return false
+            }
+
+            if (
+              error instanceof RenounTimeoutError ||
+              isRetryableNetworkTypeError(error)
+            ) {
+              return true
+            }
+
+            return false
+          },
+          getDelayMs: (error, attempt, _defaultDelayMs) => {
+            if (
+              error instanceof GitVirtualFetchRetryError &&
+              error.failureType === 'rateLimit' &&
+              error.retryAfterMs !== undefined
+            ) {
+              return clamp(error.retryAfterMs)
+            }
+
+            return 2 ** (attempt - 1) * 200 + Math.random() * 100
+          },
+          onRetry: ({ error, attempt, delayMs }) => {
+            if (
+              error instanceof GitVirtualFetchRetryError &&
+              error.failureType === 'rateLimit' &&
+              !notifiedRateLimit
+            ) {
+              const hostName = this.#formatHostName()
+              const waitSeconds = Math.ceil(delayMs / 1_000)
+              const waitMessage = waitSeconds
+                ? ` Waiting about ${waitSeconds} seconds before trying again.`
+                : ''
+              console.warn(
+                `[renoun] ${hostName} is rate limiting this request.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
+              )
+              notifiedRateLimit = true
+            }
+
+            if (
+              attempt === 2 &&
+              !notifiedFirstRetryFailure &&
+              lastFailure &&
+              !(lastFailure.type === 'rateLimit' && notifiedRateLimit)
+            ) {
+              const hostName = this.#formatHostName()
+              let details: string
+              if (lastFailure.type === 'rateLimit') {
+                const waitSeconds =
+                  lastFailure.retryAfterMs !== undefined
+                    ? Math.ceil(lastFailure.retryAfterMs / 1_000)
+                    : undefined
                 const waitMessage = waitSeconds
                   ? ` Waiting about ${waitSeconds} seconds before trying again.`
                   : ''
-                console.warn(
-                  `[renoun] ${hostName} is rate limiting this request.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
-                )
-                notifiedRateLimit = true
+                details = `We're still being rate limited by ${hostName}.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
+              } else if (lastFailure.type === 'response') {
+                details = `The host responded with status ${lastFailure.status}.`
+              } else {
+                const message =
+                  lastFailure.error instanceof Error
+                    ? lastFailure.error.message
+                    : 'an unknown error'
+                details = `Encountered ${message} while contacting ${hostName}.`
               }
-              await sleep(retryAfter)
-              // Honor server-advised delay exactly; skip client-side backoff
-              skipBackoff = true
-              break
+              console.warn(`[renoun] Fetch retry is still failing. ${details}`)
+              notifiedFirstRetryFailure = true
             }
-          }
-
-          if (response.status >= 500 && response.status !== 501) {
-            lastFailure = {
-              type: 'response',
-              status: response.status,
-              url: response.url,
-            }
-            if (attempt === maxAttempts - 1) {
-              return response
-            }
-          } else {
-            return response
-          }
-          break
+          },
         }
-      } catch (error) {
-        // Non-retriable redirect/auth errors should surface immediately
-        if (
-          error instanceof Error &&
-          (error.message.includes('Too many redirects') ||
-            error.message.includes('Missing redirect location') ||
-            error.message.includes('Redirected to disallowed origin'))
-        ) {
-          throw error
-        }
-        lastFailure = { type: 'error', error }
-        if (attempt === maxAttempts - 1) {
-          throw error
-        }
-      } finally {
-        clearTimeout(timer)
-        if (this.#currentFetch === controller) {
-          this.#currentFetch = undefined
-        }
-      }
-
-      if (
-        attempt === 1 &&
-        !notifiedFirstRetryFailure &&
-        lastFailure &&
-        !(lastFailure.type === 'rateLimit' && notifiedRateLimit)
-      ) {
-        const hostName = this.#formatHostName()
-        let details: string
-        if (lastFailure.type === 'rateLimit') {
-          const waitSeconds =
-            lastFailure.retryAfterMs !== undefined
-              ? Math.ceil(lastFailure.retryAfterMs / 1_000)
-              : undefined
-          const waitMessage = waitSeconds
-            ? ` Waiting about ${waitSeconds} seconds before trying again.`
+      )
+    } catch (error) {
+      const hostName = this.#formatHostName()
+      if (lastFailure?.type === 'rateLimit') {
+        const waitMessage =
+          lastFailure.retryAfterMs !== undefined
+            ? ` after waiting about ${Math.ceil(lastFailure.retryAfterMs / 1_000)} seconds`
             : ''
-          details = `We're still being rate limited by ${hostName}.${waitMessage} ${RATE_LIMIT_GUIDANCE}`
-        } else if (lastFailure.type === 'response') {
-          details = `The host responded with status ${lastFailure.status}.`
-        } else {
-          const message =
-            lastFailure.error instanceof Error
-              ? lastFailure.error.message
-              : 'an unknown error'
-          details = `Encountered ${message} while contacting ${hostName}.`
-        }
-        console.warn(`[renoun] Fetch retry is still failing. ${details}`)
-        notifiedFirstRetryFailure = true
-      }
-
-      if (skipBackoff) {
-        continue
-      }
-      const backoff = 2 ** attempt * 200 + Math.random() * 100
-      await sleep(backoff)
-    }
-
-    const hostName = this.#formatHostName()
-    if (lastFailure?.type === 'rateLimit') {
-      const waitMessage =
-        lastFailure.retryAfterMs !== undefined
-          ? ` after waiting about ${Math.ceil(lastFailure.retryAfterMs / 1_000)} seconds`
-          : ''
-      throw new Error(
-        `[renoun] Fetch failed because ${hostName} rate limited the request${waitMessage}. ${RATE_LIMIT_GUIDANCE}`
-      )
-    }
-    if (lastFailure?.type === 'response') {
-      const host = (() => {
-        try {
-          return new URL(lastFailure.url).host
-        } catch {
-          return this.#formatHostName()
-        }
-      })()
-      throw new Error(
-        `[renoun] Fetch failed with status ${lastFailure.status} from ${host}.`
-      )
-    }
-    if (lastFailure?.type === 'error') {
-      if (lastFailure.error instanceof Error) {
         throw new Error(
-          `[renoun] Failed to fetch after ${maxAttempts} attempts: ${lastFailure.error.message}`
+          `[renoun] Fetch failed because ${hostName} rate limited the request${waitMessage}. ${RATE_LIMIT_GUIDANCE}`
         )
       }
-      throw new Error(
-        `[renoun] Failed to fetch after ${maxAttempts} attempts due to an unknown error`
-      )
-    }
+      if (lastFailure?.type === 'response') {
+        const host = (() => {
+          try {
+            return new URL(lastFailure.url).host
+          } catch {
+            return this.#formatHostName()
+          }
+        })()
+        throw new Error(
+          `[renoun] Fetch failed with status ${lastFailure.status} from ${host}.`
+        )
+      }
+      if (lastFailure?.type === 'error') {
+        if (this.#isIgnorableNetworkAbortError(lastFailure.error)) {
+          if (lastFailure.error instanceof Error) {
+            throw lastFailure.error
+          }
+          throw new Error('[renoun] Fetch aborted')
+        }
+        if (lastFailure.error instanceof Error) {
+          throw new Error(
+            `[renoun] Failed to fetch after ${maxAttempts} attempts: ${lastFailure.error.message}`
+          )
+        }
+        throw new Error(
+          `[renoun] Failed to fetch after ${maxAttempts} attempts due to an unknown error`
+        )
+      }
 
-    throw new Error(`[renoun] Failed to fetch after ${maxAttempts} attempts`)
+      if (error instanceof Error) {
+        throw error
+      }
+      throw new Error(`[renoun] Failed to fetch after ${maxAttempts} attempts`)
+    }
   }
 
   async #ensureInitialized() {
@@ -1884,10 +2486,7 @@ export class GitVirtualFileSystem
 
     const currentInit = ++this.#initId
     if (!this.#initPromise) {
-      this.#initPromise = this.#loadArchive().catch((error) => {
-        this.#initPromise = undefined
-        throw error
-      })
+      this.#initPromise = this.#createInitPromise()
     }
 
     await this.#initPromise
@@ -1896,6 +2495,21 @@ export class GitVirtualFileSystem
       this.#initPromise = undefined
       await this.#ensureInitialized()
     }
+  }
+
+  #createInitPromise(): Promise<void> {
+    const initPromise = this.#loadArchive().catch((error) => {
+      this.#initPromise = undefined
+      throw error
+    })
+
+    // Prevent unhandled-rejection noise if initialization fails before callers await.
+    // Intentionally attach a secondary observer; awaited callers still receive the
+    // original rejection via `initPromise`.
+    void initPromise.catch(() => {
+      // noop
+    })
+    return initPromise
   }
 
   #formatHostName() {
@@ -1983,7 +2597,7 @@ export class GitVirtualFileSystem
       const discovered = await this.#getDefaultRefFromApi()
       if (discovered) {
         startRef = discovered
-        this.#ref = discovered
+        this.#setResolvedRef(discovered)
       }
     }
 
@@ -2005,7 +2619,7 @@ export class GitVirtualFileSystem
         if (retryResponse.ok) {
           response = retryResponse
           // Update ref so subsequent operations use the working branch
-          this.#ref = candidate
+          this.#setResolvedRef(candidate)
           break
         }
       }
@@ -2092,16 +2706,16 @@ export class GitVirtualFileSystem
   }
 
   #pathMatchesFilters(path: string): boolean {
-    const normalizedPath = path.replace(/^\.\/+/, '')
+    const normalizedPath = trimLeadingDotSlash(path)
     if (this.#include && this.#include.length > 0) {
       const includeHit = this.#include.some((inc) =>
-        normalizedPath.startsWith(inc.replace(/^\/+/, ''))
+        normalizedPath.startsWith(trimLeadingSlashes(inc))
       )
       if (!includeHit) return false
     }
     if (this.#exclude && this.#exclude.length > 0) {
       const excludeHit = this.#exclude.some((exc) =>
-        normalizedPath.startsWith(exc.replace(/^\/+/, ''))
+        normalizedPath.startsWith(trimLeadingSlashes(exc))
       )
       if (excludeHit) return false
     }
@@ -2115,7 +2729,7 @@ export class GitVirtualFileSystem
       const discovered = await this.#getDefaultRefFromApi()
       if (discovered) {
         useRef = discovered
-        this.#ref = discovered
+        this.#setResolvedRef(discovered)
       }
     }
 
@@ -2239,22 +2853,28 @@ export class GitVirtualFileSystem
     files.clear()
     if (toFetch.length === 0) return true
 
-    const concurrency = 8
-    const gate = new Semaphore(Math.min(concurrency, toFetch.length))
-    await Promise.all(
-      toFetch.map(async ({ path }) => {
-        const release = await gate.acquire()
+    await forEachConcurrent(
+      toFetch,
+      {
+        concurrency: Math.min(
+          GIT_VIRTUAL_SUBSET_FETCH_CONCURRENCY,
+          toFetch.length
+        ),
+      },
+      async ({ path }) => {
+        const url = buildUrl(path)
         try {
-          const url = buildUrl(path)
-          this.#assertAllowed(url)
-          const response = await fetch(url, {
-            headers: this.#noAuthHeaders,
-            referrerPolicy: 'no-referrer',
+          const response = await this.#fetchWithRetry(url, {
+            authMode: 'none',
           })
-          if (!response.ok) return
+          if (!response.ok) {
+            return
+          }
           const arrayBuffer = await response.arrayBuffer()
           const buffer = new Uint8Array(arrayBuffer)
-          if (buffer.length > this.#maxFileBytes) return
+          if (buffer.length > this.#maxFileBytes) {
+            return
+          }
           const content: InMemoryFileContent = this.#isBinaryBuffer(buffer)
             ? { kind: 'Binary', content: buffer, encoding: 'binary' }
             : new TextDecoder('utf-8').decode(buffer)
@@ -2263,10 +2883,8 @@ export class GitVirtualFileSystem
           if (!this.#isIgnorableNetworkAbortError(error)) {
             throw error
           }
-        } finally {
-          release()
         }
-      })
+      }
     )
     return this.getFiles().size > 0
   }
@@ -2282,96 +2900,109 @@ export class GitVirtualFileSystem
     discard: () => Promise<void>
   }> {
     const reader = stream.getReader()
-    let buffer = new Uint8Array(0)
     let done = false
-    let rawBytesRead = 0
-    const readFromStream = async (size: number): Promise<Uint8Array> => {
-      while (buffer.length < size && !done) {
-        const { value, done: rdone } = await reader.read()
-        if (rdone) {
-          done = true
-          break
-        }
-        if (value && value.length > 0) {
-          rawBytesRead += value.length
-          if (rawBytesRead > this.#maxTarStreamBytes) {
-            throw new Error('[renoun] Archive exceeds maximum stream size')
+
+    try {
+      let buffer = new Uint8Array(0)
+      let rawBytesRead = 0
+      const readFromStream = async (size: number): Promise<Uint8Array> => {
+        while (buffer.length < size && !done) {
+          const { value, done: rdone } = await reader.read()
+          if (rdone) {
+            done = true
+            break
           }
-          const merged = new Uint8Array(buffer.length + value.length)
-          merged.set(buffer, 0)
-          merged.set(value, buffer.length)
-          buffer = merged
+          if (value && value.length > 0) {
+            rawBytesRead += value.length
+            if (rawBytesRead > this.#maxTarStreamBytes) {
+              throw new Error('[renoun] Archive exceeds maximum stream size')
+            }
+            const merged = new Uint8Array(buffer.length + value.length)
+            merged.set(buffer, 0)
+            merged.set(value, buffer.length)
+            buffer = merged
+          }
+        }
+        const out = buffer.subarray(0, Math.min(size, buffer.length))
+        buffer = buffer.subarray(out.length)
+        return out
+      }
+
+      while (true) {
+        const header = await readFromStream(512)
+        if (header.length === 0 || header.every((byte) => byte === 0)) break
+        if (header.length < 512) throw new Error('[renoun] Truncated tar header')
+        if (!this.#validTarChecksum(header)) {
+          throw new Error('[renoun] Invalid tar header checksum')
+        }
+
+        const size = this.#parseTarSize(header)
+        const typeFlag = header[156]!
+        const name = this.#readTarString(header, 0, 100)
+        const prefix = this.#readTarString(header, 345, 500)
+        const linkname = this.#readTarString(header, 157, 257)
+
+        const dataSize = size
+        const paddedSize = Math.ceil(dataSize / 512) * 512
+        let remaining = dataSize
+
+        let discarded = false
+        const readData = async (maxChunk: number): Promise<Uint8Array> => {
+          if (remaining <= 0) return new Uint8Array(0)
+          const toRead = Math.min(remaining, maxChunk)
+          const chunk = await readFromStream(toRead)
+          remaining -= chunk.length
+          return chunk
+        }
+        const discard = async () => {
+          let toSkip = remaining
+          while (toSkip > 0) {
+            const chunk = await readFromStream(Math.min(64 * 1024, toSkip))
+            if (chunk.length === 0) break
+            toSkip -= chunk.length
+          }
+          remaining = 0
+          let pad = paddedSize - dataSize
+          while (pad > 0) {
+            const chunk = await readFromStream(Math.min(64 * 1024, pad))
+            if (chunk.length === 0) break
+            pad -= chunk.length
+          }
+          discarded = true
+        }
+        const finishPadding = async () => {
+          const pad = paddedSize - dataSize
+          if (pad > 0) await readFromStream(pad)
+        }
+
+        yield {
+          header,
+          size,
+          typeFlag,
+          name,
+          prefix,
+          linkname,
+          readData,
+          discard,
+        }
+
+        // If consumer didn't fully read, ensure we consume padding
+        if (remaining > 0) {
+          await discard()
+        } else if (!discarded) {
+          await finishPadding()
         }
       }
-      const out = buffer.subarray(0, Math.min(size, buffer.length))
-      buffer = buffer.subarray(out.length)
-      return out
-    }
-
-    while (true) {
-      const header = await readFromStream(512)
-      if (header.length === 0 || header.every((byte) => byte === 0)) break
-      if (header.length < 512) throw new Error('[renoun] Truncated tar header')
-      if (!this.#validTarChecksum(header)) {
-        throw new Error('[renoun] Invalid tar header checksum')
-      }
-
-      const size = this.#parseTarSize(header)
-      const typeFlag = header[156]!
-      const name = this.#readTarString(header, 0, 100)
-      const prefix = this.#readTarString(header, 345, 500)
-      const linkname = this.#readTarString(header, 157, 257)
-
-      const dataSize = size
-      const paddedSize = Math.ceil(dataSize / 512) * 512
-      let remaining = dataSize
-
-      let discarded = false
-      const readData = async (maxChunk: number): Promise<Uint8Array> => {
-        if (remaining <= 0) return new Uint8Array(0)
-        const toRead = Math.min(remaining, maxChunk)
-        const chunk = await readFromStream(toRead)
-        remaining -= chunk.length
-        return chunk
-      }
-      const discard = async () => {
-        let toSkip = remaining
-        while (toSkip > 0) {
-          const chunk = await readFromStream(Math.min(64 * 1024, toSkip))
-          if (chunk.length === 0) break
-          toSkip -= chunk.length
+    } finally {
+      if (!done) {
+        try {
+          await reader.cancel()
+        } catch {
+          // Best-effort cancellation during teardown; keep the original extraction
+          // error if one is already in flight.
         }
-        remaining = 0
-        let pad = paddedSize - dataSize
-        while (pad > 0) {
-          const chunk = await readFromStream(Math.min(64 * 1024, pad))
-          if (chunk.length === 0) break
-          pad -= chunk.length
-        }
-        discarded = true
       }
-      const finishPadding = async () => {
-        const pad = paddedSize - dataSize
-        if (pad > 0) await readFromStream(pad)
-      }
-
-      yield {
-        header,
-        size,
-        typeFlag,
-        name,
-        prefix,
-        linkname,
-        readData,
-        discard,
-      }
-
-      // If consumer didn't fully read, ensure we consume padding
-      if (remaining > 0) {
-        await discard()
-      } else if (!discarded) {
-        await finishPadding()
-      }
+      reader.releaseLock()
     }
   }
 
@@ -2580,7 +3211,7 @@ export class GitVirtualFileSystem
     if (!entry) {
       const keys = Array.from(this.getFiles().keys())
       // Fallback try to locate file by suffix (handles tar root folder prefix)
-      const suffix = `/${normalizeSlashes(targetPath).replace(/^\.+\//, '')}`
+      const suffix = `/${trimLeadingDotsSegment(normalizeSlashes(targetPath))}`
       const candidates = keys.filter(
         (key) =>
           key === `./${normalizeSlashes(targetPath)}` || key.endsWith(suffix)
@@ -2620,9 +3251,6 @@ export class GitVirtualFileSystem
       '[renoun] readFileSync is not supported in GitVirtualFileSystem'
     )
   }
-
-  // LRU cache for parsed exports by content hash (shared across calls)
-  #exportParseCache = new LRUMap<string, Map<string, ExportItem>>(500)
 
   /** Get the export history of a repository based on a set of entry files. */
   async *getExportHistory(
@@ -2688,13 +3316,17 @@ export class GitVirtualFileSystem
     const updateMode = options.updateMode ?? 'signature'
 
     // Resolve entry files in parallel
-    const entryRelatives = await Promise.all(
-      uniqueEntrySources.map(async (source) => {
+    const entryRelatives = await mapConcurrent(
+      uniqueEntrySources,
+      {
+        concurrency: GIT_VIRTUAL_ENTRY_RESOLUTION_CONCURRENCY,
+      },
+      async (source) => {
         if (looksLikeFilePath(source)) {
           return [source]
         }
         return this.#inferEntryFiles(source)
-      })
+      }
     )
 
     const uniqueEntryRelatives = Array.from(
@@ -2812,8 +3444,6 @@ export class GitVirtualFileSystem
     const reversedCommits = [...commitHistory].reverse()
 
     // Pre-fetch all file contents in parallel batches
-    // This significantly reduces the number of sequential API calls
-    const FETCH_BATCH_SIZE = 10
     const fileContentCache = new Map<string, string | null>()
 
     // Build list of all (commit, file) pairs we need to fetch
@@ -2824,17 +3454,22 @@ export class GitVirtualFileSystem
       }
     }
 
-    // Fetch in parallel batches with concurrency limit
-    await mapWithLimit(fetchTasks, FETCH_BATCH_SIZE, async (task) => {
-      const cacheKey = `${task.commitSha}:${task.filePath}`
-      if (!fileContentCache.has(cacheKey)) {
-        const content = await this.#fetchFileAtCommit(
-          task.filePath,
-          task.commitSha
-        )
-        fileContentCache.set(cacheKey, content)
+    await forEachConcurrent(
+      fetchTasks,
+      {
+        concurrency: GIT_VIRTUAL_HISTORY_FETCH_CONCURRENCY,
+      },
+      async (task) => {
+        const cacheKey = `${task.commitSha}:${task.filePath}`
+        if (!fileContentCache.has(cacheKey)) {
+          const content = await this.#fetchFileAtCommit(
+            task.filePath,
+            task.commitSha
+          )
+          fileContentCache.set(cacheKey, content)
+        }
       }
-    })
+    )
 
     yield {
       type: 'progress',
@@ -2869,21 +3504,20 @@ export class GitVirtualFileSystem
       const commitExports = new Map<string, Map<string, ExportItem>>()
 
       // Process entry files in parallel
-      const entryResults = await Promise.all(
-        uniqueEntryRelatives.map(async (entryRelative) => {
+      const entryResults = await mapConcurrent(
+        uniqueEntryRelatives,
+        {
+          concurrency: GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY,
+        },
+        async (entryRelative) => {
           const cacheKey = `${commit.sha}:${entryRelative}`
           const content = fileContentCache.get(cacheKey)
           if (!content) return null
 
-          // Use content hash for caching parsed exports
-          const contentHash = this.#hashContent(content)
-          const cachedExports = this.#exportParseCache.get(contentHash)
-
-          if (cachedExports) {
-            return { entryRelative, exports: cachedExports }
-          }
-
-          const rawExports = scanModuleExports(entryRelative, content)
+          const rawExports = await this.#getOrParseExportsForContent(
+            entryRelative,
+            content
+          )
           const entryExportMap = await this.#resolveExportsFromRawOptimized(
             entryRelative,
             rawExports,
@@ -2896,11 +3530,8 @@ export class GitVirtualFileSystem
             fileContentCache
           )
 
-          // Cache the parsed exports
-          this.#exportParseCache.set(contentHash, entryExportMap)
-
           return { entryRelative, exports: entryExportMap }
-        })
+        }
       )
 
       // Merge entry results into commitExports
@@ -2981,6 +3612,47 @@ export class GitVirtualFileSystem
     return createHash('sha1').update(content).digest('hex').substring(0, 16)
   }
 
+  async #getOrParseExportsForContent(
+    filePath: string,
+    content: string
+  ): Promise<Map<string, ExportItem>> {
+    const contentHash = this.#hashContent(content)
+    const parserFlavor = getParserFlavorFromFileName(filePath)
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('blob-exports', {
+      contentHash,
+      parserFlavor,
+    })
+    const cachedPayload =
+      await session.cache.get<Record<string, ExportItem>>(nodeKey)
+    if (cachedPayload !== undefined) {
+      return deserializeExportItemMap(cachedPayload)
+    }
+
+    const payload = await session.cache.getOrCompute<
+      Record<string, ExportItem>
+    >(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: [
+          {
+            name: 'git-virtual-cache',
+            version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep(
+          'git-virtual-cache',
+          GIT_VIRTUAL_HISTORY_CACHE_VERSION
+        )
+        return serializeExportItemMap(scanModuleExports(filePath, content))
+      }
+    )
+    return deserializeExportItemMap(payload)
+  }
+
   async #collectExportsForCurrentSnapshot(
     entryRelatives: string[],
     maxDepth: number,
@@ -2989,8 +3661,12 @@ export class GitVirtualFileSystem
   ): Promise<Map<string, Map<string, ExportItem>>> {
     const currentExports = new Map<string, Map<string, ExportItem>>()
 
-    const results = await Promise.all(
-      entryRelatives.map(async (entryRelative) => {
+    const results = await mapConcurrent(
+      entryRelatives,
+      {
+        concurrency: GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY,
+      },
+      async (entryRelative) => {
         const entryExportMap = await this.#collectExportsFromFile(
           entryRelative,
           0,
@@ -3001,7 +3677,7 @@ export class GitVirtualFileSystem
           new Set()
         )
         return { entryRelative, exports: entryExportMap }
-      })
+      }
     )
 
     for (const result of results) {
@@ -3030,25 +3706,28 @@ export class GitVirtualFileSystem
   ): Promise<Map<string, Map<string, ExportItem>>> {
     const currentExports = new Map<string, Map<string, ExportItem>>()
 
-    const results = await Promise.all(
-      entryRelatives.map(async (entryRelative) => {
+    const results = await mapConcurrent(
+      entryRelatives,
+      {
+        concurrency: GIT_VIRTUAL_ENTRY_EXPORT_CONCURRENCY,
+      },
+      async (entryRelative) => {
         const cacheKey = `${ref}:${entryRelative}`
         let content = fileContentCache.get(cacheKey)
         if (content === undefined) {
-          content = await this.#fetchFileAtCommit(entryRelative, ref)
+          content = await this.#fetchFileAtCommit(entryRelative, ref, {
+            persist: false,
+          })
           fileContentCache.set(cacheKey, content)
         }
         if (!content) {
           return { exports: new Map<string, ExportItem>() }
         }
 
-        const contentHash = this.#hashContent(content)
-        const cachedExports = this.#exportParseCache.get(contentHash)
-        if (cachedExports) {
-          return { exports: cachedExports }
-        }
-
-        const rawExports = scanModuleExports(entryRelative, content)
+        const rawExports = await this.#getOrParseExportsForContent(
+          entryRelative,
+          content
+        )
         const entryExportMap = await this.#resolveExportsFromRawOptimized(
           entryRelative,
           rawExports,
@@ -3060,9 +3739,8 @@ export class GitVirtualFileSystem
           new Set(),
           fileContentCache
         )
-        this.#exportParseCache.set(contentHash, entryExportMap)
         return { exports: entryExportMap }
-      })
+      }
     )
 
     for (const result of results) {
@@ -3371,11 +4049,15 @@ export class GitVirtualFileSystem
       ...new Set(allExternalExports.map(([, , fromPath]) => fromPath)),
     ]
 
-    const resolutionResults = await Promise.all(
-      uniqueFromPaths.map(async (fromPath) => ({
+    const resolutionResults = await mapConcurrent(
+      uniqueFromPaths,
+      {
+        concurrency: GIT_VIRTUAL_MODULE_RESOLUTION_CONCURRENCY,
+      },
+      async (fromPath) => ({
         fromPath,
         resolved: await this.#resolveModulePath(baseDirectory, fromPath),
-      }))
+      })
     )
 
     const resolutionMap = new Map<string, string | null>()
@@ -3408,8 +4090,12 @@ export class GitVirtualFileSystem
     )
 
     // Fetch and parse in parallel
-    const collectionResults = await Promise.all(
-      pathsToCollect.map(async (resolved) => {
+    const collectionResults = await mapConcurrent(
+      pathsToCollect,
+      {
+        concurrency: GIT_VIRTUAL_CHILD_EXPORT_COLLECTION_CONCURRENCY,
+      },
+      async (resolved) => {
         const cacheKey = `${commitSha}:${resolved}`
         let content = fileContentCache.get(cacheKey)
 
@@ -3421,14 +4107,10 @@ export class GitVirtualFileSystem
         if (!content)
           return { resolved, exports: new Map<string, ExportItem>() }
 
-        // Check content cache
-        const contentHash = this.#hashContent(content)
-        const cachedExports = this.#exportParseCache.get(contentHash)
-        if (cachedExports) {
-          return { resolved, exports: cachedExports }
-        }
-
-        const childRawExports = scanModuleExports(resolved, content)
+        const childRawExports = await this.#getOrParseExportsForContent(
+          resolved,
+          content
+        )
         const childExports = await this.#resolveExportsFromRawOptimized(
           resolved,
           childRawExports,
@@ -3441,9 +4123,8 @@ export class GitVirtualFileSystem
           fileContentCache
         )
 
-        this.#exportParseCache.set(contentHash, childExports)
         return { resolved, exports: childExports }
-      })
+      }
     )
 
     for (const { resolved, exports: childExports } of collectionResults) {
@@ -3548,14 +4229,10 @@ export class GitVirtualFileSystem
       return results
     }
 
-    // Check content cache first
-    const contentHash = this.#hashContent(content)
-    const cachedExports = this.#exportParseCache.get(contentHash)
-    if (cachedExports) {
-      return cachedExports
-    }
-
-    const rawExports = scanModuleExports(filePath, content)
+    const rawExports = await this.#getOrParseExportsForContent(
+      filePath,
+      content
+    )
 
     const exportMap = await this.#resolveExportsFromRaw(
       filePath,
@@ -3567,9 +4244,6 @@ export class GitVirtualFileSystem
       parseWarnings,
       visitingBranch
     )
-
-    // Cache the result
-    this.#exportParseCache.set(contentHash, exportMap)
 
     return exportMap
   }
@@ -3626,11 +4300,15 @@ export class GitVirtualFileSystem
       ...new Set(allExternalExports.map(([, , fromPath]) => fromPath)),
     ]
 
-    const resolutionResults = await Promise.all(
-      uniqueFromPaths.map(async (fromPath) => ({
+    const resolutionResults = await mapConcurrent(
+      uniqueFromPaths,
+      {
+        concurrency: GIT_VIRTUAL_MODULE_RESOLUTION_CONCURRENCY,
+      },
+      async (fromPath) => ({
         fromPath,
         resolved: await this.#resolveModulePath(baseDirectory, fromPath),
-      }))
+      })
     )
 
     const resolutionMap = new Map<string, string | null>()
@@ -3663,8 +4341,12 @@ export class GitVirtualFileSystem
     )
 
     // Fetch and parse in parallel
-    const collectionResults = await Promise.all(
-      pathsToCollect.map(async (resolved) => {
+    const collectionResults = await mapConcurrent(
+      pathsToCollect,
+      {
+        concurrency: GIT_VIRTUAL_CHILD_EXPORT_COLLECTION_CONCURRENCY,
+      },
+      async (resolved) => {
         let content: string | null = null
         try {
           if (commitSha) {
@@ -3678,14 +4360,10 @@ export class GitVirtualFileSystem
         if (!content)
           return { resolved, exports: new Map<string, ExportItem>() }
 
-        // Check content cache
-        const contentHash = this.#hashContent(content)
-        const cachedExports = this.#exportParseCache.get(contentHash)
-        if (cachedExports) {
-          return { resolved, exports: cachedExports }
-        }
-
-        const childRawExports = scanModuleExports(resolved, content)
+        const childRawExports = await this.#getOrParseExportsForContent(
+          resolved,
+          content
+        )
         const childExports = await this.#resolveExportsFromRaw(
           resolved,
           childRawExports,
@@ -3697,9 +4375,8 @@ export class GitVirtualFileSystem
           newVisiting
         )
 
-        this.#exportParseCache.set(contentHash, childExports)
         return { resolved, exports: childExports }
-      })
+      }
     )
 
     for (const { resolved, exports: childExports } of collectionResults) {
@@ -4088,6 +4765,48 @@ export class GitVirtualFileSystem
     limit?: number,
     ref = this.#ref
   ): Promise<Array<{ sha: string; unix: number; release?: string }>> {
+    const normalizedPaths = Array.from(
+      new Set(paths.map((path) => normalizePath(path)).filter(Boolean))
+    ).sort()
+    const { identity: refIdentity, deterministic } =
+      await this.#getRefCacheIdentity(ref)
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('commit-history', {
+      refIdentity,
+      paths: normalizedPaths,
+      limit: limit ?? null,
+    })
+
+    return session.cache.getOrCompute(
+      nodeKey,
+      {
+        persist: deterministic,
+        constDeps: [
+          {
+            name: 'git-virtual-cache',
+            version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+          },
+        ],
+      },
+      async (ctx) => {
+        ctx.recordConstDep(
+          'git-virtual-cache',
+          GIT_VIRTUAL_HISTORY_CACHE_VERSION
+        )
+        return this.#getCommitHistoryForPathsUncached(
+          normalizedPaths,
+          limit,
+          ref
+        )
+      }
+    )
+  }
+
+  async #getCommitHistoryForPathsUncached(
+    paths: string[],
+    limit?: number,
+    ref = this.#ref
+  ): Promise<Array<{ sha: string; unix: number; release?: string }>> {
     const commits: Array<{ sha: string; unix: number; release?: string }> = []
 
     switch (this.#host) {
@@ -4177,42 +4896,118 @@ export class GitVirtualFileSystem
 
   async #fetchFileAtCommit(
     filePath: string,
-    commitSha: string
-  ): Promise<string | null> {
+    commitSha: string,
+    options: { persist?: boolean } = {}
+  ) {
+    const normalizedCommit = commitSha.trim()
+    const shouldPersist = options.persist ?? isFullCommitSha(normalizedCommit)
+    const normalizedPath = normalizePath(filePath)
+    const session = this.#getSession()
+    const nodeKey = this.#createPersistentCacheNodeKey('file-at-commit', {
+      commitSha: normalizedCommit,
+      path: normalizedPath,
+    })
+
     try {
-      switch (this.#host) {
-        case 'github': {
-          if (!this.#ownerEncoded || !this.#repoEncoded) return null
-          const url = `https://raw.githubusercontent.com/${this.#ownerEncoded}/${this.#repoEncoded}/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
-          const response = await fetch(url, {
-            headers: this.#noAuthHeaders,
-            referrerPolicy: 'no-referrer',
-          })
-          if (!response.ok) return null
-          return await response.text()
+      return await session.cache.getOrCompute(
+        nodeKey,
+        {
+          persist: shouldPersist,
+          constDeps: [
+            {
+              name: 'git-virtual-cache',
+              version: GIT_VIRTUAL_HISTORY_CACHE_VERSION,
+            },
+          ],
+        },
+        async (ctx) => {
+          ctx.recordConstDep(
+            'git-virtual-cache',
+            GIT_VIRTUAL_HISTORY_CACHE_VERSION
+          )
+          return this.#fetchFileAtCommitUncached(
+            normalizedPath,
+            normalizedCommit
+          )
         }
-        case 'gitlab': {
-          const project = encodeURIComponent(this.#repository)
-          const encodedPath = encodeURIComponent(filePath)
-          const url = `${this.#apiBaseUrl}/projects/${project}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(commitSha)}`
-          const response = await this.#fetchWithRetry(url)
-          if (!response.ok) return null
-          return await response.text()
-        }
-        case 'bitbucket': {
-          if (!this.#ownerEncoded || !this.#repoEncoded) return null
-          const url = `https://bitbucket.org/${this.#ownerEncoded}/${this.#repoEncoded}/raw/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
-          const response = await fetch(url, {
-            headers: this.#noAuthHeaders,
-            referrerPolicy: 'no-referrer',
-          })
-          if (!response.ok) return null
-          return await response.text()
-        }
-      }
+      )
     } catch {
       return null
     }
+  }
+
+  async #fetchFileAtCommitUncached(
+    filePath: string,
+    commitSha: string
+  ): Promise<string | null> {
+    switch (this.#host) {
+      case 'github': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return null
+        const url = `https://raw.githubusercontent.com/${this.#ownerEncoded}/${this.#repoEncoded}/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
+        const response = await this.#fetchWithRetry(url, {
+          authMode: 'none',
+        })
+        if (!response.ok) {
+          if (isMissingResourceStatus(response.status)) {
+            return null
+          }
+
+          if (isTransientHttpStatus(response.status)) {
+            throw new Error(
+              `[renoun] Failed to fetch file blob with status ${response.status}.`
+            )
+          }
+
+          return null
+        }
+
+        return await response.text()
+      }
+      case 'gitlab': {
+        const project = encodeURIComponent(this.#repository)
+        const encodedPath = encodeURIComponent(filePath)
+        const url = `${this.#apiBaseUrl}/projects/${project}/repository/files/${encodedPath}/raw?ref=${encodeURIComponent(commitSha)}`
+        const response = await this.#fetchWithRetry(url)
+        if (!response.ok) {
+          if (isMissingResourceStatus(response.status)) {
+            return null
+          }
+
+          if (isTransientHttpStatus(response.status)) {
+            throw new Error(
+              `[renoun] Failed to fetch file blob with status ${response.status}.`
+            )
+          }
+
+          return null
+        }
+
+        return await response.text()
+      }
+      case 'bitbucket': {
+        if (!this.#ownerEncoded || !this.#repoEncoded) return null
+        const url = `https://bitbucket.org/${this.#ownerEncoded}/${this.#repoEncoded}/raw/${encodeURIComponent(commitSha)}/${encodeURIComponent(filePath)}`
+        const response = await this.#fetchWithRetry(url, {
+          authMode: 'none',
+        })
+        if (!response.ok) {
+          if (isMissingResourceStatus(response.status)) {
+            return null
+          }
+
+          if (isTransientHttpStatus(response.status)) {
+            throw new Error(
+              `[renoun] Failed to fetch file blob with status ${response.status}.`
+            )
+          }
+
+          return null
+        }
+
+        return await response.text()
+      }
+    }
+
     return null
   }
 
@@ -4223,4 +5018,42 @@ export class GitVirtualFileSystem
   override isFilePathExcludedFromTsConfig(): boolean {
     return false
   }
+}
+
+function serializeExportItemMap(
+  map: Map<string, ExportItem>
+): Record<string, ExportItem> {
+  const record: Record<string, ExportItem> = Object.create(null)
+
+  for (const [name, item] of map) {
+    record[name] = item
+  }
+
+  return record
+}
+
+function deserializeExportItemMap(
+  record: Record<string, ExportItem>
+): Map<string, ExportItem> {
+  return new Map<string, ExportItem>(Object.entries(record))
+}
+
+function isTransientHttpStatus(status: number): boolean {
+  return (
+    status === 408 ||
+    status === 425 ||
+    status === 429 ||
+    (status >= 500 && status !== 501)
+  )
+}
+
+function isMissingResourceStatus(status: number): boolean {
+  return status === 404 || status === 410 || status === 422
+}
+
+function isFullCommitSha(value: string): boolean {
+  const normalized = value.trim()
+  return (
+    /^[0-9a-f]{40}$/i.test(normalized) || /^[0-9a-f]{64}$/i.test(normalized)
+  )
 }

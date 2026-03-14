@@ -1,5 +1,5 @@
 import { getTsMorph } from './ts-morph.ts'
-import type { Node, Project, SyntaxKind } from './ts-morph.ts'
+import type { Node, Project, SourceFile, SyntaxKind } from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 
@@ -7,6 +7,12 @@ import { getDebugLogger } from './debug.ts'
 import { getDeclarationLocation } from './get-declaration-location.ts'
 import { getExportPosition } from './get-export-position.ts'
 import { getJsDocMetadata } from './get-js-doc-metadata.ts'
+import { hashString } from './stable-serialization.ts'
+import {
+  emitTelemetryCounter,
+  emitTelemetryEvent,
+  emitTelemetryHistogram,
+} from './telemetry.ts'
 
 export interface ModuleExport {
   name: string
@@ -32,107 +38,151 @@ export function getFileExports(
   filePath: string,
   project: Project
 ): ModuleExport[] {
-  return getDebugLogger().trackOperation(
-    'get-file-exports',
-    () => {
-      let sourceFile = project.getSourceFile(filePath)
+  const startedAt = performance.now()
+  const fields = {
+    filePathHash: hashString(filePath).slice(0, 12),
+  }
 
-      if (!sourceFile) {
-        const addStart = performance.now()
-        sourceFile = project.addSourceFileAtPath(filePath)
+  try {
+    const exports = getDebugLogger().trackOperation(
+      'get-file-exports',
+      () => {
+        const sourceFile = ensureProjectSourceFile(filePath, project)
 
-        getDebugLogger().debug('Added source file to project', () => ({
+        const processStart = performance.now()
+        const exportDeclarations: ModuleExport[] = []
+        const exportedDeclarations = sourceFile.getExportedDeclarations()
+        const totalDeclarations = exportedDeclarations.size
+
+        getDebugLogger().debug('Processing exported declarations', () => ({
           operation: 'get-file-exports',
           data: {
             filePath,
-            wasAdded: true,
-            duration: (performance.now() - addStart).toFixed(1),
-            projectFiles: project.getSourceFiles().length,
+            totalDeclarations,
+            hasSourceFile: Boolean(sourceFile),
+            duration: (performance.now() - processStart).toFixed(1),
           },
         }))
-      }
 
-      const processStart = performance.now()
-      const exportDeclarations: ModuleExport[] = []
-      const exportedDeclarations = sourceFile.getExportedDeclarations()
-      const totalDeclarations = exportedDeclarations.size
+        for (const [name, declarations] of exportedDeclarations) {
+          const declaration = selectPreferredDeclaration(declarations)
+          let node: Node = declaration
 
-      getDebugLogger().debug('Processing exported declarations', () => ({
-        operation: 'get-file-exports',
-        data: {
-          filePath,
-          totalDeclarations,
-          hasSourceFile: Boolean(sourceFile),
-          duration: (performance.now() - processStart).toFixed(1),
-        },
-      }))
-
-      for (const [name, declarations] of exportedDeclarations) {
-        const declaration = selectPreferredDeclaration(declarations)
-        let node: Node = declaration
-
-        // export { foo } = bar
-        const exportAssignment = node.getFirstAncestorByKind(
-          tsMorph.SyntaxKind.ExportAssignment
-        )
-        if (exportAssignment && !exportAssignment.isExportEquals()) {
-          node = exportAssignment
-        }
-
-        // export const foo = 'bar'
-        if (tsMorph.Node.isVariableStatement(node)) {
-          const declarations = node.getDeclarationList().getDeclarations()
-
-          if (declarations.length > 1) {
-            throw new Error(
-              `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
-            )
-          }
-
-          node = declarations.at(0)!
-        }
-
-        // export { x } from './y'
-        if (tsMorph.Node.isExportSpecifier(node)) {
-          const exportDeclaration = node.getFirstAncestorByKind(
-            tsMorph.SyntaxKind.ExportDeclaration
+          const exportAssignment = node.getFirstAncestorByKind(
+            tsMorph.SyntaxKind.ExportAssignment
           )
-          if (exportDeclaration) {
-            node = exportDeclaration
+          if (exportAssignment && !exportAssignment.isExportEquals()) {
+            node = exportAssignment
           }
-        }
 
-        if (!exportableKinds.has(node.getKind())) {
-          continue
-        }
+          if (tsMorph.Node.isVariableStatement(node)) {
+            const declarations = node.getDeclarationList().getDeclarations()
 
-        const fileExport: ModuleExport = {
-          name,
-          path: node.getSourceFile().getFilePath(),
-          position: getExportPosition(node),
-          kind: node.getKind(),
-        }
-        let insertAt = exportDeclarations.length
+            if (declarations.length > 1) {
+              throw new Error(
+                `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
+              )
+            }
 
-        for (let index = 0; index < insertAt; index++) {
-          const existing = exportDeclarations[index]
-          const isPathBefore = fileExport.path.localeCompare(existing.path) < 0
-          const isSamePath = fileExport.path === existing.path
-          const isPositionBefore = fileExport.position < existing.position
-
-          if (isPathBefore || (isSamePath && isPositionBefore)) {
-            insertAt = index
-            break
+            node = declarations.at(0)!
           }
+
+          if (tsMorph.Node.isExportSpecifier(node)) {
+            const exportDeclaration = node.getFirstAncestorByKind(
+              tsMorph.SyntaxKind.ExportDeclaration
+            )
+            if (exportDeclaration) {
+              node = exportDeclaration
+            }
+          }
+
+          if (!exportableKinds.has(node.getKind())) {
+            continue
+          }
+
+          const fileExport: ModuleExport = {
+            name,
+            path: node.getSourceFile().getFilePath(),
+            position: getExportPosition(node),
+            kind: node.getKind(),
+          }
+          let insertAt = exportDeclarations.length
+
+          for (let index = 0; index < insertAt; index++) {
+            const existing = exportDeclarations[index]
+            const isPathBefore =
+              fileExport.path.localeCompare(existing.path) < 0
+            const isSamePath = fileExport.path === existing.path
+            const isPositionBefore = fileExport.position < existing.position
+
+            if (isPathBefore || (isSamePath && isPositionBefore)) {
+              insertAt = index
+              break
+            }
+          }
+
+          exportDeclarations.splice(insertAt, 0, fileExport)
         }
 
-        exportDeclarations.splice(insertAt, 0, fileExport)
-      }
+        return exportDeclarations
+      },
+      { data: { filePath } }
+    ) as ModuleExport[]
 
-      return exportDeclarations
-    },
-    { data: { filePath } }
-  ) as ModuleExport[]
+    const durationMs = performance.now() - startedAt
+    emitTelemetryHistogram({
+      name: 'renoun.analysis.file_exports_ms',
+      value: durationMs,
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_exports',
+      fields: {
+        ...fields,
+        durationMs,
+        exportCount: exports.length,
+      },
+    })
+
+    return exports
+  } catch (error) {
+    const durationMs = performance.now() - startedAt
+    emitTelemetryCounter({
+      name: 'renoun.analysis.file_exports_error_count',
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_exports_error',
+      fields: {
+        ...fields,
+        durationMs,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      },
+    })
+    throw error
+  }
+}
+
+export function ensureProjectSourceFile(
+  filePath: string,
+  project: Project
+): SourceFile {
+  let sourceFile = project.getSourceFile(filePath)
+
+  if (!sourceFile) {
+    const addStart = performance.now()
+    sourceFile = project.addSourceFileAtPath(filePath)
+
+    getDebugLogger().debug('Added source file to project', () => ({
+      operation: 'ensure-project-source-file',
+      data: {
+        filePath,
+        wasAdded: true,
+        duration: (performance.now() - addStart).toFixed(1),
+        projectFiles: project.getSourceFiles().length,
+      },
+    }))
+  }
+
+  return sourceFile
 }
 
 /**
@@ -190,10 +240,7 @@ export function getFileExportDeclaration(
   return getDebugLogger().trackOperation(
     'get-file-export-declaration',
     () => {
-      const sourceFile = project.getSourceFile(filePath)
-      if (!sourceFile) {
-        throw new Error(`[renoun] Source file not found: ${filePath}`)
-      }
+      const sourceFile = ensureProjectSourceFile(filePath, project)
 
       const declaration = sourceFile.getDescendantAtPos(position)
       if (!declaration) {
@@ -245,51 +292,98 @@ export async function getFileExportMetadata(
   kind: SyntaxKind,
   project: Project
 ) {
-  return getDebugLogger().trackOperation(
-    'get-file-export-metadata',
-    async () => {
-      const sourceFile = project.getSourceFile(filePath)
+  const startedAt = performance.now()
+  const fields = {
+    filePathHash: hashString(filePath).slice(0, 12),
+    kind: tsMorph.SyntaxKind[kind],
+  }
 
-      if (!sourceFile) {
-        throw new Error(`[renoun] Source file not found: ${filePath}`)
-      }
+  try {
+    const metadata = await getDebugLogger().trackOperation(
+      'get-file-export-metadata',
+      async () => {
+        const sourceFile = ensureProjectSourceFile(filePath, project)
 
-      const exportDeclaration = getFileExportDeclaration(
-        filePath,
-        position,
-        kind,
-        project
-      )
-
-      const metadata = {
-        name: getName(
-          sourceFile.getBaseNameWithoutExtension(),
-          name,
-          exportDeclaration
-        ),
-        environment: getEnvironment(exportDeclaration),
-        jsDocMetadata: getJsDocMetadata(exportDeclaration),
-        location: getDeclarationLocation(exportDeclaration),
-      }
-
-      getDebugLogger().info('Export metadata retrieved', () => ({
-        operation: 'get-file-export-metadata',
-        data: {
+        const exportDeclaration = getFileExportDeclaration(
           filePath,
-          exportName: name,
-          resolvedName: metadata.name,
-          environment: metadata.environment,
-          hasJsDoc: !!metadata.jsDocMetadata,
-          hasLocation: !!metadata.location,
-        },
-      }))
+          position,
+          kind,
+          project
+        )
 
-      return metadata
-    },
-    {
-      data: { name, filePath, position, kind: tsMorph.SyntaxKind[kind] },
-    }
-  )
+        const metadata = {
+          name: getName(
+            sourceFile.getBaseNameWithoutExtension(),
+            name,
+            exportDeclaration
+          ),
+          environment: getEnvironment(exportDeclaration),
+          jsDocMetadata: getJsDocMetadata(exportDeclaration),
+          location: getDeclarationLocation(exportDeclaration),
+        }
+
+        getDebugLogger().info('Export metadata retrieved', () => ({
+          operation: 'get-file-export-metadata',
+          data: {
+            filePath,
+            exportName: name,
+            resolvedName: metadata.name,
+            environment: metadata.environment,
+            hasJsDoc: !!metadata.jsDocMetadata,
+            hasLocation: !!metadata.location,
+          },
+        }))
+
+        return metadata
+      },
+      {
+        data: { name, filePath, position, kind: tsMorph.SyntaxKind[kind] },
+      }
+    )
+
+    const durationMs = performance.now() - startedAt
+    emitTelemetryHistogram({
+      name: 'renoun.analysis.file_export_metadata_ms',
+      value: durationMs,
+      tags: {
+        kind: fields.kind,
+      },
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_export_metadata',
+      tags: {
+        kind: fields.kind,
+      },
+      fields: {
+        ...fields,
+        durationMs,
+        hasJsDoc: Boolean(metadata.jsDocMetadata),
+        hasLocation: Boolean(metadata.location),
+      },
+    })
+
+    return metadata
+  } catch (error) {
+    const durationMs = performance.now() - startedAt
+    emitTelemetryCounter({
+      name: 'renoun.analysis.file_export_metadata_error_count',
+      tags: {
+        kind: fields.kind,
+      },
+    })
+    emitTelemetryEvent({
+      name: 'renoun.analysis.file_export_metadata_error',
+      tags: {
+        kind: fields.kind,
+      },
+      fields: {
+        ...fields,
+        durationMs,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      },
+    })
+    throw error
+  }
 }
 
 /** Get the name of an export declaration, accounting for default exports. */

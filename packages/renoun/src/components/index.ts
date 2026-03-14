@@ -51,4 +51,7 @@ export {
   type NavigationComponents,
 } from './Navigation.ts'
 export { Script } from './Script.ts'
-export { Sponsors } from './Sponsors.ts'
+export {
+  Sponsors,
+  type SponsorsProps,
+} from './Sponsors.ts'

@@ -2,15 +2,21 @@ import { Minimatch } from 'minimatch'
 import { createSlug } from '@renoun/mdx/utils'
 
 import { formatNameAsTitle } from '../utils/format-name-as-title.ts'
+import { reportBestEffortError } from '../utils/best-effort.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
+import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 import {
   directoryName,
   joinPaths,
+  normalizePathKey,
   normalizeSlashes,
+  normalizeWorkspaceRelativePath as normalizeWorkspaceRelative,
   resolveSchemePath,
   trimTrailingSlashes,
   type PathLike,
 } from '../utils/path.ts'
+import { FS_STRUCTURE_CACHE_VERSION, createCacheNodeKey } from './cache-key.ts'
+import type { Cache } from './Cache.ts'
 import type { FileSystem } from './FileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
@@ -20,6 +26,7 @@ import {
   parsePackageManagerField,
 } from './PackageManager.ts'
 import { Package } from './Package.ts'
+import { Session } from './Session.ts'
 import type {
   DirectoryStructure,
   FileStructure,
@@ -81,12 +88,8 @@ function safeReadDirectory(fileSystem: FileSystem, path: string) {
   }
 }
 
-function normalizeWorkspaceRelative(path: string) {
-  const normalized = normalizeSlashes(path)
-  if (!normalized || normalized === '.' || normalized === './') {
-    return ''
-  }
-  return normalized.replace(/^\.\/+/, '')
+function createStructureNodeKey(namespace: string, payload: unknown) {
+  return createCacheNodeKey(namespace, payload)
 }
 
 function parsePnpmWorkspacePackages(source: string) {
@@ -126,9 +129,14 @@ function parsePnpmWorkspacePackages(source: string) {
   return packages
 }
 
-function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
+function buildWorkspacePatternsWithSources(
+  fileSystem: FileSystem,
+  workspaceRoot: string
+): { patterns: string[]; manifestPaths: string[] } {
   const patterns: string[] = []
+  const manifestPaths = new Set<string>()
   const pnpmWorkspacePath = joinPaths(workspaceRoot, 'pnpm-workspace.yaml')
+  manifestPaths.add(pnpmWorkspacePath)
 
   if (safeFileExistsSync(fileSystem, pnpmWorkspacePath)) {
     const manifest = readTextFile(fileSystem, pnpmWorkspacePath)
@@ -136,6 +144,7 @@ function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
   }
 
   const workspacePackageJsonPath = joinPaths(workspaceRoot, 'package.json')
+  manifestPaths.add(workspacePackageJsonPath)
 
   if (safeFileExistsSync(fileSystem, workspacePackageJsonPath)) {
     const packageJson = readJsonFile<PackageJson>(
@@ -152,9 +161,16 @@ function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
     }
   }
 
-  return patterns
-    .map((pattern) => pattern.trim())
-    .filter((pattern) => pattern && !pattern.startsWith('!'))
+  return {
+    patterns: patterns
+      .map((pattern) => pattern.trim())
+      .filter((pattern) => pattern && !pattern.startsWith('!')),
+    manifestPaths: Array.from(manifestPaths),
+  }
+}
+
+function buildWorkspacePatterns(fileSystem: FileSystem, workspaceRoot: string) {
+  return buildWorkspacePatternsWithSources(fileSystem, workspaceRoot).patterns
 }
 
 function getWorkspacePatternBase(pattern: string) {
@@ -185,18 +201,59 @@ function buildWorkspaceSearchRoots(patterns: string[]) {
   return Array.from(bases)
 }
 
+interface WorkspacePackageResolution {
+  packageEntries: Array<{ name?: string; path: string }>
+  scannedDirectories: string[]
+  workspaceManifestPaths: string[]
+  packageManifestPaths: string[]
+}
+
+interface WorkspacePackageResolutionCacheEntry {
+  resolution: WorkspacePackageResolution
+  dependencySignatures: Map<string, string>
+}
+
+const workspacePackageResolutionCacheByFileSystem = new WeakMap<
+  FileSystem,
+  Map<string, WorkspacePackageResolutionCacheEntry>
+>()
+
+function getWorkspacePackageResolutionSharedCache(
+  fileSystem: FileSystem
+): Map<string, WorkspacePackageResolutionCacheEntry> {
+  const existing = workspacePackageResolutionCacheByFileSystem.get(fileSystem)
+  if (existing) {
+    return existing
+  }
+
+  const created = new Map<string, WorkspacePackageResolutionCacheEntry>()
+  workspacePackageResolutionCacheByFileSystem.set(fileSystem, created)
+  return created
+}
+
 export class Workspace {
   #fileSystem: FileSystem
   #workspaceRoot: string
   #workspaceRelativeRoot: string
+  #cache?: Cache
+  #workspacePackageResolutionCache?: WorkspacePackageResolutionCacheEntry
 
   constructor(
-    options: { fileSystem?: FileSystem; rootDirectory?: PathLike } = {}
+    options: {
+      fileSystem?: FileSystem
+      rootDirectory?: PathLike
+      cache?: Cache
+    } = {}
   ) {
-    this.#fileSystem = options.fileSystem ?? new NodeFileSystem()
+    this.#fileSystem =
+      options.fileSystem ??
+      new NodeFileSystem({
+        outputDirectory: options.cache?.outputDirectory,
+      })
     const resolvedRoot = normalizeSlashes(
       resolveSchemePath(options.rootDirectory ?? getRootDirectory())
     )
+    this.#cache = options.cache
 
     this.#workspaceRoot = resolvedRoot.startsWith('/')
       ? resolvedRoot
@@ -255,72 +312,286 @@ export class Workspace {
     return this.getPackages().find((pkg) => pkg.name === name)
   }
 
+  /** @internal */
+  getStructureCacheKey() {
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
+
+    return createStructureNodeKey('structure.workspace', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      workspaceRoot: normalizePathKey(this.#workspaceRoot),
+    })
+  }
+
   async getStructure(): Promise<
     Array<
       WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
     >
   > {
-    let workspaceName = 'workspace'
-    const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+    const session = Session.for(this.#fileSystem, undefined, this.#cache)
+    const nodeKey = this.getStructureCacheKey()
 
-    if (rootPackageJsonPath) {
-      try {
-        const packageJson = readJsonFile<{ name?: string }>(
-          this.#fileSystem,
-          rootPackageJsonPath,
-          `package.json at "${rootPackageJsonPath}"`
-        )
-        if (packageJson?.name) {
-          workspaceName = packageJson.name
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const packageResolution = this.#resolveWorkspacePackages()
+
+        for (const workspaceManifestPath of packageResolution.workspaceManifestPaths) {
+          await ctx.recordFileDep(workspaceManifestPath)
         }
-      } catch {
-        // fall back to default workspace name on read/parse errors
+        for (const packageManagerDependencyPath of this.#getPackageManagerDependencyPaths()) {
+          await ctx.recordFileDep(packageManagerDependencyPath)
+        }
+        for (const scannedDirectory of packageResolution.scannedDirectories) {
+          await ctx.recordDirectoryDep(scannedDirectory)
+        }
+
+        const rootPackageJsonPath = this.#findWorkspacePath('package.json')
+        const workspacePackageJsonPath =
+          rootPackageJsonPath ??
+          this.#resolveWorkspacePath('package.json', true)
+        if (
+          !packageResolution.workspaceManifestPaths.includes(
+            workspacePackageJsonPath
+          )
+        ) {
+          await ctx.recordFileDep(workspacePackageJsonPath)
+        }
+
+        let workspaceName = 'workspace'
+
+        if (rootPackageJsonPath) {
+          try {
+            const packageJson = readJsonFile<{ name?: string }>(
+              this.#fileSystem,
+              rootPackageJsonPath,
+              `package.json at "${rootPackageJsonPath}"`
+            )
+            if (packageJson?.name) {
+              workspaceName = packageJson.name
+            }
+          } catch (error) {
+            reportBestEffortError('file-system/workspace', error)
+          }
+        }
+
+        const workspaceSlug = createSlug(workspaceName, 'kebab')
+
+        const structures: Array<
+          | WorkspaceStructure
+          | PackageStructure
+          | DirectoryStructure
+          | FileStructure
+        > = [
+          {
+            kind: 'Workspace',
+            name: workspaceName,
+            title: formatNameAsTitle(workspaceName),
+            slug: workspaceSlug,
+            path: '/',
+            packageManager: this.getPackageManager(),
+          },
+        ]
+
+        for (const pkg of this.#createPackages(
+          packageResolution.packageEntries
+        )) {
+          const packageStructures = await pkg.getStructure()
+          structures.push(...packageStructures)
+          await ctx.recordNodeDep(pkg.getStructureCacheKey())
+        }
+
+        return structures
       }
-    }
-
-    const workspaceSlug = createSlug(workspaceName, 'kebab')
-
-    const structures: Array<
-      WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
-    > = [
-      {
-        kind: 'Workspace',
-        name: workspaceName,
-        title: formatNameAsTitle(workspaceName),
-        slug: workspaceSlug,
-        path: '/',
-        packageManager: this.getPackageManager(),
-      },
-    ]
-
-    for (const pkg of this.getPackages()) {
-      const packageStructures = await pkg.getStructure()
-      structures.push(...packageStructures)
-    }
-
-    return structures
+    )
   }
 
   getPackages(): Package[] {
-    return this.#getWorkspacePackageEntries().map(
+    return this.#createPackages(this.#resolveWorkspacePackages().packageEntries)
+  }
+
+  #createPackages(entries: Array<{ name?: string; path: string }>): Package[] {
+    return entries.map(
       ({ name, path }) =>
         new Package({
           name,
           path,
           fileSystem: this.#fileSystem,
+          cache: this.#cache,
         })
     )
   }
 
-  #getWorkspacePackageEntries() {
+  #getPackageManagerDependencyPaths(): string[] {
+    const dependencyPaths = new Set<string>()
+
+    for (const [filename] of LOCKFILE_CANDIDATES) {
+      const discoveredLockfilePath = this.#findWorkspacePath(filename)
+
+      if (discoveredLockfilePath) {
+        dependencyPaths.add(discoveredLockfilePath)
+        continue
+      }
+
+      dependencyPaths.add(this.#resolveWorkspacePath(filename, true))
+    }
+
+    return Array.from(dependencyPaths)
+  }
+
+  #createWorkspaceFileDependencySignature(path: string): string {
+    try {
+      const modifiedMs = this.#fileSystem.getFileLastModifiedMsSync(path)
+      if (modifiedMs !== undefined) {
+        return `mtime:${String(modifiedMs)}`
+      }
+    } catch (error) {
+      reportBestEffortError('file-system/workspace', error)
+    }
+
+    if (!safeFileExistsSync(this.#fileSystem, path)) {
+      return 'missing'
+    }
+
+    try {
+      const contents = readTextFile(this.#fileSystem, path)
+      return `content:${hashString(contents)}:${contents.length}`
+    } catch {
+      return 'exists'
+    }
+  }
+
+  #createWorkspaceDirectoryDependencySignature(path: string): string {
+    try {
+      const modifiedMs = this.#fileSystem.getFileLastModifiedMsSync(path)
+      if (modifiedMs !== undefined) {
+        return `mtime:${String(modifiedMs)}`
+      }
+    } catch (error) {
+      reportBestEffortError('file-system/workspace', error)
+    }
+
+    if (!safeFileExistsSync(this.#fileSystem, path)) {
+      return 'missing'
+    }
+
+    const listingEntries = safeReadDirectory(this.#fileSystem, path)
+      .map(
+        (entry) =>
+          `${entry.isDirectory ? 'd' : entry.isFile ? 'f' : 'o'}:${entry.name}`
+      )
+      .sort((first, second) => first.localeCompare(second))
+
+    return `listing:${hashString(stableStringify(listingEntries))}:${listingEntries.length}`
+  }
+
+  #createWorkspacePackageResolutionDependencySignatures(
+    resolution: WorkspacePackageResolution
+  ): Map<string, string> {
+    const dependencySignatures = new Map<string, string>()
+    const fileDependencyPaths = new Set<string>([
+      ...resolution.workspaceManifestPaths,
+      ...resolution.packageManifestPaths,
+      ...this.#getPackageManagerDependencyPaths(),
+    ])
+    const directoryDependencyPaths = new Set<string>(
+      resolution.scannedDirectories
+    )
+
+    const sortedFileDependencyPaths = Array.from(fileDependencyPaths).sort(
+      (a, b) => normalizePathKey(a).localeCompare(normalizePathKey(b))
+    )
+    const sortedDirectoryDependencyPaths = Array.from(
+      directoryDependencyPaths
+    ).sort((a, b) => normalizePathKey(a).localeCompare(normalizePathKey(b)))
+
+    for (const dependencyPath of sortedFileDependencyPaths) {
+      dependencySignatures.set(
+        `file:${dependencyPath}`,
+        this.#createWorkspaceFileDependencySignature(dependencyPath)
+      )
+    }
+
+    for (const dependencyPath of sortedDirectoryDependencyPaths) {
+      dependencySignatures.set(
+        `dir:${dependencyPath}`,
+        this.#createWorkspaceDirectoryDependencySignature(dependencyPath)
+      )
+    }
+
+    return dependencySignatures
+  }
+
+  #areWorkspacePackageResolutionDependenciesFresh(
+    dependencySignatures: Map<string, string>
+  ): boolean {
+    for (const [dependencyKey, previousSignature] of dependencySignatures) {
+      if (dependencyKey.startsWith('file:')) {
+        const dependencyPath = dependencyKey.slice('file:'.length)
+        const nextSignature =
+          this.#createWorkspaceFileDependencySignature(dependencyPath)
+        if (nextSignature !== previousSignature) {
+          return false
+        }
+        continue
+      }
+
+      if (dependencyKey.startsWith('dir:')) {
+        const dependencyPath = dependencyKey.slice('dir:'.length)
+        const nextSignature =
+          this.#createWorkspaceDirectoryDependencySignature(dependencyPath)
+        if (nextSignature !== previousSignature) {
+          return false
+        }
+      }
+    }
+
+    return true
+  }
+
+  #resolveWorkspacePackages(): WorkspacePackageResolution {
+    const cachedResolution = this.#workspacePackageResolutionCache
+    if (
+      cachedResolution &&
+      this.#areWorkspacePackageResolutionDependenciesFresh(
+        cachedResolution.dependencySignatures
+      )
+    ) {
+      return cachedResolution.resolution
+    }
+
+    const sharedResolutionCache = getWorkspacePackageResolutionSharedCache(
+      this.#fileSystem
+    )
+    const sharedResolutionCacheKey = normalizePathKey(this.#workspaceRoot)
+    const sharedCachedResolution = sharedResolutionCache.get(
+      sharedResolutionCacheKey
+    )
+    if (
+      sharedCachedResolution &&
+      this.#areWorkspacePackageResolutionDependenciesFresh(
+        sharedCachedResolution.dependencySignatures
+      )
+    ) {
+      this.#workspacePackageResolutionCache = sharedCachedResolution
+      return sharedCachedResolution.resolution
+    }
+
     const packageEntries: { name?: string; path: string }[] = []
+    const scannedDirectories = new Set<string>()
+    const packageManifestPaths = new Set<string>()
     const workspaceRoot = this.#workspaceRelativeRoot || this.#workspaceRoot
-    const patterns = buildWorkspacePatterns(this.#fileSystem, workspaceRoot)
+    const { patterns, manifestPaths } = buildWorkspacePatternsWithSources(
+      this.#fileSystem,
+      workspaceRoot
+    )
 
     if (patterns.length === 0) {
       const rootPackageJsonPath = this.#findWorkspacePath('package.json')
 
       if (rootPackageJsonPath) {
+        packageManifestPaths.add(rootPackageJsonPath)
         const packageJson = readJsonFile<PackageJson>(
           this.#fileSystem,
           rootPackageJsonPath,
@@ -332,7 +603,24 @@ export class Workspace {
         })
       }
 
-      return packageEntries
+      const resolution: WorkspacePackageResolution = {
+        packageEntries,
+        scannedDirectories: Array.from(scannedDirectories),
+        workspaceManifestPaths: manifestPaths,
+        packageManifestPaths: Array.from(packageManifestPaths),
+      }
+      this.#workspacePackageResolutionCache = {
+        resolution,
+        dependencySignatures:
+          this.#createWorkspacePackageResolutionDependencySignatures(
+            resolution
+          ),
+      }
+      sharedResolutionCache.set(
+        sharedResolutionCacheKey,
+        this.#workspacePackageResolutionCache
+      )
+      return resolution
     }
 
     const matchers = patterns.map(
@@ -363,6 +651,7 @@ export class Workspace {
           matchers.some((matcher) => matcher.match(normalized || '.')) &&
           packageJsonPath
         ) {
+          packageManifestPaths.add(packageJsonPath)
           const packageJson = readJsonFile<PackageJson>(
             this.#fileSystem,
             packageJsonPath,
@@ -377,6 +666,7 @@ export class Workspace {
         }
 
         const directoryPath = this.#resolveWorkspacePath(normalized || '.')
+        scannedDirectories.add(directoryPath)
 
         for (const entry of safeReadDirectory(
           this.#fileSystem,
@@ -394,7 +684,23 @@ export class Workspace {
       }
     }
 
-    return packageEntries
+    const resolution: WorkspacePackageResolution = {
+      packageEntries,
+      scannedDirectories: Array.from(scannedDirectories),
+      workspaceManifestPaths: manifestPaths,
+      packageManifestPaths: Array.from(packageManifestPaths),
+    }
+    this.#workspacePackageResolutionCache = {
+      resolution,
+      dependencySignatures:
+        this.#createWorkspacePackageResolutionDependencySignatures(resolution),
+    }
+    sharedResolutionCache.set(
+      sharedResolutionCacheKey,
+      this.#workspacePackageResolutionCache
+    )
+
+    return resolution
   }
 
   #findWorkspacePath(path: string) {

@@ -1,10 +1,21 @@
 import ignore from 'fast-ignore'
+import { randomUUID } from 'node:crypto'
 import { getTsMorph } from '../utils/ts-morph.ts'
 
-import { createSourceFile, transpileSourceFile } from '../project/client.ts'
-import type { ProjectOptions } from '../project/types.ts'
+import {
+  createSourceFile,
+  transpileSourceFile,
+} from '../analysis/node-client.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
 import { isJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
-import { joinPaths, normalizePath, normalizeSlashes } from '../utils/path.ts'
+import {
+  joinPaths,
+  normalizePath,
+  normalizeSlashes,
+  trimLeadingDotSlash,
+  trimLeadingSlashes,
+  trimTrailingSlashes,
+} from '../utils/path.ts'
 import {
   BaseFileSystem,
   type FileReadableStream,
@@ -49,24 +60,26 @@ export class InMemoryFileSystem
   extends BaseFileSystem
   implements AsyncFileSystem, SyncFileSystem, WritableFileSystem
 {
-  #projectOptions: ProjectOptions
+  #analysisOptions: AnalysisOptions
+  #cacheIdentity: string
   #files: Map<string, InMemoryEntry>
   #ignore: ReturnType<typeof ignore> | undefined
   #syncedSourceFiles: Set<string>
   #pendingSourceFileWrites: Map<string, Promise<void>>
 
   constructor(files: { [path: string]: InMemoryFileContent }) {
-    const projectId = crypto.randomUUID()
+    const analysisScopeId = randomUUID()
 
     super()
 
-    this.#projectOptions = {
-      projectId: projectId,
+    this.#analysisOptions = {
+      analysisScopeId: analysisScopeId,
       useInMemoryFileSystem: true,
       compilerOptions: {
         module: tsMorph.ts.ModuleKind.CommonJS,
       },
     }
+    this.#cacheIdentity = randomUUID()
     this.#syncedSourceFiles = new Set()
     this.#pendingSourceFileWrites = new Map()
     this.#files = new Map(
@@ -80,6 +93,18 @@ export class InMemoryFileSystem
     for (const [path, entry] of this.#files) {
       this.#maybeCreateSourceFile(path, entry)
     }
+  }
+
+  override usesPersistentCacheByDefault(): boolean {
+    return false
+  }
+
+  override usesDirectoryMtimeSnapshotDependencies(): boolean {
+    return false
+  }
+
+  override validatesPersistedFileDependenciesByDefault(): boolean {
+    return true
   }
 
   #normalizeFileContent(content: InMemoryFileContent): InMemoryFileEntry {
@@ -154,7 +179,7 @@ export class InMemoryFileSystem
     const extension = path.split('.').at(-1)
     if (extension && isJavaScriptLikeExtension(extension)) {
       const absolutePath = this.getAbsolutePath(path)
-      createSourceFile(absolutePath, entry.content, this.#projectOptions)
+      createSourceFile(absolutePath, entry.content, this.#analysisOptions)
     }
   }
 
@@ -171,7 +196,7 @@ export class InMemoryFileSystem
     }
 
     const normalized = normalizeSlashes(filePath)
-    const relativePath = normalized.replace(/^\/+/, '')
+    const relativePath = trimLeadingSlashes(normalized)
     const entry =
       this.getFileEntry(relativePath) ?? this.getFileEntry(normalized)
 
@@ -182,7 +207,7 @@ export class InMemoryFileSystem
     const writePromise = createSourceFile(
       absolutePath,
       entry.content,
-      this.#projectOptions
+      this.#analysisOptions
     )
       .then(() => {
         this.#syncedSourceFiles.add(absolutePath)
@@ -302,13 +327,17 @@ export class InMemoryFileSystem
     this.#maybeCreateSourceFile(normalizedPath, entry)
   }
 
-  getProjectOptions() {
-    return this.#projectOptions
+  getAnalysisOptions() {
+    return this.#analysisOptions
+  }
+
+  getCacheIdentity(): unknown {
+    return this.#cacheIdentity
   }
 
   transpileFile(path: string) {
     const normalized = normalizeSlashes(path)
-    return transpileSourceFile(normalized, this.#projectOptions)
+    return transpileSourceFile(normalized, this.#analysisOptions)
   }
 
   getAbsolutePath(path: string) {
@@ -323,8 +352,7 @@ export class InMemoryFileSystem
   }
 
   getRelativePathToWorkspace(path: string) {
-    const normalized = normalizeSlashes(path)
-    return normalized.startsWith('./') ? normalized.slice(2) : normalized
+    return trimLeadingDotSlash(path)
   }
 
   getFiles(): Map<string, InMemoryEntry> {
@@ -371,7 +399,7 @@ export class InMemoryFileSystem
 
       const entryName = segments.at(0)!
       const normalizedEntryPath = basePath
-        ? `${basePath.replace(/\/$/, '')}/${entryName}`
+        ? `${trimTrailingSlashes(basePath)}/${entryName}`
         : entryName
 
       if (addedPaths.has(normalizedEntryPath)) {
@@ -692,7 +720,7 @@ export class InMemoryFileSystem
       }
     }
 
-    const normalized = normalizeSlashes(filePath).replace(/^\.\//, '')
+    const normalized = trimLeadingDotSlash(filePath)
     return this.#ignore(normalized)
   }
 
