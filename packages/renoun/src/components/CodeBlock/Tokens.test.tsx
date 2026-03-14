@@ -7,6 +7,7 @@ import { parseAnnotations } from '../../utils/annotations.ts'
 const mockTokens = vi.fn()
 const mockQuickInfoProvider = vi.fn()
 const mockSymbol = vi.fn()
+const mockGetContext = vi.fn()
 
 vi.mock('../../analysis/node-client.ts', () => ({
   getSourceTextMetadata: vi.fn(),
@@ -51,7 +52,8 @@ vi.mock('../../utils/get-theme.ts', () => ({
 
 vi.mock('../../utils/context.ts', () => ({
   createContext: () => ({}),
-  getContext: () => null,
+  getContext: (...args: Parameters<typeof mockGetContext>) =>
+    mockGetContext(...args),
 }))
 
 vi.mock('../Config/ConfigProvider.ts', () => ({
@@ -106,6 +108,8 @@ describe('Tokens', () => {
     mockTokens.mockReset()
     mockQuickInfoProvider.mockReset()
     mockSymbol.mockReset()
+    mockGetContext.mockReset()
+    mockGetContext.mockReturnValue(null)
   })
 
   test('registers shared quick info entries and references them from symbols', async () => {
@@ -241,5 +245,72 @@ describe('Tokens', () => {
     const markCount = markup.match(/<mark>/g)?.length ?? 0
 
     expect(markCount).toBe(2)
+  })
+
+  test('path null disables inherited file paths for shell snippets', async () => {
+    mockGetContext.mockReturnValue({
+      filePath: 'build-a-button-component-in-react.mdx',
+      label: 'build-a-button-component-in-react.mdx',
+    })
+    mockTokens.mockResolvedValueOnce([
+      [
+        {
+          start: 0,
+          end: 16,
+          value: 'pnpm add renoun',
+          isBaseColor: true,
+        },
+      ],
+    ])
+
+    const { Tokens } = await import('./Tokens.tsx')
+
+    await Tokens({
+      children: 'pnpm add renoun',
+      language: 'shell',
+      path: null,
+      shouldFormat: false,
+    })
+
+    expect(mockTokens).toHaveBeenCalledWith(
+      expect.objectContaining({
+        language: 'shell',
+        filePath: undefined,
+      })
+    )
+  })
+
+  test('explicit paths override inherited file paths', async () => {
+    mockGetContext.mockReturnValue({
+      filePath: 'build-a-button-component-in-react.mdx',
+      label: 'build-a-button-component-in-react.mdx',
+    })
+    mockTokens.mockResolvedValueOnce([
+      [
+        {
+          start: 0,
+          end: 15,
+          value: 'echo "renoun"',
+          isBaseColor: true,
+        },
+      ],
+    ])
+
+    const { Tokens } = await import('./Tokens.tsx')
+
+    await Tokens({
+      children: 'echo "renoun"',
+      language: 'shell',
+      path: 'install.sh',
+      shouldAnalyze: false,
+      shouldFormat: false,
+    })
+
+    expect(mockTokens).toHaveBeenCalledWith(
+      expect.objectContaining({
+        language: 'shell',
+        filePath: 'install.sh',
+      })
+    )
   })
 })

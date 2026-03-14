@@ -4945,6 +4945,10 @@ const PRODUCTION_SNAPSHOT_REVALIDATE_INTERVAL_MS = 250
 const DIRECTORY_SNAPSHOT_COORDINATION_KEY_PREFIX = 'dir:resolve:'
 const strictHermeticWarningKeys = new Set<string>()
 
+function shouldUseDirectoryPathLookupCache(): boolean {
+  return !isDevelopmentEnvironment()
+}
+
 function toStrictHermeticWarningScopeKey(key: string): string {
   const serverId = process.env[PROCESS_ENV_KEYS.renounServerId]
   if (typeof serverId !== 'string' || serverId.trim().length === 0) {
@@ -5755,7 +5759,7 @@ export class Directory<
     segments: string[],
     allExtensions?: string[]
   ): Promise<FileSystemEntry<LoaderTypes>> {
-    if (segments.length > 0) {
+    if (shouldUseDirectoryPathLookupCache() && segments.length > 0) {
       const directoryWorkspacePath = trimTrailingSlashes(
         trimLeadingDotPrefix(directory.workspacePath)
       )
@@ -6043,9 +6047,9 @@ export class Directory<
     const rawPath = Array.isArray(normalizedInput)
       ? normalizedInput.join('/')
       : normalizedInput
-    const cachedFile = this.#pathLookup.get(
-      rawPath.startsWith('/') ? rawPath : `/${rawPath}`
-    )
+    const cachedFile = shouldUseDirectoryPathLookupCache()
+      ? this.#pathLookup.get(rawPath.startsWith('/') ? rawPath : `/${rawPath}`)
+      : undefined
 
     if (
       cachedFile instanceof File &&
@@ -9330,6 +9334,10 @@ export class Collection<
   async #getRootFreshnessKey(): Promise<string> {
     const roots = await Promise.all(
       this.#entries.map(async (entry) => {
+        const session =
+          entry instanceof Directory
+            ? entry.getSession()
+            : entry.getParent().getSession()
         const fileSystem =
           entry instanceof Directory
             ? entry.getFileSystem()
@@ -9339,10 +9347,8 @@ export class Collection<
 
         if (typeof getWorkspaceChangeToken === 'function') {
           try {
-            workspaceChangeToken = await getWorkspaceChangeToken.call(
-              fileSystem,
-              entry.workspacePath
-            )
+            workspaceChangeToken =
+              await session.getWorkspaceChangeToken(entry.workspacePath)
           } catch {
             workspaceChangeToken = null
           }

@@ -3338,6 +3338,60 @@ export function identity<T>(value: T) {
     expect(secondNextEntry!.getPathname()).toBe('/docs/c')
   })
 
+  test('directory getFile refreshes cached mdx lookups in development after workspace changes', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+
+    try {
+      const fileSystem = new TokenAwareInMemoryFileSystem({
+        'docs/index.mdx': '# Initial',
+      })
+      const cache = new Cache({
+        workspaceChangeTokenTtlMs: 0,
+        workspaceChangedPathsTtlMs: 0,
+      })
+      const docs = new Directory({ path: 'docs', fileSystem, cache })
+
+      const firstFile = await docs.getFile('index', 'mdx')
+      expect(await firstFile.getText()).toBe('# Initial')
+
+      await fileSystem.writeFile('docs/index.mdx', '# Updated')
+
+      const secondFile = await docs.getFile('index', 'mdx')
+
+      expect(secondFile).not.toBe(firstFile)
+      expect(await secondFile.getText()).toBe('# Updated')
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV
+      } else {
+        process.env.NODE_ENV = previousNodeEnv
+      }
+    }
+  })
+
+  test('entry group reuses the session workspace token cache for freshness checks', async () => {
+    const fileSystem = new TokenAwareInMemoryFileSystem({
+      'docs/a.mdx': '',
+      'guides/a.mdx': '',
+    })
+    const cache = new Cache({
+      workspaceChangeTokenTtlMs: 60_000,
+      workspaceChangedPathsTtlMs: 60_000,
+    })
+    const docs = new Directory({ path: 'docs', fileSystem, cache })
+    const guides = new Directory({ path: 'guides', fileSystem, cache })
+    const group = new Collection({ entries: [docs, guides] })
+    const tokenSpy = vi.spyOn(fileSystem, 'getWorkspaceChangeToken')
+
+    await group.getEntries({ recursive: true })
+    await group.getEntries({ recursive: true })
+
+    expect(tokenSpy).toHaveBeenCalledTimes(2)
+    expect(tokenSpy).toHaveBeenNthCalledWith(1, 'docs')
+    expect(tokenSpy).toHaveBeenNthCalledWith(2, 'guides')
+  })
+
   test('multiple extensions in entry group', async () => {
     const fileSystem = new InMemoryFileSystem({
       'components/Button.mdx': '',

@@ -400,6 +400,7 @@ async function TokensAsync({
   annotations,
 }: TokensProps) {
   const context = getContext(Context)
+  const shouldInheritContextMetadata = path !== null
   const isDevelopmentRuntime =
     !isProductionEnvironment() && !isTestEnvironment() && !isVitestRuntime()
   let didSettleContext = false
@@ -522,8 +523,12 @@ async function TokensAsync({
     } else {
       metadata.value = processedValue
       metadata.language = language
-      metadata.filePath = context?.filePath ?? resolvedPath
-      metadata.label = context?.label
+      metadata.filePath = resolvedPath
+        ? resolvedPath
+        : shouldInheritContextMetadata
+          ? context?.filePath
+          : undefined
+      metadata.label = shouldInheritContextMetadata ? context?.label : undefined
       metadata.valueSignature = getSourceTextValueSignature(processedValue)
     }
 
