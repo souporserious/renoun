@@ -31,10 +31,7 @@ import { normalizePathKey, removeExtension } from '../utils/path.ts'
 import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
 import { NodeFileSystem } from './NodeFileSystem'
 import { Cache } from './Cache.ts'
-import {
-  InMemoryFileSystem,
-  type InMemoryEntry,
-} from './InMemoryFileSystem.ts'
+import { InMemoryFileSystem, type InMemoryEntry } from './InMemoryFileSystem.ts'
 import * as gitHostFileSystemModule from './GitVirtualFileSystem'
 import {
   type FileSystemEntry,
@@ -70,6 +67,33 @@ type IsUnknown<Type> = unknown extends Type
 
 type IsNotUnknown<Type> = IsUnknown<Type> extends true ? false : true
 
+interface SerializedNavigationEntry {
+  name: string
+  path: string
+  depth: number
+  children?: SerializedNavigationEntry[]
+}
+
+function serializeNavigationEntries(
+  entries: readonly {
+    entry: {
+      name: string
+      depth: number
+      getPathname: () => string
+    }
+    children?: readonly any[]
+  }[]
+): SerializedNavigationEntry[] {
+  return entries.map(({ entry, children }) => ({
+    name: entry.name,
+    path: entry.getPathname(),
+    depth: entry.depth,
+    ...(children && children.length > 0
+      ? { children: serializeNavigationEntries(children) }
+      : {}),
+  }))
+}
+
 function createTempDirectoryHandle(prefix: string) {
   const path = mkdtempSync(prefix)
   return {
@@ -83,8 +107,7 @@ function createTempDirectoryHandle(prefix: string) {
 class TokenAwareInMemoryFileSystem extends InMemoryFileSystem {
   override async getWorkspaceChangeToken(rootPath: string): Promise<string> {
     const normalizedRootPath = normalizePathKey(rootPath)
-    const prefix =
-      normalizedRootPath === '.' ? '' : `${normalizedRootPath}/`
+    const prefix = normalizedRootPath === '.' ? '' : `${normalizedRootPath}/`
     const scopedEntries = Array.from(this.getFiles().entries())
       .filter(([path]) => {
         const normalizedPath = normalizePathKey(path)
@@ -913,9 +936,7 @@ describe('file system', () => {
   })
 
   describe('schema', () => {
-    test(
-      'types only',
-      async () => {
+    test('types only', async () => {
       const directory = new Directory<{
         ts: { metadata?: { title: string } }
       }>({
@@ -931,9 +952,7 @@ describe('file system', () => {
       type Test = Expect<IsNotAny<typeof value>>
 
       expectTypeOf(value).toExtend<{ title: string } | undefined>()
-      },
-      30_000
-    )
+    }, 30_000)
 
     test('custom validator', async () => {
       const directory = new Directory({
@@ -2790,43 +2809,14 @@ export function identity<T>(value: T) {
     expect(nextEntry).toBeInstanceOf(Directory)
   })
 
-  test('generates tree navigation', async () => {
+  test('generates tree navigation entries', async () => {
     const projectDirectory = new Directory({
       path: 'fixtures/project',
       basePathname: 'project',
       sort: fixtureSort,
     })
 
-    type TreeEntry = {
-      name: string
-      path: string
-      depth: number
-      children?: TreeEntry[]
-    }
-
-    async function buildTreeNavigation<Entry extends FileSystemEntry<any>>(
-      entry: Entry
-    ): Promise<TreeEntry> {
-      const name = entry.name
-      const path = entry.getPathname()
-      const depth = entry.depth
-
-      if (isFile(entry)) {
-        return { name, path, depth }
-      }
-
-      const entries = await entry.getEntries()
-
-      return {
-        name,
-        path,
-        depth,
-        children: await Promise.all(entries.map(buildTreeNavigation)),
-      }
-    }
-
-    const sources = await projectDirectory.getEntries()
-    const tree = await Promise.all(sources.map(buildTreeNavigation))
+    const tree = serializeNavigationEntries(await projectDirectory.getTree())
 
     expect(tree).toMatchInlineSnapshot(`
       [
@@ -2856,6 +2846,110 @@ export function identity<T>(value: T) {
           "depth": 0,
           "name": "types.ts",
           "path": "/project/types",
+        },
+      ]
+    `)
+  })
+
+  test('synthesizes filtered ancestors in navigation entries', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/guides/advanced/deep-dive.mdx': '# Deep Dive',
+      'docs/guides/drafts/ignore-me.mdx': '# Ignore Me',
+      'docs/overview.mdx': '# Overview',
+    })
+    const docs = new Directory({
+      fileSystem,
+      path: 'docs',
+      basePathname: 'docs',
+      filter: (entry) => isFile(entry, 'mdx') && entry.baseName === 'deep-dive',
+    })
+
+    const tree = serializeNavigationEntries(await docs.getTree())
+
+    expect(tree).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "depth": 2,
+                  "name": "deep-dive.mdx",
+                  "path": "/docs/guides/advanced/deep-dive",
+                },
+              ],
+              "depth": 1,
+              "name": "advanced",
+              "path": "/docs/guides/advanced",
+            },
+          ],
+          "depth": 0,
+          "name": "guides",
+          "path": "/docs/guides",
+        },
+      ]
+    `)
+  })
+
+  test('builds collection navigation entries from filtered directory roots', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'docs/guides/advanced/deep-dive.mdx': '# Deep Dive',
+      'extras/overview.mdx': '# Overview',
+    })
+    const docs = new Directory({
+      fileSystem,
+      path: 'docs',
+      basePathname: 'docs',
+      filter: (entry) => isFile(entry, 'mdx') && entry.baseName === 'deep-dive',
+    })
+    const extras = new Directory({
+      fileSystem,
+      path: 'extras',
+      basePathname: 'extras',
+    })
+    const overview = await extras.getFile('overview', 'mdx')
+
+    if (!overview) {
+      throw new Error('Expected overview file')
+    }
+
+    const collection = new Collection({
+      entries: [docs, overview],
+    })
+    const tree = serializeNavigationEntries(await collection.getTree())
+
+    expect(tree).toMatchInlineSnapshot(`
+      [
+        {
+          "children": [
+            {
+              "children": [
+                {
+                  "children": [
+                    {
+                      "depth": 2,
+                      "name": "deep-dive.mdx",
+                      "path": "/docs/guides/advanced/deep-dive",
+                    },
+                  ],
+                  "depth": 1,
+                  "name": "advanced",
+                  "path": "/docs/guides/advanced",
+                },
+              ],
+              "depth": 0,
+              "name": "guides",
+              "path": "/docs/guides",
+            },
+          ],
+          "depth": -1,
+          "name": "docs",
+          "path": "/docs",
+        },
+        {
+          "depth": 0,
+          "name": "overview.mdx",
+          "path": "/extras/overview",
         },
       ]
     `)

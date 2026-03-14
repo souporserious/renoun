@@ -875,7 +875,7 @@ describe('Repository', () => {
       vi.restoreAllMocks()
     })
 
-    test('does not call fetch in local-version release mode', async () => {
+    test('does not call fetch in local release mode', async () => {
       const mockFetch = vi.fn(async () => ({
         ok: true,
         status: 200,
@@ -886,7 +886,7 @@ describe('Repository', () => {
       const repository = new Repository({
         path: 'owner/repo',
         releaseSource: {
-          mode: 'local-version',
+          mode: 'local',
           version: '11.3.0',
         },
       })
@@ -898,7 +898,7 @@ describe('Repository', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    test('builds package-scoped release metadata and URL from local version in local-version mode', async () => {
+    test('builds package-scoped release metadata and URL from local version in local mode', async () => {
       const mockFetch = vi.fn(async () => ({
         ok: true,
         status: 200,
@@ -909,7 +909,7 @@ describe('Repository', () => {
       const repository = new Repository({
         path: 'owner/repo',
         releaseSource: {
-          mode: 'local-version',
+          mode: 'local',
           version: '11.3.0',
         },
       })
@@ -935,7 +935,7 @@ describe('Repository', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    test('encodes scoped package release tag URLs in local-version mode', async () => {
+    test('encodes scoped package release tag URLs in local mode', async () => {
       const mockFetch = vi.fn(async () => ({
         ok: true,
         status: 200,
@@ -946,7 +946,7 @@ describe('Repository', () => {
       const repository = new Repository({
         path: 'owner/repo',
         releaseSource: {
-          mode: 'local-version',
+          mode: 'local',
           version: '11.3.0',
         },
       })
@@ -968,7 +968,7 @@ describe('Repository', () => {
       expect(mockFetch).not.toHaveBeenCalled()
     })
 
-    test('flags local-version prereleases from the version for package names with digits', async () => {
+    test('flags local prereleases from the version for package names with digits', async () => {
       const mockFetch = vi.fn(async () => ({
         ok: true,
         status: 200,
@@ -979,7 +979,7 @@ describe('Repository', () => {
       const repository = new Repository({
         path: 'owner/repo',
         releaseSource: {
-          mode: 'local-version',
+          mode: 'local',
           version: '1.0.0-beta.1',
         },
       })

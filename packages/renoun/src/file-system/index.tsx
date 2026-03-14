@@ -17,6 +17,7 @@ export type {
   WithDefaultTypes,
   InferModuleExports,
   FileSystemEntry,
+  NavigationEntry,
   FileWithExtension,
   DirectoryFilter,
   BaseDirectoryOptions,

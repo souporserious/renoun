@@ -831,6 +831,13 @@ export type FileSystemEntry<
   Extension = undefined,
 > = Directory<DirectoryTypes> | FileWithExtension<DirectoryTypes, Extension>
 
+export interface NavigationEntry<
+  Entry extends FileSystemEntry<any> = FileSystemEntry<any>,
+> {
+  entry: Entry
+  children?: NavigationEntry<Entry>[]
+}
+
 /** Options for the `File#getPathname` and `File#getPathnameSegments` methods. */
 export interface FilePathnameOptions {
   /** Whether to include the configured `Directory:options.basePathname` in the pathname. */
@@ -4706,6 +4713,32 @@ type DirectoryEntriesRecursiveOption<Filter> = Filter extends string
     : undefined
   : boolean
 
+type DirectoryEntriesBaseOptions<ProvidedFilter> = {
+  /** Filter entries with a minimatch pattern or predicate. */
+  filter?: ProvidedFilter
+
+  /** Include files named the same as their immediate directory (e.g. `Button/Button.tsx`). */
+  includeDirectoryNamedFiles?: boolean
+
+  /** Include index and readme files. */
+  includeIndexAndReadmeFiles?: boolean
+
+  /** Include files that are ignored by `.gitignore`. */
+  includeGitIgnoredFiles?: boolean
+
+  /** Include files that are excluded by the configured `tsconfig.json` file's `exclude` patterns. */
+  includeTsConfigExcludedFiles?: boolean
+
+  /** Include hidden files and directories (names starting with `.`). */
+  includeHiddenFiles?: boolean
+}
+
+type DirectoryFlatEntriesOptions<ProvidedFilter> =
+  DirectoryEntriesBaseOptions<ProvidedFilter> & {
+    /** Recursively walk every subdirectory. */
+    recursive?: DirectoryEntriesRecursiveOption<ProvidedFilter>
+  }
+
 type NoInferType<T> = [T][T extends any ? 0 : never]
 
 export type DirectoryFilter<
@@ -6884,30 +6917,11 @@ export class Directory<
           ApplyDirectorySchema<LoaderTypes, Schema>
         >
       | undefined = Filter,
-  >(options?: {
-    /** Filter entries with a minimatch pattern or predicate. */
-    filter?: ProvidedFilter
-
-    /** Recursively walk every subdirectory. */
-    recursive?: DirectoryEntriesRecursiveOption<
+  >(
+    options?: DirectoryFlatEntriesOptions<
       ProvidedFilter extends undefined ? Filter : ProvidedFilter
     >
-
-    /** Include files named the same as their immediate directory (e.g. `Button/Button.tsx`). */
-    includeDirectoryNamedFiles?: boolean
-
-    /** Include index and readme files. */
-    includeIndexAndReadmeFiles?: boolean
-
-    /** Include files that are ignored by `.gitignore`. */
-    includeGitIgnoredFiles?: boolean
-
-    /** Include files that are excluded by the configured `tsconfig.json` file's `exclude` patterns. */
-    includeTsConfigExcludedFiles?: boolean
-
-    /** Include hidden files and directories (names starting with `.`). */
-    includeHiddenFiles?: boolean
-  }): Promise<
+  ): Promise<
     Array<
       ResolveDirectoryFilterEntries<
         ProvidedFilter extends undefined ? Filter : ProvidedFilter,
@@ -6966,6 +6980,86 @@ export class Directory<
     )
 
     return snapshot.materialize() as any
+  }
+
+  async #getEntriesAsTree(options?: {
+    filter?: any
+    includeDirectoryNamedFiles?: boolean
+    includeIndexAndReadmeFiles?: boolean
+    includeGitIgnoredFiles?: boolean
+    includeTsConfigExcludedFiles?: boolean
+    includeHiddenFiles?: boolean
+  }): Promise<
+    NavigationEntry<
+      FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
+    >[]
+  > {
+    const filterOverride = options?.filter
+    const hasFilterOverride = filterOverride !== undefined
+    const directory = hasFilterOverride
+      ? this.#duplicate({ filter: filterOverride as any })
+      : this
+    const entriesOptions = { ...(options ?? {}) }
+
+    delete (entriesOptions as any).filter
+
+    if (directory.hasPredicateFilter()) {
+      const [directEntries, recursiveEntries] = await Promise.all([
+        directory.getEntries(entriesOptions),
+        directory.getEntries({
+          ...entriesOptions,
+          recursive: true,
+        } as any),
+      ])
+      const tree = buildNavigationChildrenByPath(
+        directory.getPathname(),
+        recursiveEntries as FileSystemEntry<any>[]
+      )
+
+      return materializeNavigationEntries(
+        mergeNavigationEntries(
+          directEntries as FileSystemEntry<any>[],
+          tree.rootEntries
+        ) as FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>[],
+        tree.childrenByPath as ReadonlyMap<
+          string,
+          readonly FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>[]
+        >
+      )
+    }
+
+    const entries = (await directory.getEntries(entriesOptions)) as Array<
+      FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
+    >
+
+    return Promise.all(
+      entries.map(
+        async (
+          entry
+        ): Promise<
+          NavigationEntry<
+            FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
+          >
+        > => {
+          if (!(entry instanceof Directory)) {
+            return { entry }
+          }
+
+          const children = await entry.#getEntriesAsTree(entriesOptions)
+          return children.length > 0 ? { entry, children } : { entry }
+        }
+      )
+    )
+  }
+
+  async getTree(options?: {
+    includeIndexAndReadmeFiles?: boolean
+  }): Promise<
+    NavigationEntry<
+      FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
+    >[]
+  > {
+    return this.#getEntriesAsTree(options)
   }
 
   async getStructure(): Promise<Array<DirectoryStructure | FileStructure>> {
@@ -8984,6 +9078,193 @@ function isPersistedCollectionNavigationPathsV1(
   )
 }
 
+function buildNavigationChildrenByPath(
+  rootPathname: string,
+  entries: readonly FileSystemEntry<any>[]
+): {
+  rootEntries: readonly FileSystemEntry<any>[]
+  childrenByPath: ReadonlyMap<string, readonly FileSystemEntry<any>[]>
+} {
+  const childrenByPath = new Map<string, FileSystemEntry<any>[]>()
+  const childPathsByParent = new Map<string, Set<string>>()
+
+  const addChildEntry = (
+    parentPathname: string,
+    entry: FileSystemEntry<any>
+  ) => {
+    const pathname = entry.getPathname()
+    let childPaths = childPathsByParent.get(parentPathname)
+    if (!childPaths) {
+      childPaths = new Set()
+      childPathsByParent.set(parentPathname, childPaths)
+    }
+
+    if (childPaths.has(pathname)) {
+      return
+    }
+    childPaths.add(pathname)
+
+    const siblings = childrenByPath.get(parentPathname)
+    if (siblings) {
+      siblings.push(entry)
+    } else {
+      childrenByPath.set(parentPathname, [entry])
+    }
+  }
+
+  const isPathWithinRoot = (pathname: string) => {
+    if (rootPathname === '/') {
+      return pathname.startsWith('/')
+    }
+
+    return pathname === rootPathname || pathname.startsWith(`${rootPathname}/`)
+  }
+
+  for (const entry of entries) {
+    let currentEntry: FileSystemEntry<any> | undefined = entry
+
+    while (currentEntry) {
+      const pathname: string = currentEntry.getPathname()
+      let parentDirectory: Directory<any> | undefined
+
+      if (pathname !== rootPathname) {
+        try {
+          const parent: Directory<any> = currentEntry.getParent()
+          parentDirectory =
+            parent.getPathname() === pathname ? undefined : parent
+        } catch {
+          parentDirectory = undefined
+        }
+      }
+
+      const lastSeparatorIndex = pathname.lastIndexOf('/')
+      const parentPathname =
+        parentDirectory?.getPathname() ??
+        (lastSeparatorIndex > 0 ? pathname.slice(0, lastSeparatorIndex) : '/')
+
+      if (!isPathWithinRoot(parentPathname)) {
+        break
+      }
+
+      addChildEntry(parentPathname, currentEntry)
+
+      if (!parentDirectory || parentPathname === rootPathname) {
+        break
+      }
+
+      currentEntry = parentDirectory
+    }
+  }
+
+  return {
+    rootEntries: childrenByPath.get(rootPathname) ?? [],
+    childrenByPath,
+  }
+}
+
+function mergeNavigationEntries(
+  directEntries: readonly FileSystemEntry<any>[],
+  recursiveEntries: readonly FileSystemEntry<any>[]
+): readonly FileSystemEntry<any>[] {
+  if (directEntries.length === 0) {
+    return recursiveEntries
+  }
+
+  if (recursiveEntries.length === 0) {
+    return directEntries
+  }
+
+  const directPathnames = directEntries.map((entry) => entry.getPathname())
+  const recursivePathnames = recursiveEntries.map((entry) =>
+    entry.getPathname()
+  )
+  const sharedSuffixLengths = Array.from(
+    { length: directEntries.length + 1 },
+    () => Array<number>(recursiveEntries.length + 1).fill(0)
+  )
+
+  for (
+    let directIndex = directEntries.length - 1;
+    directIndex >= 0;
+    --directIndex
+  ) {
+    for (
+      let recursiveIndex = recursiveEntries.length - 1;
+      recursiveIndex >= 0;
+      --recursiveIndex
+    ) {
+      if (directPathnames[directIndex] === recursivePathnames[recursiveIndex]) {
+        sharedSuffixLengths[directIndex]![recursiveIndex] =
+          1 + sharedSuffixLengths[directIndex + 1]![recursiveIndex + 1]!
+        continue
+      }
+
+      sharedSuffixLengths[directIndex]![recursiveIndex] = Math.max(
+        sharedSuffixLengths[directIndex + 1]![recursiveIndex]!,
+        sharedSuffixLengths[directIndex]![recursiveIndex + 1]!
+      )
+    }
+  }
+
+  const mergedEntries: FileSystemEntry<any>[] = []
+  let directIndex = 0
+  let recursiveIndex = 0
+
+  while (
+    directIndex < directEntries.length &&
+    recursiveIndex < recursiveEntries.length
+  ) {
+    if (directPathnames[directIndex] === recursivePathnames[recursiveIndex]) {
+      mergedEntries.push(directEntries[directIndex]!)
+      directIndex += 1
+      recursiveIndex += 1
+      continue
+    }
+
+    if (
+      sharedSuffixLengths[directIndex + 1]![recursiveIndex]! >
+      sharedSuffixLengths[directIndex]![recursiveIndex + 1]!
+    ) {
+      mergedEntries.push(directEntries[directIndex]!)
+      directIndex += 1
+      continue
+    }
+
+    mergedEntries.push(recursiveEntries[recursiveIndex]!)
+    recursiveIndex += 1
+  }
+
+  while (directIndex < directEntries.length) {
+    mergedEntries.push(directEntries[directIndex]!)
+    directIndex += 1
+  }
+
+  while (recursiveIndex < recursiveEntries.length) {
+    mergedEntries.push(recursiveEntries[recursiveIndex]!)
+    recursiveIndex += 1
+  }
+
+  return mergedEntries
+}
+
+function materializeNavigationEntries<Entry extends FileSystemEntry<any>>(
+  entries: readonly Entry[],
+  childrenByPath: ReadonlyMap<string, readonly Entry[]>
+): NavigationEntry<Entry>[] {
+  return entries.map((entry) => {
+    const children = childrenByPath.get(entry.getPathname())
+
+    if (!children || children.length === 0) {
+      return { entry }
+    }
+
+    return {
+      entry,
+      children: materializeNavigationEntries(children, childrenByPath),
+    }
+  })
+}
+
 /** A group of file system entries. */
 export class Collection<
   Types extends Record<string, any> = never,
@@ -9494,6 +9775,41 @@ export class Collection<
         this.#entriesInflight.delete(cacheKey)
       }
     }
+  }
+
+  async getTree(options?: {
+    includeIndexAndReadmeFiles?: boolean
+  }): Promise<
+    NavigationEntry<
+      FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
+    >[]
+  > {
+    const entries = (await this.getEntries({
+      includeIndexAndReadmeFiles: options?.includeIndexAndReadmeFiles,
+    })) as Array<
+      FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
+    >
+
+    return Promise.all(
+      entries.map(
+        async (
+          entry
+        ): Promise<
+          NavigationEntry<
+            FileSystemEntry<CollectionResolvedTypes<Types, Entries, Loaders>>
+          >
+        > => {
+          if (!(entry instanceof Directory)) {
+            return { entry }
+          }
+
+          const children = await entry.getTree({
+            includeIndexAndReadmeFiles: options?.includeIndexAndReadmeFiles,
+          })
+          return children.length > 0 ? { entry, children } : { entry }
+        }
+      )
+    )
   }
 
   /** Get previous and next sibling entries for a pathname or entry in this collection. */

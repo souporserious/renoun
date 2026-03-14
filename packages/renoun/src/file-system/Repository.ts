@@ -26,7 +26,7 @@ export type GitHostType = 'github' | 'gitlab' | 'bitbucket' | 'pierre'
 
 export type RepositoryReleaseSource =
   | { mode?: 'remote' }
-  | { mode: 'local-version'; version: string }
+  | { mode: 'local'; version: string }
 
 export interface RepositoryConfig {
   /** The base URL of the repository host or full repository URL. */
@@ -331,19 +331,19 @@ function mergeSparsePaths(
 
 function normalizeReleaseSource(
   value: RepositoryReleaseSource | undefined
-): { mode: 'remote' } | { mode: 'local-version'; version: string } {
+): { mode: 'remote' } | { mode: 'local'; version: string } {
   if (!value || value.mode === undefined || value.mode === 'remote') {
     return { mode: 'remote' }
   }
 
-  if (value.mode === 'local-version') {
+  if (value.mode === 'local') {
     const normalizedVersion = String(value.version ?? '').trim()
     if (!normalizedVersion) {
       return { mode: 'remote' }
     }
 
     return {
-      mode: 'local-version',
+      mode: 'local',
       version: normalizedVersion,
     }
   }
@@ -704,9 +704,9 @@ export class Repository {
   #pendingSparsePaths: Set<string> = new Set()
   #releasePromises: Map<string, Promise<Release>> = new Map()
   #githubReleasesPromise?: Promise<any[]>
-  #releaseSource:
-    | { mode: 'remote' }
-    | { mode: 'local-version'; version: string } = { mode: 'remote' }
+  #releaseSource: { mode: 'remote' } | { mode: 'local'; version: string } = {
+    mode: 'remote',
+  }
   #cache?: Cache
 
   constructor(repository?: RepositoryOptions | RepositoryConfig | string) {
@@ -1176,7 +1176,7 @@ export class Repository {
       packageName: options?.packageName,
       releaseSourceMode: this.#releaseSource.mode,
       releaseSourceVersion:
-        this.#releaseSource.mode === 'local-version'
+        this.#releaseSource.mode === 'local'
           ? this.#releaseSource.version
           : undefined,
     })
@@ -1262,7 +1262,7 @@ export class Repository {
     specifier: ReleaseSpecifier,
     options?: GetReleaseOptions
   ): Promise<Release> {
-    if (this.#releaseSource.mode === 'local-version') {
+    if (this.#releaseSource.mode === 'local') {
       return this.#resolveLocalVersionRelease(this.#releaseSource, options)
     }
 
@@ -1300,7 +1300,7 @@ export class Repository {
   }
 
   #resolveLocalVersionRelease(
-    releaseSource: { mode: 'local-version'; version: string },
+    releaseSource: { mode: 'local'; version: string },
     options?: GetReleaseOptions
   ): Release {
     const packageName = options?.packageName
