@@ -300,7 +300,7 @@ describe('GitFileSystem', () => {
     }
   })
 
-  it('prefers the nearest Next app .next cache directory for clone caches', () => {
+  it('prefers the nearest Next app .next renoun directory for clone caches', () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-next-app-'))
     const workspaceRoot = join(tmpDirectory, 'workspace')
     const appRoot = join(workspaceRoot, 'apps', 'site')
@@ -333,7 +333,7 @@ describe('GitFileSystem', () => {
         const store = new GitFileSystem({ repository: '.' })
         try {
           expect(store.cacheDirectory).toBe(
-            resolve(canonicalAppRoot, '.next', 'cache', 'renoun', 'git')
+            resolve(canonicalAppRoot, '.next', 'renoun', 'git')
           )
         } finally {
           store.close()

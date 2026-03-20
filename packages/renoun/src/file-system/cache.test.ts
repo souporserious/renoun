@@ -7230,7 +7230,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('prefers the nearest Next app .next cache directory for sqlite persistence', () => {
+  test('prefers the nearest Next app .next renoun directory for sqlite persistence', () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-next-app-'))
     const workspaceRoot = join(tmpDirectory, 'workspace')
     const appRoot = join(workspaceRoot, 'apps', 'site')
@@ -7261,7 +7261,7 @@ export type Metadata = Value`,
       const canonicalAppRoot = realpathSync(appRoot)
       withWorkingDirectory(appRoot, () => {
         expect(getDefaultCacheDatabasePath()).toBe(
-          join(canonicalAppRoot, '.next', 'cache', 'renoun', 'fs-cache.sqlite')
+          join(canonicalAppRoot, '.next', 'renoun', 'fs-cache.sqlite')
         )
       })
     } finally {
@@ -7269,7 +7269,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('uses the Next app .next cache directory when projectRoot is passed directly', () => {
+  test('uses the Next app .next renoun directory when projectRoot is passed directly', () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-next-project-root-')
     )
@@ -7301,7 +7301,7 @@ export type Metadata = Value`,
     try {
       const canonicalAppRoot = realpathSync(appRoot)
       expect(getDefaultCacheDatabasePath(appRoot)).toBe(
-        join(canonicalAppRoot, '.next', 'cache', 'renoun', 'fs-cache.sqlite')
+        join(canonicalAppRoot, '.next', 'renoun', 'fs-cache.sqlite')
       )
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
@@ -7317,7 +7317,6 @@ export type Metadata = Value`,
     const cachedRepoRoot = join(
       appRoot,
       '.next',
-      'cache',
       'renoun',
       'git',
       'repo'
@@ -7359,7 +7358,6 @@ export type Metadata = Value`,
       const expectedDbPath = join(
         canonicalAppRoot,
         '.next',
-        'cache',
         'renoun',
         'fs-cache.sqlite'
       )
@@ -7422,10 +7420,11 @@ export type Metadata = Value`,
     try {
       const realSession = Session.for(realFileSystem)
       const aliasSession = Session.for(aliasFileSystem)
+      const nodeKey = `test:session-root-alias:${normalizePathKey(tmpDirectory)}`
       let computeCount = 0
 
       const realResult = await realSession.cache.getOrCompute(
-        'test:session-root-alias',
+        nodeKey,
         { persist: true },
         async () => {
           computeCount += 1
@@ -7433,7 +7432,7 @@ export type Metadata = Value`,
         }
       )
       const aliasResult = await aliasSession.cache.getOrCompute(
-        'test:session-root-alias',
+        nodeKey,
         { persist: true },
         async () => {
           computeCount += 1
