@@ -7,6 +7,10 @@ export {
 export type {
   HistoryProps,
   HistoryComponents,
+  HistoryExportEntry,
+  HistoryCompleteProps,
+  HistoryProgressProps,
+  HistoryRecentlyAddedOptions,
   HistoryListComponents,
   HistorySelectEntries,
   HistorySelectEntriesContext,
