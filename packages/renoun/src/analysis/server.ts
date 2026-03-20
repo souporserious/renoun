@@ -1446,7 +1446,7 @@ export async function createServer(options?: CreateServerOptions) {
       return getCachedSourceTextMetadata(project, options)
     },
     {
-      memoize: true,
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 32,
     }
   )
@@ -1482,7 +1482,7 @@ export async function createServer(options?: CreateServerOptions) {
       })
     },
     {
-      memoize: true,
+      memoize: getProductionRpcMemoizeOptions(),
       concurrency: 28,
     }
   )

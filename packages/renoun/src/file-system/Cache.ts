@@ -194,7 +194,7 @@ export interface CacheOptions {
   targetedMissingDependencyFallback?: boolean
   /**
    * Override strict hermetic cache mode.
-   * When omitted, file-system logic defaults to strict mode in production.
+   * When omitted, file-system logic defaults to strict mode in production and CI.
    */
   strictHermetic?: boolean
   /**

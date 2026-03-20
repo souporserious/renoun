@@ -493,6 +493,88 @@ describe('analysis server refresh invalidations', () => {
     expect(quickInfoSpy).toHaveBeenCalledTimes(2)
   }, 45_000)
 
+  test('does not memoize source text metadata RPC responses outside production', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['NODE_ENV'] = 'test'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    const sourceTextMetadataSpy = vi
+      .spyOn(cachedAnalysis, 'getCachedSourceTextMetadata')
+      .mockResolvedValueOnce({
+        section: 'first-result',
+      } as unknown as Awaited<
+        ReturnType<typeof cachedAnalysis.getCachedSourceTextMetadata>
+      >)
+      .mockResolvedValueOnce({
+        section: 'second-result',
+      } as unknown as Awaited<
+        ReturnType<typeof cachedAnalysis.getCachedSourceTextMetadata>
+      >)
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+    const params = {
+      value: 'const value = 1\n',
+      language: 'ts' as const,
+      shouldFormat: false,
+    }
+    const first = await client.callMethod<typeof params, unknown>(
+      'getSourceTextMetadata',
+      params
+    )
+    const second = await client.callMethod<typeof params, unknown>(
+      'getSourceTextMetadata',
+      params
+    )
+
+    expect(first).toEqual({
+      section: 'first-result',
+    })
+    expect(second).toEqual({
+      section: 'second-result',
+    })
+    expect(sourceTextMetadataSpy).toHaveBeenCalledTimes(2)
+  }, 45_000)
+
+  test('does not memoize token RPC responses outside production', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['NODE_ENV'] = 'test'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    const getTokensSpy = vi
+      .spyOn(cachedAnalysis, 'getCachedTokens')
+      .mockResolvedValueOnce([
+        [{ value: 'first-result' }],
+      ] as unknown as Awaited<ReturnType<typeof cachedAnalysis.getCachedTokens>>)
+      .mockResolvedValueOnce([
+        [{ value: 'second-result' }],
+      ] as unknown as Awaited<ReturnType<typeof cachedAnalysis.getCachedTokens>>)
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+    const params = {
+      value: 'const value = 1\n',
+      language: 'ts' as const,
+      theme: 'default' as const,
+    }
+    const first = await client.callMethod<typeof params, unknown>(
+      'getTokens',
+      params
+    )
+    const second = await client.callMethod<typeof params, unknown>(
+      'getTokens',
+      params
+    )
+
+    expect(first).toEqual([[{ value: 'first-result' }]])
+    expect(second).toEqual([[{ value: 'second-result' }]])
+    expect(getTokensSpy).toHaveBeenCalledTimes(2)
+  }, 45_000)
+
   test('hydrates synthetic snippet source metadata before resolving deferred quick info', async () => {
     globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
     process.env['NODE_ENV'] = 'development'

@@ -1,9 +1,6 @@
 import { Cache } from '../file-system/Cache.ts'
 import type { FileSystem } from '../file-system/FileSystem.ts'
-import {
-  FileSystemSnapshot,
-  type SnapshotContentIdOptions,
-} from '../file-system/Snapshot.ts'
+import { FileSystemSnapshot } from '../file-system/Snapshot.ts'
 import { Session } from '../file-system/Session.ts'
 import { isProductionEnvironment } from '../utils/env.ts'
 import { normalizePathKey } from '../utils/path.ts'
@@ -69,15 +66,6 @@ function pathsIntersect(firstPath: string, secondPath: string): boolean {
 }
 
 class RuntimeAnalysisSnapshot extends FileSystemSnapshot {
-  override contentId(
-    path: string,
-    options: SnapshotContentIdOptions = {}
-  ): Promise<string> {
-    return super.contentId(path, {
-      ...options,
-      strictHermetic: options.strictHermetic ?? false,
-    })
-  }
 }
 
 async function getRuntimeAnalysisFileSystem(): Promise<

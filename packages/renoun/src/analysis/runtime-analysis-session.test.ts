@@ -1,14 +1,21 @@
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { afterEach, describe, expect, test } from 'vitest'
 
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 import {
   getRuntimeAnalysisSession,
   getRuntimeAnalysisSessions,
   resetRuntimeAnalysisSessionsForTests,
 } from './runtime-analysis-session.ts'
 
+const originalEnvironment = captureProcessEnv(['CI', 'NODE_ENV'])
+
 describe('runtime analysis session', () => {
   afterEach(() => {
     resetRuntimeAnalysisSessionsForTests()
+    restoreProcessEnv(originalEnvironment)
   })
 
   test('reuses the same session for identical scope paths', async () => {
@@ -107,5 +114,34 @@ describe('runtime analysis session', () => {
     )
 
     expect(refreshedFirstSession?.session).not.toBe(firstSession?.session)
+  })
+
+  test('uses strict hermetic content ids in CI', async () => {
+    process.env['CI'] = 'true'
+    process.env['NODE_ENV'] = 'development'
+
+    const runtimeDirectory = join(
+      process.cwd(),
+      '.cache',
+      `runtime-analysis-hermetic-${Date.now()}`
+    )
+    const filePath = join(runtimeDirectory, 'example.ts')
+
+    mkdirSync(runtimeDirectory, { recursive: true })
+    writeFileSync(filePath, 'export const value = 1\n', 'utf8')
+
+    try {
+      const runtimeSession = await getRuntimeAnalysisSession(
+        undefined,
+        runtimeDirectory
+      )
+
+      expect(runtimeSession).toBeDefined()
+
+      const contentId = await runtimeSession!.session.snapshot.contentId(filePath)
+      expect(contentId.startsWith('sha1:')).toBe(true)
+    } finally {
+      rmSync(runtimeDirectory, { recursive: true, force: true })
+    }
   })
 })

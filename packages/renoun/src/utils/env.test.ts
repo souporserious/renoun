@@ -43,3 +43,57 @@ describe('isCiEnvironment', () => {
     })
   })
 })
+
+describe('isStrictHermeticFileSystemModeFromEnv', () => {
+  afterEach(() => {
+    vi.resetModules()
+  })
+
+  test('enables strict hermetic mode in production', async () => {
+    await withProcessEnv(
+      {
+        CI: undefined,
+        NODE_ENV: 'production',
+      },
+      async () => {
+        const { isStrictHermeticFileSystemModeFromEnv } = await import(
+          './env.ts'
+        )
+
+        expect(isStrictHermeticFileSystemModeFromEnv()).toBe(true)
+      }
+    )
+  })
+
+  test('enables strict hermetic mode in CI outside production', async () => {
+    await withProcessEnv(
+      {
+        CI: 'true',
+        NODE_ENV: 'development',
+      },
+      async () => {
+        const { isStrictHermeticFileSystemModeFromEnv } = await import(
+          './env.ts'
+        )
+
+        expect(isStrictHermeticFileSystemModeFromEnv()).toBe(true)
+      }
+    )
+  })
+
+  test('keeps strict hermetic mode disabled in local development', async () => {
+    await withProcessEnv(
+      {
+        CI: undefined,
+        NODE_ENV: 'development',
+      },
+      async () => {
+        const { isStrictHermeticFileSystemModeFromEnv } = await import(
+          './env.ts'
+        )
+
+        expect(isStrictHermeticFileSystemModeFromEnv()).toBe(false)
+      }
+    )
+  })
+})

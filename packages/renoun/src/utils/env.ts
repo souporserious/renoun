@@ -180,7 +180,7 @@ export function isCiEnvironment(): boolean {
 }
 
 export function isStrictHermeticFileSystemModeFromEnv(): boolean {
-  return isProductionEnvironment()
+  return isProductionEnvironment() || isCiEnvironment()
 }
 
 export function isRenounDebugEnabled(): boolean {
