@@ -84,15 +84,18 @@ describe('restore-renoun-cache action', () => {
     )
   })
 
-  test('caches repo and workspace SQLite databases used by app and example builds', () => {
+  test('caches repo and workspace SQLite databases used by root, app, and example builds', () => {
     const actionSource = readFileSync(
       '.github/actions/restore-renoun-cache/action.yml',
       'utf8'
     )
     const cachePaths = getCachePaths(actionSource)
 
+    expect(cachePaths).toContain('.next/renoun/fs-cache.sqlite*')
     expect(cachePaths).toContain('.renoun/cache/fs-cache.sqlite*')
+    expect(cachePaths).toContain('apps/*/.next/renoun/fs-cache.sqlite*')
     expect(cachePaths).toContain('apps/*/.renoun/cache/fs-cache.sqlite*')
+    expect(cachePaths).toContain('examples/*/.next/renoun/fs-cache.sqlite*')
     expect(cachePaths).toContain('examples/*/.renoun/cache/fs-cache.sqlite*')
   })
 

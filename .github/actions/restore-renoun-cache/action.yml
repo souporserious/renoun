@@ -20,8 +20,11 @@ runs:
       uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306
       with:
         path: |
+          .next/renoun/fs-cache.sqlite*
           .renoun/cache/fs-cache.sqlite*
+          apps/*/.next/renoun/fs-cache.sqlite*
           apps/*/.renoun/cache/fs-cache.sqlite*
+          examples/*/.next/renoun/fs-cache.sqlite*
           examples/*/.renoun/cache/fs-cache.sqlite*
         key: ${{ runner.os }}-node${{ inputs.node-version }}-renoun-cache-${{ github.workflow }}-${{ github.job }}-${{ steps.renoun-cache-token.outputs.token }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
         restore-keys: |
