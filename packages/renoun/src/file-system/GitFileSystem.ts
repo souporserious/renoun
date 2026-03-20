@@ -865,6 +865,40 @@ export class GitFileSystem
     }
   }
 
+  async #getResolvedObjectRef(): Promise<string> {
+    return this.#getRefCommit()
+  }
+
+  #getResolvedObjectRefSync(): string {
+    const direct = getLocalRefShaSync(this.repoRoot, this.ref)
+    if (direct) {
+      return direct
+    }
+
+    for (const candidate of expandRefFallbacks(this.ref)) {
+      const resolved = getLocalRefShaSync(this.repoRoot, candidate)
+      if (resolved) {
+        return resolved
+      }
+    }
+
+    return this.ref
+  }
+
+  async #createGitObjectSpec(relativePath: string): Promise<string> {
+    const objectRef = await this.#getResolvedObjectRef()
+    return assertSafeGitSpec(
+      relativePath ? `${objectRef}:${relativePath}` : objectRef
+    )
+  }
+
+  #createGitObjectSpecSync(relativePath: string): string {
+    const objectRef = this.#getResolvedObjectRefSync()
+    return assertSafeGitSpec(
+      relativePath ? `${objectRef}:${relativePath}` : objectRef
+    )
+  }
+
   readDirectorySync(path: string = '.'): DirectoryEntry[] {
     this.#ensureRepoReadySync()
     return this.#readDirectorySyncInternal(path)
@@ -888,7 +922,7 @@ export class GitFileSystem
       return fsReadFile(worktreePath, 'utf-8')
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    const spec = await this.#createGitObjectSpec(relativePath)
     const object = await this.#git!.getBlobInfo(spec)
     if (!object) {
       throw new Error(`[renoun] File not found: ${path}`)
@@ -937,9 +971,7 @@ export class GitFileSystem
       }
     }
 
-    const spec = assertSafeGitSpec(
-      relativePath ? `${this.ref}:${relativePath}` : this.ref
-    )
+    const spec = this.#createGitObjectSpecSync(relativePath)
     const result = spawnSync('git', ['cat-file', '-s', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -967,7 +999,7 @@ export class GitFileSystem
       return undefined
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    const spec = await this.#createGitObjectSpec(relativePath)
     const blobMeta = await this.#git!.getBlobMeta(spec)
 
     if (!blobMeta) {
@@ -1012,9 +1044,7 @@ export class GitFileSystem
       return true
     }
 
-    const spec = assertSafeGitSpec(
-      relativePath ? `${this.ref}:${relativePath}` : this.ref
-    )
+    const spec = this.#createGitObjectSpecSync(relativePath)
     const result = spawnSync('git', ['cat-file', '-e', spec], {
       cwd: this.repoRoot,
       stdio: 'ignore',
@@ -1031,7 +1061,7 @@ export class GitFileSystem
       return true
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    const spec = await this.#createGitObjectSpec(relativePath)
     const meta = await this.#git!.getBlobMeta(spec)
     return meta !== null
   }
@@ -1049,7 +1079,7 @@ export class GitFileSystem
       }
     }
 
-    const safeRef = assertSafeGitArg(this.ref, 'ref')
+    const safeRef = assertSafeGitArg(this.#getResolvedObjectRefSync(), 'ref')
     const result = spawnSync(
       'git',
       ['log', '-1', '--format=%ct', safeRef, '--', relativePath],
@@ -1082,7 +1112,10 @@ export class GitFileSystem
       }
     }
 
-    const safeRef = assertSafeGitArg(this.ref, 'ref')
+    const safeRef = assertSafeGitArg(
+      await this.#getResolvedObjectRef(),
+      'ref'
+    )
     const result = await spawnWithResult(
       'git',
       ['log', '-1', '--format=%ct', safeRef, '--', relativePath],
@@ -1368,9 +1401,7 @@ export class GitFileSystem
       return this.#readDirectoryFromFsSync(relativePath, worktreePath)
     }
 
-    const spec = assertSafeGitSpec(
-      relativePath ? `${this.ref}:${relativePath}` : this.ref
-    )
+    const spec = this.#createGitObjectSpecSync(relativePath)
     const result = spawnSync('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -1395,9 +1426,7 @@ export class GitFileSystem
       return this.#readDirectoryFromFs(relativePath, worktreePath)
     }
 
-    const spec = assertSafeGitSpec(
-      relativePath ? `${this.ref}:${relativePath}` : this.ref
-    )
+    const spec = await this.#createGitObjectSpec(relativePath)
     const result = await spawnWithResult('git', ['ls-tree', '-z', spec], {
       cwd: this.repoRoot,
       maxBuffer: this.maxBufferBytes,
@@ -1477,9 +1506,7 @@ export class GitFileSystem
       return readFileSync(worktreePath, 'utf-8')
     }
 
-    const spec = assertSafeGitSpec(
-      relativePath ? `${this.ref}:${relativePath}` : this.ref
-    )
+    const spec = this.#createGitObjectSpecSync(relativePath)
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -1503,9 +1530,7 @@ export class GitFileSystem
       return new Uint8Array(buffer)
     }
 
-    const spec = assertSafeGitSpec(
-      relativePath ? `${this.ref}:${relativePath}` : this.ref
-    )
+    const spec = this.#createGitObjectSpecSync(relativePath)
     const result = spawnSync('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
       stdio: 'pipe',
@@ -1531,7 +1556,7 @@ export class GitFileSystem
       return new Uint8Array(buffer)
     }
 
-    const spec = relativePath ? `${this.ref}:${relativePath}` : this.ref
+    const spec = await this.#createGitObjectSpec(relativePath)
     const buffer = await spawnWithBuffer('git', ['cat-file', '-p', spec], {
       cwd: this.repoRoot,
       maxBuffer: this.maxBufferBytes,

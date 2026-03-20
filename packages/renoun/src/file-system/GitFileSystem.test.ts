@@ -2670,6 +2670,60 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('reads remote cached clones after switching explicit branch refs', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFile(
+      repoRoot,
+      'src/nodes/TSL.js',
+      `export const branch = 'shared'`,
+      'init'
+    )
+    git(repoRoot, ['branch', '-m', 'dev'])
+    git(repoRoot, ['branch', 'master'])
+
+    const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+    const bareRepo = join(bareRoot, 'repo.git')
+
+    try {
+      git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+      git(bareRepo, ['symbolic-ref', 'HEAD', 'refs/heads/dev'])
+      const fileUrl = pathToFileURL(bareRepo).toString()
+
+      using devStore = new GitFileSystem({
+        repository: fileUrl,
+        cacheDirectory,
+        ref: 'dev',
+      })
+      expect(
+        (await devStore.readDirectory('src/nodes')).map((entry) => entry.name)
+      ).toContain('TSL.js')
+
+      using masterStore = new GitFileSystem({
+        repository: fileUrl,
+        cacheDirectory,
+        ref: 'master',
+      })
+      expect(
+        (await masterStore.readDirectory('src/nodes')).map(
+          (entry) => entry.name
+        )
+      ).toContain('TSL.js')
+      expect(
+        masterStore.readDirectorySync('src/nodes').map((entry) => entry.name)
+      ).toContain('TSL.js')
+      expect(await masterStore.readFile('src/nodes/TSL.js')).toContain(
+        `branch = 'shared'`
+      )
+      expect(masterStore.readFileSync('src/nodes/TSL.js')).toContain(
+        `branch = 'shared'`
+      )
+    } finally {
+      rmSync(bareRoot, { recursive: true, force: true })
+    }
+  })
+
   test('throws helpful error when no commits match the entry scope', async ({
     repoRoot,
     cacheDirectory,
