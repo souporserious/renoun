@@ -2790,6 +2790,79 @@ describe('GitFileSystem', () => {
     }
   })
 
+  test('invalidates explicit-ref analysis caches when remote refs advance', async ({
+    repoRoot,
+    cacheDirectory,
+  }) => {
+    commitFiles(
+      repoRoot,
+      [
+        {
+          filename: 'tsconfig.json',
+          content: JSON.stringify({
+            compilerOptions: {
+              allowJs: true,
+              checkJs: true,
+            },
+            include: ['src/**/*.js'],
+          }),
+        },
+        {
+          filename: 'src/index.js',
+          content: `export const value = 1`,
+        },
+      ],
+      'init'
+    )
+
+    const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+    const bareRepo = join(bareRoot, 'repo.git')
+
+    try {
+      git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+      const fileUrl = pathToFileURL(bareRepo).toString()
+
+      git(repoRoot, ['remote', 'add', 'origin', fileUrl])
+      git(repoRoot, ['push', '-u', 'origin', 'main'])
+
+      using store = new GitFileSystem({
+        repository: fileUrl,
+        cacheDirectory,
+        ref: 'main',
+        autoFetch: true,
+      })
+
+      const firstMetadata = await store.getFileMetadata('src/index.js')
+      const firstAnalysisScopeId = store.getAnalysisOptions().analysisScopeId
+      const firstExports = await store.getFileExports('src/index.js')
+      expect(firstExports.map((entry) => entry.name)).toContain('value')
+      expect(firstExports.map((entry) => entry.name)).not.toContain('nextValue')
+
+      commitFile(
+        repoRoot,
+        'src/index.js',
+        `export const nextValue = 2`,
+        'update'
+      )
+      git(repoRoot, ['push', 'origin', 'main'])
+
+      const updatedMetadata = await store.getFileMetadata('src/index.js')
+      const updatedContent = await store.readFile('src/index.js')
+      expect(updatedMetadata.refCommit).not.toBe(firstMetadata.refCommit)
+      expect(updatedContent).toContain('nextValue = 2')
+      expect(store.readFileSync('src/index.js')).toContain('nextValue = 2')
+      expect(store.getAnalysisOptions().analysisScopeId).not.toBe(
+        firstAnalysisScopeId
+      )
+
+      const secondExports = await store.getFileExports('src/index.js')
+      expect(secondExports.map((entry) => entry.name)).toContain('nextValue')
+      expect(secondExports.map((entry) => entry.name)).not.toContain('value')
+    } finally {
+      rmSync(bareRoot, { recursive: true, force: true })
+    }
+  })
+
   test('throws helpful error when no commits match the entry scope', async ({
     repoRoot,
     cacheDirectory,

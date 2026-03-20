@@ -1202,12 +1202,11 @@ export class GitFileSystem
   }
 
   #getResolvedObjectRefSync(): string {
-    const direct = getLocalRefShaSync(this.repoRoot, this.ref)
-    if (direct) {
-      return direct
-    }
-
-    for (const candidate of expandRefFallbacks(this.ref)) {
+    for (const candidate of getLocalRefResolutionCandidates(
+      this.ref,
+      this.fetchRemote,
+      this.#shouldPreferRemoteTrackingRefResolution()
+    )) {
       const resolved = getLocalRefShaSync(this.repoRoot, candidate)
       if (resolved) {
         return resolved
@@ -1897,10 +1896,33 @@ export class GitFileSystem
     return new Uint8Array(buffer)
   }
 
+  #shouldPreferRemoteTrackingRefResolution(): boolean {
+    return (
+      this.repositoryIsRemote &&
+      this.#refIsExplicit &&
+      looksLikeCacheClone(this.repoRoot, this.cacheDirectory)
+    )
+  }
+
+  #getLocalRefResolutionCandidates(ref: string): string[] {
+    return getLocalRefResolutionCandidates(
+      ref,
+      this.fetchRemote,
+      this.#shouldPreferRemoteTrackingRefResolution()
+    )
+  }
+
   #ensureRepoReadySync(
     scopeDirectories: string[] = this.prepareScopeDirectories
   ) {
     if (this.#repoReady) {
+      if (
+        looksLikeCacheClone(this.repoRoot, this.cacheDirectory) &&
+        this.autoFetch &&
+        this.#refIsExplicit
+      ) {
+        this.#maybeUpdateCachedRepoForRefSync(this.ref)
+      }
       this.#ensureCachedScopeSync(scopeDirectories)
       if (!this.#git) {
         this.#git = new GitObjectStore(this.repoRoot)
@@ -1986,7 +2008,13 @@ export class GitFileSystem
       return
     }
 
-    const localSha = getLocalRefShaSync(this.repoRoot, ref)
+    let localSha: string | null = null
+    for (const candidate of this.#getLocalRefResolutionCandidates(ref)) {
+      localSha = getLocalRefShaSync(this.repoRoot, candidate)
+      if (localSha) {
+        break
+      }
+    }
     const { remote, ref: remoteRef } = getRemoteRefQuery(ref, this.fetchRemote)
     const remoteSha = getRemoteRefShaSync(this.repoRoot, remote, remoteRef)
     if (remoteSha && localSha === remoteSha) {
@@ -4182,11 +4210,25 @@ export class GitFileSystem
     scopeDirectories: string[] = this.prepareScopeDirectories
   ) {
     if (this.#repoReady) {
+      if (
+        looksLikeCacheClone(this.repoRoot, this.cacheDirectory) &&
+        this.autoFetch &&
+        this.#refIsExplicit
+      ) {
+        await this.#maybeUpdateCachedRepoForRef(this.ref)
+      }
       await this.#ensureCachedScope(scopeDirectories)
       return this.repoRoot
     }
     if (this.#repoRootPromise) {
       const repoRoot = await this.#repoRootPromise
+      if (
+        looksLikeCacheClone(this.repoRoot, this.cacheDirectory) &&
+        this.autoFetch &&
+        this.#refIsExplicit
+      ) {
+        await this.#maybeUpdateCachedRepoForRef(this.ref)
+      }
       await this.#ensureCachedScope(scopeDirectories)
       return repoRoot
     }
@@ -4236,7 +4278,10 @@ export class GitFileSystem
     }
   }
 
-  async #maybeUpdateCachedRepoForRef(ref: string): Promise<void> {
+  async #maybeUpdateCachedRepoForRef(
+    ref: string,
+    options: { forceRemoteCheck?: boolean } = {}
+  ): Promise<void> {
     if (!looksLikeCacheClone(this.repoRoot, this.cacheDirectory)) {
       return
     }
@@ -4247,10 +4292,12 @@ export class GitFileSystem
       return
     }
 
-    const localSha = await this.#getLocalRefSha(ref)
+    const localSha = await this.#resolveLocalRefToCommit(ref)
     const { remote, ref: remoteRef } = getRemoteRefQuery(ref, this.fetchRemote)
     const safeRemote = assertSafeGitArg(remote, 'remote')
-    const remoteSha = await this.#getRemoteRefSha(safeRemote, remoteRef)
+    const remoteSha = await this.#getRemoteRefSha(safeRemote, remoteRef, {
+      forceRefresh: options.forceRemoteCheck === true,
+    })
     if (!remoteSha || localSha !== remoteSha) {
       if (this.verbose) {
         console.log(
@@ -4324,7 +4371,22 @@ export class GitFileSystem
     return isFullSha(trimmed) ? trimmed : null
   }
 
-  async #getRemoteRefSha(remote: string, ref: string): Promise<string | null> {
+  async #resolveLocalRefToCommit(ref: string): Promise<string | null> {
+    for (const candidate of this.#getLocalRefResolutionCandidates(ref)) {
+      const resolved = await this.#getLocalRefSha(candidate)
+      if (resolved) {
+        return resolved
+      }
+    }
+
+    return null
+  }
+
+  async #getRemoteRefSha(
+    remote: string,
+    ref: string,
+    options: { forceRefresh?: boolean } = {}
+  ): Promise<string | null> {
     const safeRemote = assertSafeGitArg(remote, 'remote')
     const safeRef = assertSafeGitArg(ref, 'ref')
     const session = this.#getSession()
@@ -4338,7 +4400,9 @@ export class GitFileSystem
     }>(nodeKey)
     const now = Date.now()
     if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
-      return cached.remoteSha
+      if (options.forceRefresh !== true) {
+        return cached.remoteSha
+      }
     }
 
     const result = await spawnWithResult(
@@ -4436,6 +4500,16 @@ export class GitFileSystem
 
   async #getRefCommit(): Promise<string> {
     if (this.#refCommit) {
+      if (
+        looksLikeCacheClone(this.repoRoot, this.cacheDirectory) &&
+        this.autoFetch &&
+        this.#refIsExplicit &&
+        !isFullSha(this.ref)
+      ) {
+        await this.#maybeUpdateCachedRepoForRef(this.ref, {
+          forceRemoteCheck: true,
+        })
+      }
       const { identity, deterministic } = await this.#getRefCacheIdentity(
         this.ref,
         { forceRefresh: true }
@@ -4609,19 +4683,9 @@ export class GitFileSystem
   }
 
   async #resolveRefToCommit(ref: string): Promise<string | null> {
-    const safeRef = assertSafeGitArg(ref, 'ref')
     try {
       await this.#ensureRepoReady()
-      const out = await spawnWithStdout(
-        'git',
-        ['rev-parse', '--verify', `${safeRef}^{commit}`],
-        {
-          cwd: this.repoRoot,
-          maxBuffer: this.maxBufferBytes,
-        }
-      )
-      const trimmed = out.trim()
-      return /^[0-9a-f]{40}$/i.test(trimmed) ? trimmed : null
+      return await this.#resolveLocalRefToCommit(ref)
     } catch {
       return null
     }
@@ -6136,6 +6200,69 @@ function expandRefFallbacks(ref: string): string[] {
   }
 
   return uniqueStrings(out)
+}
+
+function getRemoteTrackingRefCandidates(
+  ref: string,
+  defaultRemote: string
+): string[] {
+  const out: string[] = []
+  const stringRef = String(ref).trim()
+
+  if (!stringRef || stringRef === 'HEAD') {
+    return out
+  }
+
+  const remoteMatch = stringRef.match(/^refs\/remotes\/([^/]+)\/(.+)$/)
+  if (remoteMatch) {
+    const remote = remoteMatch[1]
+    const branch = remoteMatch[2]
+    out.push(stringRef)
+    out.push(`${remote}/${branch}`)
+    return uniqueStrings(out)
+  }
+
+  const headMatch = stringRef.match(/^refs\/heads\/(.+)$/)
+  if (headMatch) {
+    const branch = headMatch[1]
+    out.push(`refs/remotes/${defaultRemote}/${branch}`)
+    out.push(`${defaultRemote}/${branch}`)
+    return uniqueStrings(out)
+  }
+
+  const shortRemoteMatch = stringRef.match(/^([^/]+)\/(.+)$/)
+  if (shortRemoteMatch) {
+    const remote = shortRemoteMatch[1]
+    const branch = shortRemoteMatch[2]
+    out.push(`refs/remotes/${remote}/${branch}`)
+    out.push(stringRef)
+    return uniqueStrings(out)
+  }
+
+  out.push(`refs/remotes/${defaultRemote}/${stringRef}`)
+  out.push(`${defaultRemote}/${stringRef}`)
+  return uniqueStrings(out)
+}
+
+function getLocalRefResolutionCandidates(
+  ref: string,
+  defaultRemote: string,
+  preferRemoteTracking: boolean
+): string[] {
+  const stringRef = String(ref).trim()
+  if (!stringRef) {
+    return []
+  }
+
+  if (!preferRemoteTracking) {
+    return uniqueStrings([stringRef, ...expandRefFallbacks(stringRef)])
+  }
+
+  return uniqueStrings([
+    ...getRemoteTrackingRefCandidates(stringRef, defaultRemote),
+    stringRef,
+    ...expandRefFallbacks(stringRef),
+  ])
 }
 
 function inferRemoteAndBranch(
