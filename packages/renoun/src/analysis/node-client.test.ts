@@ -96,6 +96,7 @@ vi.mock('./client.server.ts', () => ({
 
 describe('analysis node client transport guards', () => {
   const originalEnvironment = captureProcessEnv([
+    'NODE_ENV',
     'RENOUN_SERVER_PORT',
     'RENOUN_SERVER_HOST',
     'RENOUN_SERVER_ID',
@@ -1307,6 +1308,7 @@ describe('analysis node client transport guards', () => {
   })
 
   test('refresh notifications invalidate source metadata cache conservatively', async () => {
+    process.env['NODE_ENV'] = 'production'
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
@@ -1389,6 +1391,7 @@ describe('analysis node client transport guards', () => {
   })
 
   test('keeps colliding source metadata inputs in distinct RPC cache entries', async () => {
+    process.env['NODE_ENV'] = 'production'
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
@@ -1658,6 +1661,7 @@ describe('analysis node client transport guards', () => {
   })
 
   test('refresh notifications invalidate token cache conservatively', async () => {
+    process.env['NODE_ENV'] = 'production'
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'
     process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
@@ -1738,6 +1742,135 @@ describe('analysis node client transport guards', () => {
     const third = await module.getTokens(options)
 
     expect(third[0]?.[0]?.value).toBe('token-2')
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getTokens')
+    ).toHaveLength(2)
+  })
+
+  test('does not memoize source metadata RPC responses outside production', async () => {
+    process.env['NODE_ENV'] = 'development'
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let sourceMetadataCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getSourceTextMetadata') {
+        sourceMetadataCallCount += 1
+        return {
+          value: `remote-result-${sourceMetadataCallCount}`,
+          language: 'tsx',
+        }
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./node-client.ts')
+    const request = {
+      value: '<Button />',
+      language: 'tsx' as const,
+      analysisOptions: {
+        tsConfigFilePath: '/project/tsconfig.json',
+      },
+    }
+
+    const first = await module.getSourceTextMetadata(request)
+    const second = await module.getSourceTextMetadata(request)
+
+    expect(first).toEqual({
+      value: 'remote-result-1',
+      language: 'tsx',
+    })
+    expect(second).toEqual({
+      value: 'remote-result-2',
+      language: 'tsx',
+    })
+    expect(
+      callMethod.mock.calls.filter(([method]) => method === 'getSourceTextMetadata')
+    ).toHaveLength(2)
+  })
+
+  test('does not memoize token RPC responses outside production', async () => {
+    process.env['NODE_ENV'] = 'development'
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS'] = '60000'
+    process.env['RENOUN_ANALYSIS_REFRESH_NOTIFICATIONS'] = 'true'
+
+    const listeners = new Map<string, (payload: unknown) => void>()
+    let tokenCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'getTokens') {
+        tokenCallCount += 1
+        return [
+          [
+            {
+              value: `token-${tokenCallCount}`,
+              start: 0,
+              end: 7,
+              hasTextStyles: false,
+              isBaseColor: true,
+              isDeprecated: false,
+              isSymbol: false,
+              isWhiteSpace: false,
+              style: {},
+            },
+          ],
+        ]
+      }
+
+      if (method === 'getRefreshInvalidationsSince') {
+        return { nextCursor: 0, fullRefresh: false }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+        on: vi.fn((eventName: string, listener: (payload: unknown) => void) => {
+          listeners.set(eventName, listener)
+        }),
+      }
+    })
+
+    const module = await import('./node-client.ts')
+    const options = {
+      value: 'const value = helper()',
+      language: 'ts' as const,
+      filePath: '/project/src/a.ts',
+      theme: 'github-dark',
+      analysisOptions: {
+        tsConfigFilePath: '/project/tsconfig.json',
+      },
+    }
+
+    const first = await module.getTokens(options)
+    const second = await module.getTokens(options)
+
+    expect(first[0]?.[0]?.value).toBe('token-1')
+    expect(second[0]?.[0]?.value).toBe('token-2')
     expect(
       callMethod.mock.calls.filter(([method]) => method === 'getTokens')
     ).toHaveLength(2)

@@ -18,12 +18,13 @@ import {
   resolve as resolvePath,
 } from 'node:path'
 import { serialize } from 'node:v8'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { setGlobalTelemetry, type Telemetry } from '../utils/telemetry.ts'
+import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 
 import {
   Cache,
@@ -64,6 +65,8 @@ type SqliteComputeSlotPersistence = CacheStorePersistence & {
   releaseComputeSlot(nodeKey: string, owner: string): Promise<void>
   getComputeSlotOwner(nodeKey: string): Promise<string | undefined>
 }
+
+const originalEnvironment = captureProcessEnv(['CI'])
 
 class SyntheticContentIdFileSystem extends InMemoryFileSystem {
   readonly #contentIds = new Map<string, string>()
@@ -473,6 +476,11 @@ async function withProductionSqliteCache<T>(
 
 afterEach(() => {
   setGlobalTelemetry(undefined)
+  restoreProcessEnv(originalEnvironment)
+})
+
+beforeEach(() => {
+  delete process.env['CI']
 })
 
 describe('file-system cache integration', () => {

@@ -1,7 +1,7 @@
 import { rmSync } from 'node:fs'
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
 import {
   CacheStore,
@@ -9,7 +9,11 @@ import {
   type CacheStoreGetOrComputeOptions,
 } from '../file-system/Cache.ts'
 import { getTsMorph } from '../utils/ts-morph.ts'
-import { isDetectAsyncLeaksEnabled } from '../utils/test.ts'
+import {
+  captureProcessEnv,
+  isDetectAsyncLeaksEnabled,
+  restoreProcessEnv,
+} from '../utils/test.ts'
 import { getFileExports } from '../utils/get-file-exports.ts'
 import {
   collectTypeScriptMetadata,
@@ -34,6 +38,7 @@ import { resetRuntimeAnalysisSessionsForTests } from './runtime-analysis-session
 
 const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget, SyntaxKind } =
   getTsMorph()
+const originalEnvironment = captureProcessEnv(['CI'])
 
 function createTextMateToken(value: string) {
   const isWhiteSpace = /^\s+$/.test(value)
@@ -178,8 +183,13 @@ async function createTemporaryWorkspace(
 }
 
 describe('analysis cached analysis', () => {
+  beforeEach(() => {
+    delete process.env['CI']
+  })
+
   afterEach(() => {
     resetRuntimeAnalysisSessionsForTests()
+    restoreProcessEnv(originalEnvironment)
   })
 
   test('reuses cached source text metadata for identical inputs', async () => {

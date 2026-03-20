@@ -2,7 +2,11 @@ import { resolve } from 'node:path'
 import { realpathSync } from 'node:fs'
 
 import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
-import { isDevelopmentEnvironment, isTestEnvironment } from '../utils/env.ts'
+import {
+  isCiEnvironment,
+  isDevelopmentEnvironment,
+  isTestEnvironment,
+} from '../utils/env.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import {
   normalizeNonNegativeInteger,
@@ -669,6 +673,10 @@ export class Session {
   }
 
   #resolveWorkspaceChangeTokenTtlMs(): number {
+    if (!this.#workspaceChangeTokenTtlConfigured && isCiEnvironment()) {
+      return 0
+    }
+
     if (
       !this.#workspaceChangeTokenTtlConfigured &&
       !this.cache.usesPersistentCache
@@ -680,6 +688,10 @@ export class Session {
   }
 
   #resolveWorkspaceChangedPathsTtlMs(): number {
+    if (!this.#workspaceChangedPathsTtlConfigured && isCiEnvironment()) {
+      return 0
+    }
+
     if (
       !this.#workspaceChangedPathsTtlConfigured &&
       !this.cache.usesPersistentCache

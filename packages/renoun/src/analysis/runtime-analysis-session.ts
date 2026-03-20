@@ -2,7 +2,7 @@ import { Cache } from '../file-system/Cache.ts'
 import type { FileSystem } from '../file-system/FileSystem.ts'
 import { FileSystemSnapshot } from '../file-system/Snapshot.ts'
 import { Session } from '../file-system/Session.ts'
-import { isProductionEnvironment } from '../utils/env.ts'
+import { isCiEnvironment, isProductionEnvironment } from '../utils/env.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
@@ -102,6 +102,8 @@ function getRuntimeAnalysisCache(cache?: Cache): Cache | undefined {
 
   runtimeAnalysisNonPersistentCache ??= new Cache({
     persistence: undefined,
+    workspaceChangeTokenTtlMs: isCiEnvironment() ? 0 : undefined,
+    workspaceChangedPathsTtlMs: isCiEnvironment() ? 0 : undefined,
   })
   return runtimeAnalysisNonPersistentCache
 }

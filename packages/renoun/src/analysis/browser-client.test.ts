@@ -31,7 +31,10 @@ vi.mock('./rpc/client.ts', () => ({
 }))
 
 describe('browser-client runtime transport', () => {
+  let originalNodeEnv: string | undefined
+
   beforeEach(() => {
+    originalNodeEnv = process.env['NODE_ENV']
     vi.resetModules()
     mocks.instances.length = 0
     mocks.WebSocketClient.mockReset()
@@ -76,6 +79,12 @@ describe('browser-client runtime transport', () => {
   })
 
   afterEach(async () => {
+    if (originalNodeEnv === undefined) {
+      delete process.env['NODE_ENV']
+    } else {
+      process.env['NODE_ENV'] = originalNodeEnv
+    }
+
     const module = await import('./browser-client.ts')
     module.setAnalysisClientBrowserRuntime(undefined)
     module.__TEST_ONLY__.clearAnalysisClientRpcState()
@@ -285,6 +294,72 @@ describe('browser-client runtime transport', () => {
     expect(client.on).not.toHaveBeenCalled()
     resolveNextPendingCall(client, { text: 'quick-info-b' })
     await expect(secondPromise).resolves.toEqual({ text: 'quick-info-b' })
+  })
+
+  it('does not memoize token RPC responses outside production', async () => {
+    process.env['NODE_ENV'] = 'development'
+
+    const module = await import('./browser-client.ts')
+    const runtime: AnalysisServerRuntime = {
+      id: 'runtime-a',
+      port: '43123',
+      host: '127.0.0.1',
+    }
+    const options = {
+      value: 'const value = helper()',
+      language: 'ts' as const,
+      filePath: '/project/src/a.ts',
+      theme: 'github-dark' as const,
+      runtime,
+      analysisOptions: {
+        tsConfigFilePath: '/project/tsconfig.json',
+      },
+    }
+
+    const firstPromise = module.getTokens(options)
+    await flushBrowserClientCallQueue()
+
+    const client = getMockBrowserClient(0)
+    resolveNextPendingCall(client, [
+      [
+        {
+          value: 'token-1',
+          start: 0,
+          end: 7,
+          hasTextStyles: false,
+          isBaseColor: true,
+          isDeprecated: false,
+          isSymbol: false,
+          isWhiteSpace: false,
+          style: {},
+        },
+      ],
+    ])
+    const first = await firstPromise
+
+    const secondPromise = module.getTokens(options)
+    await flushBrowserClientCallQueue()
+
+    expect(client.callMethod).toHaveBeenCalledTimes(2)
+    resolveNextPendingCall(client, [
+      [
+        {
+          value: 'token-2',
+          start: 0,
+          end: 7,
+          hasTextStyles: false,
+          isBaseColor: true,
+          isDeprecated: false,
+          isSymbol: false,
+          isWhiteSpace: false,
+          style: {},
+        },
+      ],
+    ])
+    const second = await secondPromise
+
+    expect(first[0]?.[0]?.value).toBe('token-1')
+    expect(second[0]?.[0]?.value).toBe('token-2')
   })
 
   it('scopes refresh invalidations to the runtime that emitted them', async () => {

@@ -66,6 +66,9 @@ export const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
   'transpileSourceFile',
 ])
 
+const CLIENT_RPC_METHODS_DISABLED_OUTSIDE_PRODUCTION =
+  new Set<ClientCachedRpcMethod>(['getSourceTextMetadata', 'getTokens'])
+
 const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
   new Set<ClientCachedRpcMethod>([
     'getQuickInfoAtPosition',
@@ -431,11 +434,25 @@ export function toGetFileExportTextRpcValueText(value: unknown): string {
   throw new Error('[renoun] Invalid getFileExportText RPC response payload.')
 }
 
+function shouldDisableClientRpcMethodOutsideProduction(
+  method: ClientCachedRpcMethod
+): boolean {
+  if (!CLIENT_RPC_METHODS_DISABLED_OUTSIDE_PRODUCTION.has(method)) {
+    return false
+  }
+
+  return process.env.NODE_ENV !== 'production'
+}
+
 export function shouldBypassClientRpcCache(
   method: ClientCachedRpcMethod,
   params: unknown,
   consumeRefreshNotifications: boolean
 ): boolean {
+  if (shouldDisableClientRpcMethodOutsideProduction(method)) {
+    return true
+  }
+
   if (method === 'getFileExportText') {
     const candidate = params as { includeDependencies?: unknown }
     return (

@@ -2,5 +2,5 @@ import React from 'react'
 import { Image } from 'renoun'
 
 export function ComponentName() {
-  return <Image source="figma:KnjWnaZyFizO2HgD5tWYqh/mark" />
+  return <Image source="figma:dAtPdBGcoK4joJbnxxdjYO/mark" />
 }

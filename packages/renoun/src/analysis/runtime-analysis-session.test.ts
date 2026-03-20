@@ -144,4 +144,46 @@ describe('runtime analysis session', () => {
       rmSync(runtimeDirectory, { recursive: true, force: true })
     }
   })
+
+  test('does not cache workspace change tokens implicitly in CI', async () => {
+    process.env['CI'] = 'true'
+    process.env['NODE_ENV'] = 'development'
+
+    const runtimeDirectory = join(
+      process.cwd(),
+      '.cache',
+      `runtime-analysis-token-ttl-${Date.now()}`
+    )
+
+    mkdirSync(runtimeDirectory, { recursive: true })
+
+    try {
+      const runtimeSession = await getRuntimeAnalysisSession(
+        undefined,
+        runtimeDirectory
+      )
+
+      expect(runtimeSession).toBeDefined()
+
+      let tokenCallCount = 0
+      runtimeSession!.fileSystem.getWorkspaceChangeToken = async () => {
+        tokenCallCount += 1
+        return `token-${tokenCallCount}`
+      }
+
+      const firstToken = await runtimeSession!.session.getWorkspaceChangeToken(
+        runtimeDirectory
+      )
+      await Promise.resolve()
+      const secondToken = await runtimeSession!.session.getWorkspaceChangeToken(
+        runtimeDirectory
+      )
+
+      expect(firstToken).toBe('token-1')
+      expect(secondToken).toBe('token-2')
+      expect(tokenCallCount).toBe(2)
+    } finally {
+      rmSync(runtimeDirectory, { recursive: true, force: true })
+    }
+  })
 })

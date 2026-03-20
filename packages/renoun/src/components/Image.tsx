@@ -1,6 +1,6 @@
 import React, { cache } from 'react'
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { isAbsolute, dirname, join, posix as pathPosix } from 'node:path'
 
 import { svgToJsx } from '../utils/svg-to-jsx.ts'
@@ -156,25 +156,18 @@ function getCachedFigmaPaths(
   options?: { label?: string; nodeId?: string; scale?: number }
 ) {
   const { dirSegments, baseName } = getFigmaExportBasename(options)
-  const fileName = `${baseName}.${format}`
-
-  // Filesystem path: <cacheDir>[/segments...]/fileName
-  const fileSystemPath = join(cacheLocation.directory, ...dirSegments, fileName)
-
-  // Public path: <publicBasePath>[/segments...]/fileName
+  const fileSystemDirectory = join(cacheLocation.directory, ...dirSegments)
   const publicBaseDir =
     dirSegments.length > 0
       ? pathPosix.join(cacheLocation.publicBasePath, ...dirSegments)
       : cacheLocation.publicBasePath
-
-  const publicPathWithoutQuery = pathPosix.join(publicBaseDir, fileName)
-
-  // Use hash only as cache-busting query param, not in the filename
   const shortHash = key.slice(0, 8)
-  const publicPath =
+  const fileName =
     shortHash.length > 0
-      ? `${publicPathWithoutQuery}?v=${encodeURIComponent(shortHash)}`
-      : publicPathWithoutQuery
+      ? `${baseName}.${shortHash}.${format}`
+      : `${baseName}.${format}`
+  const fileSystemPath = join(fileSystemDirectory, fileName)
+  const publicPath = pathPosix.join(publicBaseDir, fileName)
 
   return {
     baseName,
@@ -182,6 +175,17 @@ function getCachedFigmaPaths(
     fileSystemPath,
     publicPath,
   }
+}
+
+function isFallbackCachedFigmaFileName(
+  fileName: string,
+  options: { baseName: string; format: Format }
+): boolean {
+  const { baseName, format } = options
+  return (
+    fileName === `${baseName}.${format}` ||
+    (fileName.startsWith(`${baseName}.`) && fileName.endsWith(`.${format}`))
+  )
 }
 
 function resolveFigmaCacheLocation(
@@ -231,6 +235,72 @@ async function readCachedFigmaImage(
       }
     }
   }
+  return null
+}
+
+async function readAnyCachedFigmaImage(
+  cacheLocation: FigmaCacheLocation,
+  options?: { label?: string; nodeId?: string; scale?: number }
+): Promise<CachedFigmaImage | null> {
+  const { dirSegments, baseName } = getFigmaExportBasename(options)
+  const fileSystemDirectory = join(cacheLocation.directory, ...dirSegments)
+  const publicBaseDir =
+    dirSegments.length > 0
+      ? pathPosix.join(cacheLocation.publicBasePath, ...dirSegments)
+      : cacheLocation.publicBasePath
+
+  let fileNames: string[]
+  try {
+    fileNames = await readdir(fileSystemDirectory)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+      if (process.env.RENOUN_DEBUG === 'debug') {
+        console.debug('[renoun] Failed to read figma cache directory', error)
+      }
+    }
+    return null
+  }
+
+  const formats: Array<CachedFigmaImage['format']> = ['svg', 'png', 'jpg']
+  for (const format of formats) {
+    const matchingFileName = fileNames
+      .filter((fileName) =>
+        isFallbackCachedFigmaFileName(fileName, { baseName, format })
+      )
+      .sort((first, second) => {
+        const firstIsVersioned = first !== `${baseName}.${format}`
+        const secondIsVersioned = second !== `${baseName}.${format}`
+        if (firstIsVersioned !== secondIsVersioned) {
+          return firstIsVersioned ? -1 : 1
+        }
+
+        return second.localeCompare(first)
+      })[0]
+
+    if (!matchingFileName) {
+      continue
+    }
+
+    const fileSystemPath = join(fileSystemDirectory, matchingFileName)
+    const publicPath = pathPosix.join(publicBaseDir, matchingFileName)
+
+    try {
+      if (format === 'svg') {
+        const svg = await readFile(fileSystemPath, 'utf8')
+        return { format, svg, publicPath }
+      }
+
+      await readFile(fileSystemPath)
+      return { format, publicPath }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code !== 'ENOENT') {
+        if (process.env.RENOUN_DEBUG === 'debug') {
+          console.debug('[renoun] Failed to read stale figma cache', error)
+        }
+      }
+    }
+  }
+
   return null
 }
 
@@ -1251,8 +1321,25 @@ export async function Image<Source extends string>({
     })
   }
 
+  const { fileId: matchedFileId, selector, alias } = matched
+  fileId = matchedFileId
+
+  const cacheLabel = buildCacheLabel(selector, alias, matchedBasePathname)
+  const cacheOptions = { label: cacheLabel, scale }
+  const staleCachedImage = await readAnyCachedFigmaImage(
+    cacheLocation,
+    cacheOptions
+  )
   const token = process.env['FIGMA_TOKEN']
   if (!token) {
+    if (staleCachedImage) {
+      return renderCachedFigmaImage(
+        staleCachedImage,
+        props,
+        description ?? undefined
+      )
+    }
+
     const isProduction = process.env.NODE_ENV === 'production'
     const lines: string[] = [
       '[renoun] a FIGMA_TOKEN environment variable is required to load images from Figma.\n',
@@ -1293,12 +1380,7 @@ export async function Image<Source extends string>({
 
     throw new Error(lines.join('\n'))
   }
-
-  const { fileId: matchedFileId, selector, alias } = matched
-  fileId = matchedFileId
-
-  const cacheLabel = buildCacheLabel(selector, alias, matchedBasePathname)
-  const cacheOptions = { label: cacheLabel, scale }
+  const figmaToken: string = token
 
   const figmaOptions = {
     scale,
@@ -1309,21 +1391,6 @@ export async function Image<Source extends string>({
     svgIncludeNodeId: false,
     svgSimplifyStroke: true,
   } satisfies Omit<FigmaImageOptions, 'format'>
-
-  const cacheKeyWithoutVersion = getFigmaCacheKey({
-    fileId,
-    selector: cacheLabel,
-    options: figmaOptions,
-  })
-
-  const cachedImage = await readCachedFigmaImage(
-    cacheKeyWithoutVersion,
-    cacheLocation,
-    cacheOptions
-  )
-  if (cachedImage) {
-    return renderCachedFigmaImage(cachedImage, props, description ?? undefined)
-  }
 
   // Resolve by selector (e.g. "mark") → node id + metadata
   const selectorCandidates: string[] = [selector]
@@ -1338,7 +1405,7 @@ export async function Image<Source extends string>({
   let lastErrorMessage: string | undefined
   for (const candidate of selectorCandidates) {
     try {
-      component = await resolveComponentBySelector(fileId, candidate, token)
+      component = await resolveComponentBySelector(fileId, candidate, figmaToken)
       if (component) break
     } catch (error) {
       component = null
@@ -1347,6 +1414,14 @@ export async function Image<Source extends string>({
   }
 
   if (!component) {
+    if (staleCachedImage) {
+      return renderCachedFigmaImage(
+        staleCachedImage,
+        props,
+        description ?? undefined
+      )
+    }
+
     const detail = lastErrorMessage ? stripRenounPrefix(lastErrorMessage) : ''
     throw new Error(
       `[renoun] Unable to resolve "${selector}" in file "${fileId}".` +
@@ -1357,18 +1432,37 @@ export async function Image<Source extends string>({
   const resolvedNodeId = component.nodeId
   resolvedDescription = component.description?.trim() || undefined
 
-  const fileVersion = await getFigmaFileVersion(fileId, token)
+  const fileVersion = await getFigmaFileVersion(fileId, figmaToken)
+  if (fileVersion === undefined && staleCachedImage) {
+    return renderCachedFigmaImage(
+      staleCachedImage,
+      props,
+      description ?? resolvedDescription ?? undefined
+    )
+  }
   const cacheKey = getFigmaCacheKey({
     fileId,
     selector: cacheLabel,
     options: figmaOptions,
     version: fileVersion,
   })
+  const cachedImage = await readCachedFigmaImage(
+    cacheKey,
+    cacheLocation,
+    cacheOptions
+  )
+  if (cachedImage) {
+    return renderCachedFigmaImage(
+      cachedImage,
+      props,
+      description ?? resolvedDescription ?? undefined
+    )
+  }
 
   // 6) Optionally enrich description if still missing
   if (!resolvedDescription && description === undefined) {
     try {
-      const components = await fetchFigmaComponents(fileId, token)
+      const components = await fetchFigmaComponents(fileId, figmaToken)
       const metadata = components.find(
         (component) => component.nodeId === resolvedNodeId
       )
@@ -1382,13 +1476,29 @@ export async function Image<Source extends string>({
   }
 
   // 7) Fetch from Figma and write to cache
-  const { url: bestUrl, format: resolvedFormat } = await getFigmaImageUrl(
-    fileId,
-    resolvedNodeId,
-    figmaOptions,
-    token,
-    format
-  )
+  let bestUrl: string
+  let resolvedFormat: Format
+  try {
+    const resolvedImage = await getFigmaImageUrl(
+      fileId,
+      resolvedNodeId,
+      figmaOptions,
+      figmaToken,
+      format
+    )
+    bestUrl = resolvedImage.url
+    resolvedFormat = resolvedImage.format
+  } catch (error) {
+    if (staleCachedImage) {
+      return renderCachedFigmaImage(
+        staleCachedImage,
+        props,
+        description ?? resolvedDescription ?? undefined
+      )
+    }
+
+    throw error
+  }
 
   if (resolvedFormat === 'svg') {
     try {
@@ -1439,11 +1549,19 @@ export async function Image<Source extends string>({
   }
 
   return (
-    <img
-      {...props}
-      src={bestUrl}
-      alt={description ?? resolvedDescription ?? ''}
-    />
+    staleCachedImage
+      ? renderCachedFigmaImage(
+          staleCachedImage,
+          props,
+          description ?? resolvedDescription ?? undefined
+        )
+      : (
+          <img
+            {...props}
+            src={bestUrl}
+            alt={description ?? resolvedDescription ?? ''}
+          />
+        )
   )
 }
 
@@ -1513,4 +1631,12 @@ function stripRenounPrefix(message: string): string {
     .map((line) => line.replace(/^\s*\[renoun\]\s*/iu, '').trimEnd())
     .join('\n')
     .trim()
+}
+
+export const __TEST_ONLY__ = {
+  getFigmaCacheKey,
+  readAnyCachedFigmaImage,
+  readCachedFigmaImage,
+  resolveFigmaCacheLocation,
+  writeFigmaCacheFile,
 }

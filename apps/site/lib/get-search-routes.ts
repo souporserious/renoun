@@ -1,4 +1,3 @@
-import { cache } from 'react'
 import {
   ModuleExportNotFoundError,
   isJavaScriptFile,
@@ -156,7 +155,7 @@ async function getApiRoutes(
   return routes
 }
 
-export const getSearchRoutes = cache(async () => {
+export async function getSearchRoutes() {
   const entries = await RootCollection.getEntries({ recursive: true })
 
   const routes = await Promise.all(
@@ -235,4 +234,4 @@ export const getSearchRoutes = cache(async () => {
     title,
     keywords,
   }))
-})
+}
