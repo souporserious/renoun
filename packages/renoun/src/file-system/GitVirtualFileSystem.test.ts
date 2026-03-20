@@ -501,6 +501,74 @@ describe('GitVirtualFileSystem', () => {
     expect(commitHistoryCalls).toBe(2)
   })
 
+  it('enumerates exports for remote modules through filesystem and directory APIs', async () => {
+    const archive = makeTar([
+      {
+        path: 'root/.keep',
+        content: '',
+      },
+      {
+        path: 'root/src/index.ts',
+        content: [
+          'export const alpha = 1',
+          'export function beta() {',
+          '  return alpha + 1',
+          '}',
+          'export class Gamma {}',
+        ].join('\n'),
+      },
+    ])
+
+    const mockFetch = vi.fn(async (input: unknown) => {
+      const url = String(input)
+
+      if (url.includes('/repos/owner/exports-repo/tarball/main')) {
+        return {
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          headers: createHeaders({
+            'content-type': 'application/octet-stream',
+          }),
+          arrayBuffer: async () => archive,
+        } as Response
+      }
+
+      return {
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: createHeaders({}),
+        text: async () => '',
+      } as Response
+    })
+
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const fileSystem = new GitVirtualFileSystem({
+      repository: 'owner/exports-repo',
+      host: 'github',
+      ref: 'main',
+    })
+
+    const filePath = fileSystem.getAbsolutePath('src/index.ts')
+    const directExports = await fileSystem.getFileExports(filePath)
+    expect(directExports.map((entry) => entry.name)).toEqual([
+      'alpha',
+      'beta',
+      'Gamma',
+    ])
+
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('src/index', 'ts')
+    const entryExports = await file.getExports()
+    expect(entryExports.map((entry) => entry.name)).toEqual([
+      'alpha',
+      'beta',
+      'Gamma',
+    ])
+  })
+
   it('recomputes export parsing after ref fallback switches branches', async () => {
     let defaultBranch = 'develop'
     const developArchive = makeTar([

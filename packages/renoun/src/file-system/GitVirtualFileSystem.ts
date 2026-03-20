@@ -1144,6 +1144,11 @@ export class GitVirtualFileSystem
     return result as MetadataForPath<Path>
   }
 
+  override async getFileExports(filePath: string) {
+    await this.#ensureInitialized()
+    return super.getFileExports(filePath)
+  }
+
   /** Get metadata for a file. */
   async getFileMetadata(filePath: string): Promise<GitFileMetadata> {
     await this.#ensureInitialized()
