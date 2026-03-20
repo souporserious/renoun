@@ -1,5 +1,10 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
+import { getTheme } from './get-theme.ts'
 import { validateTheme } from './theme-schema.ts'
 
 describe('theme schema', () => {
@@ -39,5 +44,50 @@ describe('theme schema', () => {
       semanticTokenColors: { variable: { foo: true } },
     }
     expect(() => validateTheme(theme)).toThrow()
+  })
+})
+
+describe('getTheme', () => {
+  it('does not reuse cached themes across aliases with different overrides', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'renoun-theme-cache-'))
+    const themePath = join(directory, 'theme.json')
+
+    try {
+      writeFileSync(
+        themePath,
+        JSON.stringify({
+          colors: {
+            'editor.background': '#101010',
+          },
+        })
+      )
+
+      const themeConfig = {
+        light: [
+          themePath,
+          {
+            colors: {
+              'editor.background': '#ffffff',
+            },
+          },
+        ],
+        dark: [
+          themePath,
+          {
+            colors: {
+              'editor.background': '#000000',
+            },
+          },
+        ],
+      } as const
+
+      const lightTheme = await getTheme('light', themeConfig)
+      const darkTheme = await getTheme('dark', themeConfig)
+
+      expect(lightTheme.colors?.['editor.background']).toBe('#ffffff')
+      expect(darkTheme.colors?.['editor.background']).toBe('#000000')
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 })

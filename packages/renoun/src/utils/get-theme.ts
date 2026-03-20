@@ -2,6 +2,7 @@ import { readFileSync, watch } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { ConfigurationOptions } from '../components/Config/types.ts'
+import { stableStringify } from './stable-serialization.ts'
 import type { TextMateThemeRaw } from './create-tokenizer.ts'
 import { loadTmTheme } from './load-package.ts'
 import { validateTheme, type Theme } from './theme-schema.ts'
@@ -34,12 +35,59 @@ function getThemeConfigName(
   return themeConfig
 }
 
-const cachedThemes = new Map<string | undefined, TextMateThemeRaw>()
+type ResolvedThemeConfigName = ReturnType<typeof getThemeConfigName>
+
+const cachedThemes = new Map<string, TextMateThemeRaw>()
 const themeWatchers = new Map<string, ReturnType<typeof watch>>()
+const themeCacheKeysByPath = new Map<string, Set<string>>()
 // Only create file-system watchers while developing so production builds
 // don't hold onto extra handles or perform redundant work.
 const shouldWatchThemes =
   process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test'
+
+function createResolvedThemeCacheKey(
+  themeName: string | undefined,
+  themeConfigName: ResolvedThemeConfigName,
+  themePath: string | undefined
+): string {
+  return stableStringify({
+    themeName: themeName ?? null,
+    themePath: themePath ?? null,
+    themeConfigName: Array.isArray(themeConfigName)
+      ? [themeConfigName[0], themeConfigName[1] ?? null]
+      : themeConfigName ?? null,
+  })
+}
+
+function registerThemeCacheKey(
+  themePath: string | undefined,
+  cacheKey: string
+): void {
+  if (!themePath || !themePath.endsWith('.json')) {
+    return
+  }
+
+  let cacheKeys = themeCacheKeysByPath.get(themePath)
+  if (!cacheKeys) {
+    cacheKeys = new Set<string>()
+    themeCacheKeysByPath.set(themePath, cacheKeys)
+  }
+
+  cacheKeys.add(cacheKey)
+}
+
+function invalidateCachedThemesForPath(themePath: string): void {
+  const cacheKeys = themeCacheKeysByPath.get(themePath)
+  if (!cacheKeys) {
+    return
+  }
+
+  for (const cacheKey of cacheKeys) {
+    cachedThemes.delete(cacheKey)
+  }
+
+  themeCacheKeysByPath.delete(themePath)
+}
 
 function ensureThemeWatcher(themePath: string) {
   if (!shouldWatchThemes || themeWatchers.has(themePath)) {
@@ -48,7 +96,7 @@ function ensureThemeWatcher(themePath: string) {
 
   try {
     const watcher = watch(themePath, { persistent: false }, (eventType) => {
-      cachedThemes.delete(themePath)
+      invalidateCachedThemesForPath(themePath)
 
       if (eventType === 'rename') {
         watcher.close()
@@ -88,7 +136,12 @@ export async function getTheme(
     themePath = resolve(process.cwd(), themePath)
   }
 
-  const cachedTheme = cachedThemes.get(themePath)
+  const cacheKey = createResolvedThemeCacheKey(
+    themeName,
+    themeConfigName,
+    themePath
+  )
+  const cachedTheme = cachedThemes.get(cacheKey)
 
   if (themePath && themePath.endsWith('.json')) {
     ensureThemeWatcher(themePath)
@@ -151,7 +204,8 @@ export async function getTheme(
     themeOverrides
   )
 
-  cachedThemes.set(themePath, finalTheme)
+  cachedThemes.set(cacheKey, finalTheme)
+  registerThemeCacheKey(themePath, cacheKey)
 
   return finalTheme
 }
