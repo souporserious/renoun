@@ -37,6 +37,16 @@ import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
 
 import {
+  getFileExportMetadata as getAnalysisFileExportMetadata,
+  getFileExportStaticValue as getAnalysisFileExportStaticValue,
+  getFileExportText as getAnalysisFileExportText,
+  getFileExports as getAnalysisFileExports,
+  getOutlineRanges as getAnalysisOutlineRanges,
+  resolveTypeAtLocation as resolveAnalysisTypeAtLocation,
+  resolveTypeAtLocationWithDependencies as resolveAnalysisTypeAtLocationWithDependencies,
+} from '../analysis/node-client.ts'
+import type { AnalysisOptions } from '../analysis/types.ts'
+import {
   ensureRelativePath,
   joinPaths,
   normalizeSlashes,
@@ -50,6 +60,9 @@ import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
 } from '../utils/is-javascript-like-extension.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
+import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
+import type { SyntaxKind } from '../utils/ts-morph.ts'
 import {
   BaseFileSystem,
   type FileReadableStream,
@@ -277,6 +290,10 @@ function resolveDefaultGitCacheDirectory(startDirectory?: string): string {
 
 function sanitizeRepositorySpecifierForStorage(specifier: string): string {
   return sanitizeCredentialedGitRemote(specifier)
+}
+
+function sanitizeCachePathSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '__')
 }
 
 /**
@@ -640,6 +657,10 @@ export class GitFileSystem
   #cache?: Cache
   #session?: Session
   #historyWarmupInFlight = new Set<string>()
+  #analysisRepoRoot?: string
+  #analysisRepoRootPromise: Promise<string> | null = null
+  #analysisRepoCommit: string | null = null
+  #preparedAnalysisScope = new Set<string>()
 
   constructor(options: GitFileSystemOptions) {
     super(options)
@@ -709,9 +730,320 @@ export class GitFileSystem
 
   getAnalysisOptions() {
     this.#ensureRepoReadySync()
-    return {
-      tsConfigFilePath: this.getAbsolutePath(this.#tsConfigPath),
+    return this.#createAnalysisOptions(
+      this.getAbsolutePath(this.#tsConfigPath),
+      this.#createAnalysisScopeIdSync()
+    )
+  }
+
+  override async getFileExports(filePath: string) {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return getAnalysisFileExports(prepared.filePath, prepared.analysisOptions)
+  }
+
+  override async getFileExportMetadata(
+    name: string,
+    filePath: string,
+    position: number,
+    kind: SyntaxKind
+  ) {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return getAnalysisFileExportMetadata(
+      name,
+      prepared.filePath,
+      position,
+      kind,
+      prepared.analysisOptions
+    )
+  }
+
+  override async getFileExportText(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    includeDependencies?: boolean
+  ) {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return getAnalysisFileExportText(
+      prepared.filePath,
+      position,
+      kind,
+      includeDependencies,
+      prepared.analysisOptions
+    )
+  }
+
+  override async getOutlineRanges(filePath: string) {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return getAnalysisOutlineRanges(prepared.filePath, prepared.analysisOptions)
+  }
+
+  override async getFileExportStaticValue(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind
+  ) {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return getAnalysisFileExportStaticValue(
+      prepared.filePath,
+      position,
+      kind,
+      prepared.analysisOptions
+    )
+  }
+
+  override async resolveTypeAtLocationWithDependencies(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    filter?: TypeFilter
+  ): Promise<ResolvedTypeAtLocationResult> {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return resolveAnalysisTypeAtLocationWithDependencies(
+      prepared.filePath,
+      position,
+      kind,
+      filter,
+      prepared.analysisOptions
+    )
+  }
+
+  override async resolveTypeAtLocation(
+    filePath: string,
+    position: number,
+    kind: SyntaxKind,
+    filter?: TypeFilter
+  ): Promise<ResolvedTypeAtLocationResult['resolvedType']> {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return resolveAnalysisTypeAtLocation(
+      prepared.filePath,
+      position,
+      kind,
+      filter,
+      prepared.analysisOptions
+    )
+  }
+
+  #createAnalysisOptions(
+    tsConfigFilePath: string,
+    analysisScopeId?: string
+  ): AnalysisOptions {
+    if (analysisScopeId) {
+      return {
+        tsConfigFilePath,
+        analysisScopeId,
+      }
     }
+
+    return {
+      tsConfigFilePath,
+    }
+  }
+
+  #createAnalysisScopeBase(): string {
+    return this.repositoryIsRemote
+      ? sanitizeRepositorySpecifierForStorage(this.repository)
+      : normalizePath(resolve(this.repoRoot))
+  }
+
+  #createAnalysisScopeIdSync(): string | undefined {
+    if (!this.#refIsExplicit) {
+      return undefined
+    }
+
+    return `git:${this.#createAnalysisScopeBase()}:${this.#getResolvedObjectRefSync()}`
+  }
+
+  async #createAnalysisScopeId(): Promise<string | undefined> {
+    if (!this.#refIsExplicit) {
+      return undefined
+    }
+
+    return `git:${this.#createAnalysisScopeBase()}:${await this.#getResolvedObjectRef()}`
+  }
+
+  async #getPreparedAnalysisContext(filePath: string): Promise<{
+    filePath: string
+    analysisOptions: AnalysisOptions
+  }> {
+    await this.#ensureRepoReady()
+
+    const relativePath = this.#normalizeToRepoPath(filePath)
+
+    if (!this.#shouldUseIsolatedAnalysisRoot()) {
+      return {
+        filePath: this.getAbsolutePath(relativePath),
+        analysisOptions: this.getAnalysisOptions(),
+      }
+    }
+
+    const analysisRoot = await this.#ensureAnalysisRepoReady()
+    await this.#ensureAnalysisScope(analysisRoot)
+
+    const analysisScopeId = await this.#createAnalysisScopeId()
+    const tsConfigFilePath = join(
+      analysisRoot,
+      this.#normalizeToRepoPath(this.#tsConfigPath)
+    )
+
+    return {
+      filePath: join(analysisRoot, relativePath),
+      analysisOptions: this.#createAnalysisOptions(
+        tsConfigFilePath,
+        analysisScopeId
+      ),
+    }
+  }
+
+  #shouldUseIsolatedAnalysisRoot(): boolean {
+    return (
+      this.#refIsExplicit &&
+      looksLikeCacheClone(this.repoRoot, this.cacheDirectory)
+    )
+  }
+
+  #resolveAnalysisRepoRootPath(): string {
+    return join(
+      this.cacheDirectory,
+      '_analysis',
+      sanitizeCachePathSegment(this.#createAnalysisScopeBase()),
+      sanitizeCachePathSegment(this.ref)
+    )
+  }
+
+  async #ensureAnalysisRepoReady(): Promise<string> {
+    const refCommit = await this.#getRefCommit()
+    const analysisRoot = this.#resolveAnalysisRepoRootPath()
+
+    if (
+      this.#analysisRepoRoot === analysisRoot &&
+      this.#analysisRepoCommit === refCommit &&
+      existsSync(join(analysisRoot, '.git'))
+    ) {
+      return analysisRoot
+    }
+
+    if (this.#analysisRepoRootPromise) {
+      return this.#analysisRepoRootPromise
+    }
+
+    this.#analysisRepoRootPromise = (async () => {
+      await mkdir(dirname(analysisRoot), { recursive: true })
+
+      const gitDirectoryPath = join(analysisRoot, '.git')
+      if (existsSync(analysisRoot) && !existsSync(gitDirectoryPath)) {
+        await rm(analysisRoot, { recursive: true, force: true })
+        this.#preparedAnalysisScope.clear()
+      }
+
+      if (!existsSync(gitDirectoryPath)) {
+        const result = await spawnWithResult(
+          'git',
+          ['worktree', 'add', '--detach', '--force', analysisRoot, refCommit],
+          {
+            cwd: this.repoRoot,
+            maxBuffer: this.maxBufferBytes,
+            verbose: this.verbose,
+          }
+        )
+
+        if (result.status !== 0) {
+          const stderr = result.stderr ? String(result.stderr).trim() : ''
+          throw new Error(
+            `[renoun] Failed to prepare analysis worktree "${analysisRoot}"${
+              stderr ? `: ${stderr}` : ''
+            }`
+          )
+        }
+
+        this.#preparedAnalysisScope.clear()
+      } else {
+        const currentCommit = await spawnWithStdout(
+          'git',
+          ['rev-parse', '--verify', 'HEAD^{commit}'],
+          {
+            cwd: analysisRoot,
+            maxBuffer: this.maxBufferBytes,
+          }
+        )
+          .then((output) => output.trim())
+          .catch(() => '')
+
+        if (currentCommit !== refCommit) {
+          const result = await spawnWithResult(
+            'git',
+            ['checkout', '--detach', '--force', refCommit],
+            {
+              cwd: analysisRoot,
+              maxBuffer: this.maxBufferBytes,
+              verbose: this.verbose,
+            }
+          )
+
+          if (result.status !== 0) {
+            const stderr = result.stderr ? String(result.stderr).trim() : ''
+            throw new Error(
+              `[renoun] Failed to update analysis worktree "${analysisRoot}"${
+                stderr ? `: ${stderr}` : ''
+              }`
+            )
+          }
+
+          this.#preparedAnalysisScope.clear()
+        }
+      }
+
+      this.#analysisRepoRoot = analysisRoot
+      this.#analysisRepoCommit = refCommit
+      return analysisRoot
+    })()
+
+    try {
+      return await this.#analysisRepoRootPromise
+    } finally {
+      this.#analysisRepoRootPromise = null
+    }
+  }
+
+  async #ensureAnalysisScope(analysisRoot: string): Promise<void> {
+    if (this.#preparedAnalysisScope.has('.')) {
+      return
+    }
+
+    const disableResult = await spawnWithResult(
+      'git',
+      ['sparse-checkout', 'disable'],
+      {
+        cwd: analysisRoot,
+        maxBuffer: this.maxBufferBytes,
+        verbose: this.verbose,
+      }
+    )
+    if (disableResult.status !== 0) {
+      const stderr = disableResult.stderr
+        ? String(disableResult.stderr).trim()
+        : ''
+      throw new Error(
+        `[renoun] Failed to expand analysis worktree "${analysisRoot}"${
+          stderr ? `: ${stderr}` : ''
+        }`
+      )
+    }
+
+    const result = await spawnWithResult('git', ['reset', '--hard', 'HEAD'], {
+      cwd: analysisRoot,
+      maxBuffer: this.maxBufferBytes,
+      verbose: this.verbose,
+    })
+    if (result.status !== 0) {
+      const stderr = result.stderr ? String(result.stderr).trim() : ''
+      throw new Error(
+        `[renoun] Failed to materialize analysis worktree "${analysisRoot}"${
+          stderr ? `: ${stderr}` : ''
+        }`
+      )
+    }
+    this.#preparedAnalysisScope = new Set(['.'])
   }
 
   async getGitFileMetadata(path: string): Promise<GitMetadata> {

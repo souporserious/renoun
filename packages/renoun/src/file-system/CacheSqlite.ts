@@ -191,15 +191,28 @@ export function getDefaultCacheDatabasePath(
   if (typeof cacheDirectory === 'string' && cacheDirectory.trim() !== '') {
     path = join(resolve(cacheDirectory), 'fs-cache.sqlite')
   } else if (projectRoot) {
-    path = join(
-      resolvePersistentProjectRootDirectory(projectRoot),
-      '.renoun',
-      'cache',
-      'fs-cache.sqlite'
-    )
+    try {
+      path = join(
+        resolveCacheRootDirectory({
+          startDirectory: resolvePersistentProjectRootDirectory(projectRoot),
+          fallbackToStartDirectory: true,
+        }),
+        'fs-cache.sqlite'
+      )
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes('filesystem root "/"')
+      ) {
+        throw new Error(
+          '[renoun] Refusing to write cache database at filesystem root "/". Run from a workspace directory or pass `dbPath`/`cacheDirectory`/`projectRoot` explicitly.'
+        )
+      }
+      throw error
+    }
   } else {
     try {
-        path = join(
+      path = join(
         resolveCacheRootDirectory({
           startDirectory,
           fallbackToStartDirectory: startDirectory !== undefined,

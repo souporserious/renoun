@@ -7269,6 +7269,110 @@ export type Metadata = Value`,
     }
   })
 
+  test('uses the Next app .next cache directory when projectRoot is passed directly', () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-next-project-root-')
+    )
+    const workspaceRoot = join(tmpDirectory, 'workspace')
+    const appRoot = join(workspaceRoot, 'apps', 'site')
+
+    mkdirSync(join(appRoot, 'app'), { recursive: true })
+    writeFileSync(
+      join(workspaceRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-cache-next-project-root-workspace',
+        private: true,
+        workspaces: ['apps/*'],
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(appRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-cache-next-project-root-app',
+        private: true,
+        dependencies: {
+          next: '15.0.0',
+        },
+      }),
+      'utf8'
+    )
+
+    try {
+      const canonicalAppRoot = realpathSync(appRoot)
+      expect(getDefaultCacheDatabasePath(appRoot)).toBe(
+        join(canonicalAppRoot, '.next', 'cache', 'renoun', 'fs-cache.sqlite')
+      )
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('collapses cached Next descendants back to the app root for sqlite persistence', () => {
+    const tmpDirectory = mkdtempSync(
+      join(tmpdir(), 'renoun-cache-next-descendant-')
+    )
+    const workspaceRoot = join(tmpDirectory, 'workspace')
+    const appRoot = join(workspaceRoot, 'apps', 'site')
+    const cachedRepoRoot = join(
+      appRoot,
+      '.next',
+      'cache',
+      'renoun',
+      'git',
+      'repo'
+    )
+
+    mkdirSync(join(appRoot, 'app'), { recursive: true })
+    mkdirSync(cachedRepoRoot, { recursive: true })
+    writeFileSync(
+      join(workspaceRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-cache-next-descendant-workspace',
+        private: true,
+        workspaces: ['apps/*'],
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(appRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-cache-next-descendant-app',
+        private: true,
+        dependencies: {
+          next: '15.0.0',
+        },
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(appRoot, '.next', 'package.json'),
+      JSON.stringify({
+        name: 'next-runtime-output',
+        private: true,
+      }),
+      'utf8'
+    )
+
+    try {
+      const canonicalAppRoot = realpathSync(appRoot)
+      const expectedDbPath = join(
+        canonicalAppRoot,
+        '.next',
+        'cache',
+        'renoun',
+        'fs-cache.sqlite'
+      )
+
+      withWorkingDirectory(cachedRepoRoot, () => {
+        expect(getDefaultCacheDatabasePath()).toBe(expectedDbPath)
+      })
+      expect(getDefaultCacheDatabasePath(cachedRepoRoot)).toBe(expectedDbPath)
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('allows overriding the sqlite cache directory from a Directory option', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-explicit-directory-')

@@ -66,25 +66,40 @@ export function resolvePersistentProjectRootDirectory(
   const { existsSync } = getNodeFs()
   const { basename, dirname, join } = getNodePath()
   const canonicalPath = resolveCanonicalPath(pathToResolve)
-  const appDirectory = dirname(canonicalPath)
-  const renounDirectory = dirname(appDirectory)
 
-  if (
-    basename(appDirectory) !== 'app' ||
-    basename(renounDirectory) !== '.renoun'
-  ) {
-    return canonicalPath
+  const isPersistentProjectRoot = (directory: string): boolean => {
+    return (
+      existsSync(join(directory, 'package.json')) ||
+      existsSync(join(directory, 'pnpm-workspace.yaml'))
+    )
   }
 
-  const projectRoot = dirname(renounDirectory)
-  if (
-    !existsSync(join(projectRoot, 'package.json')) &&
-    !existsSync(join(projectRoot, 'pnpm-workspace.yaml'))
-  ) {
-    return canonicalPath
+  let currentDirectory = canonicalPath
+  while (true) {
+    const baseName = basename(currentDirectory)
+    const parentDirectory = dirname(currentDirectory)
+
+    if (baseName === '.next') {
+      if (isPersistentProjectRoot(parentDirectory)) {
+        return resolveCanonicalPath(parentDirectory)
+      }
+    }
+
+    if (baseName === 'app' && basename(parentDirectory) === '.renoun') {
+      const projectRoot = dirname(parentDirectory)
+      if (isPersistentProjectRoot(projectRoot)) {
+        return resolveCanonicalPath(projectRoot)
+      }
+    }
+
+    if (parentDirectory === currentDirectory) {
+      break
+    }
+
+    currentDirectory = parentDirectory
   }
 
-  return resolveCanonicalPath(projectRoot)
+  return canonicalPath
 }
 
 /**
