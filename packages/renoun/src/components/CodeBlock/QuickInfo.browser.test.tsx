@@ -26,7 +26,10 @@ import {
 } from '../../analysis/browser-client.ts'
 import type { AnalysisServerRuntime } from '../../analysis/runtime-env.ts'
 import type { ConfigurationOptions } from '../Config/types.ts'
-import { QuickInfoProvider } from './QuickInfoProvider.tsx'
+import {
+  DefaultQuickInfoPopover,
+  QuickInfoProvider,
+} from './QuickInfoProvider.tsx'
 import { Symbol } from './Symbol.tsx'
 
 interface JsonRpcRequest {
@@ -311,7 +314,9 @@ function renderQuickInfoFixture(
         ]
       }
       popoverTheme={QUICK_INFO_THEME}
-      popoverClassName="quick-info-popover"
+      PopoverComponent={(props) => (
+        <DefaultQuickInfoPopover {...props} className="quick-info-popover" />
+      )}
       tokenThemeConfig={options.tokenThemeConfig}
       tokenRuntime={RUNTIME}
       tokenLanguages={['typescript']}

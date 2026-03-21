@@ -1,6 +1,5 @@
 import React, { Fragment, Suspense } from 'react'
-import type { CSSObject } from 'restyle'
-import { css } from 'restyle/css'
+import { styled, type CSSObject } from 'restyle'
 
 import {
   getSourceTextMetadata,
@@ -45,11 +44,18 @@ import { readCodeFromPath } from '../../utils/read-code-from-path.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
 import { createQuickInfoTheme } from './QuickInfoContent.tsx'
 import {
+  DefaultQuickInfoPopover,
   QuickInfoProvider,
   type QuickInfoEntry,
+  type QuickInfoPopoverProps,
 } from './QuickInfoProvider.tsx'
 import { Context } from './Context.tsx'
 import { Symbol } from './Symbol.tsx'
+import {
+  isComponentOverride,
+  normalizeSlotComponents,
+  type SlotComponentOrProps,
+} from '../../utils/slot-components.ts'
 
 type ThemeColors = Awaited<ReturnType<typeof getThemeColors>>
 
@@ -203,6 +209,112 @@ export type AnnotationRenderer = React.ComponentType<
 
 export type AnnotationRenderers = Record<string, AnnotationRenderer>
 
+const StyledToken = styled('span')
+const StyledSymbol = styled(Symbol, {})
+const StyledError = styled('span')
+
+export interface TokensTokenProps
+  extends Omit<React.ComponentProps<'span'>, 'children'> {
+  children: React.ReactNode
+  css?: CSSObject
+  quickInfoId?: string
+  highlightColor?: string
+}
+
+export interface TokensErrorProps
+  extends Omit<React.ComponentProps<'span'>, 'children'> {
+  children: React.ReactNode
+  css?: CSSObject
+}
+
+export type TokensPopoverProps = QuickInfoPopoverProps
+
+export interface TokensComponentOverrides {
+  Token: SlotComponentOrProps<TokensTokenProps>
+  Error: SlotComponentOrProps<TokensErrorProps>
+  Popover: SlotComponentOrProps<TokensPopoverProps>
+}
+
+export interface TokensComponents {
+  Token: React.ComponentType<TokensTokenProps>
+  Error: React.ComponentType<TokensErrorProps>
+  Popover: React.ComponentType<TokensPopoverProps>
+}
+
+function DefaultToken({
+  quickInfoId,
+  highlightColor,
+  ...props
+}: TokensTokenProps) {
+  if (quickInfoId) {
+    return (
+      <StyledSymbol
+        quickInfoId={quickInfoId}
+        highlightColor={highlightColor}
+        {...props}
+      />
+    )
+  }
+
+  return <StyledToken {...props} />
+}
+
+const defaultComponents: TokensComponents = {
+  Token: DefaultToken,
+  Error: StyledError,
+  Popover: DefaultQuickInfoPopover,
+}
+
+const tokensComponentKeys = ['Token', 'Error', 'Popover'] as const
+const tokensComponentKeySet = new Set<string>(tokensComponentKeys)
+
+function validateComponentsProp(
+  overrides: Partial<TokensComponentOverrides> | undefined
+) {
+  if (overrides === undefined) return
+
+  if (
+    overrides === null ||
+    typeof overrides !== 'object' ||
+    Array.isArray(overrides)
+  ) {
+    throw new Error(
+      `[renoun] The "components" prop for Tokens must be an object with keys: ${tokensComponentKeys.join(
+        ', '
+      )}.`
+    )
+  }
+
+  for (const [key, value] of Object.entries(overrides)) {
+    if (!tokensComponentKeySet.has(key)) {
+      throw new Error(
+        `[renoun] Unknown Tokens component override "${key}". Valid keys are: ${tokensComponentKeys.join(
+          ', '
+        )}.`
+      )
+    }
+
+    if (value === undefined) continue
+
+    if (
+      value === null ||
+      (!isComponentOverride(value) &&
+        (typeof value !== 'object' || Array.isArray(value)))
+    ) {
+      throw new Error(
+        `[renoun] Invalid Tokens component override for "${key}". Expected a React component or props object.`
+      )
+    }
+  }
+}
+
+function normalizeComponents(
+  overrides: Partial<TokensComponentOverrides> | undefined
+): TokensComponents {
+  validateComponentsProp(overrides)
+  return normalizeSlotComponents(defaultComponents, overrides as any)
+}
+
 export interface TokensProps {
   /** Code string to highlight and render as tokens. */
   children?: string | Promise<string>
@@ -228,26 +340,8 @@ export interface TokensProps {
   /** Whether or not to format the source code using `prettier` if installed. */
   shouldFormat?: boolean
 
-  /** CSS style object to apply to the tokens and popover elements. */
-  css?: {
-    token?: CSSObject
-    popover?: CSSObject
-    error?: CSSObject
-  }
-
-  /** Class names to apply to the tokens and popover elements. */
-  className?: {
-    token?: string
-    popover?: string
-    error?: string
-  }
-
-  /** Styles to apply to the tokens and popover elements. */
-  style?: {
-    token?: React.CSSProperties
-    popover?: React.CSSProperties
-    error?: React.CSSProperties
-  }
+  /** Override the default token, diagnostic, and quick info popover renderers. */
+  components?: Partial<TokensComponentOverrides>
 
   /** Optional theme configuration to drive highlighting explicitly. */
   theme?: ConfigurationOptions['theme']
@@ -285,26 +379,24 @@ function TokensFallback({
   path,
   baseDirectory,
   renderLine,
-  className = {},
-  style = {},
+  components: componentsProp,
   annotations,
 }: TokensProps) {
+  const components = normalizeComponents(componentsProp)
+  const hasTokenOverride = componentsProp?.Token !== undefined
   const sourceText = resolveFallbackSourceText({
     children,
     path,
     baseDirectory,
   })
   const value = stripFallbackAnnotationMarkers(sourceText, annotations)
-  const tokenClassName = className.token
-  const tokenStyle = style.token
+  const TokenComponent = components.Token
 
   if (!renderLine) {
-    if (tokenClassName || tokenStyle) {
+    if (hasTokenOverride) {
       return (
         <QuickInfoProvider>
-          <span className={tokenClassName} style={tokenStyle}>
-            {value}
-          </span>
+          <TokenComponent>{value}</TokenComponent>
         </QuickInfoProvider>
       )
     }
@@ -319,14 +411,11 @@ function TokensFallback({
     <QuickInfoProvider>
       {lines.map((line, index) => {
         const isLast = index === lastLineIndex
-        const lineNode =
-          tokenClassName || tokenStyle ? (
-            <span className={tokenClassName} style={tokenStyle}>
-              {line}
-            </span>
-          ) : (
-            line
-          )
+        const lineNode = hasTokenOverride ? (
+          <TokenComponent>{line}</TokenComponent>
+        ) : (
+          line
+        )
         const renderedLine = renderLine({
           children: lineNode,
           index,
@@ -393,12 +482,12 @@ async function TokensAsync({
   path,
   baseDirectory,
   renderLine,
-  css = {},
-  className = {},
-  style = {},
+  components: componentsProp,
   theme: themeProp,
   annotations,
 }: TokensProps) {
+  const components = normalizeComponents(componentsProp)
+  const errorDisplay = resolveErrorComponentDisplay(componentsProp?.Error)
   const context = getContext(Context)
   const shouldInheritContextMetadata = path !== null
   const isDevelopmentRuntime =
@@ -627,9 +716,7 @@ async function TokensAsync({
             quickInfoRequestSource,
             registerQuickInfoEntry,
             theme,
-            css,
-            className,
-            style,
+            components,
           })
         )
         const diagnostics = getUniqueDiagnostics(line)
@@ -638,8 +725,7 @@ async function TokensAsync({
           lineIndex,
           baseTokenClassName,
           theme,
-          className,
-          style,
+          components,
         })
         const lineChildrenWithDiagnostics = diagnosticNodes.length
           ? lineChildren.concat(diagnosticNodes)
@@ -651,7 +737,7 @@ async function TokensAsync({
         // would introduce extra vertical space below the diagnostic.
         const hasDiagnostics = diagnosticNodes.length > 0
         const explicitDiagnosticDisplay =
-          css?.error?.display ?? style?.error?.display
+          errorDisplay
         const diagnosticsAreBlock = explicitDiagnosticDisplay
           ? explicitDiagnosticDisplay !== 'inline' &&
             explicitDiagnosticDisplay !== 'inline-block'
@@ -683,9 +769,7 @@ async function TokensAsync({
         <QuickInfoProvider
           entries={quickInfoEntries}
           popoverTheme={quickInfoTheme}
-          popoverCss={css?.popover}
-          popoverClassName={className?.popover}
-          popoverStyle={style?.popover}
+          PopoverComponent={components.Popover}
           tokenThemeConfig={themeConfiguration}
           tokenRuntime={serverRuntime}
           tokenLanguages={config.languages}
@@ -705,18 +789,14 @@ async function TokensAsync({
       quickInfoRequestSource,
       registerQuickInfoEntry,
       theme,
-      css,
-      className,
-      style,
+      components,
     })
 
     return (
       <QuickInfoProvider
         entries={Array.from(quickInfoEntriesById.values())}
         popoverTheme={quickInfoTheme}
-        popoverCss={css?.popover}
-        popoverClassName={className?.popover}
-        popoverStyle={style?.popover}
+        PopoverComponent={components.Popover}
         tokenThemeConfig={themeConfiguration}
         tokenRuntime={serverRuntime}
         tokenLanguages={config.languages}
@@ -739,9 +819,7 @@ interface RenderTokenOptions {
   quickInfoRequestSource?: QuickInfoRequestSource
   registerQuickInfoEntry?: (entry: QuickInfoEntry) => void
   theme: ThemeColors
-  css?: TokensProps['css']
-  className?: TokensProps['className']
-  style?: TokensProps['style']
+  components: TokensComponents
 }
 
 interface RenderDiagnosticsOptions {
@@ -749,9 +827,7 @@ interface RenderDiagnosticsOptions {
   lineIndex: number
   baseTokenClassName?: string
   theme: ThemeColors
-  css?: TokensProps['css']
-  className?: TokensProps['className']
-  style?: TokensProps['style']
+  components: TokensComponents
 }
 
 interface RenderWithAnnotationsOptions {
@@ -764,9 +840,7 @@ interface RenderWithAnnotationsOptions {
   quickInfoRequestSource?: QuickInfoRequestSource
   registerQuickInfoEntry?: (entry: QuickInfoEntry) => void
   theme: ThemeColors
-  css?: TokensProps['css']
-  className?: TokensProps['className']
-  style?: TokensProps['style']
+  components: TokensComponents
 }
 
 function renderToken({
@@ -778,9 +852,7 @@ function renderToken({
   quickInfoRequestSource,
   registerQuickInfoEntry,
   theme,
-  css: cssProp,
-  className,
-  style,
+  components,
 }: RenderTokenOptions): React.ReactNode {
   const hasDiagnostics = Boolean(token.diagnostics?.length)
   const hasQuickInfo = Boolean(token.quickInfo)
@@ -802,24 +874,19 @@ function renderToken({
   const deprecatedStyles = {
     textDecoration: 'line-through',
   }
-  const diagnosticStyles = hasDiagnostics
+  const diagnosticStyles: CSSObject | undefined = hasDiagnostics
     ? {
         backgroundImage: `url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%2C0%206%203'%20enable-background%3D'new%200%200%206%203'%20height%3D'3'%20width%3D'6'%3E%3Cg%20fill%3D'%23f14c4c'%3E%3Cpolygon%20points%3D'5.5%2C0%202.5%2C3%201.1%2C3%204.1%2C0'%2F%3E%3Cpolygon%20points%3D'4%2C0%206%2C2%206%2C0.6%205.4%2C0'%2F%3E%3Cpolygon%20points%3D'0%2C2%201%2C3%202.4%2C3%200%2C0.6'%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E")`,
         backgroundRepeat: 'repeat-x',
         backgroundPosition: 'bottom left',
       }
     : undefined
-  const [tokenClassNamePart, Styles] = css({
+  const tokenCss = {
     ...token.style,
-    ...(token.isDeprecated && deprecatedStyles),
+    ...(token.isDeprecated ? deprecatedStyles : undefined),
     ...diagnosticStyles,
-    ...cssProp?.token,
-  })
-  const tokenClassName = joinClassNames(
-    tokenClassNamePart,
-    baseTokenClassName,
-    className?.token
-  )
+  } satisfies CSSObject
+  const TokenComponent = components.Token
 
   if (hasInteractiveQuickInfo) {
     const quickInfoId = toQuickInfoEntryId(lineIndex, tokenIndex)
@@ -843,28 +910,26 @@ function renderToken({
     })
 
     return (
-      <Symbol
+      <TokenComponent
         key={`${lineIndex}-${tokenIndex}`}
-        highlightColor={theme.editor.hoverHighlightBackground}
         quickInfoId={quickInfoId}
-        className={tokenClassName}
-        style={style?.token}
+        highlightColor={theme.editor.hoverHighlightBackground}
+        className={baseTokenClassName}
+        css={hasCssProperties(tokenCss) ? tokenCss : undefined}
       >
         {token.value}
-        <Styles />
-      </Symbol>
+      </TokenComponent>
     )
   }
 
   return (
-    <span
+    <TokenComponent
       key={`${lineIndex}-${tokenIndex}`}
-      className={tokenClassName}
-      style={style?.token}
+      className={baseTokenClassName}
+      css={hasCssProperties(tokenCss) ? tokenCss : undefined}
     >
       {token.value}
-      <Styles />
-    </span>
+    </TokenComponent>
   )
 }
 
@@ -899,25 +964,23 @@ function renderDiagnostics({
   lineIndex,
   baseTokenClassName,
   theme,
-  css: cssProp,
-  className,
-  style,
+  components,
 }: RenderDiagnosticsOptions): React.ReactNode[] {
   if (!diagnostics.length) {
     return []
   }
 
   const nodes: React.ReactNode[] = []
+  const ErrorComponent = components.Error
 
   diagnostics.forEach((diagnostic, index) => {
-    const [diagnosticClassName, Styles] = css({
+    const errorCss = {
       display: 'block',
       color: theme.editorError.foreground,
       backgroundColor: 'color-mix(in oklab, currentColor 18%, transparent)',
       paddingLeft: '0.75ch',
       whiteSpace: 'pre-wrap',
-      ...cssProp?.error,
-    })
+    } satisfies CSSObject
     const diagnosticText =
       diagnostic.code !== undefined
         ? `${diagnostic.message} (${diagnostic.code})`
@@ -925,19 +988,13 @@ function renderDiagnostics({
 
     nodes.push('\n')
     nodes.push(
-      <span
+      <ErrorComponent
         key={`diagnostic-${lineIndex}-${index}`}
-        className={joinClassNames(
-          baseTokenClassName,
-          diagnosticClassName,
-          className?.token,
-          className?.error
-        )}
-        style={{ ...style?.token, ...style?.error }}
+        className={baseTokenClassName}
+        css={errorCss}
       >
         {diagnosticText}
-        <Styles />
-      </span>
+      </ErrorComponent>
     )
   })
 
@@ -954,9 +1011,7 @@ function renderWithAnnotations({
   quickInfoRequestSource,
   registerQuickInfoEntry,
   theme,
-  css,
-  className,
-  style,
+  components,
 }: RenderWithAnnotationsOptions): React.ReactNode {
   const blockStartMap = new Map<number, BlockAnnotationInstruction[]>()
   const blockEndMap = new Map<number, BlockAnnotationInstruction[]>()
@@ -1138,9 +1193,7 @@ function renderWithAnnotations({
           quickInfoRequestSource,
           registerQuickInfoEntry,
           theme,
-          css,
-          className,
-          style,
+          components,
         })
 
         const inlineInstructions = inlineMap.get(currentPosition)
@@ -1165,8 +1218,7 @@ function renderWithAnnotations({
       lineIndex,
       baseTokenClassName,
       theme,
-      className,
-      style,
+      components,
     })
 
     for (const node of diagnosticNodes) {
@@ -1221,17 +1273,24 @@ function renderWithAnnotations({
   return rootChildren
 }
 
-function joinClassNames(
-  ...classNames: Array<string | undefined>
-): string | undefined {
-  let out: string | undefined
-  for (let index = 0; index < classNames.length; index++) {
-    const value = classNames[index]
-    if (!value) continue
-    if (out === undefined) out = value
-    else out += ' ' + value
+function hasCssProperties(value: CSSObject): boolean {
+  return Object.keys(value).length > 0
+}
+
+function resolveErrorComponentDisplay(
+  override: TokensComponentOverrides['Error'] | undefined
+): React.CSSProperties['display'] | undefined {
+  if (!override || isComponentOverride(override)) {
+    return undefined
   }
-  return out
+
+  const props = override as Omit<Partial<TokensErrorProps>, 'children'>
+  const styleDisplay = props.style?.display
+  if (styleDisplay) {
+    return styleDisplay
+  }
+
+  return props.css?.display as React.CSSProperties['display'] | undefined
 }
 
 export const __TEST_ONLY__ = {
