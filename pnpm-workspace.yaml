@@ -15,7 +15,7 @@ catalog:
   '@types/react-dom': 19.2.3
   arktype: 2.2.0
   geist: 1.7.0
-  next: 16.1.6
+  next: 16.1.7
   prettier: 3.8.1
   react: 19.2.4
   react-aria-components: 1.16.0
