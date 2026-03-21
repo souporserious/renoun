@@ -749,7 +749,7 @@ function resolveRepositorySpecifier(repository?: RepositoryInput) {
 
   if ('path' in repository) {
     try {
-      return parseGitSpecifier(new Repository(repository).toString())
+      return parseGitSpecifier(Repository.resolve(repository)?.toString() ?? '')
     } catch {
       return undefined
     }
@@ -1498,19 +1498,7 @@ export class Package<
     }
 
     const repositoryInstance =
-      options.repository instanceof Repository
-        ? options.repository
-        : options.repository
-          ? typeof options.repository === 'string'
-            ? new Repository({
-                path: options.repository,
-                cache: options.cache,
-              })
-            : new Repository({
-                ...options.repository,
-                cache: options.cache,
-              })
-          : undefined
+      Repository.resolve(options.repository, options.cache)
     const { fileSystem, packagePath } = this.#resolvePackageLocation({
       name: options.name,
       path: options.path,

@@ -2,6 +2,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import {
   mkdirSync,
+  readFileSync,
   writeFileSync,
   rmSync,
   mkdtempSync,
@@ -9,7 +10,7 @@ import {
   realpathSync,
   symlinkSync,
 } from 'node:fs'
-import { join, dirname, relative, resolve } from 'node:path'
+import { basename, join, dirname, relative, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { spawnSync } from 'node:child_process'
 import { pathToFileURL } from 'node:url'
@@ -33,10 +34,15 @@ import {
 } from './CacheSqlite.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem'
 import { FileSystemSnapshot } from './Snapshot'
-import { createGitFileSystemPersistentCacheNodeKey } from './git-cache-key'
+import {
+  createGitCloneDirectoryName,
+  createGitFileSystemPersistentCacheNodeKey,
+} from './git-cache-key'
 import { Session } from './Session'
+import * as spawnModule from './spawn.ts'
 import type {
   ExportHistoryGenerator,
+  ExportHistoryOptions,
   ExportHistoryReport,
   GitAuthor,
 } from './types'
@@ -48,6 +54,38 @@ async function drain(
   let result = await gen.next()
   while (!result.done) result = await gen.next()
   return result.value
+}
+
+function createDeferredPromise<Value = void>() {
+  let resolve!: (value: Value | PromiseLike<Value>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<Value>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
+async function waitForCondition(
+  check: () => boolean,
+  timeoutMs: number = 5_000
+): Promise<void> {
+  const start = Date.now()
+
+  while (Date.now() - start < timeoutMs) {
+    if (check()) {
+      return
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+
+  throw new Error('Timed out waiting for condition')
 }
 
 const GIT_ENV = {
@@ -807,6 +845,185 @@ describe('GitFileSystem', () => {
       store2.close()
     }
   })
+
+  it.sequential(
+    'shares in-flight export-history work across concurrent identical store instances',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const wrapperDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-git-'))
+      const previousPath = process.env.PATH
+      const previousRealGit = process.env.REAL_GIT
+      const previousLogPath = process.env.RENOUN_GIT_LOG
+      const previousStartedPath = process.env.RENOUN_GIT_LOG_STARTED
+      const previousReleasePath = process.env.RENOUN_GIT_LOG_RELEASE
+
+      initRepo(repoRoot)
+
+      try {
+        commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+        const realGit = spawnSync('which', ['git'], {
+          encoding: 'utf8',
+          shell: false,
+        }).stdout.trim()
+        const logFile = join(wrapperDirectory, 'git.log')
+        const startedFile = join(wrapperDirectory, 'git-log-started')
+        const releaseFile = join(wrapperDirectory, 'git-log-release')
+        const wrapperGitPath = join(wrapperDirectory, 'git')
+
+        writeFileSync(
+          wrapperGitPath,
+          [
+            '#!/bin/sh',
+            'printf "%s\\t" "$@" >> "$RENOUN_GIT_LOG"',
+            'printf "\\n" >> "$RENOUN_GIT_LOG"',
+            'if [ "$1" = "log" ]; then',
+            '  : > "$RENOUN_GIT_LOG_STARTED"',
+            '  while [ ! -f "$RENOUN_GIT_LOG_RELEASE" ]; do',
+            '    sleep 0.01',
+            '  done',
+            'fi',
+            'exec "$REAL_GIT" "$@"',
+            '',
+          ].join('\n'),
+          { mode: 0o755 }
+        )
+
+        process.env.PATH = `${wrapperDirectory}:${previousPath ?? ''}`
+        process.env.REAL_GIT = realGit
+        process.env.RENOUN_GIT_LOG = logFile
+        process.env.RENOUN_GIT_LOG_STARTED = startedFile
+        process.env.RENOUN_GIT_LOG_RELEASE = releaseFile
+
+        using firstStore = new GitFileSystem({
+          repository: repoRoot,
+          cacheDirectory,
+        })
+        using secondStore = new GitFileSystem({
+          repository: repoRoot,
+          cacheDirectory,
+        })
+
+        const firstReportPromise = drain(
+          firstStore.getExportHistory({
+            entry: 'src/index.ts',
+            __skipWarmup: true,
+          } as ExportHistoryOptions & { __skipWarmup: true })
+        )
+        await waitForCondition(() => existsSync(startedFile))
+
+        const secondReportPromise = drain(
+          secondStore.getExportHistory({
+            entry: 'src/index.ts',
+            __skipWarmup: true,
+          } as ExportHistoryOptions & { __skipWarmup: true })
+        )
+
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        const logLinesBeforeRelease = readFileSync(logFile, 'utf8')
+          .trim()
+          .split('\n')
+          .filter(Boolean)
+        const gitLogCountBeforeRelease = logLinesBeforeRelease.filter((line) =>
+          line.startsWith('log\t')
+        ).length
+        expect(gitLogCountBeforeRelease).toBe(1)
+
+        writeFileSync(releaseFile, 'release')
+
+        const [firstReport, secondReport] = await Promise.all([
+          firstReportPromise,
+          secondReportPromise,
+        ])
+
+        const finalGitLogCount = readFileSync(logFile, 'utf8')
+          .trim()
+          .split('\n')
+          .filter((line) => line.startsWith('log\t')).length
+
+        expect(finalGitLogCount).toBe(1)
+        expect(secondReport.lastCommitSha).toBe(firstReport.lastCommitSha)
+        expect(secondReport.nameToId).toEqual(firstReport.nameToId)
+      } finally {
+        vi.restoreAllMocks()
+        if (previousPath === undefined) {
+          delete process.env.PATH
+        } else {
+          process.env.PATH = previousPath
+        }
+        if (previousRealGit === undefined) {
+          delete process.env.REAL_GIT
+        } else {
+          process.env.REAL_GIT = previousRealGit
+        }
+        if (previousLogPath === undefined) {
+          delete process.env.RENOUN_GIT_LOG
+        } else {
+          process.env.RENOUN_GIT_LOG = previousLogPath
+        }
+        if (previousStartedPath === undefined) {
+          delete process.env.RENOUN_GIT_LOG_STARTED
+        } else {
+          process.env.RENOUN_GIT_LOG_STARTED = previousStartedPath
+        }
+        if (previousReleasePath === undefined) {
+          delete process.env.RENOUN_GIT_LOG_RELEASE
+        } else {
+          process.env.RENOUN_GIT_LOG_RELEASE = previousReleasePath
+        }
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(wrapperDirectory, { recursive: true, force: true })
+      }
+    }
+  )
+
+  test(
+    'does not block identical export-history requests when an earlier generator is abandoned after progress',
+    async ({ repoRoot, cacheDirectory }) => {
+      commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'init')
+
+      using firstStore = new GitFileSystem({ repository: repoRoot, cacheDirectory })
+      const abandonedGenerator = firstStore.getExportHistory({
+        entry: 'src/index.ts',
+        __skipWarmup: true,
+      } as ExportHistoryOptions & { __skipWarmup: true })
+
+      const firstProgress = await abandonedGenerator.next()
+      expect(firstProgress.done).toBe(false)
+      if (firstProgress.done) {
+        throw new Error('Expected an initial progress event before completion.')
+      }
+      expect(firstProgress.value.phase).toBe('start')
+
+      using secondStore = new GitFileSystem({
+        repository: repoRoot,
+        cacheDirectory,
+      })
+
+      const report = await Promise.race([
+        drain(
+          secondStore.getExportHistory({
+            entry: 'src/index.ts',
+            __skipWarmup: true,
+          } as ExportHistoryOptions & { __skipWarmup: true })
+        ),
+        new Promise<never>((_, reject) => {
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'Timed out waiting for identical export-history request to complete.'
+                )
+              ),
+            5_000
+          )
+        }),
+      ])
+
+      expect(getPrimaryId(report, 'value')).toBeDefined()
+    }
+  )
 
   test('persists rename-map entries used by export history', async ({
     repoRoot,
@@ -2601,12 +2818,14 @@ describe('GitFileSystem', () => {
         cacheDirectory,
       })
       expect(existsSync(join(asyncClone, '.git'))).toBe(true)
+      expect(basename(asyncClone)).toBe(createGitCloneDirectoryName(fileUrl))
 
       const syncClone = ensureCacheCloneSync({
         spec: fileUrl,
         cacheDirectory: synccacheDirectory,
       })
       expect(existsSync(join(syncClone, '.git'))).toBe(true)
+      expect(basename(syncClone)).toBe(createGitCloneDirectoryName(fileUrl))
     } finally {
       rmSync(bareRoot, { recursive: true, force: true })
       rmSync(synccacheDirectory, { recursive: true, force: true })
@@ -2669,6 +2888,73 @@ describe('GitFileSystem', () => {
       rmSync(bareRoot, { recursive: true, force: true })
     }
   })
+
+  it.sequential(
+    'does not force a second remote freshness check on warm explicit-ref reads',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFile(repoRoot, 'src/index.ts', `export const value = 1`, 'v1')
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        git(repoRoot, ['remote', 'add', 'origin', fileUrl])
+        git(repoRoot, ['push', '-u', 'origin', 'main'])
+
+        const cachedRepo = ensureCacheCloneSync({
+          spec: fileUrl,
+          cacheDirectory,
+        })
+        const spawnSpy = vi.spyOn(spawnModule, 'spawnWithResult')
+
+        using store = new GitFileSystem({
+          repository: cachedRepo,
+          cacheDirectory,
+          ref: 'main',
+          autoFetch: true,
+        })
+
+        await drain(
+          store.getExportHistory({
+            entry: 'src/index.ts',
+            __skipWarmup: true,
+          } as ExportHistoryOptions & { __skipWarmup: true })
+        )
+        const firstLsRemoteCount = spawnSpy.mock.calls.filter(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments[0] === 'ls-remote' &&
+            commandArguments[1] === 'origin'
+        ).length
+
+        await drain(
+          store.getExportHistory({
+            entry: 'src/index.ts',
+            __skipWarmup: true,
+          } as ExportHistoryOptions & { __skipWarmup: true })
+        )
+        const secondLsRemoteCount = spawnSpy.mock.calls.filter(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments[0] === 'ls-remote' &&
+            commandArguments[1] === 'origin'
+        ).length
+
+        expect(firstLsRemoteCount).toBeGreaterThan(0)
+        expect(secondLsRemoteCount).toBe(firstLsRemoteCount)
+      } finally {
+        vi.restoreAllMocks()
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
 
   test('reads remote cached clones after switching explicit branch refs', async ({
     repoRoot,
@@ -2766,11 +3052,13 @@ describe('GitFileSystem', () => {
       git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
       git(bareRepo, ['symbolic-ref', 'HEAD', 'refs/heads/dev'])
       const fileUrl = pathToFileURL(bareRepo).toString()
+      const spawnSpy = vi.spyOn(spawnModule, 'spawnWithResult')
 
       using masterStore = new GitFileSystem({
         repository: fileUrl,
         cacheDirectory,
         ref: 'master',
+        sparse: ['src/nodes'],
       })
 
       expect(
@@ -2785,7 +3073,37 @@ describe('GitFileSystem', () => {
       const exports = await masterStore.getFileExports(filePath)
 
       expect(exports.map((entry) => entry.name)).toContain('Checker')
+
+      const sparseDisableCalls = spawnSpy.mock.calls.filter(
+        ([command, commandArguments]) =>
+          command === 'git' &&
+          commandArguments[0] === 'sparse-checkout' &&
+          commandArguments[1] === 'disable'
+      )
+      const resetHardCalls = spawnSpy.mock.calls.filter(
+        ([command, commandArguments]) =>
+          command === 'git' &&
+          commandArguments[0] === 'reset' &&
+          commandArguments[1] === '--hard' &&
+          commandArguments[2] === 'HEAD'
+      )
+      const analysisSparseSetCall = [...spawnSpy.mock.calls]
+        .reverse()
+        .find(
+          ([command, commandArguments, options]) =>
+            command === 'git' &&
+            commandArguments[0] === 'sparse-checkout' &&
+            commandArguments[1] === 'set' &&
+            typeof options?.cwd === 'string' &&
+            options.cwd.startsWith(join(cacheDirectory, '_analysis'))
+        )
+
+      expect(sparseDisableCalls).toHaveLength(0)
+      expect(resetHardCalls).toHaveLength(0)
+      expect(analysisSparseSetCall?.[1]).toContain('src')
+      expect(analysisSparseSetCall?.[1]).not.toContain('.')
     } finally {
+      vi.restoreAllMocks()
       rmSync(bareRoot, { recursive: true, force: true })
     }
   })
@@ -2817,6 +3135,7 @@ describe('GitFileSystem', () => {
 
     const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
     const bareRepo = join(bareRoot, 'repo.git')
+    let persistenceProjectRoot: string | undefined
 
     try {
       git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
@@ -2833,7 +3152,7 @@ describe('GitFileSystem', () => {
       })
 
       const firstMetadata = await store.getFileMetadata('src/index.js')
-      const firstAnalysisScopeId = store.getAnalysisOptions().analysisScopeId
+      const firstAnalysisScopeId = store.getAnalysisScopeId()
       const firstExports = await store.getFileExports('src/index.js')
       expect(firstExports.map((entry) => entry.name)).toContain('value')
       expect(firstExports.map((entry) => entry.name)).not.toContain('nextValue')
@@ -2846,22 +3165,191 @@ describe('GitFileSystem', () => {
       )
       git(repoRoot, ['push', 'origin', 'main'])
 
-      const updatedMetadata = await store.getFileMetadata('src/index.js')
-      const updatedContent = await store.readFile('src/index.js')
-      expect(updatedMetadata.refCommit).not.toBe(firstMetadata.refCommit)
-      expect(updatedContent).toContain('nextValue = 2')
-      expect(store.readFileSync('src/index.js')).toContain('nextValue = 2')
-      expect(store.getAnalysisOptions().analysisScopeId).not.toBe(
-        firstAnalysisScopeId
+      persistenceProjectRoot = store.repoRoot
+      const persistence = getCacheStorePersistence({
+        projectRoot: persistenceProjectRoot,
+      })
+      const seedStore = new CacheStore({
+        snapshot: new FileSystemSnapshot(
+          new InMemoryFileSystem({ 'seed.ts': 'export {}' }),
+          'seed-snapshot'
+        ),
+        persistence,
+      })
+      const remoteRefNodeKey = createGitFileSystemPersistentCacheNodeKey({
+        domainVersion: GIT_HISTORY_CACHE_VERSION,
+        repository: fileUrl,
+        namespace: 'remote-ref',
+        payload: {
+          remote: 'origin',
+          ref: 'main',
+        },
+      })
+
+      await seedStore.put(
+        remoteRefNodeKey,
+        {
+          remoteSha: firstMetadata.refCommit,
+          checkedAt: Date.now() - 120_000,
+        },
+        {
+          persist: true,
+          deps: [
+            {
+              depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+              depVersion: GIT_HISTORY_CACHE_VERSION,
+            },
+          ],
+        }
       )
 
-      const secondExports = await store.getFileExports('src/index.js')
+      using refreshedStore = new GitFileSystem({
+        repository: fileUrl,
+        cacheDirectory,
+        ref: 'main',
+        autoFetch: true,
+      })
+
+      const updatedMetadata = await refreshedStore.getFileMetadata('src/index.js')
+      const updatedContent = await refreshedStore.readFile('src/index.js')
+      expect(updatedMetadata.refCommit).not.toBe(firstMetadata.refCommit)
+      expect(updatedContent).toContain('nextValue = 2')
+      expect(refreshedStore.readFileSync('src/index.js')).toContain(
+        'nextValue = 2'
+      )
+      expect(refreshedStore.getAnalysisScopeId()).not.toBe(firstAnalysisScopeId)
+
+      const secondExports = await refreshedStore.getFileExports('src/index.js')
       expect(secondExports.map((entry) => entry.name)).toContain('nextValue')
       expect(secondExports.map((entry) => entry.name)).not.toContain('value')
     } finally {
+      if (persistenceProjectRoot) {
+        disposeCacheStorePersistence({ projectRoot: persistenceProjectRoot })
+      }
       rmSync(bareRoot, { recursive: true, force: true })
     }
   })
+
+  it.sequential(
+    'refreshes explicit remote refs after remote-ref TTL expiry when the branch tip moves',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+      let persistenceProjectRoot: string | undefined
+
+      try {
+        const firstCommit = commitFile(
+          repoRoot,
+          'src/index.ts',
+          `export const value = 1`,
+          'v1'
+        )
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        git(repoRoot, ['remote', 'add', 'origin', fileUrl])
+        git(repoRoot, ['push', '-u', 'origin', 'main'])
+
+        using store = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          autoFetch: true,
+        })
+
+        expect(await store.readFile('src/index.ts')).toContain('value = 1')
+        expect(await store.readFile('src/index.ts')).toContain('value = 1')
+
+        const remoteRefNodeKey = createGitFileSystemPersistentCacheNodeKey({
+          domainVersion: GIT_HISTORY_CACHE_VERSION,
+          repository: fileUrl,
+          namespace: 'remote-ref',
+          payload: {
+            remote: 'origin',
+            ref: 'main',
+          },
+        })
+
+        const secondCommit = commitFile(
+          repoRoot,
+          'src/index.ts',
+          `export const value = 2`,
+          'v2'
+        )
+        git(repoRoot, ['push', 'origin', 'main'])
+
+        persistenceProjectRoot = store.repoRoot
+        const persistence = getCacheStorePersistence({
+          projectRoot: persistenceProjectRoot,
+        })
+        const seedStore = new CacheStore({
+          snapshot: new FileSystemSnapshot(
+            new InMemoryFileSystem({ 'seed.ts': 'export {}' }),
+            'seed-snapshot'
+          ),
+          persistence,
+        })
+
+        await seedStore.put(
+          remoteRefNodeKey,
+          {
+            remoteSha: firstCommit.hash,
+            checkedAt: Date.now() - 120_000,
+          },
+          {
+            persist: true,
+            deps: [
+              {
+                depKey: `const:git-file-system-cache:${GIT_HISTORY_CACHE_VERSION}`,
+                depVersion: GIT_HISTORY_CACHE_VERSION,
+              },
+            ],
+          }
+        )
+
+        const spawnSpy = vi.spyOn(spawnModule, 'spawnWithResult')
+        using refreshedStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          autoFetch: true,
+        })
+        const updatedContent = await refreshedStore.readFile('src/index.ts')
+
+        const lsRemoteCount = spawnSpy.mock.calls.filter(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments[0] === 'ls-remote' &&
+            commandArguments[1] === 'origin'
+        ).length
+        const fetchCount = spawnSpy.mock.calls.filter(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments.includes('fetch') &&
+            commandArguments.includes('--quiet') &&
+            commandArguments.includes('origin')
+        ).length
+
+        expect(updatedContent).toContain('value = 2')
+        expect(
+          (await refreshedStore.getFileMetadata('src/index.ts')).refCommit
+        ).toBe(secondCommit.hash)
+        expect(lsRemoteCount).toBeGreaterThan(0)
+        expect(fetchCount).toBeGreaterThan(0)
+      } finally {
+        vi.restoreAllMocks()
+        if (persistenceProjectRoot) {
+          disposeCacheStorePersistence({ projectRoot: persistenceProjectRoot })
+        }
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
 
   test('throws helpful error when no commits match the entry scope', async ({
     repoRoot,

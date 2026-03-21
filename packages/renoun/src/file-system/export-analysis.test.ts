@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import {
   scanModuleExports,
@@ -213,6 +213,48 @@ describe('scanModuleExports', () => {
 
       expect(exports.get('a')).toBeDefined()
       expect(exports.get('b')).toBeDefined()
+    })
+
+    it('falls back to compiler-node modifiers when ts.getModifiers is unavailable', async () => {
+      vi.resetModules()
+      vi.doMock('ts-morph', async () => {
+        const actual = await vi.importActual<typeof import('ts-morph')>(
+          'ts-morph'
+        )
+
+        return {
+          ...actual,
+          ts: new Proxy(actual.ts, {
+            get(target, property, receiver) {
+              if (property === 'getModifiers') {
+                return undefined
+              }
+
+              return Reflect.get(target, property, receiver)
+            },
+          }),
+        }
+      })
+
+      try {
+        const { scanModuleExports: scanModuleExportsWithMissingHelper } =
+          await import('./export-analysis')
+        const content = [
+          '/** @deprecated Use NewThing instead */',
+          'export class OldThing {}',
+        ].join('\n')
+
+        const exports = scanModuleExportsWithMissingHelper('mod.js', content)
+
+        expect(exports.get('OldThing')).toBeDefined()
+        expect(exports.get('OldThing')!.deprecated).toBe(true)
+        expect(exports.get('OldThing')!.deprecatedMessage).toBe(
+          'Use NewThing instead'
+        )
+      } finally {
+        vi.doUnmock('ts-morph')
+        vi.resetModules()
+      }
     })
   })
 

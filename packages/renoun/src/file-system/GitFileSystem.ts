@@ -112,6 +112,7 @@ import {
 } from './export-analysis.ts'
 import { GIT_HISTORY_CACHE_VERSION } from './cache-key.ts'
 import {
+  createGitCloneDirectoryName,
   createGitFileSystemPersistentCacheNodeKey,
   sanitizeCredentialedGitRemote,
 } from './git-cache-key.ts'
@@ -219,11 +220,31 @@ interface NormalizedExportHistoryRefScope {
 const REMOTE_REF_CACHE_TTL_MS = 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
 const REF_IDENTITY_CACHE_TTL_MS = 60_000
+const cachedRepoRefUpdateInFlight = new Map<string, Promise<void>>()
 
 type RefIdentity = {
   identity: string
   deterministic: boolean
   checkedAt: number
+}
+
+function getOrCreateInFlight<Value>(
+  map: Map<string, Promise<Value>>,
+  key: string,
+  create: () => Promise<Value>
+): Promise<Value> {
+  const existing = map.get(key)
+  if (existing) {
+    return existing
+  }
+
+  const promise = create().finally(() => {
+    if (map.get(key) === promise) {
+      map.delete(key)
+    }
+  })
+  map.set(key, promise)
+  return promise
 }
 
 interface PrepareRepoOptions {
@@ -315,7 +336,7 @@ export async function ensureCacheClone(
 
   mkdirSync(cacheDirectory, { recursive: true })
 
-  const safeName = redactedSpec.replace(/[^a-zA-Z0-9_-]/g, '__')
+  const safeName = createGitCloneDirectoryName(redactedSpec)
   const target = join(cacheDirectory, safeName)
   const gitDir = join(target, '.git')
 
@@ -401,7 +422,7 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
 
   mkdirSync(cacheDirectory, { recursive: true })
 
-  const safeName = redactedSpec.replace(/[^a-zA-Z0-9_-]/g, '__')
+  const safeName = createGitCloneDirectoryName(redactedSpec)
   const target = join(cacheDirectory, safeName)
   const gitDir = join(target, '.git')
 
@@ -550,6 +571,36 @@ function normalizeScopeDirectories(scopeDirectories: string[]): string[] {
     return ['.']
   }
   return Array.from(unique)
+}
+
+function collectScopeDirectoryAncestors(path: string): string[] {
+  const normalizedPath = normalizePath(String(path))
+  if (!normalizedPath || normalizedPath === '.') {
+    return []
+  }
+
+  let currentDirectory = looksLikeFilePath(normalizedPath)
+    ? normalizePath(dirname(normalizedPath))
+    : normalizedPath
+
+  if (!currentDirectory || currentDirectory === '.') {
+    return []
+  }
+
+  const scopeDirectories: string[] = []
+
+  while (currentDirectory && currentDirectory !== '.') {
+    scopeDirectories.push(currentDirectory)
+
+    const parentDirectory = normalizePath(dirname(currentDirectory))
+    if (parentDirectory === currentDirectory) {
+      break
+    }
+
+    currentDirectory = parentDirectory
+  }
+
+  return scopeDirectories
 }
 
 /** Merges the prepared scope directories with the new scope directories. */
@@ -728,12 +779,21 @@ export class GitFileSystem
     return false
   }
 
-  getAnalysisOptions() {
+  override getAnalysisScopeId(): string | undefined {
+    this.#ensureRepoReadySync()
+    return this.#createAnalysisScopeIdSync()
+  }
+
+  getAnalysisCacheMetadata() {
     this.#ensureRepoReadySync()
     return this.#createAnalysisOptions(
       this.getAbsolutePath(this.#tsConfigPath),
       this.#createAnalysisScopeIdSync()
     )
+  }
+
+  override prepareAnalysis(filePath: string) {
+    return this.#getPreparedAnalysisContext(filePath)
   }
 
   override async getFileExports(filePath: string) {
@@ -862,6 +922,32 @@ export class GitFileSystem
     return `git:${this.#createAnalysisScopeBase()}:${await this.#getResolvedObjectRef()}`
   }
 
+  #getAnalysisScopeDirectories(filePath: string): string[] {
+    const scopeDirectories = new Set<string>()
+
+    for (const preparedScopeDirectory of this.prepareScopeDirectories) {
+      scopeDirectories.add(this.#normalizeToRepoPath(preparedScopeDirectory))
+    }
+
+    for (const scopeDirectory of collectScopeDirectoryAncestors(filePath)) {
+      scopeDirectories.add(scopeDirectory)
+    }
+
+    for (const scopeDirectory of collectScopeDirectoryAncestors(
+      this.#normalizeToRepoPath(this.#tsConfigPath)
+    )) {
+      scopeDirectories.add(scopeDirectory)
+    }
+
+    const collectedScopeDirectories = Array.from(scopeDirectories)
+      .filter((scopeDirectory) => scopeDirectory.length > 0)
+      .sort()
+
+    return collectedScopeDirectories.length > 0
+      ? collectedScopeDirectories
+      : ['.']
+  }
+
   async #getPreparedAnalysisContext(filePath: string): Promise<{
     filePath: string
     analysisOptions: AnalysisOptions
@@ -873,12 +959,15 @@ export class GitFileSystem
     if (!this.#shouldUseIsolatedAnalysisRoot()) {
       return {
         filePath: this.getAbsolutePath(relativePath),
-        analysisOptions: this.getAnalysisOptions(),
+        analysisOptions: this.getAnalysisCacheMetadata(),
       }
     }
 
     const analysisRoot = await this.#ensureAnalysisRepoReady()
-    await this.#ensureAnalysisScope(analysisRoot)
+    await this.#ensureAnalysisScope(
+      analysisRoot,
+      this.#getAnalysisScopeDirectories(relativePath)
+    )
 
     const analysisScopeId = await this.#createAnalysisScopeId()
     const tsConfigFilePath = join(
@@ -1005,45 +1094,21 @@ export class GitFileSystem
     }
   }
 
-  async #ensureAnalysisScope(analysisRoot: string): Promise<void> {
-    if (this.#preparedAnalysisScope.has('.')) {
+  async #ensureAnalysisScope(
+    analysisRoot: string,
+    scopeDirectories: string[]
+  ): Promise<void> {
+    const { merged, missing } = mergeScopeDirectories(
+      this.#preparedAnalysisScope,
+      scopeDirectories
+    )
+
+    if (missing.length === 0) {
       return
     }
 
-    const disableResult = await spawnWithResult(
-      'git',
-      ['sparse-checkout', 'disable'],
-      {
-        cwd: analysisRoot,
-        maxBuffer: this.maxBufferBytes,
-        verbose: this.verbose,
-      }
-    )
-    if (disableResult.status !== 0) {
-      const stderr = disableResult.stderr
-        ? String(disableResult.stderr).trim()
-        : ''
-      throw new Error(
-        `[renoun] Failed to expand analysis worktree "${analysisRoot}"${
-          stderr ? `: ${stderr}` : ''
-        }`
-      )
-    }
-
-    const result = await spawnWithResult('git', ['reset', '--hard', 'HEAD'], {
-      cwd: analysisRoot,
-      maxBuffer: this.maxBufferBytes,
-      verbose: this.verbose,
-    })
-    if (result.status !== 0) {
-      const stderr = result.stderr ? String(result.stderr).trim() : ''
-      throw new Error(
-        `[renoun] Failed to materialize analysis worktree "${analysisRoot}"${
-          stderr ? `: ${stderr}` : ''
-        }`
-      )
-    }
-    this.#preparedAnalysisScope = new Set(['.'])
+    await ensureCachedScope(analysisRoot, merged, this.verbose)
+    this.#preparedAnalysisScope = new Set(merged)
   }
 
   async getGitFileMetadata(path: string): Promise<GitMetadata> {
@@ -3259,7 +3324,8 @@ export class GitFileSystem
 
     let resumeReport: ExportHistoryReport | null = null
     let resumeCommit: string | null = null
-    let resumeSnapshot: ExportHistoryReport['lastExportSnapshot'] | null = null
+    let resumeSnapshot: ExportHistoryReport['lastExportSnapshot'] | null =
+      null
 
     const latestPointer =
       await session.cache.get<ExportHistoryLatestPointer>(latestNodeKey)
@@ -3296,9 +3362,7 @@ export class GitFileSystem
 
     // Fetch content history
     const logStartCommit = resumeCommit ?? startCommit
-    const logRef = logStartCommit
-      ? `${logStartCommit}..${endCommit}`
-      : endCommit
+    const logRef = logStartCommit ? `${logStartCommit}..${endCommit}` : endCommit
     const contentCommits = await this.#gitLogCached(logRef, scopeDirectories, {
       reverse: true, // Oldest to Newest
       limit,
@@ -4185,6 +4249,41 @@ export class GitFileSystem
     }
   }
 
+  /** @internal */
+  registerSparsePaths(paths: Iterable<string>): void {
+    const existingScopeDirectories = new Set(
+      this.prepareScopeDirectories.map((path) =>
+        trimLeadingSlashes(trimLeadingDotSlash(normalizePath(path)))
+      )
+    )
+
+    let changed = false
+
+    for (const path of paths) {
+      const normalizedPath = trimLeadingSlashes(
+        trimLeadingDotSlash(normalizePath(String(path)))
+      )
+
+      if (!normalizedPath || normalizedPath === '.') {
+        continue
+      }
+
+      if (existingScopeDirectories.has(normalizedPath)) {
+        continue
+      }
+
+      existingScopeDirectories.add(normalizedPath)
+      this.prepareScopeDirectories.push(normalizedPath)
+      changed = true
+    }
+
+    if (!changed || !this.#repoReady) {
+      return
+    }
+
+    this.#ensureCachedScopeSync(this.prepareScopeDirectories)
+  }
+
   async #ensureCachedScope(scopeDirectories: string[]): Promise<void> {
     if (!looksLikeCacheClone(this.repoRoot, this.cacheDirectory)) {
       return
@@ -4278,10 +4377,7 @@ export class GitFileSystem
     }
   }
 
-  async #maybeUpdateCachedRepoForRef(
-    ref: string,
-    options: { forceRemoteCheck?: boolean } = {}
-  ): Promise<void> {
+  async #maybeUpdateCachedRepoForRef(ref: string): Promise<void> {
     if (!looksLikeCacheClone(this.repoRoot, this.cacheDirectory)) {
       return
     }
@@ -4295,41 +4391,23 @@ export class GitFileSystem
     const localSha = await this.#resolveLocalRefToCommit(ref)
     const { remote, ref: remoteRef } = getRemoteRefQuery(ref, this.fetchRemote)
     const safeRemote = assertSafeGitArg(remote, 'remote')
-    const remoteSha = await this.#getRemoteRefSha(safeRemote, remoteRef, {
-      forceRefresh: options.forceRemoteCheck === true,
-    })
-    if (!remoteSha || localSha !== remoteSha) {
-      if (this.verbose) {
-        console.log(
-          `[GitFileSystem] Cached ref "${ref}" moved; fetching ${safeRemote}…`
-        )
-      }
-      const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
-      let result = await spawnWithResult(
-        'git',
-        ['fetch', '--quiet', safeRemote],
-        {
-          cwd: this.repoRoot,
-          maxBuffer: this.maxBufferBytes,
-          verbose: this.verbose,
-          env: baseEnv,
-        }
-      )
-      if (result.status !== 0) {
-        const stderr = result.stderr ? String(result.stderr).trim() : ''
-        if (
-          /protocol.*file/i.test(stderr) ||
-          /file.*not allowed/i.test(stderr)
-        ) {
-          result = await spawnWithResult(
+    const updateKey = `${normalizePath(resolve(this.repoRoot))}\x00${safeRemote}\x00${remoteRef}`
+
+    return getOrCreateInFlight(
+      cachedRepoRefUpdateInFlight,
+      updateKey,
+      async () => {
+        const remoteSha = await this.#getRemoteRefSha(safeRemote, remoteRef)
+        if (!remoteSha || localSha !== remoteSha) {
+          if (this.verbose) {
+            console.log(
+              `[GitFileSystem] Cached ref "${ref}" moved; fetching ${safeRemote}…`
+            )
+          }
+          const baseEnv = { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+          let result = await spawnWithResult(
             'git',
-            [
-              '-c',
-              'protocol.file.allow=always',
-              'fetch',
-              '--quiet',
-              safeRemote,
-            ],
+            ['fetch', '--quiet', safeRemote],
             {
               cwd: this.repoRoot,
               maxBuffer: this.maxBufferBytes,
@@ -4337,21 +4415,47 @@ export class GitFileSystem
               env: baseEnv,
             }
           )
+          if (result.status !== 0) {
+            const stderr = result.stderr ? String(result.stderr).trim() : ''
+            if (
+              /protocol.*file/i.test(stderr) ||
+              /file.*not allowed/i.test(stderr)
+            ) {
+              result = await spawnWithResult(
+                'git',
+                [
+                  '-c',
+                  'protocol.file.allow=always',
+                  'fetch',
+                  '--quiet',
+                  safeRemote,
+                ],
+                {
+                  cwd: this.repoRoot,
+                  maxBuffer: this.maxBufferBytes,
+                  verbose: this.verbose,
+                  env: baseEnv,
+                }
+              )
+            }
+          }
+          if (result.status !== 0) {
+            if (this.verbose) {
+              const msg = result.stderr
+                ? String(result.stderr).trim()
+                : 'unknown error'
+              console.warn(
+                `[GitFileSystem] Fetch failed (${safeRemote}): ${msg}`
+              )
+            }
+            return
+          }
+          if (await supportsGitBackfill()) {
+            await runGitBackfill(this.repoRoot, this.verbose)
+          }
         }
       }
-      if (result.status !== 0) {
-        if (this.verbose) {
-          const msg = result.stderr
-            ? String(result.stderr).trim()
-            : 'unknown error'
-          console.warn(`[GitFileSystem] Fetch failed (${safeRemote}): ${msg}`)
-        }
-        return
-      }
-      if (await supportsGitBackfill()) {
-        await runGitBackfill(this.repoRoot, this.verbose)
-      }
-    }
+    )
   }
 
   async #getLocalRefSha(ref: string): Promise<string | null> {
@@ -4500,16 +4604,6 @@ export class GitFileSystem
 
   async #getRefCommit(): Promise<string> {
     if (this.#refCommit) {
-      if (
-        looksLikeCacheClone(this.repoRoot, this.cacheDirectory) &&
-        this.autoFetch &&
-        this.#refIsExplicit &&
-        !isFullSha(this.ref)
-      ) {
-        await this.#maybeUpdateCachedRepoForRef(this.ref, {
-          forceRemoteCheck: true,
-        })
-      }
       const { identity, deterministic } = await this.#getRefCacheIdentity(
         this.ref,
         { forceRefresh: true }
@@ -4757,10 +4851,17 @@ export class GitFileSystem
   #normalizeToRepoPath(inputPath: string) {
     const path = String(inputPath)
     const absolutePath = isAbsoluteLike(path) ? resolve(path) : null
+    const analysisRoot =
+      this.#analysisRepoRoot ??
+      (this.#shouldUseIsolatedAnalysisRoot()
+        ? this.#resolveAnalysisRepoRootPath()
+        : undefined)
 
     let relativePath = path
     if (absolutePath && isSubPath(absolutePath, this.repoRoot)) {
       relativePath = relative(this.repoRoot, absolutePath)
+    } else if (absolutePath && analysisRoot && isSubPath(absolutePath, analysisRoot)) {
+      relativePath = relative(analysisRoot, absolutePath)
     }
 
     relativePath = relativePath.split(sep).join('/')

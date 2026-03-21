@@ -1349,4 +1349,67 @@ describe('Repository', () => {
       expect(release.assets).toEqual([])
     })
   })
+
+  describe('resolve', () => {
+    test('interns equivalent repository inputs within the same cache scope', () => {
+      const workspaceRoot = mkdtempSync(join(tmpdir(), 'renoun-repository-'))
+      const cache = new Cache({ outputDirectory: join(workspaceRoot, 'cache') })
+
+      try {
+        const first = Repository.resolve(
+          {
+            path: workspaceRoot,
+            ref: 'main',
+          },
+          cache
+        )
+        const second = Repository.resolve(
+          {
+            path: workspaceRoot,
+            ref: 'main',
+          },
+          cache
+        )
+
+        expect(first).toBeDefined()
+        expect(second).toBe(first)
+      } finally {
+        rmSync(workspaceRoot, { recursive: true, force: true })
+      }
+    })
+
+    test('propagates late sparse paths into a live git file system', () => {
+      const workspaceRoot = mkdtempSync(join(tmpdir(), 'renoun-repository-'))
+      const cache = new Cache({ outputDirectory: join(workspaceRoot, 'cache') })
+      const repository = Repository.resolve(
+        {
+          path: workspaceRoot,
+          ref: 'main',
+        },
+        cache
+      )!
+
+      try {
+        const fileSystem = repository.getFileSystem()
+        expect(fileSystem).toBeInstanceOf(GitFileSystem)
+
+        const registerSparsePathsSpy = vi.spyOn(fileSystem, 'registerSparsePaths')
+        const resolvedRepository = Repository.resolve(
+          {
+            path: workspaceRoot,
+            ref: 'main',
+            sparse: ['src/nodes'],
+          },
+          cache
+        )
+
+        expect(resolvedRepository).toBe(repository)
+        expect(registerSparsePathsSpy).toHaveBeenCalledWith(['src/nodes'])
+        expect(fileSystem.prepareScopeDirectories).toContain('src/nodes')
+      } finally {
+        closeRepositoryFileSystem(repository)
+        rmSync(workspaceRoot, { recursive: true, force: true })
+      }
+    })
+  })
 })

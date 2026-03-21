@@ -327,7 +327,7 @@ export class InMemoryFileSystem
     this.#maybeCreateSourceFile(normalizedPath, entry)
   }
 
-  getAnalysisOptions() {
+  getAnalysisCacheMetadata() {
     return this.#analysisOptions
   }
 

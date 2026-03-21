@@ -1,7 +1,16 @@
 import React, { Suspense } from 'react'
 import { dirname, resolve } from 'node:path'
 
-import { JavaScriptFile, type ModuleExport } from '../../file-system/index.tsx'
+import {
+  Directory,
+  JavaScriptFile,
+  type ModuleExport,
+} from '../../file-system/entries.ts'
+import {
+  Repository,
+  type RepositoryInput,
+} from '../../file-system/Repository.ts'
+import type { FileSystem } from '../../file-system/FileSystem.ts'
 import {
   type Kind,
   type TypeFilter,
@@ -11,6 +20,8 @@ import { mapConcurrent } from '../../utils/concurrency.ts'
 import { BaseDirectoryContext } from '../Context.tsx'
 import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
+
+let hasWarnedAboutReferenceSourceWithoutContext = false
 
 type GapSize = 'small' | 'medium' | 'large'
 type ClassAccessor = NonNullable<TypeOfKind<'Class'>['accessors']>[number]
@@ -231,6 +242,12 @@ export interface ReferenceProps {
   /** The file path, `JavaScriptFile`, or `ModuleExport` type reference to resolve. */
   source: string | PathLike | JavaScriptFile<any> | ModuleExport<any>
 
+  /** Repository context for string-based `source` values. */
+  repository?: RepositoryInput
+
+  /** File-system context for string-based `source` values. */
+  fileSystem?: FileSystem
+
   /** Optional filter for including additional properties from referenced types. */
   filter?: TypeFilter
 
@@ -257,6 +274,8 @@ function ReferenceWithFallback(props: ReferenceProps) {
 
 async function ReferenceAsync({
   source,
+  repository,
+  fileSystem,
   filter,
   baseDirectory,
   components = {},
@@ -275,7 +294,38 @@ async function ReferenceAsync({
     } else {
       filePath = resolvedSource
     }
-    source = new JavaScriptFile({ path: filePath })
+
+    const resolvedRepository = Repository.resolve(repository)
+    const contextualFileSystem = fileSystem ?? resolvedRepository?.getFileSystem()
+
+    if (
+      process.env.NODE_ENV === 'development' &&
+      !resolvedRepository &&
+      !contextualFileSystem &&
+      !hasWarnedAboutReferenceSourceWithoutContext
+    ) {
+      hasWarnedAboutReferenceSourceWithoutContext = true
+      console.warn(
+        '[renoun] <Reference source=\"...\" /> is analyzing without repository or fileSystem context. Pass `repository` or `fileSystem` so string sources reuse the same git-backed caches and refs as the rest of your docs.'
+      )
+    }
+
+    if (contextualFileSystem) {
+      const workspacePath =
+        contextualFileSystem.getRelativePathToWorkspace(filePath)
+      const directory = new Directory({
+        path: dirname(workspacePath),
+        fileSystem: contextualFileSystem,
+        ...(resolvedRepository ? { repository: resolvedRepository } : {}),
+      })
+
+      source = new JavaScriptFile({
+        path: workspacePath,
+        directory,
+      })
+    } else {
+      source = new JavaScriptFile({ path: filePath })
+    }
   }
 
   let resolvedType: Kind | Kind[] | undefined

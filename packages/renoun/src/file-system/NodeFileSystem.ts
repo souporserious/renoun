@@ -100,7 +100,7 @@ export class NodeFileSystem
     return true
   }
 
-  getAnalysisOptions() {
+  getAnalysisCacheMetadata() {
     return {
       tsConfigFilePath: this.#tsConfigPath,
     }

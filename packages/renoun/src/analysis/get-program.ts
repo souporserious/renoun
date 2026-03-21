@@ -131,23 +131,30 @@ export function getProgram(options?: AnalysisOptions) {
   }
 
   const tsConfigFilePath = options?.tsConfigFilePath || 'tsconfig.json'
-  const shouldUseInMemoryFs =
-    options?.useInMemoryFileSystem || !existsSync(tsConfigFilePath)
+  const hasTypeScriptConfig = existsSync(tsConfigFilePath)
+  const shouldUseInMemoryFs = options?.useInMemoryFileSystem === true
 
-  const project = new Project(
-    shouldUseInMemoryFs
+  const projectOptions = shouldUseInMemoryFs
+    ? {
+        compilerOptions: {
+          ...defaultCompilerOptions,
+          ...options?.compilerOptions,
+        },
+        useInMemoryFileSystem: true,
+      }
+    : hasTypeScriptConfig
       ? {
+          compilerOptions: options?.compilerOptions,
+          tsConfigFilePath,
+        }
+      : {
           compilerOptions: {
             ...defaultCompilerOptions,
             ...options?.compilerOptions,
           },
-          useInMemoryFileSystem: true,
         }
-      : {
-          compilerOptions: options?.compilerOptions,
-          tsConfigFilePath,
-        }
-  )
+
+  const project = new Project(projectOptions)
   let associatedProjects = directoryToProjects.get(workspaceDirectory)
 
   if (!associatedProjects) {

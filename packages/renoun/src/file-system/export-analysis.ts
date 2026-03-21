@@ -425,10 +425,35 @@ export function getDeprecatedInfo(
 }
 
 function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  const modifiers = ts.canHaveModifiers(node)
-    ? ts.getModifiers(node)
-    : undefined
+  const modifiers = getNodeModifiers(node)
   return modifiers?.some((modifier) => modifier.kind === kind) ?? false
+}
+
+function getNodeModifiers(
+  node: ts.Node
+): readonly ts.ModifierLike[] | undefined {
+  const compilerNode = node as ts.Node & {
+    modifiers?: ts.NodeArray<ts.ModifierLike>
+  }
+
+  if (compilerNode.modifiers) {
+    return compilerNode.modifiers
+  }
+
+  const compilerTs = ts as typeof ts & {
+    canHaveModifiers?: (node: ts.Node) => boolean
+    getModifiers?: (node: ts.Node) => readonly ts.ModifierLike[] | undefined
+  }
+
+  if (
+    typeof compilerTs.canHaveModifiers === 'function' &&
+    compilerTs.canHaveModifiers(node) &&
+    typeof compilerTs.getModifiers === 'function'
+  ) {
+    return compilerTs.getModifiers(node)
+  }
+
+  return undefined
 }
 
 /**

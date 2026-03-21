@@ -514,37 +514,11 @@ function recordGitHistoryDependency(
   context.recordConstDep(dependency.name, dependency.version)
 }
 
-function isRepositoryInstance(value: unknown): value is Repository {
-  if (value instanceof Repository) return true
-  if (!value || typeof value !== 'object') return false
-  return (
-    'getFileSystem' in value &&
-    typeof (value as { getFileSystem?: unknown }).getFileSystem === 'function'
-  )
-}
-
 function normalizeRepositoryInput(
   repository?: RepositoryInput,
   cache?: Cache
 ): Repository | undefined {
-  if (!repository) return undefined
-  if (isRepositoryInstance(repository)) return repository
-
-  if (cache === undefined) {
-    return new Repository(repository)
-  }
-
-  if (typeof repository === 'string') {
-    return new Repository({
-      path: repository,
-      cache,
-    })
-  }
-
-  return new Repository({
-    ...repository,
-    cache,
-  })
+  return Repository.resolve(repository, cache)
 }
 
 async function getGitFileMetadataForPath(
@@ -5445,10 +5419,13 @@ export class Directory<
           normalizeSlashes(absolutePath)
         )
 
-        this.#repository = new Repository({
-          path: detectedRoot,
-          cache: this.#cache,
-        })
+        this.#repository = Repository.resolve(
+          {
+            path: detectedRoot,
+            cache: this.#cache,
+          },
+          this.#cache
+        )!
         this.#repository.registerSparsePath(repoRelativePath)
         this.#fileSystem = new NodeFileSystem({
           tsConfigPath: this.#tsConfigPath,

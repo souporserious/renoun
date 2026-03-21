@@ -131,7 +131,7 @@ export class FileSystemSnapshot implements Snapshot {
     const descriptor = {
       version: SNAPSHOT_VERSION,
       fileSystem: fileSystem.constructor?.name ?? 'UnknownFileSystem',
-      analysisOptions: safeGetAnalysisOptions(fileSystem),
+      analysisOptions: safeGetAnalysisMetadata(fileSystem),
       cacheIdentity: safeGetCacheIdentity(fileSystem),
       ref: safeGetStringField(fileSystem, 'ref'),
       repository: safeGetStringField(fileSystem, 'repository'),
@@ -637,9 +637,9 @@ function resolveWorkspaceChangedPathsLookupCacheTtlMs(): number {
   return WORKSPACE_CHANGED_PATHS_LOOKUP_CACHE_TTL_MS
 }
 
-function safeGetAnalysisOptions(fileSystem: FileSystem): unknown {
+function safeGetAnalysisMetadata(fileSystem: FileSystem): unknown {
   try {
-    return sanitizeAnalysisOptions(fileSystem.getAnalysisOptions())
+    return sanitizeAnalysisOptions(fileSystem.getAnalysisCacheMetadata())
   } catch {
     return undefined
   }

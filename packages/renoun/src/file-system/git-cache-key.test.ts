@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest'
 
 import {
+  createGitCloneDirectoryName,
   createGitFileSystemPersistentCacheNodeKey,
   createGitVirtualPersistentCacheNodeKey,
   sanitizeCredentialedGitRemote,
@@ -126,5 +127,11 @@ describe('git cache key sanitization', () => {
     })
 
     expect(firstKey).not.toBe(secondKey)
+  })
+
+  test('creates readable git clone directory names for github remotes', () => {
+    expect(
+      createGitCloneDirectoryName('https://github.com/mrdoob/three.js')
+    ).toBe('github_mrdoob_threejs')
   })
 })

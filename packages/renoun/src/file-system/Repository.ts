@@ -329,6 +329,41 @@ function mergeSparsePaths(
   return Array.from(merged)
 }
 
+const repositoryRegistryWithoutCache = new Map<string, WeakRef<Repository>>()
+const repositoryRegistryWithCache = new WeakMap<
+  Cache,
+  Map<string, WeakRef<Repository>>
+>()
+
+function getRepositoryRegistry(
+  cache: Cache | undefined
+): Map<string, WeakRef<Repository>> {
+  if (!cache) {
+    return repositoryRegistryWithoutCache
+  }
+
+  let registry = repositoryRegistryWithCache.get(cache)
+  if (!registry) {
+    registry = new Map<string, WeakRef<Repository>>()
+    repositoryRegistryWithCache.set(cache, registry)
+  }
+
+  return registry
+}
+
+function getAliveRepositoryFromRegistry(
+  registry: Map<string, WeakRef<Repository>>,
+  key: string
+): Repository | undefined {
+  const existing = registry.get(key)?.deref()
+  if (!existing) {
+    registry.delete(key)
+    return undefined
+  }
+
+  return existing
+}
+
 function normalizeReleaseSource(
   value: RepositoryReleaseSource | undefined
 ): { mode: 'remote' } | { mode: 'local'; version: string } {
@@ -709,6 +744,43 @@ export class Repository {
   }
   #cache?: Cache
 
+  static resolve(
+    repository?: RepositoryInput,
+    cache?: Cache
+  ): Repository | undefined {
+    if (!repository) {
+      return undefined
+    }
+
+    if (repository instanceof Repository) {
+      return repository
+    }
+
+    const candidate =
+      cache === undefined
+        ? new Repository(repository as RepositoryOptions | RepositoryConfig | string)
+        : typeof repository === 'string'
+          ? new Repository({
+              path: repository,
+              cache,
+            })
+          : new Repository({
+              ...repository,
+              cache,
+            })
+    const registry = getRepositoryRegistry(candidate.#cache)
+    const internKey = candidate.#createInternKey()
+    const existing = getAliveRepositoryFromRegistry(registry, internKey)
+
+    if (existing) {
+      existing.#mergeInternedState(candidate)
+      return existing
+    }
+
+    registry.set(internKey, new WeakRef(candidate))
+    return candidate
+  }
+
   constructor(repository?: RepositoryOptions | RepositoryConfig | string) {
     const options =
       repository === undefined
@@ -887,6 +959,81 @@ export class Repository {
     }
   }
 
+  #createInternKey(): string {
+    const fileSystemConfig =
+      this.#fileSystemConfig?.kind === 'git'
+        ? {
+            kind: 'git' as const,
+            repository: this.#fileSystemConfig.repository,
+            ref: this.#fileSystemConfig.ref ?? null,
+            depth: this.#fileSystemConfig.depth ?? null,
+          }
+        : this.#fileSystemConfig?.kind === 'virtual'
+          ? {
+              kind: 'virtual' as const,
+              repository: this.#fileSystemConfig.repository,
+              host: this.#fileSystemConfig.host,
+              ref: this.#fileSystemConfig.ref ?? null,
+              token: this.#fileSystemConfig.token ?? null,
+            }
+          : null
+
+    return JSON.stringify({
+      path: normalizeSlashes(this.#path),
+      baseUrl: this.#baseUrl ?? null,
+      host: this.#host ?? null,
+      owner: this.#owner ?? null,
+      repo: this.#repo ?? null,
+      defaultRef: this.#defaultRef,
+      defaultPath: this.#defaultPath ?? null,
+      isDefaultRefExplicit: this.#isDefaultRefExplicit,
+      releaseSource: this.#releaseSource,
+      fileSystemConfig,
+    })
+  }
+
+  #mergeInternedState(candidate: Repository): void {
+    const candidateConfiguredSparse =
+      candidate.#fileSystemConfig?.kind === 'git'
+        ? candidate.#fileSystemConfig.sparse
+        : undefined
+
+    if (candidateConfiguredSparse) {
+      this.registerSparsePaths(candidateConfiguredSparse)
+    }
+
+    for (const pendingSparsePath of candidate.#pendingSparsePaths) {
+      this.registerSparsePath(pendingSparsePath)
+    }
+  }
+
+  #applySparsePathsToLiveFileSystem(paths: Iterable<string>): void {
+    if (!(this.#fileSystem instanceof GitFileSystem)) {
+      return
+    }
+
+    this.#fileSystem.registerSparsePaths(paths)
+  }
+
+  /** @internal */
+  registerSparsePaths(paths: Iterable<string>): void {
+    const normalizedPaths: string[] = []
+
+    for (const path of paths) {
+      const normalized = normalizeSparsePath(String(path))
+      if (!normalized || this.#pendingSparsePaths.has(normalized)) {
+        continue
+      }
+
+      this.#pendingSparsePaths.add(normalized)
+      normalizedPaths.push(normalized)
+    }
+
+    if (normalizedPaths.length > 0) {
+      this.#applySparsePathsToLiveFileSystem(normalizedPaths)
+    }
+  }
+
   /** Returns a directory scoped to this repository. */
   getDirectory(path?: string): Directory {
     return new Directory({
@@ -962,11 +1109,11 @@ export class Repository {
 
   /** @internal */
   registerSparsePath(path?: string) {
-    if (!path) return
+    if (!path) {
+      return
+    }
 
-    const normalized = normalizeSparsePath(String(path))
-    if (!normalized) return
-    this.#pendingSparsePaths.add(normalized)
+    this.registerSparsePaths([path])
   }
 
   /** @internal */

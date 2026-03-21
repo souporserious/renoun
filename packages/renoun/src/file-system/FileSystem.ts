@@ -197,7 +197,33 @@ export abstract class BaseFileSystem {
         : undefined
   }
 
-  abstract getAnalysisOptions(): AnalysisOptions
+  /** Stable analysis metadata used for cache partitioning and snapshot identity. */
+  abstract getAnalysisCacheMetadata(): AnalysisOptions
+
+  /**
+   * Optional stable analysis scope identity for cache partitioning.
+   *
+   * Prefer this over reading raw analysis metadata directly.
+   */
+  getAnalysisScopeId(): string | undefined {
+    return this.getAnalysisCacheMetadata().analysisScopeId
+  }
+
+  /**
+   * Prepare a file path for analysis.
+   *
+   * Backends may rewrite `filePath` and/or return backend-specific analysis
+   * options. Callers that need direct node-client access should use this.
+   */
+  async prepareAnalysis(filePath: string): Promise<{
+    filePath: string
+    analysisOptions: AnalysisOptions
+  }> {
+    return {
+      filePath,
+      analysisOptions: this.getAnalysisCacheMetadata(),
+    }
+  }
 
   abstract getAbsolutePath(path: string): string
 
@@ -400,7 +426,10 @@ export abstract class BaseFileSystem {
   abstract isFilePathGitIgnored(filePath: string): boolean
 
   getFileExports(filePath: string) {
-    return getFileExports(filePath, this.getAnalysisOptions())
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getFileExports(preparedFilePath, analysisOptions)
+    )
   }
 
   getFileExportMetadata(
@@ -409,12 +438,15 @@ export abstract class BaseFileSystem {
     position: number,
     kind: SyntaxKind
   ) {
-    return getFileExportMetadata(
-      name,
-      filePath,
-      position,
-      kind,
-      this.getAnalysisOptions()
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getFileExportMetadata(
+          name,
+          preparedFilePath,
+          position,
+          kind,
+          analysisOptions
+        )
     )
   }
 
@@ -424,17 +456,23 @@ export abstract class BaseFileSystem {
     kind: SyntaxKind,
     includeDependencies?: boolean
   ) {
-    return getFileExportText(
-      filePath,
-      position,
-      kind,
-      includeDependencies,
-      this.getAnalysisOptions()
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getFileExportText(
+          preparedFilePath,
+          position,
+          kind,
+          includeDependencies,
+          analysisOptions
+        )
     )
   }
 
   getOutlineRanges(filePath: string) {
-    return getOutlineRanges(filePath, this.getAnalysisOptions())
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getOutlineRanges(preparedFilePath, analysisOptions)
+    )
   }
 
   async getFoldingRanges(filePath: string) {
@@ -451,11 +489,14 @@ export abstract class BaseFileSystem {
     position: number,
     kind: SyntaxKind
   ) {
-    return getFileExportStaticValue(
-      filePath,
-      position,
-      kind,
-      this.getAnalysisOptions()
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getFileExportStaticValue(
+          preparedFilePath,
+          position,
+          kind,
+          analysisOptions
+        )
     )
   }
 
@@ -465,12 +506,15 @@ export abstract class BaseFileSystem {
     kind: SyntaxKind,
     filter?: TypeFilter
   ) {
-    return resolveTypeAtLocationWithDependencies(
-      filePath,
-      position,
-      kind,
-      filter,
-      this.getAnalysisOptions()
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        resolveTypeAtLocationWithDependencies(
+          preparedFilePath,
+          position,
+          kind,
+          filter,
+          analysisOptions
+        )
     )
   }
 
@@ -481,12 +525,15 @@ export abstract class BaseFileSystem {
     kind: SyntaxKind,
     filter?: TypeFilter
   ) {
-    return resolveTypeAtLocation(
-      filePath,
-      position,
-      kind,
-      filter,
-      this.getAnalysisOptions()
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        resolveTypeAtLocation(
+          preparedFilePath,
+          position,
+          kind,
+          filter,
+          analysisOptions
+        )
     )
   }
 }
