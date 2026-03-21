@@ -8,11 +8,11 @@ describe('truncate-renoun-cache script', () => {
       'utf8'
     )
 
-    expect(scriptSource).toContain('.next/renoun/fs-cache.sqlite')
+    expect(scriptSource).toContain('.next/cache/renoun/fs-cache.sqlite')
     expect(scriptSource).toContain('.renoun/cache/fs-cache.sqlite')
-    expect(scriptSource).toContain('apps/*/.next/renoun/fs-cache.sqlite')
+    expect(scriptSource).toContain('apps/*/.next/cache/renoun/fs-cache.sqlite')
     expect(scriptSource).toContain('apps/*/.renoun/cache/fs-cache.sqlite')
-    expect(scriptSource).toContain('examples/*/.next/renoun/fs-cache.sqlite')
+    expect(scriptSource).toContain('examples/*/.next/cache/renoun/fs-cache.sqlite')
     expect(scriptSource).toContain('examples/*/.renoun/cache/fs-cache.sqlite')
   })
 })

@@ -81,11 +81,11 @@ describe('save-renoun-cache action', () => {
     )
     const cachePaths = getCachePaths(actionSource)
 
-    expect(cachePaths).toContain('.next/renoun/fs-cache.sqlite*')
+    expect(cachePaths).toContain('.next/cache/renoun/fs-cache.sqlite*')
     expect(cachePaths).toContain('.renoun/cache/fs-cache.sqlite*')
-    expect(cachePaths).toContain('apps/*/.next/renoun/fs-cache.sqlite*')
+    expect(cachePaths).toContain('apps/*/.next/cache/renoun/fs-cache.sqlite*')
     expect(cachePaths).toContain('apps/*/.renoun/cache/fs-cache.sqlite*')
-    expect(cachePaths).toContain('examples/*/.next/renoun/fs-cache.sqlite*')
+    expect(cachePaths).toContain('examples/*/.next/cache/renoun/fs-cache.sqlite*')
     expect(cachePaths).toContain('examples/*/.renoun/cache/fs-cache.sqlite*')
   })
 

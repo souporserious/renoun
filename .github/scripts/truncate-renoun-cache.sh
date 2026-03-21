@@ -4,11 +4,11 @@ set -euo pipefail
 shopt -s nullglob
 
 cache_paths=(
-  .next/renoun/fs-cache.sqlite
+  .next/cache/renoun/fs-cache.sqlite
   .renoun/cache/fs-cache.sqlite
-  apps/*/.next/renoun/fs-cache.sqlite
+  apps/*/.next/cache/renoun/fs-cache.sqlite
   apps/*/.renoun/cache/fs-cache.sqlite
-  examples/*/.next/renoun/fs-cache.sqlite
+  examples/*/.next/cache/renoun/fs-cache.sqlite
   examples/*/.renoun/cache/fs-cache.sqlite
 )
 
