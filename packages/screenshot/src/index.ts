@@ -603,6 +603,13 @@ interface RenderEnvironment {
   skipElements?: Set<Element>
 
   /**
+   * Optional frozen snapshots of live canvas elements captured at screenshot
+   * start. This preserves WebGL and animated canvas content across any async
+   * resource preparation that happens before DOM painting begins.
+   */
+  canvasSnapshots?: WeakMap<HTMLCanvasElement, HTMLCanvasElement>
+
+  /**
    * The color space to use for the canvas. Defaults to using match media query to determine the color space.
    */
   colorSpace: PredefinedColorSpace
@@ -659,6 +666,71 @@ function createCanvasLayer(
   canvas.width = Math.max(1, Math.floor(width))
   canvas.height = Math.max(1, Math.floor(height))
   return canvas
+}
+
+function snapshotCanvasElement(
+  sourceCanvas: HTMLCanvasElement
+): HTMLCanvasElement | null {
+  if (sourceCanvas.width <= 0 || sourceCanvas.height <= 0) {
+    return null
+  }
+
+  const ownerDocument = sourceCanvas.ownerDocument || document
+  const snapshot = ownerDocument.createElement('canvas')
+  snapshot.width = sourceCanvas.width
+  snapshot.height = sourceCanvas.height
+
+  const snapshotContext = snapshot.getContext('2d')
+  if (!snapshotContext) {
+    return null
+  }
+
+  try {
+    snapshotContext.drawImage(sourceCanvas, 0, 0)
+    return snapshot
+  } catch {
+    return null
+  }
+}
+
+function captureCanvasSnapshots(
+  root: Element,
+  allElements?: HTMLElement[]
+): WeakMap<HTMLCanvasElement, HTMLCanvasElement> | undefined {
+  const canvases = new Set<HTMLCanvasElement>()
+
+  if (root instanceof HTMLCanvasElement) {
+    canvases.add(root)
+  }
+
+  const descendantCanvases = root.querySelectorAll('canvas')
+  for (let index = 0; index < descendantCanvases.length; index++) {
+    canvases.add(descendantCanvases[index] as HTMLCanvasElement)
+  }
+
+  if (allElements && allElements.length) {
+    const allElementsLength = allElements.length
+    for (let index = 0; index < allElementsLength; index++) {
+      const element = allElements[index]
+      if (element instanceof HTMLCanvasElement) {
+        canvases.add(element)
+      }
+    }
+  }
+
+  if (canvases.size === 0) {
+    return undefined
+  }
+
+  const snapshots = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>()
+  for (const canvas of canvases) {
+    const snapshot = snapshotCanvasElement(canvas)
+    if (snapshot) {
+      snapshots.set(canvas, snapshot)
+    }
+  }
+
+  return snapshots
 }
 
 /**
@@ -738,6 +810,11 @@ async function renderToCanvas(
     includeFixed === 'none'
       ? undefined
       : Array.from(ownerDocument.querySelectorAll<HTMLElement>('*'))
+
+  const canvasSnapshots = captureCanvasSnapshots(
+    element as HTMLElement,
+    allElements
+  )
 
   await prepareResources(element as HTMLElement)
 
@@ -933,6 +1010,7 @@ async function renderToCanvas(
     captureRect,
     includeFixed,
     allElements,
+    canvasSnapshots,
     colorSpace,
   }
 
@@ -4320,8 +4398,20 @@ async function renderElementNode(
   if (element instanceof HTMLImageElement) {
     await renderImageElement(element, context, rect, style)
   } else if (element instanceof HTMLCanvasElement) {
-    // Inline <canvas>: draw its current bitmap.
-    context.drawImage(element, rect.left, rect.top, rect.width, rect.height)
+    // Inline <canvas>: prefer the frozen capture-start snapshot so WebGL /
+    // animated canvases do not change while async resource preparation runs.
+    const canvasSource = env.canvasSnapshots?.get(element) ?? element
+    try {
+      context.drawImage(
+        canvasSource,
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height
+      )
+    } catch {
+      // Tainted canvases or other security restrictions can prevent drawing.
+    }
   } else if (element instanceof HTMLVideoElement) {
     // Inline <video>: best-effort current frame rendering when data is ready.
     try {
@@ -10712,7 +10802,10 @@ function isWhitespaceCodePoint(code: number): boolean {
 
 function getLeadingWhitespaceLength(value: string): number {
   let index = 0
-  while (index < value.length && isWhitespaceCodePoint(value.charCodeAt(index))) {
+  while (
+    index < value.length &&
+    isWhitespaceCodePoint(value.charCodeAt(index))
+  ) {
     index += 1
   }
   return index

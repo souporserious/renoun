@@ -32,6 +32,16 @@ interface RGBA {
   a: number
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+
+  return { promise, resolve }
+}
+
 /** Get pixel color at a specific position from canvas */
 function getPixel(canvas: HTMLCanvasElement, x: number, y: number): RGBA {
   const ctx = canvas.getContext('2d')!
@@ -540,6 +550,105 @@ describe('screenshot', () => {
   })
 
   // Visual Accuracy Tests - Solid Colors
+
+  describe('visual accuracy: canvas elements', () => {
+    it('renders inline 2D canvas content', async () => {
+      const wrapper = createElement({
+        width: '64px',
+        height: '64px',
+      })
+
+      const sourceCanvas = document.createElement('canvas')
+      sourceCanvas.width = 64
+      sourceCanvas.height = 64
+      sourceCanvas.style.display = 'block'
+      sourceCanvas.style.width = '64px'
+      sourceCanvas.style.height = '64px'
+
+      const sourceContext = sourceCanvas.getContext('2d')
+      if (!sourceContext) {
+        throw new Error('2D canvas context not available in browser test')
+      }
+
+      sourceContext.fillStyle = 'rgb(255, 0, 0)'
+      sourceContext.fillRect(0, 0, 64, 64)
+
+      wrapper.appendChild(sourceCanvas)
+      container.appendChild(wrapper)
+
+      const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+      const color = sampleArea(canvas, 20, 20, 16)
+
+      expectColor(color, { r: 255, g: 0, b: 0, a: 255 })
+    })
+
+    it('captures WebGL canvas content at invocation time before async prep resumes', async () => {
+      const wrapper = createElement({
+        width: '64px',
+        height: '64px',
+      })
+
+      const sourceCanvas = document.createElement('canvas')
+      sourceCanvas.width = 64
+      sourceCanvas.height = 64
+      sourceCanvas.style.display = 'block'
+      sourceCanvas.style.width = '64px'
+      sourceCanvas.style.height = '64px'
+
+      const gl =
+        (sourceCanvas.getContext('webgl') as WebGLRenderingContext | null) ??
+        (sourceCanvas.getContext(
+          'experimental-webgl'
+        ) as WebGLRenderingContext | null)
+
+      if (!gl) {
+        throw new Error('WebGL context not available in browser test')
+      }
+
+      expect(gl.getContextAttributes()?.preserveDrawingBuffer ?? false).toBe(
+        false
+      )
+
+      gl.viewport(0, 0, 64, 64)
+      gl.clearColor(0, 1, 0, 1)
+      gl.clear(gl.COLOR_BUFFER_BIT)
+      gl.finish()
+
+      wrapper.appendChild(sourceCanvas)
+      container.appendChild(wrapper)
+
+      const fonts = document.fonts
+      const hadOwnReady = Object.prototype.hasOwnProperty.call(fonts, 'ready')
+      const ownReadyDescriptor = Object.getOwnPropertyDescriptor(fonts, 'ready')
+      const { promise, resolve } = createDeferred<void>()
+
+      Object.defineProperty(fonts, 'ready', {
+        configurable: true,
+        get: () => promise,
+      })
+
+      try {
+        const capturePromise = screenshot.canvas(wrapper, { scale: 1 })
+
+        gl.clearColor(0, 0, 0, 0)
+        gl.clear(gl.COLOR_BUFFER_BIT)
+        gl.finish()
+
+        resolve()
+
+        const canvas = await capturePromise
+        const color = sampleArea(canvas, 20, 20, 16)
+
+        expectColor(color, { r: 0, g: 255, b: 0, a: 255 }, 10)
+      } finally {
+        if (hadOwnReady && ownReadyDescriptor) {
+          Object.defineProperty(fonts, 'ready', ownReadyDescriptor)
+        } else {
+          delete (fonts as unknown as { ready?: Promise<FontFaceSet> }).ready
+        }
+      }
+    })
+  })
 
   describe('visual accuracy: solid colors', () => {
     it('renders solid red correctly', async () => {
