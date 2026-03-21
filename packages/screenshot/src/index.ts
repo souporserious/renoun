@@ -610,6 +610,12 @@ interface RenderEnvironment {
   canvasSnapshots?: WeakMap<HTMLCanvasElement, HTMLCanvasElement>
 
   /**
+   * Canvas elements that could not be snapshotted because browser security
+   * restrictions prevented their pixels from being copied.
+   */
+  unreadableCanvasElements?: WeakSet<HTMLCanvasElement>
+
+  /**
    * The color space to use for the canvas. Defaults to using match media query to determine the color space.
    */
   colorSpace: PredefinedColorSpace
@@ -668,9 +674,12 @@ function createCanvasLayer(
   return canvas
 }
 
+const unreadableCanvasSentinel = Symbol('unreadable-canvas')
+const warnedUnreadableCanvases = new WeakSet<HTMLCanvasElement>()
+
 function snapshotCanvasElement(
   sourceCanvas: HTMLCanvasElement
-): HTMLCanvasElement | null {
+): HTMLCanvasElement | typeof unreadableCanvasSentinel | null {
   if (sourceCanvas.width <= 0 || sourceCanvas.height <= 0) {
     return null
   }
@@ -689,14 +698,19 @@ function snapshotCanvasElement(
     snapshotContext.drawImage(sourceCanvas, 0, 0)
     return snapshot
   } catch {
-    return null
+    return unreadableCanvasSentinel
   }
+}
+
+interface CanvasSnapshotCapture {
+  snapshots?: WeakMap<HTMLCanvasElement, HTMLCanvasElement>
+  unreadableCanvasElements?: WeakSet<HTMLCanvasElement>
 }
 
 function captureCanvasSnapshots(
   root: Element,
   allElements?: HTMLElement[]
-): WeakMap<HTMLCanvasElement, HTMLCanvasElement> | undefined {
+): CanvasSnapshotCapture {
   const canvases = new Set<HTMLCanvasElement>()
 
   if (root instanceof HTMLCanvasElement) {
@@ -719,18 +733,104 @@ function captureCanvasSnapshots(
   }
 
   if (canvases.size === 0) {
-    return undefined
+    return {}
   }
 
   const snapshots = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>()
+  const unreadableCanvasElements = new WeakSet<HTMLCanvasElement>()
+  let hasSnapshots = false
+  let hasUnreadableCanvases = false
+
   for (const canvas of canvases) {
     const snapshot = snapshotCanvasElement(canvas)
-    if (snapshot) {
+    if (snapshot === unreadableCanvasSentinel) {
+      unreadableCanvasElements.add(canvas)
+      hasUnreadableCanvases = true
+    } else if (snapshot) {
       snapshots.set(canvas, snapshot)
+      hasSnapshots = true
     }
   }
 
-  return snapshots
+  return {
+    snapshots: hasSnapshots ? snapshots : undefined,
+    unreadableCanvasElements: hasUnreadableCanvases
+      ? unreadableCanvasElements
+      : undefined,
+  }
+}
+
+function warnUnreadableCanvas(element: HTMLCanvasElement) {
+  if (warnedUnreadableCanvases.has(element)) {
+    return
+  }
+
+  warnedUnreadableCanvases.add(element)
+
+  if (typeof console !== 'undefined' && console.warn) {
+    console.warn(
+      `[screenshot] Could not capture canvas contents because the source canvas is not readable in this browser context. This usually means cross-origin images or WebGL textures tainted the canvas. Rendering a placeholder instead. Ensure upstream image requests use CORS (for example \`crossOrigin="anonymous"\` with a matching \`Access-Control-Allow-Origin\` header) before drawing into the source canvas.`
+    )
+  }
+}
+
+function renderUnreadableCanvasPlaceholder(
+  context: CanvasRenderingContext2D,
+  rect: DOMRect,
+  radii: BorderRadii,
+  hasRadius: boolean
+) {
+  context.save()
+  context.beginPath()
+
+  if (hasRadius) {
+    pathRoundedRect(context, rect, radii)
+  } else {
+    context.rect(rect.left, rect.top, rect.width, rect.height)
+  }
+
+  context.clip()
+
+  context.fillStyle = 'rgba(148, 163, 184, 0.16)'
+  context.fillRect(rect.left, rect.top, rect.width, rect.height)
+
+  context.strokeStyle = 'rgba(71, 85, 105, 0.5)'
+  context.lineWidth = 1
+
+  const stripeSpacing = Math.max(
+    8,
+    Math.min(16, Math.round(Math.min(rect.width, rect.height) / 5))
+  )
+  const stripeSpan = rect.height + rect.width
+
+  context.beginPath()
+  for (
+    let offset = -rect.height;
+    offset <= stripeSpan;
+    offset += stripeSpacing
+  ) {
+    context.moveTo(rect.left + offset, rect.top)
+    context.lineTo(rect.left + offset + rect.height, rect.bottom)
+  }
+  context.stroke()
+
+  if (rect.width >= 96 && rect.height >= 32) {
+    const fontSize = Math.max(
+      10,
+      Math.min(14, Math.floor(Math.min(rect.width / 10, rect.height / 2.5)))
+    )
+    context.fillStyle = 'rgba(15, 23, 42, 0.78)'
+    context.font = `500 ${fontSize}px ui-monospace, SFMono-Regular, Menlo, monospace`
+    context.textAlign = 'center'
+    context.textBaseline = 'middle'
+    context.fillText(
+      'canvas unavailable',
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2
+    )
+  }
+
+  context.restore()
 }
 
 /**
@@ -811,10 +911,11 @@ async function renderToCanvas(
       ? undefined
       : Array.from(ownerDocument.querySelectorAll<HTMLElement>('*'))
 
-  const canvasSnapshots = captureCanvasSnapshots(
+  const { snapshots: canvasSnapshots, unreadableCanvasElements } =
+    captureCanvasSnapshots(
     element as HTMLElement,
     allElements
-  )
+    )
 
   await prepareResources(element as HTMLElement)
 
@@ -1011,6 +1112,7 @@ async function renderToCanvas(
     includeFixed,
     allElements,
     canvasSnapshots,
+    unreadableCanvasElements,
     colorSpace,
   }
 
@@ -4400,8 +4502,9 @@ async function renderElementNode(
   } else if (element instanceof HTMLCanvasElement) {
     // Inline <canvas>: prefer the frozen capture-start snapshot so WebGL /
     // animated canvases do not change while async resource preparation runs.
-    const canvasSource = env.canvasSnapshots?.get(element) ?? element
-    try {
+    const canvasSource = env.canvasSnapshots?.get(element)
+
+    if (canvasSource) {
       context.drawImage(
         canvasSource,
         rect.left,
@@ -4409,8 +4512,22 @@ async function renderElementNode(
         rect.width,
         rect.height
       )
-    } catch {
-      // Tainted canvases or other security restrictions can prevent drawing.
+    } else if (env.unreadableCanvasElements?.has(element)) {
+      warnUnreadableCanvas(element)
+      renderUnreadableCanvasPlaceholder(context, rect, radii, hasRadius)
+    } else {
+      try {
+        context.drawImage(
+          element,
+          rect.left,
+          rect.top,
+          rect.width,
+          rect.height
+        )
+      } catch {
+        warnUnreadableCanvas(element)
+        renderUnreadableCanvasPlaceholder(context, rect, radii, hasRadius)
+      }
     }
   } else if (element instanceof HTMLVideoElement) {
     // Inline <video>: best-effort current frame rendering when data is ready.

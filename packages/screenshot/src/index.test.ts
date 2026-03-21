@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { page } from 'vitest/browser'
 import { screenshot } from './index.js'
 import { geistMonoLatinExtWoff2Base64 } from '../fixtures/fonts/geist-mono-latin-ext.woff2.ts'
@@ -646,6 +646,74 @@ describe('screenshot', () => {
         } else {
           delete (fonts as unknown as { ready?: Promise<FontFaceSet> }).ready
         }
+      }
+    })
+
+    it('renders a placeholder for unreadable canvases and warns clearly', async () => {
+      const wrapper = createElement({
+        width: '128px',
+        height: '64px',
+      })
+
+      const sourceCanvas = document.createElement('canvas')
+      sourceCanvas.width = 128
+      sourceCanvas.height = 64
+      sourceCanvas.style.display = 'block'
+      sourceCanvas.style.width = '128px'
+      sourceCanvas.style.height = '64px'
+
+      const sourceContext = sourceCanvas.getContext('2d')
+      if (!sourceContext) {
+        throw new Error('2D canvas context not available in browser test')
+      }
+
+      sourceContext.fillStyle = 'rgb(255, 0, 0)'
+      sourceContext.fillRect(0, 0, 128, 64)
+
+      wrapper.appendChild(sourceCanvas)
+      container.appendChild(wrapper)
+
+      const originalDrawImage =
+        CanvasRenderingContext2D.prototype.drawImage as unknown as (
+          this: CanvasRenderingContext2D,
+          ...args: unknown[]
+        ) => void
+      const drawImageWithSecurityError = function (
+        this: CanvasRenderingContext2D,
+        ...args: unknown[]
+      ) {
+        if (args[0] === sourceCanvas) {
+          throw new DOMException(
+            'The canvas has been tainted by cross-origin data.',
+            'SecurityError'
+          )
+        }
+
+        return originalDrawImage.apply(this, args)
+      }
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      CanvasRenderingContext2D.prototype.drawImage =
+        drawImageWithSecurityError as unknown as CanvasRenderingContext2D['drawImage']
+
+      try {
+        const canvas = await screenshot.canvas(wrapper, { scale: 1 })
+        const color = sampleArea(canvas, 40, 20, 24)
+
+        expect(color.a).toBeGreaterThan(0)
+        expect(colorsMatch(color, { r: 255, g: 0, b: 0, a: 255 }, 10)).toBe(
+          false
+        )
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Could not capture canvas contents')
+        )
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('cross-origin')
+        )
+      } finally {
+        CanvasRenderingContext2D.prototype.drawImage =
+          originalDrawImage as unknown as CanvasRenderingContext2D['drawImage']
+        warnSpy.mockRestore()
       }
     })
   })

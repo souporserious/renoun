@@ -194,6 +194,23 @@ interface ScreenshotTask extends Promise<HTMLCanvasElement> {
 }
 ```
 
+## Canvas Security
+
+Inline `<canvas>` elements are captured at screenshot start so animated and WebGL
+content stays stable during async resource preparation.
+
+If a source canvas has been tainted by cross-origin image data or WebGL textures,
+the browser will refuse to copy its pixels. In that case `@renoun/screenshot`
+renders the element box with a visible placeholder and logs a warning instead of
+silently leaving the area blank.
+
+To keep canvas content readable:
+
+- Load source images with CORS enabled.
+- Set `crossOrigin="anonymous"` on images before assigning `src`.
+- Ensure the image response includes a matching `Access-Control-Allow-Origin`
+  header before drawing it into a canvas or uploading it into WebGL.
+
 ## License
 
 [MIT](/LICENSE.md) © [souporserious](https://souporserious.com/)
