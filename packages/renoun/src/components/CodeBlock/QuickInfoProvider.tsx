@@ -49,10 +49,67 @@ export interface QuickInfoEntry {
   diagnostics?: TokenDiagnostic[]
 }
 
+export interface QuickInfoPopoverProps {
+  diagnostics?: TokenDiagnostic[]
+  quickInfo?: {
+    displayText: string
+    documentationText: string
+  }
+  displayTokens?: TokenizedLines
+  theme: QuickInfoTheme
+  isLoading?: boolean
+  css?: CSSObject
+  className?: string
+  style?: React.CSSProperties
+  tokenThemeConfig?: ConfigurationOptions['theme']
+  tokenRuntime?: AnalysisServerRuntime
+  tokenLanguages?: GrammarLanguage[]
+}
+
 type ResolvedQuickInfoEntry = Pick<
   QuickInfoEntry,
   'quickInfo' | 'displayTokens'
 >
+
+export function DefaultQuickInfoPopover({
+  diagnostics,
+  quickInfo,
+  displayTokens,
+  theme,
+  isLoading = false,
+  css,
+  className,
+  style,
+  tokenThemeConfig,
+  tokenRuntime,
+  tokenLanguages,
+}: QuickInfoPopoverProps) {
+  if (isLoading) {
+    return (
+      <QuickInfoLoading
+        theme={theme}
+        css={css}
+        className={className}
+        style={style}
+      />
+    )
+  }
+
+  return (
+    <QuickInfoClientPopover
+      diagnostics={diagnostics}
+      quickInfo={quickInfo}
+      displayTokens={displayTokens}
+      theme={theme}
+      css={css}
+      className={className}
+      style={style}
+      tokenThemeConfig={tokenThemeConfig}
+      runtime={tokenRuntime}
+      languages={tokenLanguages}
+    />
+  )
+}
 
 /**
  * Context for managing quick info popovers.
@@ -87,9 +144,7 @@ export function QuickInfoProvider({
   closeDelay = 180,
   entries = [],
   popoverTheme,
-  popoverCss,
-  popoverClassName,
-  popoverStyle,
+  PopoverComponent = DefaultQuickInfoPopover,
   tokenThemeConfig,
   tokenRuntime,
   tokenLanguages,
@@ -99,9 +154,7 @@ export function QuickInfoProvider({
   closeDelay?: number
   entries?: QuickInfoEntry[]
   popoverTheme?: QuickInfoTheme
-  popoverCss?: CSSObject
-  popoverClassName?: string
-  popoverStyle?: React.CSSProperties
+  PopoverComponent?: React.ComponentType<QuickInfoPopoverProps>
   tokenThemeConfig?: ConfigurationOptions['theme']
   tokenRuntime?: AnalysisServerRuntime
   tokenLanguages?: GrammarLanguage[]
@@ -289,34 +342,39 @@ export function QuickInfoProvider({
       {shouldRenderPopover && popoverTheme && activeEntry
         ? createPortal(
             isActiveEntryLoading ? (
-              <QuickInfoLoading
+              <PopoverComponent
+                diagnostics={activeEntry.diagnostics}
+                quickInfo={activeEntry.quickInfo}
+                displayTokens={activeEntry.displayTokens}
                 theme={popoverTheme}
-                css={popoverCss}
-                className={popoverClassName}
-                style={popoverStyle}
+                isLoading
+                tokenThemeConfig={tokenThemeConfig}
+                tokenRuntime={tokenRuntime}
+                tokenLanguages={tokenLanguages}
               />
             ) : (
               <React.Suspense
                 fallback={
-                  <QuickInfoLoading
+                  <PopoverComponent
+                    diagnostics={activeEntry.diagnostics}
+                    quickInfo={activeEntry.quickInfo}
+                    displayTokens={activeEntry.displayTokens}
                     theme={popoverTheme}
-                    css={popoverCss}
-                    className={popoverClassName}
-                    style={popoverStyle}
+                    isLoading
+                    tokenThemeConfig={tokenThemeConfig}
+                    tokenRuntime={tokenRuntime}
+                    tokenLanguages={tokenLanguages}
                   />
                 }
               >
-                <QuickInfoClientPopover
+                <PopoverComponent
                   diagnostics={activeEntry.diagnostics}
                   quickInfo={activeEntry.quickInfo}
                   displayTokens={activeEntry.displayTokens}
                   theme={popoverTheme}
-                  css={popoverCss}
-                  className={popoverClassName}
-                  style={popoverStyle}
                   tokenThemeConfig={tokenThemeConfig}
-                  runtime={tokenRuntime}
-                  languages={tokenLanguages}
+                  tokenRuntime={tokenRuntime}
+                  tokenLanguages={tokenLanguages}
                 />
               </React.Suspense>
             ),

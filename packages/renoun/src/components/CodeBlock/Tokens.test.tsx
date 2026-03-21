@@ -65,14 +65,31 @@ vi.mock('./Context.tsx', () => ({
 }))
 
 vi.mock('./QuickInfoProvider.tsx', () => ({
+  DefaultQuickInfoPopover: ({
+    className,
+    style,
+    quickInfo,
+    isLoading,
+  }: {
+    className?: string
+    style?: React.CSSProperties
+    quickInfo?: { displayText: string }
+    isLoading?: boolean
+  }) => (
+    <div className={className} style={style}>
+      {isLoading ? 'loading' : quickInfo?.displayText}
+    </div>
+  ),
   QuickInfoProvider: ({
     children,
     entries,
+    PopoverComponent,
   }: {
     children: React.ReactNode
     entries?: Array<{ id: string }>
+    PopoverComponent?: React.ComponentType<any>
   }) => {
-    mockQuickInfoProvider({ entries })
+    mockQuickInfoProvider({ entries, PopoverComponent })
     return <>{children}</>
   },
 }))
@@ -148,9 +165,12 @@ describe('Tokens', () => {
     renderToStaticMarkup(<>{element}</>)
 
     expect(mockQuickInfoProvider).toHaveBeenCalledTimes(1)
-    expect(mockQuickInfoProvider).toHaveBeenCalledWith({
-      entries: [expect.objectContaining({ id: '0:2' })],
-    })
+    expect(mockQuickInfoProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: [expect.objectContaining({ id: '0:2' })],
+        PopoverComponent: expect.any(Function),
+      })
+    )
     expect(mockSymbol).toHaveBeenCalledWith({
       quickInfoId: '0:2',
     })
@@ -198,9 +218,12 @@ describe('Tokens', () => {
     renderToStaticMarkup(<>{element}</>)
 
     expect(mockQuickInfoProvider).toHaveBeenCalledTimes(1)
-    expect(mockQuickInfoProvider).toHaveBeenCalledWith({
-      entries: [expect.objectContaining({ id: '0:1' })],
-    })
+    expect(mockQuickInfoProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entries: [expect.objectContaining({ id: '0:1' })],
+        PopoverComponent: expect.any(Function),
+      })
+    )
     expect(
       mockSymbol.mock.calls.every(([props]) => props.quickInfoId === '0:1')
     ).toBe(true)
@@ -311,6 +334,98 @@ describe('Tokens', () => {
         language: 'shell',
         filePath: 'install.sh',
       })
+    )
+  })
+
+  test('applies token slot prop overrides', async () => {
+    mockTokens.mockResolvedValueOnce([
+      [
+        {
+          start: 0,
+          end: 5,
+          value: 'const',
+          hasTextStyles: true,
+        },
+      ],
+    ])
+
+    const { Tokens } = await import('./Tokens.tsx')
+    const element = await Tokens({
+      shouldAnalyze: false,
+      children: 'const',
+      components: {
+        Token: {
+          className: 'custom-token',
+        },
+      },
+    })
+
+    const markup = renderToStaticMarkup(<>{element}</>)
+
+    expect(markup).toContain('custom-token')
+  })
+
+  test('applies popover slot prop overrides', async () => {
+    mockTokens.mockResolvedValueOnce([
+      [
+        {
+          start: 0,
+          end: 6,
+          value: 'Router',
+          quickInfo: {
+            displayText: 'const Router: Router',
+            documentationText: 'Navigate programmatically.',
+          },
+        },
+      ],
+    ])
+
+    const { Tokens } = await import('./Tokens.tsx')
+    const element = await Tokens({
+      shouldAnalyze: false,
+      children: 'Router',
+      components: {
+        Popover: {
+          className: 'custom-popover',
+        },
+      },
+    })
+
+    renderToStaticMarkup(<>{element}</>)
+
+    const popoverComponent = mockQuickInfoProvider.mock.calls[0]?.[0]
+      ?.PopoverComponent as React.ComponentType<any> | undefined
+
+    expect(popoverComponent).toBeDefined()
+
+    const markup = renderToStaticMarkup(
+      React.createElement(popoverComponent!, {
+        theme: {
+          background: '#000',
+          foreground: '#fff',
+          panelBorder: '#333',
+          errorForeground: '#f00',
+        },
+        isLoading: true,
+      })
+    )
+
+    expect(markup).toContain('custom-popover')
+  })
+
+  test('rejects unknown component override keys', async () => {
+    const { Tokens } = await import('./Tokens.tsx')
+
+    await expect(
+      Tokens({
+        shouldAnalyze: false,
+        children: 'const',
+        components: {
+          Unknown: {},
+        } as any,
+      })
+    ).rejects.toThrow(
+      '[renoun] Unknown Tokens component override "Unknown". Valid keys are: Token, Error, Popover.'
     )
   })
 })
