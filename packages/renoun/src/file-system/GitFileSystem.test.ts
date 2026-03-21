@@ -942,6 +942,7 @@ describe('GitFileSystem', () => {
           .filter((line) => line.startsWith('log\t')).length
 
         expect(finalGitLogCount).toBe(1)
+        expect(secondReport.generatedAt).toBe(firstReport.generatedAt)
         expect(secondReport.lastCommitSha).toBe(firstReport.lastCommitSha)
         expect(secondReport.nameToId).toEqual(firstReport.nameToId)
       } finally {

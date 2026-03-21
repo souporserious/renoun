@@ -1,6 +1,6 @@
 ## Basic Usage
 
-Pass the async generator returned by `repository.getExportHistory()` as the `source` prop:
+Pass a repository as the `source` prop:
 
 ```tsx
 import { Directory } from 'renoun'
@@ -16,11 +16,12 @@ const directory = new Directory({
 
 export default async function Page() {
   const repo = directory.getRepository()
-  const source = repo.getExportHistory()
 
-  return <History source={source} />
+  return <History source={repo} />
 }
 ```
+
+Passing a repository is the recommended form because React server rendering can replay renders. `History` will create a fresh generator internally for each render attempt. A source factory works too. A pre-created async generator still works, but it is a one-shot object and is easier to misuse.
 
 `History` handles streaming + data projection. You provide UI via component slots.
 
@@ -77,8 +78,13 @@ const components: Partial<HistoryComponents> = {
 }
 
 export default async function Page() {
-  const source = repo.getExportHistory({ entry: 'src/index.ts' })
-  return <History source={source} components={components} />
+  return (
+    <History
+      source={repo}
+      sourceOptions={{ entry: 'src/index.ts' }}
+      components={components}
+    />
+  )
 }
 ```
 
@@ -107,8 +113,13 @@ const selectRecent = ({ report }: HistorySelectEntriesContext) =>
   getRecentlyAddedHistoryEntries(report, { release: 'latest' })
 
 export default async function Page() {
-  const source = repo.getExportHistory({ entry: 'src/index.ts' })
-  return <History source={source} selectEntries={selectRecent} />
+  return (
+    <History
+      source={repo}
+      sourceOptions={{ entry: 'src/index.ts' }}
+      selectEntries={selectRecent}
+    />
+  )
 }
 ```
 
@@ -120,4 +131,4 @@ export default async function Page() {
 
 ## Streaming Model
 
-`History` consumes the async generator one event at a time with recursive Suspense boundaries. Each progress yield is rendered via `Progress`; when complete, `Complete` receives the final report and projected entries.
+`History` consumes export history one event at a time with recursive Suspense boundaries. Each progress yield is rendered via `Progress`; when complete, `Complete` receives the final report and projected entries.

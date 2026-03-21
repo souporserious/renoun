@@ -3,6 +3,7 @@ import React, { Suspense } from 'react'
 import type {
   ExportChange,
   ExportHistoryGenerator,
+  RepositoryExportHistoryOptions,
   ExportHistoryProgressEvent,
   ExportHistoryReport,
 } from '../../file-system/index.tsx'
@@ -119,6 +120,22 @@ export type HistorySelectEntries = (
   context: HistorySelectEntriesContext
 ) => HistoryExportEntry[]
 
+export interface HistorySourceProvider {
+  /** Creates a fresh export-history generator for this render. */
+  getExportHistory(
+    options?: RepositoryExportHistoryOptions
+  ): ExportHistoryGenerator
+}
+
+export type HistorySourceFactory = (
+  options?: RepositoryExportHistoryOptions
+) => ExportHistoryGenerator
+
+export type HistorySource =
+  | ExportHistoryGenerator
+  | HistorySourceProvider
+  | HistorySourceFactory
+
 function FragmentView({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
@@ -137,9 +154,65 @@ const defaultComponents: HistoryComponents = {
   Change: NullView,
 }
 
+function getMergedComponents(
+  components?: Partial<HistoryComponents>
+): HistoryComponents {
+  return {
+    ...defaultComponents,
+    ...components,
+  }
+}
+
+function renderInitialProgress(components: HistoryComponents) {
+  return (
+    <components.Progress
+      phase="start"
+      elapsedMs={0}
+      commitsProcessed={0}
+      totalCommits={0}
+      exportCount={0}
+      changeCount={0}
+    />
+  )
+}
+
+function isHistorySourceProvider(
+  source: HistorySource
+): source is HistorySourceProvider {
+  return (
+    typeof source === 'object' &&
+    source !== null &&
+    'getExportHistory' in source &&
+    typeof source.getExportHistory === 'function'
+  )
+}
+
+function resolveHistorySource(
+  source: HistorySource,
+  sourceOptions?: RepositoryExportHistoryOptions
+): ExportHistoryGenerator {
+  if (typeof source === 'function') {
+    return source(sourceOptions)
+  }
+
+  if (isHistorySourceProvider(source)) {
+    return source.getExportHistory(sourceOptions)
+  }
+
+  return source
+}
+
 export interface HistoryProps {
-  /** The async generator returned by `repository.getExportHistory()`. */
-  source: ExportHistoryGenerator
+  /**
+   * Export history input.
+   *
+   * Passing a repository is recommended because React server rendering can
+   * replay renders, and repositories create a fresh generator each time.
+   */
+  source: HistorySource
+
+  /** Options forwarded when `source` is a repository-like provider. */
+  sourceOptions?: RepositoryExportHistoryOptions
 
   /** Override any default slot renderer. */
   components?: Partial<HistoryComponents>
@@ -267,12 +340,13 @@ function ReportView({
 }
 
 /** Streams export history from a repository source. */
-export const History =
-  process.env.NODE_ENV === 'development' ? HistoryWithFallback : HistoryAsync
+export const History = HistoryWithFallback
 
 function HistoryWithFallback(props: HistoryProps) {
+  const mergedComponents = getMergedComponents(props.components)
+
   return (
-    <Suspense>
+    <Suspense fallback={renderInitialProgress(mergedComponents)}>
       <HistoryAsync {...props} />
     </Suspense>
   )
@@ -280,33 +354,21 @@ function HistoryWithFallback(props: HistoryProps) {
 
 async function HistoryAsync({
   source,
+  sourceOptions,
   components = {},
   selectEntries,
 }: HistoryProps) {
-  const mergedComponents: HistoryComponents = {
-    ...defaultComponents,
-    ...components,
-  }
+  const mergedComponents = getMergedComponents(components)
 
   const Root = mergedComponents.Root
   const startMs = Date.now()
+  const resolvedSource = resolveHistorySource(source, sourceOptions)
 
   return (
     <Root>
-      <Suspense
-        fallback={
-          <mergedComponents.Progress
-            phase="start"
-            elapsedMs={0}
-            commitsProcessed={0}
-            totalCommits={0}
-            exportCount={0}
-            changeCount={0}
-          />
-        }
-      >
+      <Suspense fallback={renderInitialProgress(mergedComponents)}>
         <StreamResolver
-          source={source}
+          source={resolvedSource}
           startMs={startMs}
           components={mergedComponents}
           selectEntries={selectEntries}

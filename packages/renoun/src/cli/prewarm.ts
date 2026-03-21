@@ -20,6 +20,7 @@ import { warmRenounPrewarmTargets } from './prewarm/warm-analysis.ts'
 import {
   collectRenounPrewarmTargets,
   type DirectoryEntriesRequest,
+  type ExportHistoryRequest,
   type FileRequest,
   type RenounPrewarmTargets,
 } from './prewarm/collect-targets.ts'
@@ -52,6 +53,7 @@ let prewarmWorkspaceGateStoreByKey:
 
 export type {
   DirectoryEntriesRequest,
+  ExportHistoryRequest,
   FileRequest,
   RenounPrewarmTargets,
 }
@@ -188,7 +190,8 @@ async function runPrewarmAnalysis(options?: {
 
   if (
     targets.directoryGetEntries.length === 0 &&
-    targets.fileGetFile.length === 0
+    targets.fileGetFile.length === 0 &&
+    targets.exportHistory.length === 0
   ) {
     logger.debug('No renoun prewarm targets were found')
     return 'no-targets'

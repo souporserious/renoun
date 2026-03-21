@@ -16,6 +16,7 @@ import {
   createCacheNodeKey,
 } from '../../file-system/cache-key.ts'
 import { NodeFileSystem } from '../../file-system/NodeFileSystem.ts'
+import { Repository } from '../../file-system/Repository.ts'
 import { FileSystemSnapshot } from '../../file-system/Snapshot.ts'
 import { getFileExports, getOutlineRanges } from '../../analysis/node-client.ts'
 import type { AnalysisOptions } from '../../analysis/types.ts'
@@ -26,6 +27,7 @@ import { isJavaScriptLikeExtension } from '../../utils/is-javascript-like-extens
 import { normalizePathKey } from '../../utils/path.ts'
 import type {
   DirectoryEntriesRequest,
+  ExportHistoryRequest,
   FileRequest,
   RenounPrewarmTargets,
 } from '../prewarm.ts'
@@ -33,6 +35,10 @@ import type {
 const PREWARM_FILE_CACHE_CONCURRENCY = Math.max(
   8,
   Math.min(32, cpus().length * 2)
+)
+const PREWARM_EXPORT_HISTORY_CONCURRENCY = Math.max(
+  1,
+  Math.min(4, Math.ceil(cpus().length / 4))
 )
 
 const DEFAULT_GET_FILE_EXTENSIONS = [
@@ -94,6 +100,14 @@ export async function warmRenounPrewarmTargets(
     }))
   }
 
+  if (targets.exportHistory.length > 0) {
+    logger.debug('Collecting Repository#getExportHistory callsites', () => ({
+      data: {
+        histories: targets.exportHistory.length,
+      },
+    }))
+  }
+
   const [directoryWarmFiles, fileWarmFiles] = await Promise.all([
     targets.directoryGetEntries.length > 0
       ? collectWarmFilesFromDirectoryTargets(targets.directoryGetEntries, {
@@ -119,24 +133,32 @@ export async function warmRenounPrewarmTargets(
     mergeWarmTask(task, warmFilesByPath)
   }
 
-  if (warmFilesByPath.size === 0) {
+  if (warmFilesByPath.size === 0 && targets.exportHistory.length === 0) {
     logger.debug('No prewarm files were discovered')
     return
   }
 
-  logger.debug('Prewarming renoun file cache', () => ({
+  logger.debug('Prewarming renoun cache targets', () => ({
     data: {
       files: warmFilesByPath.size,
+      exportHistories: targets.exportHistory.length,
     },
   }))
 
-  await warmFiles(Array.from(warmFilesByPath.values()), {
-    analysisOptions: options.analysisOptions,
-    fileSystem,
-    logger,
-  })
+  await Promise.all([
+    warmFilesByPath.size > 0
+      ? warmFiles(Array.from(warmFilesByPath.values()), {
+          analysisOptions: options.analysisOptions,
+          fileSystem,
+          logger,
+        })
+      : Promise.resolve(),
+    targets.exportHistory.length > 0
+      ? warmExportHistoryRequests(targets.exportHistory, { logger })
+      : Promise.resolve(),
+  ])
 
-  logger.debug('Finished prewarming Renoun file cache')
+  logger.debug('Finished prewarming renoun cache targets')
 }
 
 async function collectWarmFilesFromDirectoryTargets(
@@ -307,6 +329,120 @@ function getFileRequestKey(request: FileRequest): string {
     .slice()
     .sort()
     .join('\0')}`
+}
+
+async function warmExportHistoryRequests(
+  requests: ExportHistoryRequest[],
+  options: {
+    logger: ReturnType<typeof getDebugLogger>
+  }
+): Promise<void> {
+  const uniqueRequests = dedupeExportHistoryRequests(requests)
+
+  await forEachConcurrent(
+    Array.from(uniqueRequests.values()),
+    {
+      concurrency: PREWARM_EXPORT_HISTORY_CONCURRENCY,
+    },
+    async (request) => {
+      try {
+        const repository = Repository.resolve(
+          request.repository as Parameters<typeof Repository.resolve>[0]
+        )
+        if (!repository) {
+          return
+        }
+
+        for (const sparsePath of request.sparsePaths ?? []) {
+          repository.registerSparsePath(sparsePath)
+        }
+
+        await drainExportHistory(repository.getExportHistory(request.options))
+      } catch (error) {
+        options.logger.warn(
+          'Skipping renoun Repository#getExportHistory prewarm target',
+          () => ({
+            data: {
+              repository: formatRepositoryTarget(request.repository),
+              sparsePaths: request.sparsePaths ?? [],
+              error: formatPrewarmError(error),
+            },
+          })
+        )
+      }
+    }
+  )
+}
+
+function dedupeExportHistoryRequests(
+  requests: ExportHistoryRequest[]
+): Map<string, ExportHistoryRequest> {
+  const uniqueRequests = new Map<string, ExportHistoryRequest>()
+
+  for (const request of requests) {
+    const key = getExportHistoryRequestKey(request)
+    if (uniqueRequests.has(key)) {
+      continue
+    }
+
+    uniqueRequests.set(key, request)
+  }
+
+  return uniqueRequests
+}
+
+function getExportHistoryRequestKey(request: ExportHistoryRequest): string {
+  return JSON.stringify({
+    repository: normalizePrewarmKeyValue(request.repository),
+    sparsePaths: [...(request.sparsePaths ?? [])].sort(),
+    options: normalizePrewarmKeyValue(request.options ?? null),
+  })
+}
+
+function normalizePrewarmKeyValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizePrewarmKeyValue(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [
+          key,
+          normalizePrewarmKeyValue(entryValue),
+        ])
+    )
+  }
+
+  return value
+}
+
+function formatRepositoryTarget(repository: unknown): string {
+  if (typeof repository === 'string') {
+    return repository
+  }
+
+  if (repository && typeof repository === 'object') {
+    const path: string | undefined =
+      typeof (repository as Record<string, unknown>)['path'] === 'string'
+        ? ((repository as Record<string, unknown>)['path'] as string)
+        : undefined
+    const baseUrl: string | undefined =
+      typeof (repository as Record<string, unknown>)['baseUrl'] === 'string'
+        ? ((repository as Record<string, unknown>)['baseUrl'] as string)
+        : undefined
+
+    if (path) {
+      return path
+    }
+
+    if (baseUrl) {
+      return baseUrl
+    }
+  }
+
+  return 'unknown'
 }
 
 async function collectDirectoryFilePaths(
@@ -577,6 +713,15 @@ async function warmFiles(
       }
     }
   )
+}
+
+async function drainExportHistory(
+  generator: ReturnType<Repository['getExportHistory']>
+): Promise<void> {
+  let result = await generator.next()
+  while (!result.done) {
+    result = await generator.next()
+  }
 }
 
 function formatPrewarmError(error: unknown): string {

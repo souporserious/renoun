@@ -221,6 +221,13 @@ const REMOTE_REF_CACHE_TTL_MS = 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
 const REF_IDENTITY_CACHE_TTL_MS = 60_000
 const cachedRepoRefUpdateInFlight = new Map<string, Promise<void>>()
+const cachedRemoteRefSyncChecks = new Map<
+  string,
+  {
+    remoteSha: string | null
+    checkedAt: number
+  }
+>()
 
 type RefIdentity = {
   identity: string
@@ -699,6 +706,7 @@ export class GitFileSystem
   #worktreeRootChecked = false
   #worktreeRootExists = false
   #worktreeIgnoreCache = new Map<string, boolean>()
+  #nextSyncRepoRefCheckAt = 0
 
   // Singleton promise to prevent parallel unshallow operations
   #unshallowPromise: Promise<void> | null = null
@@ -1615,6 +1623,20 @@ export class GitFileSystem
     if (!relativePath) {
       return false
     }
+
+    const cached = this.#worktreeIgnoreCache.get(relativePath)
+    if (cached !== undefined) {
+      return cached
+    }
+
+    if (
+      looksLikeCacheClone(this.repoRoot, this.cacheDirectory) &&
+      !this.#resolveWorktreePath(relativePath, 'any')
+    ) {
+      this.#worktreeIgnoreCache.set(relativePath, false)
+      return false
+    }
+
     const result = spawnSync(
       'git',
       ['check-ignore', '-q', '--', relativePath],
@@ -1624,7 +1646,9 @@ export class GitFileSystem
         shell: false,
       }
     )
-    return result.status === 0
+    const ignored = result.status === 0
+    this.#worktreeIgnoreCache.set(relativePath, ignored)
+    return ignored
   }
 
   close() {
@@ -1981,13 +2005,7 @@ export class GitFileSystem
     scopeDirectories: string[] = this.prepareScopeDirectories
   ) {
     if (this.#repoReady) {
-      if (
-        looksLikeCacheClone(this.repoRoot, this.cacheDirectory) &&
-        this.autoFetch &&
-        this.#refIsExplicit
-      ) {
-        this.#maybeUpdateCachedRepoForRefSync(this.ref)
-      }
+      this.#maybeUpdateCachedRepoForRefSync(this.ref)
       this.#ensureCachedScopeSync(scopeDirectories)
       if (!this.#git) {
         this.#git = new GitObjectStore(this.repoRoot)
@@ -2024,11 +2042,12 @@ export class GitFileSystem
     this.#worktreeRootChecked = false
     this.#worktreeRootExists = false
     this.#worktreeIgnoreCache.clear()
+    this.#nextSyncRepoRefCheckAt = 0
     if (!this.#git) {
       this.#git = new GitObjectStore(this.repoRoot)
     }
     if (!prepared && looksLikeCacheClone(this.repoRoot, this.cacheDirectory)) {
-      this.#maybeUpdateCachedRepoForRefSync(this.ref)
+      this.#maybeUpdateCachedRepoForRefSync(this.ref, { force: true })
     }
     this.#ensureCachedScopeSync(scopeDirectories)
     this.#repoReady = true
@@ -2065,13 +2084,21 @@ export class GitFileSystem
     this.#preparedScope = new Set(merged)
   }
 
-  #maybeUpdateCachedRepoForRefSync(ref: string) {
+  #maybeUpdateCachedRepoForRefSync(
+    ref: string,
+    options: { force?: boolean } = {}
+  ) {
     if (!looksLikeCacheClone(this.repoRoot, this.cacheDirectory)) {
       return
     }
     if (!this.autoFetch || isFullSha(ref)) {
       return
     }
+    const now = Date.now()
+    if (options.force !== true && now < this.#nextSyncRepoRefCheckAt) {
+      return
+    }
+    this.#nextSyncRepoRefCheckAt = now + REMOTE_REF_CACHE_TTL_MS
 
     let localSha: string | null = null
     for (const candidate of this.#getLocalRefResolutionCandidates(ref)) {
@@ -2178,6 +2205,7 @@ export class GitFileSystem
     void reason
     this.#refCommit = null
     this.#refCommitPromise = null
+    this.#nextSyncRepoRefCheckAt = 0
     this.#historyWarmupInFlight.clear()
     this.#worktreeIgnoreCache.clear()
 
@@ -3309,358 +3337,370 @@ export class GitFileSystem
       return cachedReport
     }
 
-    if (!skipWarmup) {
-      void this.#scheduleRelatedBarrelHistoryWarmup({
-        entryFiles: uniqueEntryRelatives,
-        commitSha: endCommit,
-        scopeDirectories: sortedScopeDirectories,
-        ref: options.ref,
-        limit,
-        maxDepth,
-        detectUpdates,
-        updateMode,
-      }).catch(() => {})
+    const progressQueue = createAsyncValueQueue<ExportHistoryProgressEvent>()
+    const emitProgress = (event: ExportHistoryProgressEvent) => {
+      progressQueue.push(event)
     }
 
-    let resumeReport: ExportHistoryReport | null = null
-    let resumeCommit: string | null = null
-    let resumeSnapshot: ExportHistoryReport['lastExportSnapshot'] | null =
-      null
+    const computeReport = async (): Promise<ExportHistoryReport> => {
+      let resumeReport: ExportHistoryReport | null = null
+      let resumeCommit: string | null = null
+      let resumeSnapshot: ExportHistoryReport['lastExportSnapshot'] | null =
+        null
 
-    const latestPointer =
-      await session.cache.get<ExportHistoryLatestPointer>(latestNodeKey)
-    if (latestPointer?.reportNodeKey && latestPointer.lastCommitSha) {
-      const previousReport = await session.cache.get<ExportHistoryReport>(
-        latestPointer.reportNodeKey
-      )
-      const hasSameEntrySelection = Array.isArray(previousReport?.entryFiles)
-        ? previousReport.entryFiles.length === sortedEntryRelatives.length &&
-          [...previousReport.entryFiles]
-            .sort()
-            .every(
-              (entryFile, index) => entryFile === sortedEntryRelatives[index]
-            )
-        : false
-      if (
-        previousReport?.repo === this.repoRoot &&
-        hasSameEntrySelection &&
-        previousReport.lastCommitSha &&
-        previousReport.lastExportSnapshot &&
-        previousReport.lastCommitSha === latestPointer.lastCommitSha
-      ) {
-        const isAncestor = await this.#gitIsAncestorCommit(
-          previousReport.lastCommitSha,
-          endCommit
+      const latestPointer =
+        await session.cache.get<ExportHistoryLatestPointer>(latestNodeKey)
+      if (latestPointer?.reportNodeKey && latestPointer.lastCommitSha) {
+        const previousReport = await session.cache.get<ExportHistoryReport>(
+          latestPointer.reportNodeKey
         )
-        if (isAncestor) {
-          resumeReport = previousReport
-          resumeCommit = previousReport.lastCommitSha
-          resumeSnapshot = previousReport.lastExportSnapshot
-        }
-      }
-    }
-
-    // Fetch content history
-    const logStartCommit = resumeCommit ?? startCommit
-    const logRef = logStartCommit ? `${logStartCommit}..${endCommit}` : endCommit
-    const contentCommits = await this.#gitLogCached(logRef, scopeDirectories, {
-      reverse: true, // Oldest to Newest
-      limit,
-    })
-
-    if (contentCommits.length === 0) {
-      if (resumeReport) {
-        await this.#replacePersistentNode(session, reportNodeKey, resumeReport)
-        if (resumeReport.lastCommitSha) {
-          await this.#replacePersistentNode(session, latestNodeKey, {
-            reportNodeKey,
-            lastCommitSha: resumeReport.lastCommitSha,
-          })
-        }
-        return resumeReport
-      }
-      throw new Error(
-        `No commits found for paths "${scopeDirectories.join(', ')}" in ref "${endRef}".`
-      )
-    }
-
-    yield {
-      type: 'progress',
-      phase: 'gitLogCached',
-      elapsedMs: Date.now() - _startMs,
-      totalCommits: contentCommits.length,
-    } satisfies ExportHistoryProgressEvent
-
-    let findRelease: (commitSha: string) => string | undefined
-    if (targetReleaseTag) {
-      findRelease = () => targetReleaseTag
-    } else {
-      const commitToRelease = await this.#buildCommitReleaseMap(
-        contentCommits,
-        scopeDirectories,
-        startCommit
-      )
-      findRelease = (commitSha: string) => commitToRelease.get(commitSha)
-    }
-
-    yield {
-      type: 'progress',
-      phase: 'buildCommitReleaseMap',
-      elapsedMs: Date.now() - _startMs,
-      totalCommits: contentCommits.length,
-    } satisfies ExportHistoryProgressEvent
-
-    // Attach release info
-    const uniqueCommits: ExportHistoryCommit[] = contentCommits.map(
-      (commit) => ({
-        ...commit,
-        release: targetReleaseTag
-          ? targetReleaseTag
-          : commit.tags?.length
-            ? commit.tags[0]
-            : findRelease(commit.sha),
-      })
-    )
-
-    const latestCommit = uniqueCommits[uniqueCommits.length - 1].sha
-
-    yield {
-      type: 'progress',
-      phase: 'resolveEntries',
-      elapsedMs: Date.now() - _startMs,
-      totalCommits: uniqueCommits.length,
-    } satisfies ExportHistoryProgressEvent
-
-    const blobCache = new Map<string, Map<string, ExportItem>>()
-    const exports: ExportHistoryReport['exports'] =
-      resumeReport?.exports ?? Object.create(null)
-    const parseWarnings: string[] = resumeReport?.parseWarnings
-      ? [...resumeReport.parseWarnings]
-      : []
-
-    // Map<ExportName, Map<ExportId, ExportItem>>
-    let previousExports: Map<string, Map<string, ExportItem>> | null = null
-    let previousCommitHash: string | null = null
-    let previousResolvedPaths: Map<string, string | null> | null = null
-    let cacheHits = 0
-    let cacheMisses = 0
-    const getOrParseBlobExports = async (
-      sha: string,
-      filePathForParser: string
-    ) =>
-      this.#getOrParseExportsForBlob(sha, filePathForParser, async () => {
-        return git.repoPath
-          ? readBlobSync(git.repoPath, sha)
-          : git.getBlobContentBySha(sha)
-      })
-
-    if (resumeSnapshot) {
-      previousExports = deserializeExportSnapshot(resumeSnapshot)
-      previousCommitHash = resumeCommit
-    }
-
-    const BATCH_SIZE = 8
-
-    async function processCommit(
-      commit: ExportHistoryCommit,
-      commitTree?: Map<string, GitObjectMeta>
-    ) {
-      let hasEntry = false
-      const currentExports = new Map<string, Map<string, ExportItem>>()
-
-      // IMPORTANT: metaCache, resolveCache, and blobShaResolveCache MUST be
-      // created fresh per commit. Sharing these across commits causes stale
-      // cross-commit resolution where file renames/moves between commits are
-      // missed, resulting in collapsed "big commit" changes instead of
-      // granular per-commit tracking. The blobCache (export parse cache)
-      // is safe to share because it is keyed by blob SHA (content-addressed).
-      // Historical regression: sharing per-commit lookup caches caused
-      // cross-commit stale resolution when files moved between commits.
-      const context: CollectContext = {
-        maxDepth,
-        blobCache,
-        getOrParseBlobExports,
-        scopeDirectories,
-        parseWarnings,
-        git,
-        commit: commit.sha,
-        cacheStats: { hits: 0, misses: 0 },
-        metaCache: new Map(),
-        resolveCache: new Map(),
-        blobShaResolveCache: new Map(),
-        repoPath: git.repoPath,
-      }
-
-      if (commitTree) {
-        for (const [path, meta] of commitTree) {
-          context.metaCache.set(`${commit.sha}:${path}`, meta)
-        }
-      }
-
-      for (const entryRelative of uniqueEntryRelatives) {
-        const entryMeta = await getBlobMetaCached(
-          context,
-          `${commit.sha}:${entryRelative}`
-        )
-        if (!entryMeta) {
-          continue
-        }
-
-        hasEntry = true
-        const entryExportMap = await collectExportsFromFile(
-          context,
-          entryRelative,
-          0,
-          new Set()
-        )
-
-        for (const [name, item] of entryExportMap) {
-          let itemsForName = currentExports.get(name)
-          if (!itemsForName) {
-            itemsForName = new Map()
-            currentExports.set(name, itemsForName)
-          }
-          if (!itemsForName.has(item.id)) {
-            itemsForName.set(item.id, item)
-          }
-        }
-      }
-
-      return {
-        commit,
-        hasEntry,
-        currentExports,
-        metaCache: context.metaCache,
-        stats: {
-          hits: context.cacheStats.hits,
-          misses: context.cacheStats.misses,
-        },
-      }
-    }
-
-    function extractResolvedPaths(
-      metaCache: Map<string, GitObjectMeta | null>
-    ): Map<string, string | null> {
-      const paths = new Map<string, string | null>()
-      for (const [specifier, meta] of metaCache) {
-        const colonIdx = specifier.indexOf(':')
-        if (colonIdx !== -1) {
-          paths.set(specifier.substring(colonIdx + 1), meta?.sha ?? null)
-        }
-      }
-      return paths
-    }
-
-    function serializeExportSnapshot(
-      exportMap: Map<string, Map<string, ExportItem>>
-    ): Record<string, Record<string, ExportItem>> {
-      const snapshot: Record<
-        string,
-        Record<string, ExportItem>
-      > = Object.create(null)
-      for (const [name, items] of exportMap) {
-        const serialized: Record<string, ExportItem> = Object.create(null)
-        for (const [id, item] of items) {
-          serialized[id] = item
-        }
-        if (Object.keys(serialized).length) {
-          snapshot[name] = serialized
-        }
-      }
-      return snapshot
-    }
-
-    function deserializeExportSnapshot(
-      snapshot: Record<string, Record<string, ExportItem>>
-    ): Map<string, Map<string, ExportItem>> {
-      const exportMap = new Map<string, Map<string, ExportItem>>()
-      for (const [name, items] of Object.entries(snapshot)) {
-        const mapped = new Map<string, ExportItem>()
-        for (const [id, item] of Object.entries(items)) {
-          mapped.set(id, item)
-        }
-        exportMap.set(name, mapped)
-      }
-      return exportMap
-    }
-
-    function fingerprintMatches(
-      tree: Map<string, GitObjectMeta>,
-      previousPaths: Map<string, string | null>
-    ): boolean {
-      for (const [path, prevSha] of previousPaths) {
-        const currentMeta = tree.get(path)
-        const currentSha = currentMeta?.sha ?? null
-        if (currentSha !== prevSha) return false
-      }
-      return true
-    }
-
-    type ProcessCommitResult = Awaited<ReturnType<typeof processCommit>>
-
-    const handleCommitResult = async (
-      result: ProcessCommitResult
-    ): Promise<boolean> => {
-      previousResolvedPaths = extractResolvedPaths(result.metaCache)
-
-      let currentExports = result.currentExports
-      cacheHits += result.stats.hits
-      cacheMisses += result.stats.misses
-
-      if (!result.hasEntry) {
-        if (previousExports) {
-          currentExports = previousExports
-        } else {
-          globalCommitsProcessed++
-          return false
-        }
-      }
-
-      const changeBase = {
-        sha: result.commit.sha,
-        unix: result.commit.unix,
-        date: new Date(result.commit.unix * 1000).toISOString(),
-        release: result.commit.release,
-      }
-
-      if (previousExports !== null) {
-        const { previousById, currentById, previousNamesById } =
-          buildExportComparisonMaps(previousExports, currentExports)
-
-        const removedIds: string[] = []
-        for (const id of previousById.keys()) {
-          if (!currentById.has(id)) {
-            removedIds.push(id)
-          }
-        }
-        // Rename detection uses a same-file pass first, then an optional
-        // cross-file pass for unmatched items within the same commit. The
-        // cross-file pass is conservative (requires unique hash matches)
-        // to avoid false positives.
-        const byFileAdded = new Map<string, string[]>()
-        const byFileRemoved = new Map<string, string[]>()
-
-        const renamedFileGroups = new Set<string>()
-        let fileRenameNewToOld = new Map<string, string>()
-
-        // If there are removed+added exports but *no* file overlap, it's often a file rename.
-        // In that case, ask git for rename pairs so we can compare "new file" exports against
-        // "old file" exports even when signatures change (e.g. UniformsNode -> UniformArrayNode).
+        const hasSameEntrySelection = Array.isArray(previousReport?.entryFiles)
+          ? previousReport.entryFiles.length === sortedEntryRelatives.length &&
+            [...previousReport.entryFiles]
+              .sort()
+              .every(
+                (entryFile, index) => entryFile === sortedEntryRelatives[index]
+              )
+          : false
         if (
-          previousCommitHash &&
-          previousCommitHash !== result.commit.sha &&
-          removedIds.length
+          previousReport?.repo === this.repoRoot &&
+          hasSameEntrySelection &&
+          previousReport.lastCommitSha &&
+          previousReport.lastExportSnapshot &&
+          previousReport.lastCommitSha === latestPointer.lastCommitSha
         ) {
-          const removedFiles = new Set<string>()
-          for (const removedId of removedIds) {
-            const parsed = parseExportId(removedId)
-            if (parsed) {
-              removedFiles.add(parsed.file)
+          const isAncestor = await this.#gitIsAncestorCommit(
+            previousReport.lastCommitSha,
+            endCommit
+          )
+          if (isAncestor) {
+            resumeReport = previousReport
+            resumeCommit = previousReport.lastCommitSha
+            resumeSnapshot = previousReport.lastExportSnapshot
+          }
+        }
+      }
+
+      // Fetch content history
+      const logStartCommit = resumeCommit ?? startCommit
+      const logRef = logStartCommit
+        ? `${logStartCommit}..${endCommit}`
+        : endCommit
+      const contentCommits = await this.#gitLogCached(logRef, scopeDirectories, {
+        reverse: true, // Oldest to Newest
+        limit,
+      })
+
+      if (contentCommits.length === 0) {
+        if (resumeReport) {
+          return resumeReport
+        }
+        throw new Error(
+          `No commits found for paths "${scopeDirectories.join(', ')}" in ref "${endRef}".`
+        )
+      }
+
+      emitProgress({
+        type: 'progress',
+        phase: 'gitLogCached',
+        elapsedMs: Date.now() - _startMs,
+        totalCommits: contentCommits.length,
+      } satisfies ExportHistoryProgressEvent)
+
+      let findRelease: (commitSha: string) => string | undefined
+      if (targetReleaseTag) {
+        findRelease = () => targetReleaseTag
+      } else {
+        const commitToRelease = await this.#buildCommitReleaseMap(
+          contentCommits,
+          scopeDirectories,
+          startCommit
+        )
+        findRelease = (commitSha: string) => commitToRelease.get(commitSha)
+      }
+
+      emitProgress({
+        type: 'progress',
+        phase: 'buildCommitReleaseMap',
+        elapsedMs: Date.now() - _startMs,
+        totalCommits: contentCommits.length,
+      } satisfies ExportHistoryProgressEvent)
+
+      // Attach release info
+      const uniqueCommits: ExportHistoryCommit[] = contentCommits.map(
+        (commit) => ({
+          ...commit,
+          release: targetReleaseTag
+            ? targetReleaseTag
+            : commit.tags?.length
+              ? commit.tags[0]
+              : findRelease(commit.sha),
+        })
+      )
+
+      const latestCommit = uniqueCommits[uniqueCommits.length - 1].sha
+
+      emitProgress({
+        type: 'progress',
+        phase: 'resolveEntries',
+        elapsedMs: Date.now() - _startMs,
+        totalCommits: uniqueCommits.length,
+      } satisfies ExportHistoryProgressEvent)
+
+      const blobCache = new Map<string, Map<string, ExportItem>>()
+      const exports: ExportHistoryReport['exports'] =
+        resumeReport?.exports ?? Object.create(null)
+      const parseWarnings: string[] = resumeReport?.parseWarnings
+        ? [...resumeReport.parseWarnings]
+        : []
+
+      // Map<ExportName, Map<ExportId, ExportItem>>
+      let previousExports: Map<string, Map<string, ExportItem>> | null = null
+      let previousCommitHash: string | null = null
+      let previousResolvedPaths: Map<string, string | null> | null = null
+      let cacheHits = 0
+      let cacheMisses = 0
+      const getOrParseBlobExports = async (
+        sha: string,
+        filePathForParser: string
+      ) =>
+        this.#getOrParseExportsForBlob(sha, filePathForParser, async () => {
+          return git.repoPath
+            ? readBlobSync(git.repoPath, sha)
+            : git.getBlobContentBySha(sha)
+        })
+
+      if (resumeSnapshot) {
+        previousExports = deserializeExportSnapshot(resumeSnapshot)
+        previousCommitHash = resumeCommit
+      }
+
+      const BATCH_SIZE = 8
+
+      async function processCommit(
+        commit: ExportHistoryCommit,
+        commitTree?: Map<string, GitObjectMeta>
+      ) {
+        let hasEntry = false
+        const currentExports = new Map<string, Map<string, ExportItem>>()
+
+        // IMPORTANT: metaCache, resolveCache, and blobShaResolveCache MUST be
+        // created fresh per commit. Sharing these across commits causes stale
+        // cross-commit resolution where file renames/moves between commits are
+        // missed, resulting in collapsed "big commit" changes instead of
+        // granular per-commit tracking. The blobCache (export parse cache)
+        // is safe to share because it is keyed by blob SHA (content-addressed).
+        // Historical regression: sharing per-commit lookup caches caused
+        // cross-commit stale resolution when files moved between commits.
+        const context: CollectContext = {
+          maxDepth,
+          blobCache,
+          getOrParseBlobExports,
+          scopeDirectories,
+          parseWarnings,
+          git,
+          commit: commit.sha,
+          cacheStats: { hits: 0, misses: 0 },
+          metaCache: new Map(),
+          resolveCache: new Map(),
+          blobShaResolveCache: new Map(),
+          repoPath: git.repoPath,
+        }
+
+        if (commitTree) {
+          for (const [path, meta] of commitTree) {
+            context.metaCache.set(`${commit.sha}:${path}`, meta)
+          }
+        }
+
+        for (const entryRelative of uniqueEntryRelatives) {
+          const entryMeta = await getBlobMetaCached(
+            context,
+            `${commit.sha}:${entryRelative}`
+          )
+          if (!entryMeta) {
+            continue
+          }
+
+          hasEntry = true
+          const entryExportMap = await collectExportsFromFile(
+            context,
+            entryRelative,
+            0,
+            new Set()
+          )
+
+          for (const [name, item] of entryExportMap) {
+            let itemsForName = currentExports.get(name)
+            if (!itemsForName) {
+              itemsForName = new Map()
+              currentExports.set(name, itemsForName)
+            }
+            if (!itemsForName.has(item.id)) {
+              itemsForName.set(item.id, item)
+            }
+          }
+        }
+
+        return {
+          commit,
+          hasEntry,
+          currentExports,
+          metaCache: context.metaCache,
+          stats: {
+            hits: context.cacheStats.hits,
+            misses: context.cacheStats.misses,
+          },
+        }
+      }
+
+      function extractResolvedPaths(
+        metaCache: Map<string, GitObjectMeta | null>
+      ): Map<string, string | null> {
+        const paths = new Map<string, string | null>()
+        for (const [specifier, meta] of metaCache) {
+          const colonIdx = specifier.indexOf(':')
+          if (colonIdx !== -1) {
+            paths.set(specifier.substring(colonIdx + 1), meta?.sha ?? null)
+          }
+        }
+        return paths
+      }
+
+      function serializeExportSnapshot(
+        exportMap: Map<string, Map<string, ExportItem>>
+      ): Record<string, Record<string, ExportItem>> {
+        const snapshot: Record<
+          string,
+          Record<string, ExportItem>
+        > = Object.create(null)
+        for (const [name, items] of exportMap) {
+          const serialized: Record<string, ExportItem> = Object.create(null)
+          for (const [id, item] of items) {
+            serialized[id] = item
+          }
+          if (Object.keys(serialized).length) {
+            snapshot[name] = serialized
+          }
+        }
+        return snapshot
+      }
+
+      function deserializeExportSnapshot(
+        snapshot: Record<string, Record<string, ExportItem>>
+      ): Map<string, Map<string, ExportItem>> {
+        const exportMap = new Map<string, Map<string, ExportItem>>()
+        for (const [name, items] of Object.entries(snapshot)) {
+          const mapped = new Map<string, ExportItem>()
+          for (const [id, item] of Object.entries(items)) {
+            mapped.set(id, item)
+          }
+          exportMap.set(name, mapped)
+        }
+        return exportMap
+      }
+
+      function fingerprintMatches(
+        tree: Map<string, GitObjectMeta>,
+        previousPaths: Map<string, string | null>
+      ): boolean {
+        for (const [path, prevSha] of previousPaths) {
+          const currentMeta = tree.get(path)
+          const currentSha = currentMeta?.sha ?? null
+          if (currentSha !== prevSha) return false
+        }
+        return true
+      }
+
+      type ProcessCommitResult = Awaited<ReturnType<typeof processCommit>>
+
+      const handleCommitResult = async (
+        result: ProcessCommitResult
+      ): Promise<boolean> => {
+        previousResolvedPaths = extractResolvedPaths(result.metaCache)
+
+        let currentExports = result.currentExports
+        cacheHits += result.stats.hits
+        cacheMisses += result.stats.misses
+
+        if (!result.hasEntry) {
+          if (previousExports) {
+            currentExports = previousExports
+          } else {
+            globalCommitsProcessed++
+            return false
+          }
+        }
+
+        const changeBase = {
+          sha: result.commit.sha,
+          unix: result.commit.unix,
+          date: new Date(result.commit.unix * 1000).toISOString(),
+          release: result.commit.release,
+        }
+
+        if (previousExports !== null) {
+          const { previousById, currentById, previousNamesById } =
+            buildExportComparisonMaps(previousExports, currentExports)
+
+          const removedIds: string[] = []
+          for (const id of previousById.keys()) {
+            if (!currentById.has(id)) {
+              removedIds.push(id)
+            }
+          }
+          // Rename detection uses a same-file pass first, then an optional
+          // cross-file pass for unmatched items within the same commit. The
+          // cross-file pass is conservative (requires unique hash matches)
+          // to avoid false positives.
+          const byFileAdded = new Map<string, string[]>()
+          const byFileRemoved = new Map<string, string[]>()
+
+          const renamedFileGroups = new Set<string>()
+          let fileRenameNewToOld = new Map<string, string>()
+
+          // If there are removed+added exports but *no* file overlap, it's often a file rename.
+          // In that case, ask git for rename pairs so we can compare "new file" exports against
+          // "old file" exports even when signatures change (e.g. UniformsNode -> UniformArrayNode).
+          if (
+            previousCommitHash &&
+            previousCommitHash !== result.commit.sha &&
+            removedIds.length
+          ) {
+            const removedFiles = new Set<string>()
+            for (const removedId of removedIds) {
+              const parsed = parseExportId(removedId)
+              if (parsed) {
+                removedFiles.add(parsed.file)
+              }
+            }
+
+            let hasNew = false
+            let hasOverlap = false
+            for (const id of currentById.keys()) {
+              if (previousById.has(id)) {
+                continue
+              }
+              const parsed = parseExportId(id)
+              if (!parsed) {
+                continue
+              }
+              hasNew = true
+              if (removedFiles.has(parsed.file)) {
+                hasOverlap = true
+                break
+              }
+            }
+
+            if (hasNew && !hasOverlap) {
+              fileRenameNewToOld = await this.#gitRenameNewToOldBetween(
+                previousCommitHash,
+                result.commit.sha,
+                diffScopePaths
+              )
             }
           }
 
-          let hasNew = false
-          let hasOverlap = false
           for (const id of currentById.keys()) {
             if (previousById.has(id)) {
               continue
@@ -3669,469 +3709,516 @@ export class GitFileSystem
             if (!parsed) {
               continue
             }
-            hasNew = true
-            if (removedFiles.has(parsed.file)) {
-              hasOverlap = true
-              break
+
+            const mapped = fileRenameNewToOld.get(parsed.file)
+            const fileKey = mapped ?? parsed.file
+            if (mapped) {
+              renamedFileGroups.add(fileKey)
+            }
+
+            const list = byFileAdded.get(fileKey)
+            if (list) {
+              list.push(id)
+            } else {
+              byFileAdded.set(fileKey, [id])
             }
           }
 
-          if (hasNew && !hasOverlap) {
-            fileRenameNewToOld = await this.#gitRenameNewToOldBetween(
-              previousCommitHash,
-              result.commit.sha,
-              diffScopePaths
-            )
-          }
-        }
-
-        for (const id of currentById.keys()) {
-          if (previousById.has(id)) {
-            continue
-          }
-          const parsed = parseExportId(id)
-          if (!parsed) {
-            continue
+          for (const removedId of removedIds) {
+            const parsed = parseExportId(removedId)
+            if (!parsed) {
+              continue
+            }
+            const list = byFileRemoved.get(parsed.file)
+            if (list) {
+              list.push(removedId)
+            } else {
+              byFileRemoved.set(parsed.file, [removedId])
+            }
           }
 
-          const mapped = fileRenameNewToOld.get(parsed.file)
-          const fileKey = mapped ?? parsed.file
-          if (mapped) {
-            renamedFileGroups.add(fileKey)
-          }
+          const { renamePairs, usedRemovedIds } = detectSameFileRenames({
+            previousById,
+            currentById,
+            removedIds,
+            preGrouped: { byFileAdded, byFileRemoved },
+            renamedFileGroups,
+            renamedFileThreshold: RENAME_SIGNATURE_DICE_MIN_RENAMED_FILE,
+            marginThreshold: RENAME_SIGNATURE_DICE_MARGIN,
+          })
 
-          const list = byFileAdded.get(fileKey)
-          if (list) {
-            list.push(id)
-          } else {
-            byFileAdded.set(fileKey, [id])
-          }
-        }
+          detectCrossFileRenames(
+            previousById,
+            currentById,
+            removedIds,
+            usedRemovedIds,
+            renamePairs,
+            RENAME_PATH_DICE_MIN,
+            RENAME_SIGNATURE_DICE_MARGIN
+          )
 
-        for (const removedId of removedIds) {
-          const parsed = parseExportId(removedId)
-          if (!parsed) {
-            continue
-          }
-          const list = byFileRemoved.get(parsed.file)
-          if (list) {
-            list.push(removedId)
-          } else {
-            byFileRemoved.set(parsed.file, [removedId])
-          }
-        }
+          // Detect re-export moves: same public name, different defining file.
+          // This catches barrel-file reorganizations that other passes miss
+          // (e.g. `timerGlobal` moving from TimerNode.js to Timer.js).
+          detectSameNameMoves(
+            previousExports,
+            currentExports,
+            previousById,
+            currentById,
+            removedIds,
+            usedRemovedIds,
+            renamePairs
+          )
 
-        const { renamePairs, usedRemovedIds } = detectSameFileRenames({
-          previousById,
-          currentById,
-          removedIds,
-          preGrouped: { byFileAdded, byFileRemoved },
-          renamedFileGroups,
-          renamedFileThreshold: RENAME_SIGNATURE_DICE_MIN_RENAMED_FILE,
-          marginThreshold: RENAME_SIGNATURE_DICE_MARGIN,
-        })
+          const addedIds = new Set<string>()
+          const renamedIds = new Set<string>()
+          const updatedIds = new Set<string>()
+          const deprecatedIds = new Set<string>()
 
-        detectCrossFileRenames(
-          previousById,
-          currentById,
-          removedIds,
-          usedRemovedIds,
-          renamePairs,
-          RENAME_PATH_DICE_MIN,
-          RENAME_SIGNATURE_DICE_MARGIN
-        )
+          for (const [name, currentItems] of currentExports) {
+            const previousItems = previousExports.get(name)
+            for (const [id, currentExportItem] of currentItems) {
+              const renameInfo = renamePairs.get(id)
+              const history = mergeRenameHistory(
+                exports,
+                id,
+                renameInfo?.oldId ?? id
+              )
 
-        // Detect re-export moves: same public name, different defining file.
-        // This catches barrel-file reorganizations that other passes miss
-        // (e.g. `timerGlobal` moving from TimerNode.js to Timer.js).
-        detectSameNameMoves(
-          previousExports,
-          currentExports,
-          previousById,
-          currentById,
-          removedIds,
-          usedRemovedIds,
-          renamePairs
-        )
+              const previousDeprecated = renameInfo?.oldId
+                ? previousById.get(renameInfo.oldId)?.deprecated
+                : (previousById.get(id)?.deprecated ??
+                  previousItems?.get(id)?.deprecated)
+              const willDeprecate =
+                currentExportItem.deprecated &&
+                !previousDeprecated &&
+                !deprecatedIds.has(id)
 
-        const addedIds = new Set<string>()
-        const renamedIds = new Set<string>()
-        const updatedIds = new Set<string>()
-        const deprecatedIds = new Set<string>()
-
-        for (const [name, currentItems] of currentExports) {
-          const previousItems = previousExports.get(name)
-          for (const [id, currentExportItem] of currentItems) {
-            const renameInfo = renamePairs.get(id)
-            const history = mergeRenameHistory(
-              exports,
-              id,
-              renameInfo?.oldId ?? id
-            )
-
-            const previousDeprecated = renameInfo?.oldId
-              ? previousById.get(renameInfo.oldId)?.deprecated
-              : (previousById.get(id)?.deprecated ??
-                previousItems?.get(id)?.deprecated)
-            const willDeprecate =
-              currentExportItem.deprecated &&
-              !previousDeprecated &&
-              !deprecatedIds.has(id)
-
-            if (renameInfo) {
-              if (!renamedIds.has(id)) {
-                const currentParsed = parseExportId(id)
-                const previousParsed = parseExportId(renameInfo.oldId)
-                const oldExportName = previousById.get(renameInfo.oldId)?.name
-
-                history.push({
-                  ...changeBase,
-                  kind: 'Renamed',
-                  name,
-                  localName: currentExportItem.localName,
-                  filePath: currentParsed?.file ?? '',
-                  id,
-                  previousName:
-                    oldExportName && oldExportName !== name
-                      ? oldExportName
-                      : undefined,
-                  previousFilePath:
-                    currentParsed &&
-                    previousParsed &&
-                    currentParsed.file !== previousParsed.file
-                      ? previousParsed.file
-                      : undefined,
-                  previousId: renameInfo.oldId,
-                } as ExportChange)
-                renamedIds.add(id)
-              }
-            } else if (!previousItems || !previousItems.has(id)) {
-              const previousNames = previousNamesById.get(id)
-              if (previousNames && previousNames.size > 0) {
+              if (renameInfo) {
                 if (!renamedIds.has(id)) {
-                  let actualPreviousName: string | undefined
-                  for (const prevName of previousNames) {
-                    if (prevName !== name) {
-                      actualPreviousName = prevName
-                      break
-                    }
-                  }
+                  const currentParsed = parseExportId(id)
+                  const previousParsed = parseExportId(renameInfo.oldId)
+                  const oldExportName = previousById.get(renameInfo.oldId)?.name
+
                   history.push({
                     ...changeBase,
                     kind: 'Renamed',
                     name,
                     localName: currentExportItem.localName,
-                    filePath: parseExportId(id)?.file ?? '',
+                    filePath: currentParsed?.file ?? '',
                     id,
-                    previousName: actualPreviousName,
-                    previousId: id,
+                    previousName:
+                      oldExportName && oldExportName !== name
+                        ? oldExportName
+                        : undefined,
+                    previousFilePath:
+                      currentParsed &&
+                      previousParsed &&
+                      currentParsed.file !== previousParsed.file
+                        ? previousParsed.file
+                        : undefined,
+                    previousId: renameInfo.oldId,
                   } as ExportChange)
                   renamedIds.add(id)
                 }
-              } else if (!addedIds.has(id)) {
-                const collapsed = checkAndCollapseOscillation(
-                  history,
-                  'Added',
-                  changeBase.release
-                )
-                if (!collapsed) {
+              } else if (!previousItems || !previousItems.has(id)) {
+                const previousNames = previousNamesById.get(id)
+                if (previousNames && previousNames.size > 0) {
+                  if (!renamedIds.has(id)) {
+                    let actualPreviousName: string | undefined
+                    for (const prevName of previousNames) {
+                      if (prevName !== name) {
+                        actualPreviousName = prevName
+                        break
+                      }
+                    }
+                    history.push({
+                      ...changeBase,
+                      kind: 'Renamed',
+                      name,
+                      localName: currentExportItem.localName,
+                      filePath: parseExportId(id)?.file ?? '',
+                      id,
+                      previousName: actualPreviousName,
+                      previousId: id,
+                    } as ExportChange)
+                    renamedIds.add(id)
+                  }
+                } else if (!addedIds.has(id)) {
+                  const collapsed = checkAndCollapseOscillation(
+                    history,
+                    'Added',
+                    changeBase.release
+                  )
+                  if (!collapsed) {
+                    history.push({
+                      ...changeBase,
+                      kind: 'Added',
+                      name,
+                      localName: currentExportItem.localName,
+                      filePath: parseExportId(id)?.file ?? '',
+                      id,
+                    } as ExportChange)
+                  }
+                  addedIds.add(id)
+                }
+              } else if (detectUpdates && !willDeprecate) {
+                const previousExportItem = previousItems.get(id)!
+                const signatureChanged =
+                  previousExportItem.signatureHash !==
+                  currentExportItem.signatureHash
+                const bodyChanged =
+                  previousExportItem.bodyHash !== currentExportItem.bodyHash
+                const shouldRecord =
+                  updateMode === 'signature' ? signatureChanged : bodyChanged
+                if (shouldRecord && !updatedIds.has(id)) {
                   history.push({
                     ...changeBase,
-                    kind: 'Added',
+                    kind: 'Updated',
                     name,
                     localName: currentExportItem.localName,
                     filePath: parseExportId(id)?.file ?? '',
                     id,
+                    signature: signatureChanged,
                   } as ExportChange)
+                  updatedIds.add(id)
                 }
-                addedIds.add(id)
               }
-            } else if (detectUpdates && !willDeprecate) {
-              const previousExportItem = previousItems.get(id)!
-              const signatureChanged =
-                previousExportItem.signatureHash !==
-                currentExportItem.signatureHash
-              const bodyChanged =
-                previousExportItem.bodyHash !== currentExportItem.bodyHash
-              const shouldRecord =
-                updateMode === 'signature' ? signatureChanged : bodyChanged
-              if (shouldRecord && !updatedIds.has(id)) {
+
+              if (willDeprecate) {
                 history.push({
                   ...changeBase,
-                  kind: 'Updated',
+                  kind: 'Deprecated',
                   name,
                   localName: currentExportItem.localName,
                   filePath: parseExportId(id)?.file ?? '',
                   id,
-                  signature: signatureChanged,
+                  message: currentExportItem.deprecatedMessage,
                 } as ExportChange)
-                updatedIds.add(id)
+                deprecatedIds.add(id)
               }
             }
+          }
 
-            if (willDeprecate) {
+          for (const removedId of removedIds) {
+            if (usedRemovedIds.has(removedId)) continue
+            let history = exports[removedId]
+            if (!history) continue
+            const removedItem = previousById.get(removedId)
+            if (!removedItem) continue
+
+            const collapsed = checkAndCollapseOscillation(
+              history,
+              'Removed',
+              changeBase.release
+            )
+            if (collapsed && history.length === 0) {
+              delete exports[removedId]
+            } else if (!collapsed) {
               history.push({
                 ...changeBase,
-                kind: 'Deprecated',
-                name,
-                localName: currentExportItem.localName,
-                filePath: parseExportId(id)?.file ?? '',
-                id,
-                message: currentExportItem.deprecatedMessage,
+                kind: 'Removed',
+                name: removedItem.name,
+                localName: removedItem.localName,
+                filePath: parseExportId(removedId)?.file ?? '',
+                id: removedId,
               } as ExportChange)
-              deprecatedIds.add(id)
+            }
+          }
+        } else {
+          // First commit where the entry file exists and no startRef baseline
+          // was provided. When startRef IS provided, the baseline is
+          // established from that commit (handled earlier), so silently
+          // absorbing is correct — the user said "only show changes after
+          // startRef". Without startRef, emit "Added" for every export so
+          // the initial appearance is recorded in the history.
+          if (!startCommit) {
+            for (const [name, items] of currentExports) {
+              for (const [id, item] of items) {
+                let history = exports[id]
+                if (!history) {
+                  history = []
+                  exports[id] = history
+                }
+                history.push({
+                  ...changeBase,
+                  kind: 'Added',
+                  name,
+                  localName: item.localName,
+                  filePath: parseExportId(id)?.file ?? '',
+                  id,
+                })
+              }
             }
           }
         }
 
-        for (const removedId of removedIds) {
-          if (usedRemovedIds.has(removedId)) continue
-          let history = exports[removedId]
-          if (!history) continue
-          const removedItem = previousById.get(removedId)
-          if (!removedItem) continue
+        previousExports = currentExports
+        previousCommitHash = result.commit.sha
 
-          const collapsed = checkAndCollapseOscillation(
-            history,
-            'Removed',
-            changeBase.release
-          )
-          if (collapsed && history.length === 0) {
-            delete exports[removedId]
-          } else if (!collapsed) {
-            history.push({
-              ...changeBase,
-              kind: 'Removed',
-              name: removedItem.name,
-              localName: removedItem.localName,
-              filePath: parseExportId(removedId)?.file ?? '',
-              id: removedId,
-            } as ExportChange)
+        globalCommitsProcessed++
+        return true
+      }
+
+      let globalCommitsProcessed = 0
+
+      // Yield progress approximately 20 times during batch processing.
+      // Each yield creates a React Suspense boundary, and hundreds of
+      // boundaries add significant RSC serialisation overhead (~0.4 s each).
+      // Yielding ~20 times keeps streaming responsive without the cumulative
+      // overhead that causes multi-minute page loads.
+      const yieldInterval = Math.max(1, Math.ceil(uniqueCommits.length / 20))
+
+      let initialBatchStart = 0
+
+      if (startCommit) {
+        const unix = await this.#getCommitUnix(startCommit)
+        const baselineRelease = targetReleaseTag
+          ? previousReleaseTag
+          : findRelease(startCommit)
+        const baselineCommit = {
+          unix,
+          sha: startCommit,
+          release: baselineRelease,
+          tags: [],
+        } satisfies ExportHistoryCommit
+
+        const baselineTree = loadCommitTreeSync(git.repoPath, startCommit)
+        const firstBatch = uniqueCommits.slice(0, BATCH_SIZE)
+        const firstBatchTrees = new Map<string, Map<string, GitObjectMeta>>()
+        for (const commit of firstBatch) {
+          const tree = loadCommitTreeSync(git.repoPath, commit.sha)
+          if (tree) {
+            firstBatchTrees.set(commit.sha, tree)
           }
         }
-      } else {
-        // First commit where the entry file exists and no startRef baseline
-        // was provided. When startRef IS provided, the baseline is
-        // established from that commit (handled earlier), so silently
-        // absorbing is correct — the user said "only show changes after
-        // startRef". Without startRef, emit "Added" for every export so
-        // the initial appearance is recorded in the history.
-        if (!startCommit) {
-          for (const [name, items] of currentExports) {
-            for (const [id, item] of items) {
-              let history = exports[id]
-              if (!history) {
-                history = []
-                exports[id] = history
-              }
-              history.push({
-                ...changeBase,
-                kind: 'Added',
-                name,
-                localName: item.localName,
-                filePath: parseExportId(id)?.file ?? '',
-                id,
+
+        const [baselineResult, firstBatchResults] = await Promise.all([
+          processCommit(baselineCommit, baselineTree ?? undefined),
+          mapConcurrent(
+            firstBatch,
+            {
+              concurrency: BATCH_SIZE,
+            },
+            (commit) => processCommit(commit, firstBatchTrees.get(commit.sha))
+          ),
+        ])
+
+        cacheHits += baselineResult.stats.hits
+        cacheMisses += baselineResult.stats.misses
+        previousResolvedPaths = extractResolvedPaths(baselineResult.metaCache)
+
+        if (baselineResult.hasEntry) {
+          previousExports = baselineResult.currentExports
+          previousCommitHash = baselineCommit.sha
+        }
+
+        const firstBatchStart = 0
+        for (const result of firstBatchResults) {
+          const shouldYield = await handleCommitResult(result)
+          if (shouldYield) {
+            const isLastCommit = globalCommitsProcessed >= uniqueCommits.length
+            if (isLastCommit || globalCommitsProcessed % yieldInterval === 0) {
+              emitProgress({
+                type: 'progress',
+                phase: 'batch',
+                elapsedMs: Date.now() - _startMs,
+                batchStart: firstBatchStart,
+                batchSize: yieldInterval,
+                totalCommits: uniqueCommits.length,
+                commitsProcessed: globalCommitsProcessed,
+                exports: { ...exports },
+              } satisfies ExportHistoryProgressEvent)
+            }
+          }
+        }
+
+        initialBatchStart = BATCH_SIZE
+      }
+
+      for (
+        let batchStart = initialBatchStart;
+        batchStart < uniqueCommits.length;
+        batchStart += BATCH_SIZE
+      ) {
+        const batch = uniqueCommits.slice(batchStart, batchStart + BATCH_SIZE)
+
+        // Pre-load commit trees synchronously (bypasses event loop congestion).
+        // Each `git ls-tree -r -l` is ~5ms, so 8 commits = ~40ms of blocking.
+        // Returns null for commits whose tree objects aren't available locally
+        // (e.g. partial clones); those fall back to the async path.
+        const batchTrees = new Map<string, Map<string, GitObjectMeta>>()
+        for (const commit of batch) {
+          const tree = loadCommitTreeSync(git.repoPath, commit.sha)
+          if (tree) {
+            batchTrees.set(commit.sha, tree)
+          }
+        }
+
+        for (const commit of batch) {
+          const tree = batchTrees.get(commit.sha)
+          if (
+            previousResolvedPaths &&
+            tree &&
+            fingerprintMatches(tree, previousResolvedPaths)
+          ) {
+            if (previousExports) {
+              previousCommitHash = commit.sha
+            }
+
+            globalCommitsProcessed++
+
+            const isLastCommit = globalCommitsProcessed >= uniqueCommits.length
+            if (isLastCommit || globalCommitsProcessed % yieldInterval === 0) {
+              emitProgress({
+                type: 'progress',
+                phase: 'batch',
+                elapsedMs: Date.now() - _startMs,
+                batchStart,
+                batchSize: yieldInterval,
+                totalCommits: uniqueCommits.length,
+                commitsProcessed: globalCommitsProcessed,
+                exports: { ...exports },
+              } satisfies ExportHistoryProgressEvent)
+            }
+            continue
+          }
+
+          const result = await processCommit(commit, tree)
+          const shouldYield = await handleCommitResult(result)
+          if (shouldYield) {
+            const isLastCommit = globalCommitsProcessed >= uniqueCommits.length
+            if (isLastCommit || globalCommitsProcessed % yieldInterval === 0) {
+              emitProgress({
+                type: 'progress',
+                phase: 'batch',
+                elapsedMs: Date.now() - _startMs,
+                batchStart,
+                batchSize: yieldInterval,
+                totalCommits: uniqueCommits.length,
+                commitsProcessed: globalCommitsProcessed,
+                exports: { ...exports },
+              } satisfies ExportHistoryProgressEvent)
+            }
+          }
+        }
+      }
+
+      const nameToId: Record<string, string[]> = Object.create(null)
+      if (previousExports) {
+        for (const [name, ids] of previousExports) {
+          const sorted = Array.from(ids.keys()).sort()
+          if (sorted.length > 0) {
+            nameToId[name] = sorted
+          }
+        }
+      }
+
+      const lastExportSnapshot = previousExports
+        ? serializeExportSnapshot(previousExports)
+        : undefined
+      const report: ExportHistoryReport = {
+        generatedAt: new Date().toISOString(),
+        repo: this.repoRoot,
+        entryFiles: uniqueEntryRelatives,
+        exports,
+        nameToId,
+        lastCommitSha: latestCommit,
+        ...(lastExportSnapshot ? { lastExportSnapshot } : {}),
+        ...(parseWarnings.length ? { parseWarnings } : {}),
+      }
+
+      if (this.verbose) {
+        const denom = cacheHits + cacheMisses
+        const pct = denom ? ((cacheHits / denom) * 100).toFixed(1) : '0.0'
+        console.log(
+          `[GitFileSystem] public API scan done (parse cache hit rate: ${pct}%)`
+        )
+        if (parseWarnings.length)
+          console.log(`[GitFileSystem] parseWarnings=${parseWarnings.length}`)
+      }
+
+      return report
+    }
+
+    const reportPromise = (async (): Promise<ExportHistoryReport> => {
+      while (true) {
+        const freshReport =
+          await session.cache.get<ExportHistoryReport>(reportNodeKey)
+        if (freshReport) {
+          return freshReport
+        }
+
+        let settledReport: ExportHistoryReport | undefined
+        await session.cache.withComputeSlot(reportNodeKey, {
+          leader: async () => {
+            const cachedDuringLeader =
+              await session.cache.get<ExportHistoryReport>(reportNodeKey)
+            if (cachedDuringLeader) {
+              settledReport = cachedDuringLeader
+              return
+            }
+
+            if (!skipWarmup) {
+              void this.#scheduleRelatedBarrelHistoryWarmup({
+                entryFiles: uniqueEntryRelatives,
+                commitSha: endCommit,
+                scopeDirectories: sortedScopeDirectories,
+                ref: options.ref,
+                limit,
+                maxDepth,
+                detectUpdates,
+                updateMode,
+              }).catch(() => {})
+            }
+
+            const computedReport = await computeReport()
+
+            await this.#replacePersistentNode(
+              session,
+              reportNodeKey,
+              computedReport
+            )
+            if (computedReport.lastCommitSha) {
+              await this.#replacePersistentNode(session, latestNodeKey, {
+                reportNodeKey,
+                lastCommitSha: computedReport.lastCommitSha,
               })
             }
-          }
-        }
-      }
-
-      previousExports = currentExports
-      previousCommitHash = result.commit.sha
-
-      globalCommitsProcessed++
-      return true
-    }
-
-    let globalCommitsProcessed = 0
-
-    // Yield progress approximately 20 times during batch processing.
-    // Each yield creates a React Suspense boundary, and hundreds of
-    // boundaries add significant RSC serialisation overhead (~0.4 s each).
-    // Yielding ~20 times keeps streaming responsive without the cumulative
-    // overhead that causes multi-minute page loads.
-    const yieldInterval = Math.max(1, Math.ceil(uniqueCommits.length / 20))
-
-    let initialBatchStart = 0
-
-    if (startCommit) {
-      const unix = await this.#getCommitUnix(startCommit)
-      const baselineRelease = targetReleaseTag
-        ? previousReleaseTag
-        : findRelease(startCommit)
-      const baselineCommit = {
-        unix,
-        sha: startCommit,
-        release: baselineRelease,
-        tags: [],
-      } satisfies ExportHistoryCommit
-
-      const baselineTree = loadCommitTreeSync(git.repoPath, startCommit)
-      const firstBatch = uniqueCommits.slice(0, BATCH_SIZE)
-      const firstBatchTrees = new Map<string, Map<string, GitObjectMeta>>()
-      for (const commit of firstBatch) {
-        const tree = loadCommitTreeSync(git.repoPath, commit.sha)
-        if (tree) {
-          firstBatchTrees.set(commit.sha, tree)
-        }
-      }
-
-      const [baselineResult, firstBatchResults] = await Promise.all([
-        processCommit(baselineCommit, baselineTree ?? undefined),
-        mapConcurrent(
-          firstBatch,
-          {
-            concurrency: BATCH_SIZE,
+            settledReport = computedReport
           },
-          (commit) => processCommit(commit, firstBatchTrees.get(commit.sha))
-        ),
-      ])
+          follower: async () => {
+            settledReport = await session.cache.get<ExportHistoryReport>(
+              reportNodeKey
+            )
+          },
+        })
 
-      cacheHits += baselineResult.stats.hits
-      cacheMisses += baselineResult.stats.misses
-      previousResolvedPaths = extractResolvedPaths(baselineResult.metaCache)
-
-      if (baselineResult.hasEntry) {
-        previousExports = baselineResult.currentExports
-        previousCommitHash = baselineCommit.sha
-      }
-
-      const firstBatchStart = 0
-      for (const result of firstBatchResults) {
-        const shouldYield = await handleCommitResult(result)
-        if (shouldYield) {
-          const isLastCommit = globalCommitsProcessed >= uniqueCommits.length
-          if (isLastCommit || globalCommitsProcessed % yieldInterval === 0) {
-            yield {
-              type: 'progress',
-              phase: 'batch',
-              elapsedMs: Date.now() - _startMs,
-              batchStart: firstBatchStart,
-              batchSize: yieldInterval,
-              totalCommits: uniqueCommits.length,
-              commitsProcessed: globalCommitsProcessed,
-              exports: { ...exports },
-            } satisfies ExportHistoryProgressEvent
-          }
+        if (settledReport) {
+          return settledReport
         }
       }
+    })()
+    void reportPromise.catch(() => {})
 
-      initialBatchStart = BATCH_SIZE
-    }
+    void reportPromise.then(
+      () => {
+        progressQueue.close()
+      },
+      () => {
+        progressQueue.close()
+      }
+    )
 
-    for (
-      let batchStart = initialBatchStart;
-      batchStart < uniqueCommits.length;
-      batchStart += BATCH_SIZE
-    ) {
-      const batch = uniqueCommits.slice(batchStart, batchStart + BATCH_SIZE)
-
-      // Pre-load commit trees synchronously (bypasses event loop congestion).
-      // Each `git ls-tree -r -l` is ~5ms, so 8 commits = ~40ms of blocking.
-      // Returns null for commits whose tree objects aren't available locally
-      // (e.g. partial clones); those fall back to the async path.
-      const batchTrees = new Map<string, Map<string, GitObjectMeta>>()
-      for (const commit of batch) {
-        const tree = loadCommitTreeSync(git.repoPath, commit.sha)
-        if (tree) {
-          batchTrees.set(commit.sha, tree)
-        }
+    try {
+      for await (const progressEvent of progressQueue) {
+        yield progressEvent
       }
 
-      for (const commit of batch) {
-        const tree = batchTrees.get(commit.sha)
-        if (
-          previousResolvedPaths &&
-          tree &&
-          fingerprintMatches(tree, previousResolvedPaths)
-        ) {
-          if (previousExports) {
-            previousCommitHash = commit.sha
-          }
-
-          globalCommitsProcessed++
-
-          const isLastCommit = globalCommitsProcessed >= uniqueCommits.length
-          if (isLastCommit || globalCommitsProcessed % yieldInterval === 0) {
-            yield {
-              type: 'progress',
-              phase: 'batch',
-              elapsedMs: Date.now() - _startMs,
-              batchStart,
-              batchSize: yieldInterval,
-              totalCommits: uniqueCommits.length,
-              commitsProcessed: globalCommitsProcessed,
-              exports: { ...exports },
-            } satisfies ExportHistoryProgressEvent
-          }
-          continue
-        }
-
-        const result = await processCommit(commit, tree)
-        const shouldYield = await handleCommitResult(result)
-        if (shouldYield) {
-          // Yield progress periodically rather than per-commit.
-          // Yielding per-commit creates hundreds of React Suspense boundaries,
-          // each adding RSC serialisation overhead. Yielding ~20 times is enough
-          // for smooth streaming progress without the cumulative cost.
-          const isLastCommit = globalCommitsProcessed >= uniqueCommits.length
-          if (isLastCommit || globalCommitsProcessed % yieldInterval === 0) {
-            yield {
-              type: 'progress',
-              phase: 'batch',
-              elapsedMs: Date.now() - _startMs,
-              batchStart,
-              batchSize: yieldInterval,
-              totalCommits: uniqueCommits.length,
-              commitsProcessed: globalCommitsProcessed,
-              exports: { ...exports },
-            } satisfies ExportHistoryProgressEvent
-          }
-        }
-      }
+      return await reportPromise
+    } finally {
+      progressQueue.close()
     }
-
-    const nameToId: Record<string, string[]> = Object.create(null)
-    if (previousExports) {
-      for (const [name, ids] of previousExports) {
-        const sorted = Array.from(ids.keys()).sort()
-        if (sorted.length > 0) {
-          nameToId[name] = sorted
-        }
-      }
-    }
-
-    const lastExportSnapshot = previousExports
-      ? serializeExportSnapshot(previousExports)
-      : undefined
-    const report: ExportHistoryReport = {
-      generatedAt: new Date().toISOString(),
-      repo: this.repoRoot,
-      entryFiles: uniqueEntryRelatives,
-      exports,
-      nameToId,
-      lastCommitSha: latestCommit,
-      ...(lastExportSnapshot ? { lastExportSnapshot } : {}),
-      ...(parseWarnings.length ? { parseWarnings } : {}),
-    }
-
-    if (this.verbose) {
-      const denom = cacheHits + cacheMisses
-      const pct = denom ? ((cacheHits / denom) * 100).toFixed(1) : '0.0'
-      console.log(
-        `[GitFileSystem] public API scan done (parse cache hit rate: ${pct}%)`
-      )
-      if (parseWarnings.length)
-        console.log(`[GitFileSystem] parseWarnings=${parseWarnings.length}`)
-    }
-
-    await this.#replacePersistentNode(session, reportNodeKey, report)
-    await this.#replacePersistentNode(session, latestNodeKey, {
-      reportNodeKey,
-      lastCommitSha: latestCommit,
-    })
-    return report
   }
 
   /** Get metadata for a file or module. */
@@ -6224,6 +6311,105 @@ function deserializeReverseReExportGraph(
   return graph
 }
 
+function createAsyncValueQueue<Value>() {
+  const values: Value[] = []
+  const waiters: Array<{
+    resolve: (result: IteratorResult<Value>) => void
+    reject: (error: unknown) => void
+  }> = []
+  let isClosed = false
+  let error: unknown
+
+  const flush = () => {
+    while (waiters.length > 0 && values.length > 0) {
+      const waiter = waiters.shift()!
+      waiter.resolve({
+        value: values.shift()!,
+        done: false,
+      })
+    }
+
+    if (values.length > 0 || waiters.length === 0) {
+      return
+    }
+
+    const pendingWaiters = waiters.splice(0)
+    for (const waiter of pendingWaiters) {
+      if (error !== undefined) {
+        waiter.reject(error)
+      } else if (isClosed) {
+        waiter.resolve({
+          value: undefined as Value,
+          done: true,
+        })
+      }
+    }
+  }
+
+  return {
+    push(value: Value) {
+      if (isClosed || error !== undefined) {
+        return
+      }
+
+      values.push(value)
+      flush()
+    },
+    close() {
+      if (isClosed || error !== undefined) {
+        return
+      }
+
+      isClosed = true
+      flush()
+    },
+    fail(nextError: unknown) {
+      if (isClosed || error !== undefined) {
+        return
+      }
+
+      error = nextError
+      flush()
+    },
+    [Symbol.asyncIterator](): AsyncIterator<Value> {
+      return {
+        next() {
+          if (values.length > 0) {
+            return Promise.resolve({
+              value: values.shift()!,
+              done: false,
+            })
+          }
+
+          if (error !== undefined) {
+            return Promise.reject(error)
+          }
+
+          if (isClosed) {
+            return Promise.resolve({
+              value: undefined as Value,
+              done: true,
+            })
+          }
+
+          return new Promise<IteratorResult<Value>>((resolve, reject) => {
+            waiters.push({ resolve, reject })
+          })
+        },
+        return() {
+          isClosed = true
+          values.length = 0
+          flush()
+          return Promise.resolve({
+            value: undefined as Value,
+            done: true,
+          })
+        },
+      }
+    },
+  }
+}
+
 async function drainExportHistoryGenerator(
   generator: ExportHistoryGenerator
 ): Promise<ExportHistoryReport> {
@@ -6449,6 +6635,21 @@ function getRemoteRefShaSync(
 ): string | null {
   const safeRemote = assertSafeGitArg(remote, 'remote')
   const safeRef = assertSafeGitArg(ref, 'ref')
+  const cacheKey = `${normalizePath(resolve(repoRoot))}\x00${safeRemote}\x00${safeRef}`
+  const cached = cachedRemoteRefSyncChecks.get(cacheKey)
+  const now = Date.now()
+
+  if (cached && now - cached.checkedAt < REMOTE_REF_CACHE_TTL_MS) {
+    return cached.remoteSha
+  }
+
+  const cacheValue = (remoteSha: string | null): string | null => {
+    cachedRemoteRefSyncChecks.set(cacheKey, {
+      remoteSha,
+      checkedAt: now,
+    })
+    return remoteSha
+  }
 
   const result = spawnSync('git', ['ls-remote', safeRemote, safeRef], {
     cwd: repoRoot,
@@ -6457,7 +6658,7 @@ function getRemoteRefShaSync(
     shell: false,
   })
   if (result.status !== 0) {
-    return null
+    return cacheValue(null)
   }
 
   let remoteSha = parseLsRemoteSha(String(result.stdout))
@@ -6492,7 +6693,7 @@ function getRemoteRefShaSync(
       }
     }
   }
-  return remoteSha
+  return cacheValue(remoteSha)
 }
 
 function isFullSha(value: string): boolean {

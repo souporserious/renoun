@@ -21,6 +21,7 @@ const moduleSpecifierExtension =
 const getProgramModuleSpecifier = `../analysis/get-program${moduleSpecifierExtension}`
 const nodeFileSystemModuleSpecifier = `../file-system/NodeFileSystem${moduleSpecifierExtension}`
 const nodeClientModuleSpecifier = `../analysis/node-client${moduleSpecifierExtension}`
+const repositoryModuleSpecifier = `../file-system/Repository${moduleSpecifierExtension}`
 const gitIgnoredModuleSpecifier = `../utils/is-file-path-git-ignored${moduleSpecifierExtension}`
 const prewarmModuleSpecifier = `./prewarm${moduleSpecifierExtension}`
 
@@ -44,6 +45,10 @@ const getMDXSectionsMock = vi.fn<(source: string) => unknown>()
 const isFilePathGitIgnoredMock = vi.fn(() => false)
 const getWorkspaceChangeTokenMock =
   vi.fn<(rootPath: string) => Promise<string | null>>()
+const registerSparsePathMock = vi.fn<(path: string) => void>()
+const repositoryGetExportHistoryMock =
+  vi.fn<(options?: Record<string, unknown>) => AsyncGenerator<unknown, unknown, void>>()
+const repositoryResolveMock = vi.fn()
 
 const { Project } = getTsMorph()
 type ProjectInstance = InstanceType<typeof Project>
@@ -123,6 +128,12 @@ beforeAll(async () => {
     getOutlineRanges: getOutlineRangesMock,
   }))
 
+  vi.doMock(repositoryModuleSpecifier, () => ({
+    Repository: {
+      resolve: repositoryResolveMock,
+    },
+  }))
+
   vi.doMock(gitIgnoredModuleSpecifier, () => ({
     isFilePathGitIgnored: isFilePathGitIgnoredMock,
   }))
@@ -148,6 +159,22 @@ beforeEach(() => {
   getMarkdownSectionsMock.mockReturnValue([])
   getMDXSectionsMock.mockReturnValue([])
   getWorkspaceChangeTokenMock.mockResolvedValue(null)
+  registerSparsePathMock.mockReset()
+  repositoryGetExportHistoryMock.mockReset()
+  repositoryResolveMock.mockReset()
+  repositoryGetExportHistoryMock.mockImplementation(async function* () {
+    return {
+      generatedAt: new Date(0).toISOString(),
+      repo: 'mock-repo',
+      entryFiles: [],
+      exports: {},
+      nameToId: {},
+    }
+  })
+  repositoryResolveMock.mockReturnValue({
+    registerSparsePath: registerSparsePathMock,
+    getExportHistory: repositoryGetExportHistoryMock,
+  })
 })
 
 afterEach(() => {
@@ -503,6 +530,47 @@ describe('prewarmRenounRpcServerCache', () => {
     expect(readDirectoryMock).toHaveBeenCalledWith('/repo/src/app/(marketing)')
     expect(readDirectoryMock).not.toHaveBeenCalledWith('/repo')
   })
+
+  test('prewarms Repository#getExportHistory targets with repository sparse scope', async () => {
+    project.createSourceFile(
+      '/repo/src/history.ts',
+      `
+        import { Directory, Repository } from 'renoun'
+
+        const remoteRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: remoteRepository,
+        })
+        const repo = docs.getRepository()
+
+        repo.getExportHistory()
+        new Repository('owner/direct').getExportHistory({
+          entry: 'src/index.ts',
+          ref: 'latest',
+        })
+      `,
+      { overwrite: true }
+    )
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
+    expect(repositoryGetExportHistoryMock).toHaveBeenCalledWith(undefined)
+    expect(repositoryGetExportHistoryMock).toHaveBeenCalledWith({
+      entry: 'src/index.ts',
+      ref: 'latest',
+    })
+    expect(repositoryResolveMock.mock.calls.map((call) => call[0])).toEqual(
+      expect.arrayContaining([
+        { path: 'owner/repo', ref: 'main' },
+        'owner/direct',
+      ])
+    )
+  })
 })
 
 describe('collectRenounPrewarmTargets', () => {
@@ -794,5 +862,54 @@ describe('collectRenounPrewarmTargets', () => {
         extensions: ['tsx'],
       },
     ])
+  })
+
+  test('collects Repository#getExportHistory targets across repository aliases', async () => {
+    project.createSourceFile(
+      '/repo/src/history.ts',
+      `
+        import { Directory, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+        const repo = docs.getRepository()
+
+        repo.getExportHistory({ ref: 'latest' })
+        new Repository('owner/direct').getExportHistory({
+          entry: ['src/index.ts'],
+        })
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.exportHistory).toEqual(
+      expect.arrayContaining([
+        {
+          repository: {
+            path: 'owner/repo',
+            ref: 'main',
+          },
+          sparsePaths: ['./src/nodes'],
+          options: {
+            ref: 'latest',
+          },
+        },
+        {
+          repository: 'owner/direct',
+          sparsePaths: [],
+          options: {
+            entry: ['src/index.ts'],
+          },
+        },
+      ])
+    )
   })
 })

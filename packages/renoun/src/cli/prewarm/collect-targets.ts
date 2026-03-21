@@ -2,7 +2,7 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 
 import { isFilePathGitIgnored } from '../../utils/is-file-path-git-ignored.ts'
 import { hasJavaScriptLikeExtension } from '../../utils/is-javascript-like-extension.ts'
-import { resolveSchemePath } from '../../utils/path.ts'
+import { ensureRelativePath, resolveSchemePath } from '../../utils/path.ts'
 import {
   resolveLiteralExpression,
   type LiteralExpressionValue,
@@ -25,15 +25,25 @@ const NODE_MODULES_PATH = '/node_modules/'
 interface RenounAliases {
   directoryConstructors: Set<string>
   collectionConstructors: Set<string>
+  repositoryConstructors: Set<string>
   namespaceImports: Set<string>
 }
 
 interface RenounDirectoryDeclaration {
   path: string
+  sparsePath: string
+  repository?: RenounRepositoryDeclaration
 }
 
 interface RenounCollectionDeclaration {
   entries: RenounCollectionEntryReference[]
+}
+
+type PrewarmRepositoryInput = string | Record<string, unknown>
+
+interface RenounRepositoryDeclaration {
+  input: PrewarmRepositoryInput
+  sparsePaths: Set<string>
 }
 
 type RenounCollectionEntryReference =
@@ -55,10 +65,16 @@ export interface FileRequest {
   extensions?: string[]
 }
 
+export interface ExportHistoryRequest {
+  repository: PrewarmRepositoryInput
+  sparsePaths?: string[]
+  options?: Record<string, unknown>
+}
+
 type RenounMethodTarget =
   | {
       kind: 'directory'
-      path: string
+      declaration: RenounDirectoryDeclaration
     }
   | {
       kind: 'collection'
@@ -68,17 +84,19 @@ type RenounMethodTarget =
 export interface RenounPrewarmTargets {
   directoryGetEntries: DirectoryEntriesRequest[]
   fileGetFile: FileRequest[]
+  exportHistory: ExportHistoryRequest[]
 }
 
 type PendingRenounCallsite = {
   callExpression: CallExpression
-  methodName: 'getEntries' | 'getFile'
+  methodName: 'getEntries' | 'getFile' | 'getExportHistory'
   aliases: RenounAliases
 }
 
 const EMPTY_RENOUN_ALIASES: RenounAliases = {
   directoryConstructors: new Set(),
   collectionConstructors: new Set(),
+  repositoryConstructors: new Set(),
   namespaceImports: new Set(),
 }
 
@@ -93,6 +111,10 @@ export async function collectRenounPrewarmTargets(
     TsMorphSymbol,
     RenounDirectoryDeclaration
   >()
+  const repositoryDeclarations = new Map<
+    TsMorphSymbol,
+    RenounRepositoryDeclaration
+  >()
   const collectionRawEntries = new Map<TsMorphSymbol, Expression[]>()
   const collectionAliases = new Map<TsMorphSymbol, RenounAliases>()
   const collectionDeclarations = new Map<
@@ -102,6 +124,7 @@ export async function collectRenounPrewarmTargets(
 
   const getEntriesRequests = new Map<string, DirectoryEntriesRequest>()
   const getFileRequests: FileRequest[] = []
+  const exportHistoryRequests: ExportHistoryRequest[] = []
   const pendingCallsites: PendingRenounCallsite[] = []
   const collectionGetEntriesRequests = new Map<
     TsMorphSymbol,
@@ -138,6 +161,7 @@ export async function collectRenounPrewarmTargets(
       aliases,
       workspaceDirectory,
       directoryDeclarations,
+      repositoryDeclarations,
       collectionRawEntries,
       collectionAliases,
       pendingCallsites
@@ -183,6 +207,31 @@ export async function collectRenounPrewarmTargets(
       continue
     }
 
+    if (methodName === 'getExportHistory') {
+      const repositoryTarget = resolveRenounRepositoryTarget(
+        callExpressionTarget.getExpression(),
+        aliases,
+        {
+          directories: directoryDeclarations,
+          collections: collectionDeclarations,
+          repositories: repositoryDeclarations,
+          workspaceDirectory,
+        }
+      )
+
+      if (!repositoryTarget) {
+        continue
+      }
+
+      const options = resolveExportHistoryOptions(callExpression)
+      exportHistoryRequests.push({
+        repository: repositoryTarget.input,
+        sparsePaths: Array.from(repositoryTarget.sparsePaths).sort(),
+        ...(options ? { options } : {}),
+      })
+      continue
+    }
+
     const methodTarget = resolveRenounMethodTarget(
       callExpressionTarget.getExpression(),
       aliases,
@@ -202,7 +251,7 @@ export async function collectRenounPrewarmTargets(
 
       if (methodTarget.kind === 'directory') {
         addDirectoryEntriesRequest(getEntriesRequests, {
-          directoryPath: methodTarget.path,
+          directoryPath: methodTarget.declaration.path,
           recursive: options.recursive,
           includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
           includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
@@ -250,6 +299,7 @@ export async function collectRenounPrewarmTargets(
   return {
     directoryGetEntries: Array.from(getEntriesRequests.values()),
     fileGetFile: getFileRequests,
+    exportHistory: exportHistoryRequests,
   }
 }
 
@@ -257,6 +307,7 @@ function getRenounAliases(sourceFile: SourceFile): RenounAliases {
   const aliases: RenounAliases = {
     directoryConstructors: new Set<string>(),
     collectionConstructors: new Set<string>(),
+    repositoryConstructors: new Set<string>(),
     namespaceImports: new Set<string>(),
   }
 
@@ -282,6 +333,12 @@ function getRenounAliases(sourceFile: SourceFile): RenounAliases {
           namedImport.getAliasNode()?.getText() ?? name
         )
       }
+
+      if (name === 'Repository') {
+        aliases.repositoryConstructors.add(
+          namedImport.getAliasNode()?.getText() ?? name
+        )
+      }
     }
 
     const namespaceImport = importDeclaration.getNamespaceImport()
@@ -302,6 +359,7 @@ function collectRenounDeclarations(
   aliases: RenounAliases,
   workspaceDirectory: string,
   directoryDeclarations: Map<TsMorphSymbol, RenounDirectoryDeclaration>,
+  repositoryDeclarations: Map<TsMorphSymbol, RenounRepositoryDeclaration>,
   collectionRawEntries: Map<TsMorphSymbol, Expression[]>,
   collectionAliases: Map<TsMorphSymbol, RenounAliases>,
   pendingCallsites: PendingRenounCallsite[]
@@ -314,9 +372,9 @@ function collectRenounDeclarations(
       }
 
       const referenceExpression = resolveReferenceExpression(initializer)
+      const symbol = node.getSymbol()
 
       if (Node.isNewExpression(referenceExpression)) {
-        const symbol = node.getSymbol()
         if (!symbol) {
           return
         }
@@ -327,14 +385,15 @@ function collectRenounDeclarations(
             aliases
           )
         ) {
-          const path = resolveDirectoryPathFromNewExpression(
+          const declaration = resolveDirectoryDeclarationFromNewExpression(
             referenceExpression,
             aliases,
-            workspaceDirectory
+            workspaceDirectory,
+            repositoryDeclarations
           )
 
-          if (path !== undefined) {
-            directoryDeclarations.set(symbol, { path })
+          if (declaration !== undefined) {
+            directoryDeclarations.set(symbol, declaration)
             return
           }
         }
@@ -352,6 +411,24 @@ function collectRenounDeclarations(
           collectionAliases.set(symbol, aliases)
         }
       }
+
+      if (symbol) {
+        const repositoryDeclaration = resolveRenounRepositoryTarget(
+          referenceExpression,
+          aliases,
+          {
+            directories: directoryDeclarations,
+            collections: new Map(),
+            repositories: repositoryDeclarations,
+            workspaceDirectory,
+          }
+        )
+
+        if (repositoryDeclaration) {
+          repositoryDeclarations.set(symbol, repositoryDeclaration)
+          return
+        }
+      }
     }
 
     if (!Node.isCallExpression(node)) {
@@ -364,7 +441,11 @@ function collectRenounDeclarations(
     }
 
     const methodName = expression.getName()
-    if (methodName !== 'getEntries' && methodName !== 'getFile') {
+    if (
+      methodName !== 'getEntries' &&
+      methodName !== 'getFile' &&
+      methodName !== 'getExportHistory'
+    ) {
       return
     }
 
@@ -383,6 +464,9 @@ function isLikelyRenounSourceFile(sourceFile: SourceFile): boolean {
     sourceText.includes('renoun') ||
     sourceText.includes('Directory') ||
     sourceText.includes('Collection') ||
+    sourceText.includes('Repository') ||
+    sourceText.includes('getRepository') ||
+    sourceText.includes('getExportHistory') ||
     sourceText.includes('getEntries') ||
     sourceText.includes('getFile')
   )
@@ -517,7 +601,7 @@ function resolveRenounMethodTarget(
     if (directoryDeclaration) {
       return {
         kind: 'directory',
-        path: directoryDeclaration.path,
+        declaration: directoryDeclaration,
       }
     }
 
@@ -532,16 +616,17 @@ function resolveRenounMethodTarget(
   }
 
   if (Node.isNewExpression(resolved)) {
-    const directoryPath = resolveDirectoryPathFromNewExpression(
+    const directoryDeclaration = resolveDirectoryDeclarationFromNewExpression(
       resolved,
       aliases,
-      references.workspaceDirectory
+      references.workspaceDirectory,
+      new Map()
     )
 
-    if (directoryPath) {
+    if (directoryDeclaration) {
       return {
         kind: 'directory',
-        path: directoryPath,
+        declaration: directoryDeclaration,
       }
     }
 
@@ -602,7 +687,7 @@ function resolveGetFileCall(
       : undefined
     : undefined
   const extensions = resolveFileExtensionArgument(extensionExpression)
-  const directoryPath = methodTarget.path
+  const directoryPath = methodTarget.declaration.path
 
   if (!directoryPath) {
     return undefined
@@ -853,11 +938,187 @@ function mergeCollectionGetEntriesRequest(
   }
 }
 
-function resolveDirectoryPathFromNewExpression(
+function createRepositoryDeclaration(
+  input: PrewarmRepositoryInput,
+  sparsePaths?: Iterable<string>
+): RenounRepositoryDeclaration {
+  return {
+    input,
+    sparsePaths: new Set(sparsePaths),
+  }
+}
+
+function cloneRepositoryDeclaration(
+  declaration: RenounRepositoryDeclaration
+): RenounRepositoryDeclaration {
+  return createRepositoryDeclaration(
+    declaration.input,
+    declaration.sparsePaths
+  )
+}
+
+function resolveRenounRepositoryTarget(
+  expression: Expression,
+  aliases: RenounAliases,
+  references: {
+    directories: Map<TsMorphSymbol, RenounDirectoryDeclaration>
+    collections: Map<TsMorphSymbol, RenounCollectionDeclaration>
+    repositories: Map<TsMorphSymbol, RenounRepositoryDeclaration>
+    workspaceDirectory: string
+  },
+  visiting = new Set<TsMorphSymbol>()
+): RenounRepositoryDeclaration | undefined {
+  const resolved = resolveReferenceExpression(expression)
+
+  if (Node.isIdentifier(resolved)) {
+    const symbol = resolveRenounSymbol(resolved.getSymbol())
+    if (!symbol || visiting.has(symbol)) {
+      return undefined
+    }
+
+    const existing = references.repositories.get(symbol)
+    if (existing) {
+      return cloneRepositoryDeclaration(existing)
+    }
+
+    visiting.add(symbol)
+
+    for (const declaration of symbol.getDeclarations()) {
+      if (!Node.isVariableDeclaration(declaration)) {
+        continue
+      }
+
+      const initializer = declaration.getInitializer()
+      if (!initializer) {
+        continue
+      }
+
+      const repositoryDeclaration = resolveRenounRepositoryTarget(
+        initializer,
+        aliases,
+        references,
+        visiting
+      )
+
+      if (repositoryDeclaration) {
+        references.repositories.set(
+          symbol,
+          cloneRepositoryDeclaration(repositoryDeclaration)
+        )
+        return repositoryDeclaration
+      }
+    }
+
+    return undefined
+  }
+
+  if (Node.isNewExpression(resolved)) {
+    const repositoryInput = resolveRepositoryInputFromNewExpression(
+      resolved,
+      aliases
+    )
+    if (repositoryInput !== undefined) {
+      return createRepositoryDeclaration(repositoryInput)
+    }
+  }
+
+  if (Node.isCallExpression(resolved)) {
+    const callExpression = resolved.getExpression()
+    if (
+      Node.isPropertyAccessExpression(callExpression) &&
+      callExpression.getName() === 'getRepository'
+    ) {
+      const methodTarget = resolveRenounMethodTarget(
+        callExpression.getExpression(),
+        aliases,
+        {
+          directories: references.directories,
+          collections: references.collections,
+          workspaceDirectory: references.workspaceDirectory,
+        }
+      )
+
+      if (!methodTarget || methodTarget.kind !== 'directory') {
+        return undefined
+      }
+
+      const repositoryArgument = resolved.getArguments()[0]
+      const explicitRepository =
+        repositoryArgument && Node.isExpression(repositoryArgument)
+          ? resolveRenounRepositoryTarget(
+              repositoryArgument,
+              aliases,
+              references,
+              visiting
+            )
+          : undefined
+
+      const repositoryDeclaration =
+        explicitRepository ??
+        (methodTarget.declaration.repository
+          ? cloneRepositoryDeclaration(methodTarget.declaration.repository)
+          : undefined)
+
+      if (!repositoryDeclaration) {
+        return undefined
+      }
+
+      repositoryDeclaration.sparsePaths.add(methodTarget.declaration.sparsePath)
+      return repositoryDeclaration
+    }
+  }
+
+  const literalRepository = resolveRepositoryInputLiteral(resolved)
+  if (literalRepository !== undefined) {
+    return createRepositoryDeclaration(literalRepository)
+  }
+
+  return undefined
+}
+
+function resolveRepositoryInputFromNewExpression(
+  newExpression: Expression,
+  aliases: RenounAliases
+): PrewarmRepositoryInput | undefined {
+  const expression = resolveReferenceExpression(newExpression)
+  if (!Node.isNewExpression(expression)) {
+    return undefined
+  }
+
+  if (!isRepositoryConstructorExpression(expression.getExpression(), aliases)) {
+    return undefined
+  }
+
+  const firstArgument = expression.getArguments()[0]
+  if (!firstArgument || !Node.isExpression(firstArgument)) {
+    return '.'
+  }
+
+  return resolveRepositoryInputLiteral(firstArgument)
+}
+
+function resolveRepositoryInputLiteral(
+  expression: Expression
+): PrewarmRepositoryInput | undefined {
+  const value = resolveLiteralExpression(expression)
+
+  if (typeof value === 'string') {
+    return value
+  }
+
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+
+  return undefined
+}
+
+function resolveDirectoryDeclarationFromNewExpression(
   newExpression: Expression,
   aliases: RenounAliases,
-  workspaceDirectory: string
-): string | undefined {
+  workspaceDirectory: string,
+  repositoryDeclarations: Map<TsMorphSymbol, RenounRepositoryDeclaration>
+): RenounDirectoryDeclaration | undefined {
   const expression = resolveReferenceExpression(newExpression)
   if (!Node.isNewExpression(expression)) {
     return undefined
@@ -872,13 +1133,78 @@ function resolveDirectoryPathFromNewExpression(
     return undefined
   }
 
-  return resolveDirectoryPathFromLiteral(firstArgument, workspaceDirectory)
+  const path = resolveDirectoryPathFromLiteral(firstArgument, workspaceDirectory)
+  const sparsePath = resolveDirectorySparsePathFromLiteral(firstArgument)
+
+  if (!path || !sparsePath) {
+    return undefined
+  }
+
+  let repository: RenounRepositoryDeclaration | undefined
+  if (Node.isObjectLiteralExpression(firstArgument)) {
+    const repositoryProperty = firstArgument.getProperty('repository')
+    if (
+      repositoryProperty &&
+      Node.isPropertyAssignment(repositoryProperty) &&
+      Node.isExpression(repositoryProperty.getInitializerOrThrow())
+    ) {
+      repository = resolveRenounRepositoryTarget(
+        repositoryProperty.getInitializerOrThrow(),
+        aliases,
+        {
+          directories: new Map(),
+          collections: new Map(),
+          repositories: repositoryDeclarations,
+          workspaceDirectory,
+        }
+      )
+    }
+  }
+
+  return {
+    path,
+    sparsePath,
+    ...(repository ? { repository } : {}),
+  }
+}
+
+function resolveDirectoryPathFromNewExpression(
+  newExpression: Expression,
+  aliases: RenounAliases,
+  workspaceDirectory: string
+): string | undefined {
+  return resolveDirectoryDeclarationFromNewExpression(
+    newExpression,
+    aliases,
+    workspaceDirectory,
+    new Map()
+  )?.path
 }
 
 function resolveDirectoryPathFromLiteral(
   expression: Expression,
   workspaceDirectory: string
 ): string | undefined {
+  const pathValue = resolveDirectoryPathValue(expression)
+  if (!pathValue) {
+    return undefined
+  }
+
+  return toAbsoluteDirectoryPath(pathValue, workspaceDirectory)
+}
+
+function resolveDirectorySparsePathFromLiteral(
+  expression: Expression
+): string | undefined {
+  const pathValue = resolveDirectoryPathValue(expression)
+  if (!pathValue) {
+    return undefined
+  }
+
+  return toDirectorySparsePath(pathValue)
+}
+
+function resolveDirectoryPathValue(expression: Expression): string | undefined {
   const value = resolveLiteralExpression(expression)
 
   if (
@@ -889,14 +1215,11 @@ function resolveDirectoryPathFromLiteral(
     'path' in value &&
     typeof (value as Record<string, unknown>)['path'] === 'string'
   ) {
-    return toAbsoluteDirectoryPath(
-      (value as Record<string, unknown>)['path'] as string,
-      workspaceDirectory
-    )
+    return (value as Record<string, unknown>)['path'] as string
   }
 
   if (typeof value === 'string') {
-    return toAbsoluteDirectoryPath(value, workspaceDirectory)
+    return value
   }
 
   return undefined
@@ -915,6 +1238,18 @@ function toAbsoluteDirectoryPath(
   }
 
   return resolve(workspaceDirectory, resolvedPath)
+}
+
+function toDirectorySparsePath(path: string): string {
+  const resolvedPath = path.startsWith('workspace:')
+    ? resolveSchemePath(path)
+    : path
+
+  if (isAbsolute(resolvedPath) || resolvedPath.startsWith('node:')) {
+    return resolvedPath
+  }
+
+  return ensureRelativePath(resolvedPath)
 }
 
 function isDirectoryConstructorExpression(
@@ -961,6 +1296,45 @@ function isCollectionConstructorExpression(
   }
 
   return false
+}
+
+function isRepositoryConstructorExpression(
+  expression: Expression,
+  aliases: RenounAliases
+): boolean {
+  if (Node.isIdentifier(expression)) {
+    return aliases.repositoryConstructors.has(expression.getText())
+  }
+
+  if (Node.isPropertyAccessExpression(expression)) {
+    if (expression.getName() !== 'Repository') {
+      return false
+    }
+
+    const object = expression.getExpression()
+    return (
+      Node.isIdentifier(object) &&
+      aliases.namespaceImports.has(object.getText())
+    )
+  }
+
+  return false
+}
+
+function resolveExportHistoryOptions(
+  callExpression: CallExpression
+): Record<string, unknown> | undefined {
+  const firstArgument = callExpression.getArguments()[0]
+  if (!firstArgument || !Node.isExpression(firstArgument)) {
+    return undefined
+  }
+
+  const value = resolveLiteralExpression(firstArgument)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+
+  return value as Record<string, unknown>
 }
 
 function resolveReferenceExpression(expression: Expression): Expression {
