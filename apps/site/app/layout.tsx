@@ -6,6 +6,7 @@ import { GeistSans } from 'geist/font/sans'
 export const metadata = {
   title: 'renoun - Query and Render Your Codebase',
   description: `Turn your JavaScript, TypeScript, Markdown, and MDX into reusable structured data for blogs, docs, and presentations.`,
+  metadataBase: new URL('https://renoun.dev'),
 } satisfies Metadata
 
 export default function RootLayout({
