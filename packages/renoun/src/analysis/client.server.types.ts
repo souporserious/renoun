@@ -13,6 +13,7 @@ import type {
   getCachedFileExports,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
+  getCachedTypeScriptDependencyPaths,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   invalidateRuntimeAnalysisCachePaths,
@@ -36,6 +37,7 @@ export interface AnalysisClientServerModules {
   getCachedFileExports: typeof getCachedFileExports
   getCachedOutlineRanges: typeof getCachedOutlineRanges
   getCachedSourceTextMetadata: typeof getCachedSourceTextMetadata
+  getCachedTypeScriptDependencyPaths: typeof getCachedTypeScriptDependencyPaths
   getCachedTokens: typeof getCachedTokens
   invalidateRuntimeAnalysisCachePath: typeof invalidateRuntimeAnalysisCachePath
   invalidateRuntimeAnalysisCachePaths: typeof invalidateRuntimeAnalysisCachePaths

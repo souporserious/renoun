@@ -10,6 +10,7 @@ export {
   getCachedFileExports,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
+  getCachedTypeScriptDependencyPaths,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   invalidateRuntimeAnalysisCachePaths,

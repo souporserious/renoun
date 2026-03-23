@@ -338,9 +338,65 @@ function resolveActiveRuntimeRefreshNotificationsCapability(
   return undefined
 }
 
+function resolveActiveRuntimeClientRpcCacheCapability(
+  runtime?: AnalysisServerRuntime
+): boolean | undefined {
+  if (typeof runtime?.clientRuntime?.useRpcCache === 'boolean') {
+    return runtime.clientRuntime.useRpcCache
+  }
+
+  const activeRuntime = getActiveAnalysisServerRuntime()
+  if (typeof activeRuntime?.clientRuntime?.useRpcCache === 'boolean') {
+    return activeRuntime.clientRuntime.useRpcCache
+  }
+
+  return undefined
+}
+
+function resolveActiveRuntimeClientRpcCacheTtlMs(
+  runtime?: AnalysisServerRuntime
+): number | undefined {
+  const ttlMs =
+    typeof runtime?.clientRuntime?.rpcCacheTtlMs === 'number'
+      ? runtime.clientRuntime.rpcCacheTtlMs
+      : getActiveAnalysisServerRuntime()?.clientRuntime?.rpcCacheTtlMs
+
+  if (typeof ttlMs !== 'number') {
+    return undefined
+  }
+
+  const normalizedTtl = Math.floor(ttlMs)
+  return Number.isFinite(normalizedTtl) && normalizedTtl >= 0
+    ? normalizedTtl
+    : undefined
+}
+
+function resolveActiveRuntimeConsumeRefreshNotifications(
+  runtime?: AnalysisServerRuntime
+): boolean | undefined {
+  if (typeof runtime?.clientRuntime?.consumeRefreshNotifications === 'boolean') {
+    return runtime.clientRuntime.consumeRefreshNotifications
+  }
+
+  const activeRuntime = getActiveAnalysisServerRuntime()
+  if (
+    typeof activeRuntime?.clientRuntime?.consumeRefreshNotifications ===
+    'boolean'
+  ) {
+    return activeRuntime.clientRuntime.consumeRefreshNotifications
+  }
+
+  return undefined
+}
+
 function shouldUseClientRpcCache(runtime?: AnalysisServerRuntime): boolean {
   if (typeof analysisClientRuntimeOptions.useRpcCache === 'boolean') {
     return analysisClientRuntimeOptions.useRpcCache
+  }
+
+  const runtimeCapability = resolveActiveRuntimeClientRpcCacheCapability(runtime)
+  if (runtimeCapability !== undefined) {
+    return runtimeCapability
   }
 
   if (!shouldConsumeRefreshNotifications(runtime)) {
@@ -358,7 +414,8 @@ function getClientRpcCacheTtlMs(): number {
       : 0
   }
 
-  return DEFAULT_CLIENT_RPC_CACHE_TTL_MS
+  return resolveActiveRuntimeClientRpcCacheTtlMs() ??
+    DEFAULT_CLIENT_RPC_CACHE_TTL_MS
 }
 
 function invalidateClientRpcStateByNormalizedPaths(
@@ -1063,6 +1120,12 @@ function shouldConsumeRefreshNotifications(
     'boolean'
   ) {
     return analysisClientRuntimeOptions.consumeRefreshNotifications
+  }
+
+  const runtimePreference =
+    resolveActiveRuntimeConsumeRefreshNotifications(runtime)
+  if (runtimePreference !== undefined) {
+    return runtimePreference
   }
 
   if (serverCapability !== undefined) {

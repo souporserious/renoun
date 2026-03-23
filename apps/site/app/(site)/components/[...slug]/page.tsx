@@ -222,7 +222,7 @@ export default async function Component(
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            <References fileExports={componentExports} />
+            <References source={componentEntry} />
           </div>
         ) : null}
 

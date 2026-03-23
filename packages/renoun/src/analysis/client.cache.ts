@@ -13,6 +13,7 @@ import { hashString, stableStringify } from '../utils/stable-serialization.ts'
 
 export type ClientCachedRpcMethod =
   | 'getQuickInfoAtPosition'
+  | 'getCodeBlockTokens'
   | 'getSourceTextMetadata'
   | 'resolveTypeAtLocationWithDependencies'
   | 'resolveFileExportsWithDependencies'
@@ -56,6 +57,7 @@ export interface NormalizedInvalidationPaths {
 
 export const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
   'getQuickInfoAtPosition',
+  'getCodeBlockTokens',
   'getSourceTextMetadata',
   'resolveTypeAtLocationWithDependencies',
   'resolveFileExportsWithDependencies',
@@ -69,11 +71,16 @@ export const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
 ])
 
 const CLIENT_RPC_METHODS_DISABLED_OUTSIDE_PRODUCTION =
-  new Set<ClientCachedRpcMethod>(['getSourceTextMetadata', 'getTokens'])
+  new Set<ClientCachedRpcMethod>([
+    'getCodeBlockTokens',
+    'getSourceTextMetadata',
+    'getTokens',
+  ])
 
 const CLIENT_RPC_METHODS_WITH_CONSERVATIVE_ROOT_DEPENDENCY =
   new Set<ClientCachedRpcMethod>([
     'getQuickInfoAtPosition',
+    'getCodeBlockTokens',
     'getSourceTextMetadata',
     'getTokens',
     'transpileSourceFile',
@@ -289,7 +296,7 @@ export function collectClientRpcDependencyPaths(
     dependencyPaths.add(filePath)
   }
 
-  if (method === 'getTokens') {
+  if (method === 'getTokens' || method === 'getCodeBlockTokens') {
     for (const sourcePath of getCandidatePaths(
       candidate.sourcePath,
       rootCandidates

@@ -387,7 +387,8 @@ export class WebSocketServer {
 
   #averageMs = new Map<string, number>()
 
-  #MAX_QUEUE_BYTES = 4 * 1024 * 1024
+  // Allow at least one max-sized RPC reply to be queued for delivery.
+  #MAX_QUEUE_BYTES = MAX_PAYLOAD_BYTES
 
   #estimatedQueueBytes = new WeakMap<WS, number>()
 

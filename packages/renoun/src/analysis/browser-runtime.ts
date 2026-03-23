@@ -42,6 +42,31 @@ export function normalizeAnalysisServerRuntime(
     ...(typeof runtime.emitRefreshNotifications === 'boolean'
       ? { emitRefreshNotifications: runtime.emitRefreshNotifications }
       : {}),
+    ...(runtime.clientRuntime
+      ? {
+          clientRuntime: {
+            ...(typeof runtime.clientRuntime.useRpcCache === 'boolean'
+              ? { useRpcCache: runtime.clientRuntime.useRpcCache }
+              : {}),
+            ...(typeof runtime.clientRuntime.rpcCacheTtlMs === 'number' &&
+            Number.isFinite(runtime.clientRuntime.rpcCacheTtlMs)
+              ? {
+                  rpcCacheTtlMs: Math.max(
+                    0,
+                    Math.floor(runtime.clientRuntime.rpcCacheTtlMs)
+                  ),
+                }
+              : {}),
+            ...(typeof runtime.clientRuntime.consumeRefreshNotifications ===
+            'boolean'
+              ? {
+                  consumeRefreshNotifications:
+                    runtime.clientRuntime.consumeRefreshNotifications,
+                }
+              : {}),
+          },
+        }
+      : {}),
   }
 }
 
@@ -57,7 +82,11 @@ function areAnalysisServerRuntimesEqual(
     left.id === right.id &&
     left.port === right.port &&
     left.host === right.host &&
-    left.emitRefreshNotifications === right.emitRefreshNotifications
+    left.emitRefreshNotifications === right.emitRefreshNotifications &&
+    left.clientRuntime?.useRpcCache === right.clientRuntime?.useRpcCache &&
+    left.clientRuntime?.rpcCacheTtlMs === right.clientRuntime?.rpcCacheTtlMs &&
+    left.clientRuntime?.consumeRefreshNotifications ===
+      right.clientRuntime?.consumeRefreshNotifications
   )
 }
 

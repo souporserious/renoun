@@ -71,9 +71,11 @@ describe('RefreshClient browser lifecycle', () => {
   it('releases the retained runtime and websocket on unmount', async () => {
     root?.render(
       <RefreshClient
-        port="43123"
-        id="refresh-browser-test"
-        host="127.0.0.1"
+        runtime={{
+          port: '43123',
+          id: 'refresh-browser-test',
+          host: '127.0.0.1',
+        }}
       />
     )
 
@@ -108,9 +110,11 @@ describe('RefreshClient browser lifecycle', () => {
 
     root?.render(
       <RefreshClient
-        port="43123"
-        id="refresh-browser-test"
-        host="127.0.0.1"
+        runtime={{
+          port: '43123',
+          id: 'refresh-browser-test',
+          host: '127.0.0.1',
+        }}
       />
     )
 
@@ -164,9 +168,11 @@ describe('RefreshClient browser lifecycle', () => {
 
     root?.render(
       <RefreshClient
-        port="43123"
-        id="refresh-browser-test"
-        host="127.0.0.1"
+        runtime={{
+          port: '43123',
+          id: 'refresh-browser-test',
+          host: '127.0.0.1',
+        }}
       />
     )
 
@@ -198,9 +204,11 @@ describe('RefreshClient browser lifecycle', () => {
 
     root?.render(
       <RefreshClient
-        port="43123"
-        id="refresh-browser-test"
-        host="127.0.0.1"
+        runtime={{
+          port: '43123',
+          id: 'refresh-browser-test',
+          host: '127.0.0.1',
+        }}
       />
     )
 
@@ -236,9 +244,11 @@ describe('RefreshClient browser lifecycle', () => {
 
     root?.render(
       <RefreshClient
-        port="43123"
-        id="refresh-browser-test"
-        host="127.0.0.1"
+        runtime={{
+          port: '43123',
+          id: 'refresh-browser-test',
+          host: '127.0.0.1',
+        }}
       />
     )
 

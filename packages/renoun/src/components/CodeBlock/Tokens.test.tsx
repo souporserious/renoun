@@ -5,11 +5,14 @@ import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { parseAnnotations } from '../../utils/annotations.ts'
 
 const mockTokens = vi.fn()
+const mockGetCodeBlockTokens = vi.fn()
 const mockQuickInfoProvider = vi.fn()
 const mockSymbol = vi.fn()
 const mockGetContext = vi.fn()
 
 vi.mock('../../analysis/node-client.ts', () => ({
+  getCodeBlockTokens: (...args: Parameters<typeof mockGetCodeBlockTokens>) =>
+    mockGetCodeBlockTokens(...args),
   getSourceTextMetadata: vi.fn(),
   getTokens: (...args: Parameters<typeof mockTokens>) => mockTokens(...args),
 }))
@@ -123,6 +126,7 @@ const annotations = {
 describe('Tokens', () => {
   beforeEach(() => {
     mockTokens.mockReset()
+    mockGetCodeBlockTokens.mockReset()
     mockQuickInfoProvider.mockReset()
     mockSymbol.mockReset()
     mockGetContext.mockReset()
@@ -335,6 +339,46 @@ describe('Tokens', () => {
         filePath: 'install.sh',
       })
     )
+  })
+
+  test('uses combined code block analysis when source metadata is required', async () => {
+    mockGetCodeBlockTokens.mockResolvedValueOnce({
+      metadata: {
+        value: 'const Component = () => <div />',
+        language: 'tsx',
+        filePath: '_renoun/component.tsx',
+        label: 'component.tsx',
+        valueSignature: 'component-signature',
+      },
+      tokens: [
+        [
+          {
+            start: 0,
+            end: 5,
+            value: 'const',
+            hasTextStyles: true,
+          },
+        ],
+      ],
+    })
+
+    const { Tokens } = await import('./Tokens.tsx')
+
+    await Tokens({
+      children: 'const Component = () => <div />',
+      language: 'tsx',
+      shouldFormat: false,
+    })
+
+    expect(mockGetCodeBlockTokens).toHaveBeenCalledWith(
+      expect.objectContaining({
+        language: 'tsx',
+        value: 'const Component = () => <div />',
+        shouldFormat: false,
+        waitForWarmResult: false,
+      })
+    )
+    expect(mockTokens).not.toHaveBeenCalled()
   })
 
   test('applies token slot prop overrides', async () => {

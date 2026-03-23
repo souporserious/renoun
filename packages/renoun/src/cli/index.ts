@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isRenounDebugEnabled } from '../utils/env.ts'
 import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
+import { createBuildAnalysisClientRuntime } from './build-analysis-runtime.ts'
 
 type Framework = 'next' | 'vite' | 'waku'
 type AnalysisCliRuntime = {
@@ -164,7 +165,16 @@ if (firstArgument === 'validate') {
     return getDebugLogger().trackOperation(
       'cli.runSubProcess',
       async () => {
-        const server = await createServer()
+        const buildClientRuntime = isProduction
+          ? createBuildAnalysisClientRuntime()
+          : undefined
+        const server = await createServer(
+          buildClientRuntime
+            ? {
+                clientRuntime: buildClientRuntime,
+              }
+            : undefined
+        )
         const serverHost = process.env[PROCESS_ENV_KEYS.renounServerHost]
         const serverRefreshNotificationsEffective =
           process.env[
@@ -181,6 +191,26 @@ if (firstArgument === 'validate') {
           void runPrewarmSafely(createDefaultPrewarmOptions(), {
             allowInlineFallback: false,
           })
+        } else {
+          process.stdout.write(
+            '[renoun] Prewarming analysis cache for build...\n'
+          )
+
+          try {
+            const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
+            await prewarmRenounRpcServerCache(createDefaultPrewarmOptions())
+            process.stdout.write('[renoun] Analysis cache prewarmed\n')
+          } catch (error) {
+            getDebugLogger().warn(
+              'Failed to prewarm Renoun RPC cache before framework build',
+              () => ({
+                data: {
+                  framework: firstArgument,
+                  error: error instanceof Error ? error.message : String(error),
+                },
+              })
+            )
+          }
         }
 
         const frameworkBinPath = resolveFrameworkBinFile(
@@ -215,6 +245,9 @@ if (firstArgument === 'validate') {
                     emitRefreshNotifications:
                       serverRefreshNotificationsEffective === '1',
                   }
+                : {}),
+              ...(buildClientRuntime
+                ? { clientRuntime: buildClientRuntime }
                 : {}),
             }),
           },

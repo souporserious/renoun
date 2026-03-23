@@ -4,7 +4,13 @@ import mdx from '@mdx-js/rollup'
 export default defineConfig({
   plugins: [mdx()],
   test: {
-    testTimeout: 15_000,
+    // The renoun suite mixes TypeScript analysis, git integration, sqlite
+    // persistence, and framework startup tests, with some process-wide caches
+    // and runtime state. Running files in parallel causes contention and
+    // cross-file interference that shows up as false timeouts and cache misses.
+    fileParallelism: false,
+    maxWorkers: 1,
+    testTimeout: 60_000,
     include: [
       'src/**/*.{test,spec}.?(c|m)[jt]s?(x)',
       'scripts/**/*.{test,spec}.?(c|m)[jt]s?(x)',

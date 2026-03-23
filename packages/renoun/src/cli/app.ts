@@ -23,6 +23,7 @@ import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
+import { createBuildAnalysisClientRuntime } from './build-analysis-runtime.ts'
 import {
   createDefaultPrewarmOptions,
   runPrewarmSafely,
@@ -401,6 +402,8 @@ export async function runAppCommand({
   let server: Awaited<ReturnType<typeof createServer>> | undefined
   let subProcess: ReturnType<typeof spawn> | undefined
   let exitCode: number | null = null
+  const buildClientRuntime =
+    command === 'build' ? createBuildAnalysisClientRuntime() : undefined
 
   function cleanupAndExit(code: number) {
     getDebugLogger().info('App CLI cleanup initiated', () => ({
@@ -430,7 +433,9 @@ export async function runAppCommand({
   }
 
   try {
-    server = await createServer()
+    server = await createServer(
+      buildClientRuntime ? { clientRuntime: buildClientRuntime } : undefined
+    )
     const port = String(await server.getPort())
     const id = server.getId()
 
@@ -487,6 +492,28 @@ export async function runAppCommand({
       }
     }
 
+    if (command === 'build') {
+      log('Prewarming analysis cache for build...')
+
+      try {
+        const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
+        await prewarmRenounRpcServerCache(
+          createDefaultPrewarmOptions(runtimeDirectory)
+        )
+        log('Analysis cache prewarmed')
+      } catch (error) {
+        getDebugLogger().warn(
+          'Failed to prewarm Renoun RPC cache before build',
+          () => ({
+            data: {
+              error: error instanceof Error ? error.message : String(error),
+              runtimeDirectory,
+            },
+          })
+        )
+      }
+    }
+
     const frameworkBinPath = resolveFrameworkBinFile(
       resolvedExample.framework,
       {
@@ -521,6 +548,7 @@ export async function runAppCommand({
                   serverRefreshNotificationsEffective === '1',
               }
             : {}),
+          ...(buildClientRuntime ? { clientRuntime: buildClientRuntime } : {}),
         }),
       },
     })

@@ -46,6 +46,15 @@ describe('project WebSocket RPC', () => {
       concurrency: 0,
     })
 
+    server.registerMethod(
+      'largeReply',
+      () => 'x'.repeat(5 * 1024 * 1024),
+      {
+        memoize: false,
+        concurrency: 0,
+      }
+    )
+
     // Async generator that streams numbers 0..n-1
     server.registerMethod('count', async function* ({ n }: { n: number }) {
       for (let i = 0; i < n; i++) {
@@ -244,6 +253,11 @@ describe('project WebSocket RPC', () => {
 
     expect(first).toBe(second) // cached value should repeat
     expect(randomHandler).toHaveBeenCalledTimes(1)
+  })
+
+  it('delivers large RPC replies within the payload limit', async () => {
+    const result = await client.callMethod<{}, string>('largeReply', {})
+    expect(result).toHaveLength(5 * 1024 * 1024)
   })
 
   it('streams results from an async generator', async () => {

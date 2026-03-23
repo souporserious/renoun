@@ -162,7 +162,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            <References fileExports={hookExports} />
+            <References source={hookEntry} />
           </div>
         ) : null}
 

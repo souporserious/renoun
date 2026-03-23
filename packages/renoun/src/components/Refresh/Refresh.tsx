@@ -14,14 +14,7 @@ export async function Refresh() {
       return null
     }
 
-    return (
-      <RefreshClient
-        port={runtime.port}
-        id={runtime.id}
-        host={runtime.host}
-        emitRefreshNotifications={runtime.emitRefreshNotifications}
-      />
-    )
+    return <RefreshClient runtime={runtime} />
   }
 
   return null

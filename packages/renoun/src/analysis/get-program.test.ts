@@ -1,4 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
 
@@ -313,5 +316,49 @@ describe('analysis watcher invalidation batching', () => {
     }).not.toThrow()
 
     expect(mockedBestEffortFns.reportBestEffortError).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('getProgram cache key normalization', () => {
+  afterEach(() => {
+    disposeAnalysisWatchers()
+    vi.mocked(existsSync).mockReset()
+    vi.mocked(existsSync).mockReturnValue(false)
+  })
+
+  test('reuses the same project for implicit and explicit default tsconfig paths', () => {
+    const previousCwd = process.cwd()
+    const tempDirectory = mkdtempSync(join(tmpdir(), 'renoun-get-program-'))
+    const defaultTsConfigFilePath = join(tempDirectory, 'tsconfig.json')
+
+    writeFileSync(
+      defaultTsConfigFilePath,
+      JSON.stringify({
+        compilerOptions: {
+          allowJs: true,
+          jsx: 'react-jsx',
+          module: 'esnext',
+          target: 'esnext',
+        },
+      })
+    )
+
+    vi.mocked(existsSync).mockImplementation((path) => {
+      return path === 'tsconfig.json' || path === defaultTsConfigFilePath
+    })
+
+    process.chdir(tempDirectory)
+
+    try {
+      const implicitProject = getProgram()
+      const explicitProject = getProgram({
+        tsConfigFilePath: defaultTsConfigFilePath,
+      })
+
+      expect(explicitProject).toBe(implicitProject)
+    } finally {
+      process.chdir(previousCwd)
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
   })
 })

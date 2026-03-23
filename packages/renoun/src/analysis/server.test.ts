@@ -58,6 +58,9 @@ const originalEnvironment = captureProcessEnv([
   'RENOUN_SERVER_PORT',
   'RENOUN_SERVER_HOST',
   'RENOUN_SERVER_ID',
+  'RENOUN_SERVER_CLIENT_RPC_CACHE',
+  'RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS',
+  'RENOUN_SERVER_CLIENT_REFRESH_NOTIFICATIONS',
   'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
   'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',
   'NODE_ENV',
@@ -319,12 +322,16 @@ describe('analysis server refresh invalidations', () => {
     server = await createServer({
       host: '127.0.0.1',
       emitRefreshNotifications: false,
+      clientRuntime: {
+        rpcCacheTtlMs: 45_000,
+      },
     })
 
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS']).toBe('1')
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '0'
     )
+    expect(process.env['RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS']).toBe('45000')
   })
 
   test('does not treat effective refresh mode as the next server override', async () => {
@@ -369,6 +376,9 @@ describe('analysis server refresh invalidations', () => {
     const firstServer = await createServer({
       host: '127.0.0.1',
       emitRefreshNotifications: false,
+      clientRuntime: {
+        rpcCacheTtlMs: 60_000,
+      },
     })
     const firstPort = String(await firstServer.getPort())
 
@@ -377,10 +387,14 @@ describe('analysis server refresh invalidations', () => {
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '0'
     )
+    expect(process.env['RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS']).toBe('60000')
 
     const secondServer = await createServer({
       host: '127.0.0.1',
       emitRefreshNotifications: true,
+      clientRuntime: {
+        rpcCacheTtlMs: 120_000,
+      },
     })
     const secondPort = String(await secondServer.getPort())
 
@@ -389,6 +403,7 @@ describe('analysis server refresh invalidations', () => {
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '1'
     )
+    expect(process.env['RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS']).toBe('120000')
 
     secondServer.cleanup()
 
@@ -397,6 +412,7 @@ describe('analysis server refresh invalidations', () => {
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '0'
     )
+    expect(process.env['RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS']).toBe('60000')
 
     firstServer.cleanup()
   })
@@ -405,6 +421,9 @@ describe('analysis server refresh invalidations', () => {
     const activeServer = await createServer({
       host: '127.0.0.1',
       emitRefreshNotifications: false,
+      clientRuntime: {
+        rpcCacheTtlMs: 60_000,
+      },
     })
 
     expect(process.env['RENOUN_SERVER_PORT']).toBeDefined()
@@ -412,6 +431,7 @@ describe('analysis server refresh invalidations', () => {
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       '0'
     )
+    expect(process.env['RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS']).toBe('60000')
 
     activeServer.cleanup()
 
@@ -420,6 +440,7 @@ describe('analysis server refresh invalidations', () => {
     expect(process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE']).toBe(
       undefined
     )
+    expect(process.env['RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS']).toBeUndefined()
   })
 
   test('does not scan markdown or initialize the highlighter during development startup without request config', async () => {

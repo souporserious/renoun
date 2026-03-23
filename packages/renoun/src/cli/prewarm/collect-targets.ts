@@ -17,7 +17,7 @@ import type {
   Symbol as TsMorphSymbol,
 } from '../../utils/ts-morph.ts'
 
-const { Node } = getTsMorph()
+const { Node, ts } = getTsMorph()
 
 const PREWARM_COLLECTION_YIELD_INTERVAL = 128
 const NODE_MODULES_PATH = '/node_modules/'
@@ -63,7 +63,10 @@ export interface FileRequest {
   directoryPath: string
   path: string
   extensions?: string[]
+  methods?: FileRequestMethod[]
 }
+
+export type FileRequestMethod = 'getExportTypes' | 'getExports' | 'getSections'
 
 export interface ExportHistoryRequest {
   repository: PrewarmRepositoryInput
@@ -99,6 +102,16 @@ const EMPTY_RENOUN_ALIASES: RenounAliases = {
   repositoryConstructors: new Set(),
   namespaceImports: new Set(),
 }
+
+const FILE_REFERENCE_COMPONENT_NAMES = new Set(['Reference', 'References'])
+const FILE_EXPORT_HEADER_METHOD_NAMES = new Set([
+  'getDefaultExport',
+  'getExport',
+  'getExportLocation',
+  'getExportValue',
+  'getExports',
+  'getNamedExport',
+])
 
 /**
  * Collect `Directory`/`Collection` callsites for prewarming from the provided project.
@@ -697,7 +710,317 @@ function resolveGetFileCall(
     directoryPath,
     path: pathArg,
     extensions,
+    ...toFileRequestMethodsValue(
+      inferGetFileRequestMethods(callExpression)
+    ),
   }
+}
+
+function toFileRequestMethodsValue(
+  methods: FileRequestMethod[] | undefined
+): Pick<FileRequest, 'methods'> | Record<string, never> {
+  return methods && methods.length > 0 ? { methods } : {}
+}
+
+function inferGetFileRequestMethods(
+  callExpression: CallExpression
+): FileRequestMethod[] | undefined {
+  const methods = new Set<FileRequestMethod>()
+  const escaped = analyzeGetFileUsageNode(
+    callExpression,
+    methods,
+    new Set<TsMorphSymbol>()
+  )
+
+  if (escaped || methods.size === 0) {
+    return undefined
+  }
+
+  return Array.from(methods.values()).sort((left, right) =>
+    left.localeCompare(right)
+  )
+}
+
+function analyzeGetFileUsageNode(
+  node: Expression,
+  methods: Set<FileRequestMethod>,
+  visitedSymbols: Set<TsMorphSymbol>
+): boolean {
+  const parent = node.getParent()
+  if (!parent) {
+    return true
+  }
+
+  if (
+    Node.isAwaitExpression(parent) ||
+    Node.isParenthesizedExpression(parent) ||
+    Node.isAsExpression(parent) ||
+    Node.isTypeAssertion(parent) ||
+    Node.isNonNullExpression(parent) ||
+    Node.isSatisfiesExpression(parent)
+  ) {
+    return analyzeGetFileUsageNode(parent, methods, visitedSymbols)
+  }
+
+  if (
+    Node.isPropertyAccessExpression(parent) &&
+    parent.getExpression() === node
+  ) {
+    const grandparent = parent.getParent()
+
+    if (
+      Node.isCallExpression(grandparent) &&
+      grandparent.getExpression() === parent
+    ) {
+      return !applyGetFileConsumerWarmMethods(parent.getName(), methods)
+    }
+
+    return true
+  }
+
+  if (Node.isVariableDeclaration(parent) && parent.getInitializer() === node) {
+    const nameNode = parent.getNameNode()
+    if (!Node.isIdentifier(nameNode)) {
+      return true
+    }
+
+    const symbol = resolveRenounSymbol(nameNode.getSymbol())
+    if (!symbol) {
+      return true
+    }
+
+    return analyzeGetFileAliasSymbolUsages(symbol, methods, visitedSymbols)
+  }
+
+  if (Node.isJsxExpression(parent) && parent.getExpression() === node) {
+    if (isReferenceSourceJsxExpression(parent)) {
+      methods.add('getExportTypes')
+      return false
+    }
+
+    return true
+  }
+
+  return true
+}
+
+function analyzeGetFileAliasSymbolUsages(
+  symbol: TsMorphSymbol,
+  methods: Set<FileRequestMethod>,
+  visitedSymbols: Set<TsMorphSymbol>
+): boolean {
+  const resolvedSymbol = resolveRenounSymbol(symbol) ?? symbol
+  if (visitedSymbols.has(resolvedSymbol)) {
+    return false
+  }
+
+  visitedSymbols.add(resolvedSymbol)
+
+  let escaped = false
+  let foundReferenceableDeclaration = false
+
+  for (const declaration of resolvedSymbol.getDeclarations()) {
+    if (!Node.isVariableDeclaration(declaration)) {
+      continue
+    }
+
+    const nameNode = declaration.getNameNode()
+    if (!Node.isIdentifier(nameNode)) {
+      return true
+    }
+
+    foundReferenceableDeclaration = true
+
+    for (const referenceNode of nameNode.findReferencesAsNodes()) {
+      if (referenceNode === nameNode) {
+        continue
+      }
+
+      if (!Node.isExpression(referenceNode)) {
+        escaped = true
+        continue
+      }
+
+      escaped =
+        analyzeIdentifierValueUsage(referenceNode, methods, visitedSymbols) ||
+        escaped
+    }
+  }
+
+  return !foundReferenceableDeclaration || escaped
+}
+
+function analyzeIdentifierValueUsage(
+  identifier: Expression,
+  methods: Set<FileRequestMethod>,
+  visitedSymbols: Set<TsMorphSymbol>
+): boolean {
+  const parent = identifier.getParent()
+  if (!parent) {
+    return true
+  }
+
+  if (
+    Node.isAwaitExpression(parent) ||
+    Node.isParenthesizedExpression(parent) ||
+    Node.isAsExpression(parent) ||
+    Node.isTypeAssertion(parent) ||
+    Node.isNonNullExpression(parent) ||
+    Node.isSatisfiesExpression(parent)
+  ) {
+    return analyzeIdentifierValueUsage(parent, methods, visitedSymbols)
+  }
+
+  if (
+    Node.isPropertyAccessExpression(parent) &&
+    parent.getExpression() === identifier
+  ) {
+    const grandparent = parent.getParent()
+
+    if (
+      Node.isCallExpression(grandparent) &&
+      grandparent.getExpression() === parent
+    ) {
+      return !applyGetFileConsumerWarmMethods(parent.getName(), methods)
+    }
+
+    return true
+  }
+
+  if (
+    Node.isVariableDeclaration(parent) &&
+    parent.getInitializer() === identifier
+  ) {
+    const nameNode = parent.getNameNode()
+    if (!Node.isIdentifier(nameNode)) {
+      return true
+    }
+
+    const symbol = resolveRenounSymbol(nameNode.getSymbol())
+    if (!symbol) {
+      return true
+    }
+
+    return analyzeGetFileAliasSymbolUsages(symbol, methods, visitedSymbols)
+  }
+
+  if (Node.isJsxExpression(parent) && parent.getExpression() === identifier) {
+    if (isReferenceSourceJsxExpression(parent)) {
+      methods.add('getExportTypes')
+      return false
+    }
+
+    return true
+  }
+
+  return true
+}
+
+function applyGetFileConsumerWarmMethods(
+  methodName: string,
+  methods: Set<FileRequestMethod>
+): boolean {
+  if (FILE_EXPORT_HEADER_METHOD_NAMES.has(methodName)) {
+    methods.add('getExports')
+    return true
+  }
+
+  if (methodName === 'getExportTypes') {
+    methods.add('getExportTypes')
+    return true
+  }
+
+  if (methodName === 'getSections') {
+    methods.add('getExports')
+    methods.add('getSections')
+    return true
+  }
+
+  return false
+}
+
+function isReferenceSourceJsxExpression(expression: Expression): boolean {
+  const attribute = expression.getParent()
+  if (!attribute || !Node.isJsxAttribute(attribute)) {
+    return false
+  }
+
+  if (attribute.getNameNode().getText() !== 'source') {
+    return false
+  }
+
+  const openingElement = attribute.getParent()?.getParent()
+  if (
+    !openingElement ||
+    (!Node.isJsxSelfClosingElement(openingElement) &&
+      !Node.isJsxOpeningElement(openingElement))
+  ) {
+    return false
+  }
+
+  const tagNameNode = openingElement.getTagNameNode()
+  if (FILE_REFERENCE_COMPONENT_NAMES.has(tagNameNode.getText())) {
+    return true
+  }
+
+  if (Node.isPropertyAccessExpression(tagNameNode)) {
+    return (
+      FILE_REFERENCE_COMPONENT_NAMES.has(tagNameNode.getName()) &&
+      isRenounReferenceTagSymbol(tagNameNode.getExpression().getSymbol())
+    )
+  }
+
+  if (!Node.isIdentifier(tagNameNode)) {
+    return false
+  }
+
+  return isRenounReferenceTagSymbol(tagNameNode.getSymbol())
+}
+
+function isRenounReferenceTagSymbol(symbol?: TsMorphSymbol): boolean {
+  if (!symbol) {
+    return false
+  }
+
+  const candidates = [symbol]
+  const resolved = resolveRenounSymbol(symbol)
+  if (resolved && resolved !== symbol) {
+    candidates.push(resolved)
+  }
+
+  return candidates.some((candidate) =>
+    candidate.getDeclarations().some((declaration) => {
+      if (Node.isImportSpecifier(declaration)) {
+        const importDeclaration = declaration.getFirstAncestorByKind(
+          ts.SyntaxKind.ImportDeclaration
+        )
+        if (!importDeclaration) {
+          return false
+        }
+
+        if (
+          !isRenounImportSpecifier(importDeclaration.getModuleSpecifierValue())
+        ) {
+          return false
+        }
+
+        return FILE_REFERENCE_COMPONENT_NAMES.has(declaration.getName())
+      }
+
+      if (!Node.isNamespaceImport(declaration)) {
+        return false
+      }
+
+      const importDeclaration = declaration.getFirstAncestorByKind(
+        ts.SyntaxKind.ImportDeclaration
+      )
+      if (!importDeclaration) {
+        return false
+      }
+
+      return isRenounImportSpecifier(importDeclaration.getModuleSpecifierValue())
+    })
+  )
 }
 
 function resolveFileExtensionArgument(

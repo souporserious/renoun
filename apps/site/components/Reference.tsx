@@ -10,11 +10,26 @@ import type { CSSObject } from 'restyle'
 import { Collapse } from './Collapse'
 import { Markdown } from './Markdown'
 
-export function References({
-  fileExports,
-}: {
-  fileExports: ModuleExport<any>[]
-}) {
+type ReferencesProps =
+  | {
+      source: ReferenceProps['source']
+      fileExports?: undefined
+    }
+  | {
+      fileExports: ModuleExport<any>[]
+      source?: undefined
+    }
+
+export function References(props: ReferencesProps) {
+  const content =
+    props.source !== undefined ? (
+      <Reference source={props.source} />
+    ) : (
+      props.fileExports.map((fileExport) => (
+        <Reference key={fileExport.name} source={fileExport} />
+      ))
+    )
+
   return (
     <div
       css={{
@@ -26,9 +41,7 @@ export function References({
         },
       }}
     >
-      {fileExports.map((fileExport) => (
-        <Reference key={fileExport.name} source={fileExport} />
-      ))}
+      {content}
     </div>
   )
 }

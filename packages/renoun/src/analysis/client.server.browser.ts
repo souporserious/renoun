@@ -45,6 +45,11 @@ const browserAnalysisClientServerModules = {
   getCachedSourceTextMetadata() {
     return throwBrowserAnalysisClientServerError('getCachedSourceTextMetadata')
   },
+  getCachedTypeScriptDependencyPaths() {
+    return throwBrowserAnalysisClientServerError(
+      'getCachedTypeScriptDependencyPaths'
+    )
+  },
   getCachedTokens() {
     return throwBrowserAnalysisClientServerError('getCachedTokens')
   },
@@ -81,6 +86,7 @@ export const {
   resolveCachedFileExportsWithDependencies,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
+  getCachedTypeScriptDependencyPaths,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   invalidateRuntimeAnalysisCachePaths,

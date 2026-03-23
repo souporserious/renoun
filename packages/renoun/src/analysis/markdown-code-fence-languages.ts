@@ -5,6 +5,14 @@ const CODE_FENCE_MIN_LENGTH = 3
 const CODE_FENCE_LANGUAGE_MAX_LENGTH = 64
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx'])
 
+export interface MarkdownCodeFenceSnippet {
+  allowErrors?: boolean
+  language?: string
+  path?: string
+  shouldFormat: boolean
+  value: string
+}
+
 function countLeadingFenceCharacters(line: string, fenceCharacter: string): number {
   let count = 0
   while (line[count] === fenceCharacter) {
@@ -48,6 +56,112 @@ function normalizeFenceLanguageToken(token: string): string | undefined {
   return typeof mapped === 'string' ? mapped.toLowerCase() : normalized
 }
 
+function parseCodeFenceMetaValue(
+  property: string
+): string | boolean | number | undefined {
+  const equalsIndex = property.indexOf('=')
+
+  if (equalsIndex === -1) {
+    return true
+  }
+
+  const raw = property.slice(equalsIndex + 1)
+
+  if (/^(['"])(.*)\1$/.test(raw)) {
+    return raw.slice(1, -1)
+  }
+
+  const match = raw.match(/^\{(.+)\}$/)
+  if (!match) {
+    return undefined
+  }
+
+  const value = match[1]!
+
+  if (/^(['"])(.*)\1$/.test(value)) {
+    return value.slice(1, -1)
+  }
+
+  if (value === 'true' || value === 'false') {
+    return value === 'true'
+  }
+
+  const number = Number(value)
+  return Number.isNaN(number) ? value : number
+}
+
+function parseCodeFenceInfoString(infoString: string): Omit<
+  MarkdownCodeFenceSnippet,
+  'value'
+> {
+  const parts = infoString.trim().split(/\s+/).filter(Boolean)
+  const rawLanguageToken = parts.shift()
+  let language: string | undefined
+  let path: string | undefined
+  let shouldFormat = false
+  let allowErrors: boolean | undefined
+
+  if (rawLanguageToken) {
+    const normalizedLanguage = normalizeFenceLanguageToken(rawLanguageToken)
+
+    if (normalizedLanguage) {
+      const normalizedRawLanguageToken = rawLanguageToken
+        .replace(/^language-/, '')
+        .trim()
+      const dotIndex = normalizedRawLanguageToken.lastIndexOf('.')
+
+      if (
+        dotIndex !== -1 &&
+        !normalizedRawLanguageToken.startsWith('{') &&
+        !normalizedRawLanguageToken.startsWith('(')
+      ) {
+        path = normalizedRawLanguageToken
+        language =
+          normalizeFenceLanguageToken(
+            normalizedRawLanguageToken.slice(dotIndex + 1)
+          ) ?? normalizedLanguage
+      } else {
+        language = normalizedLanguage
+      }
+    }
+  }
+
+  for (const part of parts) {
+    const equalsIndex = part.indexOf('=')
+    const key = equalsIndex === -1 ? part : part.slice(0, equalsIndex)
+    const parsedValue = parseCodeFenceMetaValue(part)
+
+    if (key === 'path' && typeof parsedValue === 'string') {
+      path = parsedValue
+      if (!language) {
+        const extensionIndex = parsedValue.lastIndexOf('.')
+        if (extensionIndex !== -1) {
+          language =
+            normalizeFenceLanguageToken(parsedValue.slice(extensionIndex + 1)) ??
+            language
+        }
+      }
+      continue
+    }
+
+    if (key === 'shouldFormat' && typeof parsedValue === 'boolean') {
+      shouldFormat = parsedValue
+      continue
+    }
+
+    if (key === 'allowErrors' && typeof parsedValue === 'boolean') {
+      allowErrors = parsedValue
+    }
+  }
+
+  return {
+    ...(allowErrors !== undefined ? { allowErrors } : {}),
+    ...(language ? { language } : {}),
+    ...(path ? { path } : {}),
+    shouldFormat,
+  }
+}
+
 export function isMarkdownCodeFenceSourcePath(path: string): boolean {
   if (typeof path !== 'string' || path.length === 0) {
     return false
@@ -64,14 +178,28 @@ export function isMarkdownCodeFenceSourcePath(path: string): boolean {
 }
 
 export function extractCodeFenceLanguagesFromMarkdown(sourceText: string): string[] {
+  return extractCodeFenceSnippetsFromMarkdown(sourceText)
+    .map((snippet) => snippet.language)
+    .filter((language): language is string => typeof language === 'string')
+    .filter((language, index, languages) => languages.indexOf(language) === index)
+}
+
+export function extractCodeFenceSnippetsFromMarkdown(
+  sourceText: string
+): MarkdownCodeFenceSnippet[] {
   if (typeof sourceText !== 'string' || sourceText.length === 0) {
     return []
   }
 
-  const languages = new Set<string>()
+  const snippets: MarkdownCodeFenceSnippet[] = []
   const lines = sourceText.split(/\r?\n/)
   let activeFenceCharacter: '`' | '~' | null = null
   let activeFenceLength = 0
+  let activeSnippet:
+    | (Omit<MarkdownCodeFenceSnippet, 'value'> & {
+        lines: string[]
+      })
+    | undefined
 
   for (const line of lines) {
     const lineWithoutIndent = line.replace(
@@ -94,14 +222,10 @@ export function extractCodeFenceLanguagesFromMarkdown(sourceText: string): strin
       }
 
       const infoString = lineWithoutIndent.slice(fenceLength).trim()
-      if (infoString.length > 0) {
-        const languageToken = infoString.split(/\s+/, 1)[0]!
-        const normalizedLanguage = normalizeFenceLanguageToken(languageToken)
-        if (normalizedLanguage) {
-          languages.add(normalizedLanguage)
-        }
+      activeSnippet = {
+        ...parseCodeFenceInfoString(infoString),
+        lines: [],
       }
-
       activeFenceCharacter = firstCharacter
       activeFenceLength = fenceLength
       continue
@@ -109,6 +233,7 @@ export function extractCodeFenceLanguagesFromMarkdown(sourceText: string): strin
 
     const firstCharacter = lineWithoutIndent[0]
     if (firstCharacter !== activeFenceCharacter) {
+      activeSnippet?.lines.push(line)
       continue
     }
 
@@ -120,10 +245,21 @@ export function extractCodeFenceLanguagesFromMarkdown(sourceText: string): strin
       fenceLength >= activeFenceLength &&
       lineWithoutIndent.slice(fenceLength).trim().length === 0
     ) {
+      if (activeSnippet) {
+        const { lines, ...snippet } = activeSnippet
+        snippets.push({
+          ...snippet,
+          value: lines.join('\n'),
+        })
+      }
       activeFenceCharacter = null
       activeFenceLength = 0
+      activeSnippet = undefined
+      continue
     }
+
+    activeSnippet?.lines.push(line)
   }
 
-  return Array.from(languages.values())
+  return snippets
 }

@@ -102,6 +102,7 @@ import {
 import type { AnalysisServerRuntime } from './runtime-env.ts'
 import type { AnalysisOptions } from './types.ts'
 import type { AnalysisClientServerModules } from './client.server.types.ts'
+import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 
 export type { AnalysisClientBrowserRefreshNotification } from './client-refresh-state.ts'
 export {
@@ -114,6 +115,11 @@ export {
   onAnalysisClientBrowserRuntimeRetentionChange,
 } from './client-browser-runtime-retention.ts'
 export { onAnalysisClientRefreshVersionChange } from './client-refresh-state.ts'
+
+export interface CodeBlockTokensResult {
+  metadata: SourceTextMetadata
+  tokens: TokenizedLines
+}
 
 interface ActiveClientState {
   client: WebSocketClient
@@ -474,6 +480,57 @@ function resolveActiveRuntimeRefreshNotificationsCapability(
   )
 }
 
+function resolveActiveRuntimeClientRpcCacheCapability(
+  runtime?: AnalysisServerRuntime
+): boolean | undefined {
+  if (typeof runtime?.clientRuntime?.useRpcCache === 'boolean') {
+    return runtime.clientRuntime.useRpcCache
+  }
+
+  const activeRuntime = getActiveAnalysisServerRuntime()
+  if (typeof activeRuntime?.clientRuntime?.useRpcCache === 'boolean') {
+    return activeRuntime.clientRuntime.useRpcCache
+  }
+
+  return undefined
+}
+
+function resolveActiveRuntimeClientRpcCacheTtlMs(
+  runtime?: AnalysisServerRuntime
+): number | undefined {
+  const ttlMs =
+    typeof runtime?.clientRuntime?.rpcCacheTtlMs === 'number'
+      ? runtime.clientRuntime.rpcCacheTtlMs
+      : getActiveAnalysisServerRuntime()?.clientRuntime?.rpcCacheTtlMs
+
+  if (typeof ttlMs !== 'number') {
+    return undefined
+  }
+
+  const normalizedTtl = Math.floor(ttlMs)
+  return Number.isFinite(normalizedTtl) && normalizedTtl >= 0
+    ? normalizedTtl
+    : undefined
+}
+
+function resolveActiveRuntimeConsumeRefreshNotifications(
+  runtime?: AnalysisServerRuntime
+): boolean | undefined {
+  if (typeof runtime?.clientRuntime?.consumeRefreshNotifications === 'boolean') {
+    return runtime.clientRuntime.consumeRefreshNotifications
+  }
+
+  const activeRuntime = getActiveAnalysisServerRuntime()
+  if (
+    typeof activeRuntime?.clientRuntime?.consumeRefreshNotifications ===
+    'boolean'
+  ) {
+    return activeRuntime.clientRuntime.consumeRefreshNotifications
+  }
+
+  return undefined
+}
+
 function shouldUseClientRpcCache(runtime?: AnalysisServerRuntime): boolean {
   if (typeof analysisClientRuntimeOptions.useRpcCache === 'boolean') {
     return analysisClientRuntimeOptions.useRpcCache
@@ -482,6 +539,11 @@ function shouldUseClientRpcCache(runtime?: AnalysisServerRuntime): boolean {
   const override = resolveAnalysisClientRpcCacheEnabledFromEnv()
   if (override !== undefined) {
     return override
+  }
+
+  const runtimeCapability = resolveActiveRuntimeClientRpcCacheCapability(runtime)
+  if (runtimeCapability !== undefined) {
+    return runtimeCapability
   }
 
   if (!shouldConsumeRefreshNotifications(runtime)) {
@@ -499,9 +561,17 @@ function getClientRpcCacheTtlMs(): number {
       : 0
   }
 
-  return resolveAnalysisClientRpcCacheTtlMsFromEnv(
+  const envTtl = resolveAnalysisClientRpcCacheTtlMsFromEnv(
     DEFAULT_CLIENT_RPC_CACHE_TTL_MS
   )
+  if (
+    process.env[PROCESS_ENV_KEYS.renounAnalysisClientRpcCacheTtlMs] !== undefined
+  ) {
+    return envTtl
+  }
+
+  const runtimeTtl = resolveActiveRuntimeClientRpcCacheTtlMs()
+  return runtimeTtl ?? envTtl
 }
 
 function invalidateClientRpcStateByNormalizedPaths(
@@ -1350,6 +1420,12 @@ function shouldConsumeRefreshNotifications(
     return override
   }
 
+  const runtimePreference =
+    resolveActiveRuntimeConsumeRefreshNotifications(runtime)
+  if (runtimePreference !== undefined) {
+    return runtimePreference
+  }
+
   if (serverCapability !== undefined) {
     return serverCapability
   }
@@ -1394,6 +1470,120 @@ export async function getSourceTextMetadata(
     project,
     getSourceTextMetadataOptions
   )
+}
+
+/**
+ * Resolve formatted source metadata and highlighted tokens for a code block in
+ * a single dependency-aware analysis request.
+ */
+export async function getCodeBlockTokens(
+  options: DistributiveOmit<GetSourceTextMetadataOptions, 'project'> &
+    Omit<GetTokensOptions, 'highlighter' | 'project' | 'value' | 'language' | 'filePath'> & {
+      analysisOptions?: AnalysisOptions
+      languages?: GrammarLanguage[]
+      waitForWarmResult?: boolean
+      runtime?: AnalysisServerRuntime
+    }
+): Promise<CodeBlockTokensResult> {
+  const { runtime, ...params } = options
+
+  if (runtime) {
+    return callBrowserRuntimeClientMethod<
+      DistributiveOmit<GetSourceTextMetadataOptions, 'project'> &
+        Omit<
+          GetTokensOptions,
+          'highlighter' | 'project' | 'value' | 'language' | 'filePath'
+        > & {
+          analysisOptions?: AnalysisOptions
+          languages?: GrammarLanguage[]
+          waitForWarmResult?: boolean
+          includeClientRpcDependencies?: boolean
+        },
+      CodeBlockTokensResult
+    >('getCodeBlockTokens', params, runtime)
+  }
+
+  const client = await getReadyClient()
+  if (client) {
+    const response = await callClientMethod<
+      DistributiveOmit<GetSourceTextMetadataOptions, 'project'> &
+        Omit<
+          GetTokensOptions,
+          'highlighter' | 'project' | 'value' | 'language' | 'filePath'
+        > & {
+          analysisOptions?: AnalysisOptions
+          languages?: GrammarLanguage[]
+          waitForWarmResult?: boolean
+          includeClientRpcDependencies?: boolean
+        },
+      | CodeBlockTokensResult
+      | ClientRpcValueWithDependenciesResponse<CodeBlockTokensResult>
+    >(client, 'getCodeBlockTokens', {
+      ...params,
+      includeClientRpcDependencies: true,
+    })
+
+    return toClientRpcResponseValue(response)
+  }
+
+  const {
+    analysisOptions,
+    languages,
+    allowErrors,
+    baseDirectory,
+    deferQuickInfoUntilHover,
+    filePath,
+    isFormattingExplicit,
+    language,
+    metadataCollector,
+    shouldFormat,
+    showErrors,
+    sourcePath,
+    theme,
+    value,
+    virtualizeFilePath,
+    waitForWarmResult,
+  } = params
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
+  queueHighlighterLoad({
+    theme,
+    languages,
+  })
+
+  const metadata = await serverModules.getCachedSourceTextMetadata(project, {
+    baseDirectory,
+    filePath,
+    isFormattingExplicit,
+    language,
+    shouldFormat,
+    value,
+    virtualizeFilePath,
+  })
+  const tokens = await serverModules.getCachedTokens(project, {
+    allowErrors,
+    deferQuickInfoUntilHover,
+    filePath: metadata.filePath,
+    highlighter: currentHighlighter.current,
+    highlighterLoader: async () => {
+      return ensureHighlighterLoaded({
+        theme,
+        languages,
+      })
+    },
+    language: metadata.language,
+    metadataCollector,
+    showErrors,
+    sourcePath,
+    theme,
+    value: metadata.value,
+    waitForWarmResult,
+  })
+
+  return {
+    metadata,
+    tokens,
+  }
 }
 
 /**

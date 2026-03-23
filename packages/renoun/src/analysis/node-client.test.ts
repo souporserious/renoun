@@ -100,6 +100,9 @@ describe('analysis node client transport guards', () => {
     'RENOUN_SERVER_PORT',
     'RENOUN_SERVER_HOST',
     'RENOUN_SERVER_ID',
+    'RENOUN_SERVER_CLIENT_RPC_CACHE',
+    'RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS',
+    'RENOUN_SERVER_CLIENT_REFRESH_NOTIFICATIONS',
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',
     'RENOUN_ANALYSIS_CLIENT_RPC_CACHE',
@@ -1487,6 +1490,46 @@ describe('analysis node client transport guards', () => {
     expect(first).toMatchObject({ resolveTypeCallCount: 1 })
     expect(second).toMatchObject({ resolveTypeCallCount: 1 })
     expect(callMethod).toHaveBeenCalledTimes(1)
+  })
+
+  test('uses server runtime RPC cache TTL when no client override env is set', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+    process.env['RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS'] = '0'
+    process.env['RENOUN_ANALYSIS_CLIENT_RPC_CACHE'] = 'true'
+
+    let resolveTypeCallCount = 0
+    const callMethod = vi.fn(async (method: string) => {
+      if (method === 'resolveTypeAtLocationWithDependencies') {
+        return { resolveTypeCallCount: ++resolveTypeCallCount }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    const module = await import('./node-client.ts')
+    const first = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+    const second = await module.resolveTypeAtLocationWithDependencies(
+      '/project/src/a.ts',
+      0,
+      0 as never
+    )
+
+    expect(first).toMatchObject({ resolveTypeCallCount: 1 })
+    expect(second).toMatchObject({ resolveTypeCallCount: 2 })
+    expect(callMethod).toHaveBeenCalledTimes(2)
   })
 
   test('refresh notifications invalidate dependency-aware RPC cache entries by response dependencies', async () => {

@@ -4,7 +4,7 @@ import type {
   ts as TsMorphTS,
 } from '../utils/ts-morph.ts'
 import { join, dirname, extname, resolve } from 'node:path'
-import { existsSync, watch, statSync } from 'node:fs'
+import { existsSync, realpathSync, watch, statSync } from 'node:fs'
 import type { FSWatcher } from 'node:fs'
 
 import { getDebugLogger } from '../utils/debug.ts'
@@ -439,20 +439,50 @@ export function disposeAnalysisWatchers(): void {
   projects.clear()
 }
 
-function getProgramKeyForAnalysisOptions(options?: AnalysisOptions) {
-  if (!options) {
-    return ''
+function getProgramKeyTsConfigFilePath(
+  options?: AnalysisOptions
+): string | null {
+  const explicitTsConfigFilePath =
+    typeof options?.tsConfigFilePath === 'string' &&
+    options.tsConfigFilePath.length > 0
+      ? options.tsConfigFilePath
+      : undefined
+
+  const candidateTsConfigFilePath =
+    explicitTsConfigFilePath ??
+    (existsSync('tsconfig.json') ? 'tsconfig.json' : undefined)
+
+  if (!candidateTsConfigFilePath) {
+    return null
   }
 
+  const resolvedTsConfigFilePath = resolve(candidateTsConfigFilePath)
+
+  if (
+    typeof explicitTsConfigFilePath === 'string' &&
+    explicitTsConfigFilePath.length > 0
+  ) {
+    try {
+      return realpathSync.native(resolvedTsConfigFilePath)
+    } catch {
+      return resolvedTsConfigFilePath
+    }
+  }
+
+  try {
+    return realpathSync.native(resolvedTsConfigFilePath)
+  } catch {
+    return resolvedTsConfigFilePath
+  }
+}
+
+function getProgramKeyForAnalysisOptions(options?: AnalysisOptions) {
   return hashString(
     stableStringify({
-      analysisScopeId: options.analysisScopeId ?? null,
-      tsConfigFilePath:
-        typeof options.tsConfigFilePath === 'string'
-          ? resolve(options.tsConfigFilePath)
-          : null,
-      useInMemoryFileSystem: options.useInMemoryFileSystem === true,
-      compilerOptions: options.compilerOptions ?? null,
+      analysisScopeId: options?.analysisScopeId ?? null,
+      tsConfigFilePath: getProgramKeyTsConfigFilePath(options),
+      useInMemoryFileSystem: options?.useInMemoryFileSystem === true,
+      compilerOptions: options?.compilerOptions ?? null,
     })
   )
 }

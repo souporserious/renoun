@@ -2,7 +2,7 @@ import React, { Fragment, Suspense } from 'react'
 import { styled, type CSSObject } from 'restyle'
 
 import {
-  getSourceTextMetadata,
+  getCodeBlockTokens,
   getTokens,
 } from '../../analysis/node-client.ts'
 import { getServerRuntimeFromProcessEnv } from '../../analysis/runtime-env.ts'
@@ -589,26 +589,46 @@ async function TokensAsync({
         isFormattingExplicit,
         shouldFormat,
       })
+    const showErrors =
+      showErrorsProp === undefined ? context?.showErrors : showErrorsProp
+    const allowErrors =
+      allowErrorsProp === undefined
+        ? context?.allowErrors === undefined
+          ? showErrors
+            ? true
+            : undefined
+          : context.allowErrors
+        : allowErrorsProp
+    const shouldDeferQuickInfoUntilHover =
+      isDevelopmentRuntime && shouldAnalyze
+    let tokens: TokenizedLines
 
     if (shouldAnalyze && !shouldSkipInlineSourceMetadata) {
-      // Generated inline snippets still need the host project's tsconfig so
-      // JSX runtime and package imports resolve correctly.
-      const result = await getSourceTextMetadata({
+      const result = await getCodeBlockTokens({
         filePath: resolvedPath,
         baseDirectory: resolvedBaseDirectory,
         value: processedValue,
         language,
+        allowErrors,
+        deferQuickInfoUntilHover: shouldDeferQuickInfoUntilHover,
+        languages: config.languages,
+        metadataCollector: undefined,
+        showErrors,
         shouldFormat,
         isFormattingExplicit,
+        theme: themeConfiguration,
         virtualizeFilePath:
           hasExplicitSourceValue && resolvedPath !== undefined,
+        waitForWarmResult: isDevelopmentRuntime,
       })
-      metadata.value = result.value
-      metadata.language = result.language
-      metadata.filePath = result.filePath
-      metadata.label = result.label
+      metadata.value = result.metadata.value
+      metadata.language = result.metadata.language
+      metadata.filePath = result.metadata.filePath
+      metadata.label = result.metadata.label
       metadata.valueSignature =
-        result.valueSignature ?? getSourceTextValueSignature(result.value)
+        result.metadata.valueSignature ??
+        getSourceTextValueSignature(result.metadata.value)
+      tokens = result.tokens
     } else {
       metadata.value = processedValue
       metadata.language = language
@@ -619,6 +639,20 @@ async function TokensAsync({
           : undefined
       metadata.label = shouldInheritContextMetadata ? context?.label : undefined
       metadata.valueSignature = getSourceTextValueSignature(processedValue)
+      tokens = await getTokens({
+        value: metadata.value,
+        language: metadata.language,
+        filePath: metadata.filePath,
+        allowErrors,
+        showErrors,
+        theme: themeConfiguration,
+        languages: config.languages,
+        deferQuickInfoUntilHover: shouldDeferQuickInfoUntilHover,
+        // In development, wait for the warmed analysis result so the streamed
+        // update replaces the plain-text fallback with real highlighting and
+        // symbol quick info.
+        waitForWarmResult: isDevelopmentRuntime,
+      })
     }
 
     if (annotationInstructions && annotationParseResult) {
@@ -636,33 +670,6 @@ async function TokensAsync({
       label: metadata.label!,
       valueSignature: metadata.valueSignature!,
     })
-
-    const showErrors =
-      showErrorsProp === undefined ? context?.showErrors : showErrorsProp
-    const allowErrors =
-      allowErrorsProp === undefined
-        ? context?.allowErrors === undefined
-          ? showErrors
-            ? true
-            : undefined
-          : context.allowErrors
-        : allowErrorsProp
-    const shouldDeferQuickInfoUntilHover =
-      isDevelopmentRuntime && shouldAnalyze
-    const tokens = await getTokens({
-      value: metadata.value,
-      language: metadata.language,
-      filePath: metadata.filePath,
-      allowErrors,
-      showErrors,
-      theme: themeConfiguration,
-      languages: config.languages,
-      deferQuickInfoUntilHover: shouldDeferQuickInfoUntilHover,
-      // In development, wait for the warmed analysis result so the streamed
-      // update replaces the plain-text fallback with real highlighting and
-      // symbol quick info.
-      waitForWarmResult: isDevelopmentRuntime,
-    })
     const quickInfoRequestSource =
       shouldDeferQuickInfoUntilHover && metadata.filePath
         ? {
@@ -678,9 +685,9 @@ async function TokensAsync({
       tokens,
       themeConfiguration,
       languages: config.languages,
-      waitForWarmResult: isDevelopmentRuntime,
-      quickInfoRequestSource,
-    })
+          waitForWarmResult: isDevelopmentRuntime,
+          quickInfoRequestSource,
+        })
     const registerQuickInfoEntry = (entry: QuickInfoEntry) => {
       const existingEntry = quickInfoEntriesById.get(entry.id)
 

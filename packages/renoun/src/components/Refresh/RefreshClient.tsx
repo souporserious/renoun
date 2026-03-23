@@ -15,28 +15,21 @@ declare global {
  * @internal
  */
 export function RefreshClient({
-  port,
-  id,
-  host,
-  emitRefreshNotifications,
+  runtime,
 }: {
-  port: string
-  id: string
-  host?: string
-  emitRefreshNotifications?: boolean
+  runtime: AnalysisServerRuntime
 }) {
+  const {
+    port,
+    id,
+    host,
+    emitRefreshNotifications,
+    clientRuntime,
+  } = runtime
+
   useEffect(() => {
     if (port === undefined) {
       return
-    }
-
-    const runtime: AnalysisServerRuntime = {
-      port,
-      id,
-      ...(host ? { host } : {}),
-      ...(typeof emitRefreshNotifications === 'boolean'
-        ? { emitRefreshNotifications }
-        : {}),
     }
 
     return subscribeToAnalysisClientBrowserRuntimeRefresh(
@@ -47,7 +40,16 @@ export function RefreshClient({
         }
       }
     )
-  }, [emitRefreshNotifications, host, id, port])
+  }, [
+    clientRuntime?.consumeRefreshNotifications,
+    clientRuntime?.rpcCacheTtlMs,
+    clientRuntime?.useRpcCache,
+    emitRefreshNotifications,
+    host,
+    id,
+    port,
+    runtime,
+  ])
 
   return null
 }

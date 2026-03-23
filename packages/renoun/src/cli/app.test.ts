@@ -26,6 +26,7 @@ import {
 
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
+import { DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS } from './build-analysis-runtime.ts'
 
 const BLOG_APP_PATH = fileURLToPath(
   new URL('../../../../apps/blog', import.meta.url)
@@ -114,6 +115,7 @@ vi.mock('./framework.ts', () => ({
 }))
 
 const runPrewarmSafelyMock = vi.fn(async () => undefined)
+const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
 
 vi.mock('./prewarm-runner.ts', () => ({
   createDefaultPrewarmOptions: (rootPath = process.cwd()) => ({
@@ -122,6 +124,10 @@ vi.mock('./prewarm-runner.ts', () => ({
     },
   }),
   runPrewarmSafely: runPrewarmSafelyMock,
+}))
+
+vi.mock('./prewarm.ts', () => ({
+  prewarmRenounRpcServerCache: prewarmRenounRpcServerCacheMock,
 }))
 
 let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
@@ -481,6 +487,103 @@ describe('runAppCommand integration', () => {
         lstat(join(runtimeRoot, 'escape-link.txt'))
       ).rejects.toMatchObject({
         code: 'ENOENT',
+      })
+    } finally {
+      exitSpy.mockRestore()
+      processOnSpy.mockRestore()
+      await rm(tmpRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('prewarms analysis cache before build commands', async () => {
+    const tmpRoot = realpathSync(
+      await mkdtemp(join(tmpdir(), 'renoun-app-build-test-'))
+    )
+    const projectRoot = join(tmpRoot, 'project')
+    await mkdir(projectRoot, { recursive: true })
+
+    const nodeModulesExampleDir = join(
+      projectRoot,
+      'node_modules',
+      '@renoun',
+      'blog'
+    )
+    await mkdir(nodeModulesExampleDir, { recursive: true })
+    await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
+
+    await writeFile(
+      join(projectRoot, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'app-integration',
+          version: '1.0.0',
+          dependencies: { '@renoun/blog': 'workspace:*' },
+          devDependencies: { renoun: 'workspace:*' },
+        },
+        null,
+        2
+      )
+    )
+
+    let resolveExit!: (code: number) => void
+    let exitResolved = false
+    const exitPromise = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((
+      code?: number
+    ) => {
+      if (!exitResolved) {
+        exitResolved = true
+        resolveExit(code ?? 0)
+      }
+      return undefined as never
+    }) as unknown as typeof process.exit)
+
+    const originalProcessOn = process.on.bind(process)
+    const processOnSpy = vi.spyOn(process, 'on').mockImplementation(((
+      event: string,
+      listener: (...args: unknown[]) => void
+    ) => {
+      if (
+        event === 'uncaughtException' ||
+        event === 'unhandledRejection' ||
+        event === 'SIGINT' ||
+        event === 'SIGTERM'
+      ) {
+        return process
+      }
+
+      return originalProcessOn(
+        event as Parameters<typeof originalProcessOn>[0],
+        listener as Parameters<typeof originalProcessOn>[1]
+      )
+    }) as unknown as typeof process.on)
+
+    process.chdir(projectRoot)
+
+    try {
+      await runAppCommand({ command: 'build', args: [] })
+      const exitCode = await exitPromise
+      expect(exitCode).toBe(0)
+
+      const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
+
+      expect(runPrewarmSafelyMock).not.toHaveBeenCalled()
+      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
+        analysisOptions: {
+          tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
+        },
+      })
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      const [, , spawnOptions] = spawnMock.mock.calls[0]
+      expect(spawnOptions?.env).toMatchObject({
+        RENOUN_RUNTIME_DIRECTORY: runtimeRoot,
+        [PROCESS_ENV_KEYS.renounServerClientRpcCache]: '1',
+        [PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]: String(
+          DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS
+        ),
       })
     } finally {
       exitSpy.mockRestore()

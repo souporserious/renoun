@@ -10,6 +10,50 @@ export interface AnalysisServerRuntime {
   id: string
   host?: string
   emitRefreshNotifications?: boolean
+  clientRuntime?: AnalysisServerClientRuntime
+}
+
+/**
+ * Advanced client defaults carried by the active server runtime.
+ * These are internal transport values; callers should prefer
+ * `createServer({ clientRuntime })` over setting process env directly.
+ */
+export interface AnalysisServerClientRuntime {
+  useRpcCache?: boolean
+  rpcCacheTtlMs?: number
+  consumeRefreshNotifications?: boolean
+}
+
+function createServerClientRuntimeProcessEnv(
+  runtime: AnalysisServerClientRuntime | undefined
+): Record<string, string> {
+  if (!runtime) {
+    return {}
+  }
+
+  return {
+    ...(typeof runtime.useRpcCache === 'boolean'
+      ? {
+          [PROCESS_ENV_KEYS.renounServerClientRpcCache]: runtime.useRpcCache
+            ? '1'
+            : '0',
+        }
+      : {}),
+    ...(typeof runtime.rpcCacheTtlMs === 'number' &&
+    Number.isFinite(runtime.rpcCacheTtlMs)
+      ? {
+          [PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]: String(
+            Math.max(0, Math.floor(runtime.rpcCacheTtlMs))
+          ),
+        }
+      : {}),
+    ...(typeof runtime.consumeRefreshNotifications === 'boolean'
+      ? {
+          [PROCESS_ENV_KEYS.renounServerClientRefreshNotifications]:
+            runtime.consumeRefreshNotifications ? '1' : '0',
+        }
+      : {}),
+  }
 }
 
 export function createServerRuntimeProcessEnv(
@@ -29,6 +73,7 @@ export function createServerRuntimeProcessEnv(
             runtime.emitRefreshNotifications ? '1' : '0',
         }
       : {}),
+    ...createServerClientRuntimeProcessEnv(runtime.clientRuntime),
   }
 }
 
@@ -57,6 +102,9 @@ export function clearServerRuntimeProcessEnv(): void {
   // protocol id, but clear the exported runtime fields when no server is active.
   delete process.env[PROCESS_ENV_KEYS.renounServerPort]
   delete process.env[PROCESS_ENV_KEYS.renounServerHost]
+  delete process.env[PROCESS_ENV_KEYS.renounServerClientRpcCache]
+  delete process.env[PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]
+  delete process.env[PROCESS_ENV_KEYS.renounServerClientRefreshNotifications]
   delete process.env[
     PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
   ]
@@ -68,6 +116,65 @@ export function getServerIdFromProcessEnv(): string | undefined {
 
 export function setServerIdProcessEnv(id: string): void {
   process.env[PROCESS_ENV_KEYS.renounServerId] = id
+}
+
+function getServerClientRuntimeFromProcessEnv():
+  | AnalysisServerClientRuntime
+  | undefined {
+  const useRpcCache = parseBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounServerClientRpcCache
+  )
+  const rpcCacheTtlMs = parseNonNegativeIntegerProcessEnv(
+    PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs
+  )
+  const consumeRefreshNotifications = parseBooleanProcessEnv(
+    PROCESS_ENV_KEYS.renounServerClientRefreshNotifications
+  )
+
+  if (
+    useRpcCache === undefined &&
+    rpcCacheTtlMs === undefined &&
+    consumeRefreshNotifications === undefined
+  ) {
+    return undefined
+  }
+
+  return {
+    ...(typeof useRpcCache === 'boolean' ? { useRpcCache } : {}),
+    ...(typeof rpcCacheTtlMs === 'number' ? { rpcCacheTtlMs } : {}),
+    ...(typeof consumeRefreshNotifications === 'boolean'
+      ? { consumeRefreshNotifications }
+      : {}),
+  }
+}
+
+export function setServerClientRuntimeProcessEnv(
+  runtime?: AnalysisServerClientRuntime
+): void {
+  if (typeof runtime?.useRpcCache === 'boolean') {
+    process.env[PROCESS_ENV_KEYS.renounServerClientRpcCache] =
+      runtime.useRpcCache ? '1' : '0'
+  } else {
+    delete process.env[PROCESS_ENV_KEYS.renounServerClientRpcCache]
+  }
+
+  if (
+    typeof runtime?.rpcCacheTtlMs === 'number' &&
+    Number.isFinite(runtime.rpcCacheTtlMs)
+  ) {
+    process.env[PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs] = String(
+      Math.max(0, Math.floor(runtime.rpcCacheTtlMs))
+    )
+  } else {
+    delete process.env[PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]
+  }
+
+  if (typeof runtime?.consumeRefreshNotifications === 'boolean') {
+    process.env[PROCESS_ENV_KEYS.renounServerClientRefreshNotifications] =
+      runtime.consumeRefreshNotifications ? '1' : '0'
+  } else {
+    delete process.env[PROCESS_ENV_KEYS.renounServerClientRefreshNotifications]
+  }
 }
 
 export function getServerRuntimeFromProcessEnv():
@@ -83,6 +190,7 @@ export function getServerRuntimeFromProcessEnv():
   const emitRefreshNotifications =
     resolveServerRefreshNotificationsEffectiveFromEnv() ??
     resolveServerRefreshNotificationsEnvOverride()
+  const clientRuntime = getServerClientRuntimeFromProcessEnv()
 
   return {
     port,
@@ -91,6 +199,7 @@ export function getServerRuntimeFromProcessEnv():
     ...(typeof emitRefreshNotifications === 'boolean'
       ? { emitRefreshNotifications }
       : {}),
+    ...(clientRuntime ? { clientRuntime } : {}),
   }
 }
 

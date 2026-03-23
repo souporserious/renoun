@@ -8,6 +8,7 @@ import {
 } from '../file-system/cache-token.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { captureProcessEnv, restoreProcessEnv } from '../utils/test.ts'
+import { DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS } from './build-analysis-runtime.ts'
 
 const spawnMock = vi.fn(
   (command: string, args: string[], options?: Record<string, unknown>) => {
@@ -47,7 +48,8 @@ vi.mock('../analysis/server.ts', () => ({
   createServer: createServerMock,
 }))
 
-const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
+const runPrewarmSafelyMock = vi.fn(async () => undefined)
+const prewarmRenounRpcServerCacheDirectMock = vi.fn(async () => undefined)
 
 vi.mock('./prewarm-runner.ts', () => ({
   createDefaultPrewarmOptions: (rootPath = process.cwd()) => ({
@@ -55,7 +57,11 @@ vi.mock('./prewarm-runner.ts', () => ({
       tsConfigFilePath: join(rootPath, 'tsconfig.json'),
     },
   }),
-  runPrewarmSafely: prewarmRenounRpcServerCacheMock,
+  runPrewarmSafely: runPrewarmSafelyMock,
+}))
+
+vi.mock('./prewarm.ts', () => ({
+  prewarmRenounRpcServerCache: prewarmRenounRpcServerCacheDirectMock,
 }))
 
 const runCacheMaintenanceCommandMock = vi.fn(async (args: string[]) => {
@@ -199,9 +205,9 @@ describe('renoun CLI index integration', () => {
 
     expect(createServerMock).toHaveBeenCalledTimes(1)
     await waitForAssertion(() => {
-      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+      expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
     })
-    expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith(
+    expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
       {
         analysisOptions: {
           tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
@@ -211,6 +217,42 @@ describe('renoun CLI index integration', () => {
         allowInlineFallback: false,
       }
     )
+  })
+
+  test('prewarms analysis cache before framework build commands', async () => {
+    process.argv = ['node', 'renoun', 'next', 'build']
+
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit)
+
+    await import('./index.ts')
+
+    try {
+      expect(createServerMock).toHaveBeenCalledTimes(1)
+      await waitForAssertion(() => {
+        expect(prewarmRenounRpcServerCacheDirectMock).toHaveBeenCalledTimes(1)
+      })
+      expect(prewarmRenounRpcServerCacheDirectMock).toHaveBeenCalledWith({
+        analysisOptions: {
+          tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
+        },
+      })
+      expect(runPrewarmSafelyMock).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      const [, , spawnOptions] = spawnMock.mock.calls[0]
+      expect(spawnOptions?.env).toMatchObject({
+        [PROCESS_ENV_KEYS.renounServerClientRpcCache]: '1',
+        [PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]: String(
+          DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS
+        ),
+      })
+      await waitForAssertion(() => {
+        expect(exitSpy).toHaveBeenCalledWith(0)
+      })
+    } finally {
+      exitSpy.mockRestore()
+    }
   })
 
   test('exits through the normal command-error path when watch startup fails', async () => {

@@ -11,6 +11,10 @@ export const PROCESS_ENV_KEYS = {
   renounServerId: 'RENOUN_SERVER_ID',
   renounServerPort: 'RENOUN_SERVER_PORT',
   renounServerHost: 'RENOUN_SERVER_HOST',
+  renounServerClientRpcCache: 'RENOUN_SERVER_CLIENT_RPC_CACHE',
+  renounServerClientRpcCacheTtlMs: 'RENOUN_SERVER_CLIENT_RPC_CACHE_TTL_MS',
+  renounServerClientRefreshNotifications:
+    'RENOUN_SERVER_CLIENT_REFRESH_NOTIFICATIONS',
   renounServerRefreshNotifications: 'RENOUN_SERVER_REFRESH_NOTIFICATIONS',
   renounServerRefreshNotificationsEffective:
     'RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE',

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 
 import {
   extractCodeFenceLanguagesFromMarkdown,
+  extractCodeFenceSnippetsFromMarkdown,
   isMarkdownCodeFenceSourcePath,
 } from './markdown-code-fence-languages.ts'
 
@@ -67,5 +68,40 @@ describe('markdown code fence language extraction', () => {
     expect(isMarkdownCodeFenceSourcePath('/a/b/file.md')).toBe(true)
     expect(isMarkdownCodeFenceSourcePath('/a/b/file.mdx')).toBe(true)
     expect(isMarkdownCodeFenceSourcePath('/a/b/file.ts')).toBe(false)
+  })
+
+  test('extracts code fence snippets with path and formatting metadata', () => {
+    const source = [
+      '```tsx path="app/page.tsx"',
+      'export default function Page() {}',
+      '```',
+      '',
+      '```ts shouldFormat={true} allowErrors',
+      'const answer:number = 42',
+      '```',
+      '',
+      '```',
+      'plain text',
+      '```',
+    ].join('\n')
+
+    expect(extractCodeFenceSnippetsFromMarkdown(source)).toEqual([
+      {
+        language: 'tsx',
+        path: 'app/page.tsx',
+        shouldFormat: false,
+        value: 'export default function Page() {}',
+      },
+      {
+        allowErrors: true,
+        language: 'ts',
+        shouldFormat: true,
+        value: 'const answer:number = 42',
+      },
+      {
+        shouldFormat: false,
+        value: 'plain text',
+      },
+    ])
   })
 })

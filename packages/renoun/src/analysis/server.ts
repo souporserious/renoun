@@ -18,10 +18,11 @@ import {
   isProductionEnvironment,
 } from '../utils/env.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
-import type { GetTokensOptions } from '../utils/get-tokens.ts'
+import type { GetTokensOptions, TokenizedLines } from '../utils/get-tokens.ts'
 import {
   hydrateSourceTextMetadataSourceFile,
   type GetSourceTextMetadataOptions,
+  type SourceTextMetadata,
   type SourceTextHydrationMetadata,
 } from './query/source-text-metadata.ts'
 import { prewarmSourceTextFormatterRuntime } from '../utils/format-source-text.ts'
@@ -63,11 +64,13 @@ import {
   clearServerRuntimeProcessEnv,
   notifyServerRuntimeEnvChanged,
   resolveServerRefreshNotificationsEnvOverride,
+  setServerClientRuntimeProcessEnv,
   setServerHostProcessEnv,
   setServerIdProcessEnv,
   setServerRefreshNotificationsProcessEnv,
   setServerPortProcessEnv,
 } from './runtime-env.ts'
+import type { AnalysisServerClientRuntime } from './runtime-env.ts'
 import type { AnalysisOptions } from './types.ts'
 import {
   extractCodeFenceLanguagesFromMarkdown,
@@ -90,6 +93,7 @@ interface ActiveAnalysisServerRuntime {
   id: string
   host: 'localhost' | '127.0.0.1' | '::1'
   emitRefreshNotifications: boolean
+  clientRuntime?: AnalysisServerClientRuntime
 }
 
 const activeAnalysisServerRuntimes: ActiveAnalysisServerRuntime[] = []
@@ -159,10 +163,19 @@ interface ResolveTypeAtLocationRpcRequest {
   analysisOptions?: AnalysisOptions
 }
 
+interface CodeBlockTokensResult {
+  metadata: SourceTextMetadata
+  tokens: TokenizedLines
+}
+
 export interface CreateServerOptions {
   port?: number
   host?: 'localhost' | '127.0.0.1' | '::1'
   emitRefreshNotifications?: boolean
+  /**
+   * Advanced per-server defaults propagated to attached analysis clients.
+   */
+  clientRuntime?: AnalysisServerClientRuntime
 }
 
 interface RpcValueWithDependenciesResponse<Value> {
@@ -219,6 +232,7 @@ function applyActiveAnalysisServerRuntimeToProcessEnv(
   setServerIdProcessEnv(runtime.id)
   setServerHostProcessEnv(runtime.host)
   setServerRefreshNotificationsProcessEnv(runtime.emitRefreshNotifications)
+  setServerClientRuntimeProcessEnv(runtime.clientRuntime)
   notifyServerRuntimeEnvChanged()
 }
 
@@ -1269,6 +1283,7 @@ export async function createServer(options?: CreateServerOptions) {
     id: server.getId(),
     host: options?.host ?? 'localhost',
     emitRefreshNotifications,
+    ...(options?.clientRuntime ? { clientRuntime: options.clientRuntime } : {}),
   })
 
   const originalCleanup = server.cleanup.bind(server)
@@ -1449,6 +1464,101 @@ export async function createServer(options?: CreateServerOptions) {
     {
       memoize: getProductionRpcMemoizeOptions(),
       concurrency: 32,
+    }
+  )
+
+  server.registerMethod(
+    'getCodeBlockTokens',
+    async function getCodeBlockTokens({
+      analysisOptions,
+      languages,
+      waitForWarmResult,
+      allowErrors,
+      baseDirectory,
+      deferQuickInfoUntilHover,
+      filePath,
+      includeClientRpcDependencies,
+      isFormattingExplicit,
+      language,
+      metadataCollector,
+      shouldFormat,
+      showErrors,
+      sourcePath,
+      theme,
+      value,
+      virtualizeFilePath,
+    }: Omit<GetSourceTextMetadataOptions, 'project'> &
+      Omit<
+        GetTokensOptions,
+        'highlighter' | 'project' | 'value' | 'language' | 'filePath'
+      > & {
+        analysisOptions?: AnalysisOptions
+        languages?: HighlighterInitializationOptions['languages']
+        waitForWarmResult?: boolean
+        includeClientRpcDependencies?: boolean
+      }) {
+      const project = getProgram(analysisOptions)
+      latestCodeFencePrewarmThemeNames = getHighlighterThemeNames(theme)
+      queueHighlighterInitialization({
+        theme,
+        languages,
+      })
+
+      flushDeferredCodeFencePrewarmPaths()
+
+      const metadata = await getCachedSourceTextMetadata(project, {
+        baseDirectory,
+        filePath,
+        isFormattingExplicit,
+        language,
+        shouldFormat,
+        value,
+        virtualizeFilePath,
+      })
+      const tokens = await getCachedTokens(project, {
+        allowErrors,
+        deferQuickInfoUntilHover,
+        filePath: metadata.filePath,
+        highlighter: resolvedHighlighter,
+        highlighterLoader: async () => {
+          return ensureHighlighter({
+            theme,
+            languages,
+          })
+        },
+        language: metadata.language,
+        metadataCollector,
+        showErrors,
+        sourcePath,
+        theme,
+        value: metadata.value,
+        waitForWarmResult,
+      })
+      const result: CodeBlockTokensResult = {
+        metadata,
+        tokens,
+      }
+
+      if (includeClientRpcDependencies) {
+        return toRpcValueWithDependenciesResponse(
+          result,
+          [
+            filePath,
+            metadata.filePath,
+            sourcePath,
+          ].filter((dependencyPath): dependencyPath is string => {
+            return (
+              typeof dependencyPath === 'string' && dependencyPath.length > 0
+            )
+          })
+        )
+      }
+
+      return result
+    },
+    {
+      memoize: getProductionRpcMemoizeOptions(),
+      concurrency: 24,
     }
   )
 
