@@ -21,6 +21,8 @@ import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
 } from '../utils/is-javascript-like-extension.ts'
+import type { TypeFilter } from '../utils/resolve-type.ts'
+import type { ResolvedFileExportsResult } from '../utils/resolve-file-exports.ts'
 import {
   InMemoryFileSystem,
   type InMemoryFileContent,
@@ -1147,6 +1149,14 @@ export class GitVirtualFileSystem
   override async getFileExports(filePath: string) {
     await this.#ensureInitialized()
     return super.getFileExports(filePath)
+  }
+
+  override async resolveFileExportsWithDependencies(
+    filePath: string,
+    filter?: TypeFilter
+  ): Promise<ResolvedFileExportsResult> {
+    await this.#ensureInitialized()
+    return super.resolveFileExportsWithDependencies(filePath, filter)
   }
 
   /** Get metadata for a file. */

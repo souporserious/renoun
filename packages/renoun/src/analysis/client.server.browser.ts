@@ -34,6 +34,11 @@ const browserAnalysisClientServerModules = {
   getCachedFileExports() {
     return throwBrowserAnalysisClientServerError('getCachedFileExports')
   },
+  resolveCachedFileExportsWithDependencies() {
+    return throwBrowserAnalysisClientServerError(
+      'resolveCachedFileExportsWithDependencies'
+    )
+  },
   getCachedOutlineRanges() {
     return throwBrowserAnalysisClientServerError('getCachedOutlineRanges')
   },
@@ -73,6 +78,7 @@ export const {
   getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExports,
+  resolveCachedFileExportsWithDependencies,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
   getCachedTokens,

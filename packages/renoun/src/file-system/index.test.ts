@@ -2494,6 +2494,35 @@ function b() {}
     `)
   })
 
+  test('getExports reuses cached export headers without eager metadata analysis', async () => {
+    const fileSystem = new InMemoryFileSystem({
+      'index.ts': [
+        '/**',
+        ' * Say hello.',
+        ' * @category greetings',
+        ' */',
+        'export default function hello() {}',
+      ].join('\n'),
+    })
+    const metadataSpy = vi.spyOn(fileSystem, 'getFileExportMetadata')
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const [fileExport] = await file.getExports()
+
+    expect(metadataSpy).not.toHaveBeenCalled()
+    expect(fileExport?.name).toBe('hello')
+    expect(fileExport?.description).toBe('Say hello.')
+    expect(fileExport?.getTags()).toMatchObject([
+      { name: 'category', text: 'greetings' },
+    ])
+    expect(fileExport?.getPosition()).toMatchObject({
+      start: { line: 5, column: 1 },
+    })
+    expect(metadataSpy).not.toHaveBeenCalled()
+
+    metadataSpy.mockRestore()
+  })
+
   test('getTags filters jsdoc template tags by default', async () => {
     const fileSystem = new InMemoryFileSystem({
       'identity.ts': `/**

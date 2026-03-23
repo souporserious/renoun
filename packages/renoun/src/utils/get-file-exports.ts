@@ -1,10 +1,19 @@
 import { getTsMorph } from './ts-morph.ts'
-import type { Node, Project, SourceFile, SyntaxKind } from './ts-morph.ts'
+import type {
+  Node,
+  Project,
+  SourceFile,
+  Symbol as TsMorphSymbol,
+  SyntaxKind,
+} from './ts-morph.ts'
 
 const tsMorph = getTsMorph()
 
 import { getDebugLogger } from './debug.ts'
-import { getDeclarationLocation } from './get-declaration-location.ts'
+import {
+  getDeclarationLocation,
+  type DeclarationLocation,
+} from './get-declaration-location.ts'
 import { getExportPosition } from './get-export-position.ts'
 import { getJsDocMetadata } from './get-js-doc-metadata.ts'
 import { hashString } from './stable-serialization.ts'
@@ -19,6 +28,14 @@ export interface ModuleExport {
   path: string
   position: number
   kind: SyntaxKind
+  metadata: FileExportStaticMetadata
+}
+
+export interface FileExportStaticMetadata {
+  name: string
+  environment: ReturnType<typeof getEnvironment>
+  jsDocMetadata: ReturnType<typeof getJsDocMetadata>
+  location: DeclarationLocation
 }
 
 const exportableKinds = new Set([
@@ -51,8 +68,8 @@ export function getFileExports(
 
         const processStart = performance.now()
         const exportDeclarations: ModuleExport[] = []
-        const exportedDeclarations = sourceFile.getExportedDeclarations()
-        const totalDeclarations = exportedDeclarations.size
+        const exportSymbols = sourceFile.getExportSymbols()
+        const totalDeclarations = exportSymbols.length
 
         getDebugLogger().debug('Processing exported declarations', () => ({
           operation: 'get-file-exports',
@@ -64,39 +81,11 @@ export function getFileExports(
           },
         }))
 
-        for (const [name, declarations] of exportedDeclarations) {
-          const declaration = selectPreferredDeclaration(declarations)
-          let node: Node = declaration
+        for (const exportSymbol of exportSymbols) {
+          const name = getExportSymbolName(exportSymbol)
+          const node = getExportDeclarationForSymbol(exportSymbol)
 
-          const exportAssignment = node.getFirstAncestorByKind(
-            tsMorph.SyntaxKind.ExportAssignment
-          )
-          if (exportAssignment && !exportAssignment.isExportEquals()) {
-            node = exportAssignment
-          }
-
-          if (tsMorph.Node.isVariableStatement(node)) {
-            const declarations = node.getDeclarationList().getDeclarations()
-
-            if (declarations.length > 1) {
-              throw new Error(
-                `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${node.getText()}`
-              )
-            }
-
-            node = declarations.at(0)!
-          }
-
-          if (tsMorph.Node.isExportSpecifier(node)) {
-            const exportDeclaration = node.getFirstAncestorByKind(
-              tsMorph.SyntaxKind.ExportDeclaration
-            )
-            if (exportDeclaration) {
-              node = exportDeclaration
-            }
-          }
-
-          if (!exportableKinds.has(node.getKind())) {
+          if (!name || !node) {
             continue
           }
 
@@ -105,6 +94,11 @@ export function getFileExports(
             path: node.getSourceFile().getFilePath(),
             position: getExportPosition(node),
             kind: node.getKind(),
+            metadata: createFileExportMetadata(
+              node.getSourceFile().getBaseNameWithoutExtension(),
+              name,
+              node
+            ),
           }
           let insertAt = exportDeclarations.length
 
@@ -230,6 +224,86 @@ function selectPreferredDeclaration(declarations: Node[]) {
   return typeLike ?? functionWithBody ?? firstDeclaration ?? declarations[0]!
 }
 
+function getExportSymbolName(
+  exportSymbol: TsMorphSymbol
+): string | undefined {
+  const name = exportSymbol.getName()
+
+  if (!name || name.startsWith('__')) {
+    return undefined
+  }
+
+  return name
+}
+
+function normalizeExportDeclarationNode(node: Node): Node | undefined {
+  let normalizedNode: Node = node
+
+  const exportAssignment = normalizedNode.getFirstAncestorByKind(
+    tsMorph.SyntaxKind.ExportAssignment
+  )
+  if (exportAssignment && !exportAssignment.isExportEquals()) {
+    normalizedNode = exportAssignment
+  }
+
+  if (tsMorph.Node.isVariableStatement(normalizedNode)) {
+    const declarations = normalizedNode.getDeclarationList().getDeclarations()
+
+    if (declarations.length > 1) {
+      throw new Error(
+        `[renoun] Multiple variable declarations found in variable statement which is not currently supported: ${normalizedNode.getText()}`
+      )
+    }
+
+    normalizedNode = declarations.at(0)!
+  }
+
+  if (
+    tsMorph.Node.isExportSpecifier(normalizedNode) ||
+    tsMorph.Node.isNamespaceExport(normalizedNode)
+  ) {
+    const exportDeclaration = normalizedNode.getFirstAncestorByKind(
+      tsMorph.SyntaxKind.ExportDeclaration
+    )
+    if (exportDeclaration) {
+      normalizedNode = exportDeclaration
+    }
+  }
+
+  if (!exportableKinds.has(normalizedNode.getKind())) {
+    return undefined
+  }
+
+  return normalizedNode
+}
+
+function getExportDeclarationForSymbol(
+  exportSymbol: TsMorphSymbol
+): Node | undefined {
+  const aliasedSymbol = safeRead(() => exportSymbol.getAliasedSymbol?.())
+  const targetDeclarations =
+    aliasedSymbol?.getDeclarations() ?? exportSymbol.getDeclarations()
+
+  if (targetDeclarations.length > 0) {
+    const normalizedTarget = normalizeExportDeclarationNode(
+      selectPreferredDeclaration(targetDeclarations)
+    )
+
+    if (normalizedTarget) {
+      return normalizedTarget
+    }
+  }
+
+  const symbolDeclarations = exportSymbol.getDeclarations()
+  if (symbolDeclarations.length > 0) {
+    return normalizeExportDeclarationNode(
+      selectPreferredDeclaration(symbolDeclarations)
+    )
+  }
+
+  return undefined
+}
+
 /** Returns a specific export declaration of a file at a given position and kind. */
 export function getFileExportDeclaration(
   filePath: string,
@@ -291,7 +365,7 @@ export async function getFileExportMetadata(
   position: number,
   kind: SyntaxKind,
   project: Project
-) {
+): Promise<FileExportStaticMetadata> {
   const startedAt = performance.now()
   const fields = {
     filePathHash: hashString(filePath).slice(0, 12),
@@ -311,16 +385,11 @@ export async function getFileExportMetadata(
           project
         )
 
-        const metadata = {
-          name: getName(
-            sourceFile.getBaseNameWithoutExtension(),
-            name,
-            exportDeclaration
-          ),
-          environment: getEnvironment(exportDeclaration),
-          jsDocMetadata: getJsDocMetadata(exportDeclaration),
-          location: getDeclarationLocation(exportDeclaration),
-        }
+        const metadata = createFileExportMetadata(
+          sourceFile.getBaseNameWithoutExtension(),
+          name,
+          exportDeclaration
+        )
 
         getDebugLogger().info('Export metadata retrieved', () => ({
           operation: 'get-file-export-metadata',
@@ -386,6 +455,19 @@ export async function getFileExportMetadata(
   }
 }
 
+function createFileExportMetadata(
+  fileName: string,
+  exportName: string,
+  exportDeclaration: Node
+): FileExportStaticMetadata {
+  return {
+    name: getName(fileName, exportName, exportDeclaration),
+    environment: getEnvironment(exportDeclaration),
+    jsDocMetadata: getJsDocMetadata(exportDeclaration),
+    location: getDeclarationLocation(exportDeclaration),
+  }
+}
+
 /** Get the name of an export declaration, accounting for default exports. */
 function getName(
   fileName: string,
@@ -434,4 +516,12 @@ function getEnvironment(declaration: Node) {
   }
 
   return 'isomorphic'
+}
+
+function safeRead<Value>(read: () => Value): Value | undefined {
+  try {
+    return read()
+  } catch {
+    return undefined
+  }
 }

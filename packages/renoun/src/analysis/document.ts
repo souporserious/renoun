@@ -113,7 +113,10 @@ export function coerceAnalysisDocumentSourceFileToModule(
     })
 
   if (!hasImports && !hasExports) {
-    sourceFile.addExportDeclaration({})
+    const currentText = sourceFile.getFullText()
+    const separator =
+      currentText.length === 0 || /(?:\r\n|\n|\r)$/.test(currentText) ? '' : '\n'
+    sourceFile.replaceWithText(`${currentText}${separator}export {}\n`)
   }
 }
 

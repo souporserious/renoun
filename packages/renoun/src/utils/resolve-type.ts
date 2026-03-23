@@ -82,6 +82,76 @@ function safeGetTypeParameterName(
   }
 }
 
+function safeRead<Value>(read: () => Value): Value | undefined {
+  try {
+    return read()
+  } catch {
+    return undefined
+  }
+}
+
+function safeGetParameterName(
+  parameter: ParameterDeclaration
+): string | undefined {
+  return safeRead(() => parameter.getName())
+}
+
+function safeGetParameterType(
+  parameter: ParameterDeclaration
+): Type | undefined {
+  return safeRead(() => parameter.getType())
+}
+
+function safeGetParameterTypeNode(
+  parameter: ParameterDeclaration
+): TypeNode | undefined {
+  return safeRead(() => parameter.getTypeNode())
+}
+
+function safeParameterHasQuestionToken(parameter: ParameterDeclaration): boolean {
+  return safeRead(() => parameter.hasQuestionToken()) ?? false
+}
+
+function safeIsRestParameter(parameter: ParameterDeclaration): boolean {
+  return safeRead(() => parameter.isRestParameter()) ?? false
+}
+
+function safeGetParameterSymbol(
+  parameter: ParameterDeclaration
+): Symbol | undefined {
+  return safeRead(() => parameter.getSymbol())
+}
+
+function safeGetParameterText(
+  parameter: ParameterDeclaration
+): string | undefined {
+  return safeRead(() => parameter.getText())
+}
+
+function safeGetParameterSourceFile(
+  parameter: ParameterDeclaration
+): SourceFile | undefined {
+  return safeRead(() => parameter.getSourceFile())
+}
+
+function safeGetParameterParent(
+  parameter: ParameterDeclaration
+): Node | undefined {
+  return safeRead(() => parameter.getParent())
+}
+
+function safeGetDeclarationLocation(node: Node) {
+  return safeRead(() => getDeclarationLocation(node))
+}
+
+function safeGetJsDocMetadataValue(node: Node) {
+  return safeRead(() => getJsDocMetadata(node))
+}
+
+function safeGetSymbolDescription(symbol: Symbol): string | undefined {
+  return safeRead(() => getSymbolDescription(symbol))
+}
+
 export namespace Kind {
   /** Metadata present in all types. */
   export interface Shared {
@@ -4858,7 +4928,7 @@ function resolveParameters(
   if (tsMorph.Node.isSignaturedDeclaration(signatureDeclaration)) {
     const thisParameter = signatureDeclaration.getParameters().at(0)
 
-    if (thisParameter?.getName() === 'this') {
+    if (thisParameter && safeGetParameterName(thisParameter) === 'this') {
       const resolvedThisParameter = resolveParameter(
         thisParameter,
         enclosingNode || signatureDeclaration,
@@ -4937,7 +5007,7 @@ function resolveParameter(
 
   if (tsMorph.Node.isNode(parameterDeclarationOrSymbol)) {
     parameterDeclaration = parameterDeclarationOrSymbol
-    parameterType = parameterDeclaration.getType()
+    parameterType = safeGetParameterType(parameterDeclaration)
   } else {
     const symbolDeclaration = getPrimaryDeclaration(
       parameterDeclarationOrSymbol
@@ -5043,46 +5113,53 @@ function resolveParameter(
      *   in the generic's definition context, so stick with the annotation.
      * - Otherwise we're at an instantiated call site, so use the contextual type.
      */
-    const parameterTypeNode = parameterDeclaration.getTypeNode()
+    const parameterTypeNode = safeGetParameterTypeNode(parameterDeclaration)
     let initializer = getInitializerValue(parameterDeclaration)
     const hasInitializer = initializer !== undefined
     const isLocal = parameterDeclaration === enclosingNode
-    const isExternal = parameterDeclaration
-      ? parameterDeclaration.getSourceFile().isInNodeModules()
-      : false
+    const isExternal =
+      safeGetParameterSourceFile(parameterDeclaration)?.isInNodeModules() ??
+      false
     const jsDocParameterTag = getJsDocParameterTag(parameterDeclaration)
     const jsDocTypeNode = jsDocParameterTag?.getTypeExpression()?.getTypeNode()
     const shouldPreferJsDocType = Boolean(
       jsDocTypeNode &&
-      parameterType &&
-      (parameterType.isAny() || parameterType.isUnknown())
+      (!parameterType || parameterType.isAny() || parameterType.isUnknown())
     )
     let resolvedParameterType: Kind.TypeExpression | undefined
 
     if (shouldPreferJsDocType) {
-      resolvedParameterType = resolveTypeExpression(
-        jsDocTypeNode!.getType(),
-        jsDocTypeNode!,
-        filter,
-        initializer,
-        dependencies
-      )
+      const jsDocType = safeRead(() => jsDocTypeNode!.getType())
+
+      if (jsDocType) {
+        resolvedParameterType = resolveTypeExpression(
+          jsDocType,
+          jsDocTypeNode!,
+          filter,
+          initializer,
+          dependencies
+        )
+      }
     }
 
     if (!resolvedParameterType) {
       // Fall back to TypeScript's view of the parameter when JSDoc doesn't
       // provide a better answer so existing resolution semantics stay intact.
-      if (parameterTypeNode && (isLocal || !isExternal)) {
+      const parameterNodeType = parameterTypeNode
+        ? safeRead(() => parameterTypeNode.getType())
+        : undefined
+
+      if (parameterTypeNode && parameterNodeType && (isLocal || !isExternal)) {
         resolvedParameterType = resolveTypeExpression(
-          containsFreeTypeParameter(parameterType)
-            ? parameterTypeNode.getType() // keep annotation if still generic
-            : parameterType,
+          parameterType && containsFreeTypeParameter(parameterType)
+            ? parameterNodeType // keep annotation if still generic
+            : (parameterType ?? parameterNodeType),
           parameterTypeNode,
           filter,
           initializer,
           dependencies
         )
-      } else {
+      } else if (parameterType) {
         resolvedParameterType = resolveTypeExpression(
           parameterType,
           enclosingNode,
@@ -5093,12 +5170,20 @@ function resolveParameter(
       }
     }
 
+    if (!resolvedParameterType) {
+      resolvedParameterType = {
+        kind: 'Any',
+        text: 'any',
+      }
+    }
+
     if (resolvedParameterType) {
-      let isOptional = parameterDeclaration.hasQuestionToken() || hasInitializer
+      let isOptional =
+        safeParameterHasQuestionToken(parameterDeclaration) || hasInitializer
       let resolvedType = isOptional
         ? filterUndefinedFromUnion(resolvedParameterType)
         : resolvedParameterType
-      let isRest = parameterDeclaration.isRestParameter()
+      let isRest = safeIsRestParameter(parameterDeclaration)
 
       if (jsDocParameterTag) {
         const unwrappedJsDocType = jsDocTypeNode
@@ -5135,11 +5220,18 @@ function resolveParameter(
         }
       }
 
-      let name: string | undefined = parameterDeclaration.getName() || undefined
+      let name = safeGetParameterName(parameterDeclaration)
 
       if (name?.startsWith('__')) {
         name = undefined
       }
+
+      const parameterSymbol = safeGetParameterSymbol(parameterDeclaration)
+      const text =
+        safeGetParameterText(parameterDeclaration) ??
+        (name
+          ? `${isRest ? '...' : ''}${name}${isOptional ? '?' : ''}: ${resolvedType.text}`
+          : resolvedType.text)
 
       return {
         kind: 'Parameter',
@@ -5148,12 +5240,12 @@ function resolveParameter(
         initializer,
         isOptional: isOptional || hasInitializer,
         isRest,
-        description: getSymbolDescription(
-          parameterDeclaration.getSymbolOrThrow()
-        ),
-        text: parameterDeclaration.getText(),
-        ...getJsDocMetadata(parameterDeclaration),
-        ...getDeclarationLocation(parameterDeclaration),
+        description: parameterSymbol
+          ? safeGetSymbolDescription(parameterSymbol)
+          : undefined,
+        text,
+        ...(safeGetJsDocMetadataValue(parameterDeclaration) ?? {}),
+        ...(safeGetDeclarationLocation(parameterDeclaration) ?? {}),
       } satisfies Kind.Parameter
     }
 
@@ -5277,9 +5369,12 @@ function getJsDocCandidates(node: Node): Node[] {
 function getJsDocParameterTag(
   parameterDeclaration: ParameterDeclaration
 ): JSDocParameterTag | undefined {
-  const functionLike = parameterDeclaration.getParent()
+  const functionLike = safeGetParameterParent(parameterDeclaration)
+  if (!functionLike) {
+    return undefined
+  }
   const candidates = getJsDocCandidates(functionLike)
-  const parameterName = parameterDeclaration.getName()
+  const parameterName = safeGetParameterName(parameterDeclaration)
 
   if (!parameterName) {
     return undefined
@@ -5292,7 +5387,10 @@ function getJsDocParameterTag(
       for (const tag of jsDoc.getTags()) {
         if (!tsMorph.Node.isJSDocParameterTag(tag)) continue
 
-        const tagName = tag.getName()
+        const tagName = safeRead(() => tag.getName())
+        if (!tagName) {
+          continue
+        }
         // Match "paramName" or "paramName.subProp"
         if (
           tagName === parameterName ||
@@ -5731,11 +5829,12 @@ function resolvePropertySignature(
   }
 
   const name = property.getName()
+  const defaultValueKey = propertyDeclaration
+    ? getInitializerValueKey(propertyDeclaration)
+    : undefined
   const defaultValue =
-    defaultValues && propertyDeclaration
-      ? (defaultValues as Record<string, unknown>)[
-          getInitializerValueKey(propertyDeclaration)
-        ]
+    defaultValues && defaultValueKey
+      ? (defaultValues as Record<string, unknown>)[defaultValueKey]
       : undefined
   const isLocal = propertyDeclaration === enclosingNode
   const isExternal = propertyDeclaration

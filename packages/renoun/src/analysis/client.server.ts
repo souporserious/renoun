@@ -13,6 +13,7 @@ export {
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   invalidateRuntimeAnalysisCachePaths,
+  resolveCachedFileExportsWithDependencies,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'

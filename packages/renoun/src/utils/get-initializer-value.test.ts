@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect, vi } from 'vitest'
 import dedent from 'dedent'
 import { getTsMorph } from './ts-morph.ts'
 
@@ -123,5 +123,26 @@ describe('getInitializerValue', () => {
     )
 
     expect(defaultValue).toEqual({ initialCount: 0, incrementAmount: 1 })
+  })
+
+  test.concurrent('ignores failing synthetic reference lookups', () => {
+    const sourceFile = project.createSourceFile(
+      'synthetic.ts',
+      `const createCounter = (initialCount = 0) => {}`,
+      { overwrite: true }
+    )
+    const functionDeclaration = sourceFile.getFirstDescendantByKindOrThrow(
+      SyntaxKind.ArrowFunction
+    )
+    const parameter = functionDeclaration.getParameters().at(0)!
+    const referencesSpy = vi
+      .spyOn(parameter, 'findReferencesAsNodes')
+      .mockImplementation(() => {
+        throw new Error('synthetic-parameter')
+      })
+
+    expect(getInitializerValue(parameter)).toBe(0)
+
+    referencesSpy.mockRestore()
   })
 })

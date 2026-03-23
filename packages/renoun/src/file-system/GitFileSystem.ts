@@ -42,6 +42,7 @@ import {
   getFileExportText as getAnalysisFileExportText,
   getFileExports as getAnalysisFileExports,
   getOutlineRanges as getAnalysisOutlineRanges,
+  resolveFileExportsWithDependencies as resolveAnalysisFileExportsWithDependencies,
   resolveTypeAtLocation as resolveAnalysisTypeAtLocation,
   resolveTypeAtLocationWithDependencies as resolveAnalysisTypeAtLocationWithDependencies,
 } from '../analysis/node-client.ts'
@@ -62,6 +63,7 @@ import {
 } from '../utils/is-javascript-like-extension.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
+import type { ResolvedFileExportsResult } from '../utils/resolve-file-exports.ts'
 import type { SyntaxKind } from '../utils/ts-morph.ts'
 import {
   BaseFileSystem,
@@ -807,6 +809,18 @@ export class GitFileSystem
   override async getFileExports(filePath: string) {
     const prepared = await this.#getPreparedAnalysisContext(filePath)
     return getAnalysisFileExports(prepared.filePath, prepared.analysisOptions)
+  }
+
+  override async resolveFileExportsWithDependencies(
+    filePath: string,
+    filter?: TypeFilter
+  ): Promise<ResolvedFileExportsResult> {
+    const prepared = await this.#getPreparedAnalysisContext(filePath)
+    return resolveAnalysisFileExportsWithDependencies(
+      prepared.filePath,
+      filter,
+      prepared.analysisOptions
+    )
   }
 
   override async getFileExportMetadata(

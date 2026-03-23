@@ -22643,6 +22643,94 @@ describe('resolveType', () => {
     expect(fallbackParameter?.type.kind).toBe('Any')
   })
 
+  test('falls back to any for synthetic parameters when parameter type reads fail', () => {
+    const jsProject = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { allowJs: true, checkJs: true },
+    })
+    const sourceFile = jsProject.createSourceFile(
+      'uv-utils.js',
+      dedent`
+        export function replaceDefaultUV(uvNode = null) {
+          return uvNode
+        }
+      `,
+      { overwrite: true, scriptKind: ts.ScriptKind.JS }
+    )
+    const functionDeclaration =
+      sourceFile.getFunctionOrThrow('replaceDefaultUV')
+    const parameter = functionDeclaration.getParameters()[0]
+    const getTypeSpy = vi.spyOn(parameter, 'getType').mockImplementation(() => {
+      throw new Error('synthetic-parameter')
+    })
+
+    const resolved = resolveType(
+      functionDeclaration.getType(),
+      functionDeclaration
+    ) as any
+
+    getTypeSpy.mockRestore()
+
+    expect(resolved?.kind).toBe('Function')
+    expect(resolved?.signatures?.[0]?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'uvNode',
+          initializer: null,
+          type: expect.objectContaining({
+            kind: 'Any',
+            text: 'any',
+          }),
+        }),
+      ])
+    )
+  })
+
+  test('does not crash when reading a synthetic this parameter name fails', () => {
+    const jsProject = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { allowJs: true, checkJs: true },
+    })
+    const sourceFile = jsProject.createSourceFile(
+      'uv-utils.js',
+      dedent`
+        export function replaceDefaultUV(uvNode = null) {
+          return uvNode
+        }
+      `,
+      { overwrite: true, scriptKind: ts.ScriptKind.JS }
+    )
+    const functionDeclaration =
+      sourceFile.getFunctionOrThrow('replaceDefaultUV')
+    const parameter = functionDeclaration.getParameters()[0]
+    const getNameSpy = vi
+      .spyOn(parameter, 'getName')
+      .mockImplementationOnce(() => {
+        throw new Error('synthetic-this-parameter')
+      })
+
+    const resolved = resolveType(
+      functionDeclaration.getType(),
+      functionDeclaration
+    ) as any
+
+    getNameSpy.mockRestore()
+
+    expect(resolved?.kind).toBe('Function')
+    expect(resolved?.signatures?.[0]?.parameters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'uvNode',
+          initializer: null,
+          type: expect.objectContaining({
+            kind: 'Any',
+            text: 'any',
+          }),
+        }),
+      ])
+    )
+  })
+
   test('treats parameters with falsy initializers as optional', () => {
     const jsProject = new Project({
       useInMemoryFileSystem: true,

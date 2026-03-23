@@ -9,6 +9,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { Cache } from '../../file-system/Cache.ts'
 import { GitFileSystem } from '../../file-system/GitFileSystem.ts'
 import { Repository } from '../../file-system/Repository.ts'
+import { ModuleExport } from '../../file-system/entries.ts'
 import { Reference } from './Reference.tsx'
 
 const temporaryDirectories: string[] = []
@@ -44,7 +45,10 @@ function git(cwd: string, args: string[]) {
   return result.stdout.trim()
 }
 
-function createProjectFixture() {
+function createProjectFixture(options?: {
+  sourceText?: string
+  tsconfig?: Record<string, unknown>
+}) {
   const workspaceRoot = mkdtempSync(join(tmpdir(), 'renoun-reference-'))
   temporaryDirectories.push(workspaceRoot)
 
@@ -52,16 +56,18 @@ function createProjectFixture() {
   writeFileSync(
     join(workspaceRoot, 'tsconfig.json'),
     JSON.stringify({
-      compilerOptions: {
-        allowJs: true,
-        checkJs: true,
-      },
+      compilerOptions:
+        options?.tsconfig?.['compilerOptions'] ?? {
+          allowJs: true,
+          checkJs: true,
+        },
       include: ['src/**/*.ts'],
+      ...options?.tsconfig,
     })
   )
   writeFileSync(
     join(workspaceRoot, 'src', 'index.ts'),
-    'export const value = 1\n'
+    options?.sourceText ?? 'export const value = 1\n'
   )
 
   git(workspaceRoot, ['-c', 'init.defaultBranch=main', 'init'])
@@ -139,6 +145,76 @@ describe('Reference', () => {
       expect(relativePathSpy).toHaveBeenCalledWith(
         join(workspaceRoot, 'src', 'index.ts')
       )
+    } finally {
+      closeRepository(repository)
+    }
+  })
+
+  test('renders classes without explicit constructor metadata', async () => {
+    const workspaceRoot = createProjectFixture({
+      sourceText: 'export class LightingModel { intensity = 1 }\n',
+    })
+    const repository = Repository.resolve({
+      path: workspaceRoot,
+      cache: new Cache({
+        outputDirectory: join(workspaceRoot, '.cache'),
+      }),
+    })!
+
+    try {
+      const element = await Reference({
+        source: join(workspaceRoot, 'src', 'index.ts'),
+        repository,
+      })
+      const markup = renderToStaticMarkup(<>{element}</>)
+
+      expect(markup).toContain('LightingModel')
+      expect(markup).not.toContain('Constructor')
+    } finally {
+      closeRepository(repository)
+    }
+  })
+
+  test('uses batched file export type resolution and preserves stripInternal filtering', async () => {
+    const workspaceRoot = createProjectFixture({
+      sourceText: [
+        '/** Visible export. */',
+        'export const visible = 1',
+        '',
+        '/** @internal */',
+        'export const hidden = 2',
+        '',
+      ].join('\n'),
+      tsconfig: {
+        compilerOptions: {
+          allowJs: true,
+          checkJs: true,
+          stripInternal: true,
+        },
+      },
+    })
+    const repository = Repository.resolve({
+      path: workspaceRoot,
+      cache: new Cache({
+        outputDirectory: join(workspaceRoot, '.cache'),
+      }),
+    })!
+
+    try {
+      const getTypeSpy = vi.spyOn(ModuleExport.prototype, 'getType')
+      try {
+        const element = await Reference({
+          source: join(workspaceRoot, 'src', 'index.ts'),
+          repository,
+        })
+        const markup = renderToStaticMarkup(<>{element}</>)
+
+        expect(markup).toContain('visible')
+        expect(markup).not.toContain('hidden')
+        expect(getTypeSpy).not.toHaveBeenCalled()
+      } finally {
+        getTypeSpy.mockRestore()
+      }
     } finally {
       closeRepository(repository)
     }

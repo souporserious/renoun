@@ -16,6 +16,7 @@ import type {
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   invalidateRuntimeAnalysisCachePaths,
+  resolveCachedFileExportsWithDependencies,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -38,6 +39,8 @@ export interface AnalysisClientServerModules {
   getCachedTokens: typeof getCachedTokens
   invalidateRuntimeAnalysisCachePath: typeof invalidateRuntimeAnalysisCachePath
   invalidateRuntimeAnalysisCachePaths: typeof invalidateRuntimeAnalysisCachePaths
+  resolveCachedFileExportsWithDependencies:
+    typeof resolveCachedFileExportsWithDependencies
   resolveCachedTypeAtLocationWithDependencies:
     typeof resolveCachedTypeAtLocationWithDependencies
   transpileCachedSourceFile: typeof transpileCachedSourceFile

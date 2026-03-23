@@ -41,6 +41,7 @@ import {
   getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExports,
+  resolveCachedFileExportsWithDependencies,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
   getCachedTypeScriptDependencyPaths,
@@ -1581,6 +1582,40 @@ export async function createServer(options?: CreateServerOptions) {
     {
       memoize: getProductionRpcMemoizeOptions(),
       concurrency: 25,
+    }
+  )
+
+  server.registerMethod(
+    'resolveFileExportsWithDependencies',
+    async function resolveFileExportsWithDependencies({
+      filePath,
+      analysisOptions,
+      filter,
+      includeClientRpcDependencies,
+    }: {
+      filePath: string
+      analysisOptions?: AnalysisOptions
+      filter?: TypeFilter
+      includeClientRpcDependencies?: boolean
+    }) {
+      const project = getProgram(analysisOptions)
+      const result = await resolveCachedFileExportsWithDependencies(project, {
+        filePath,
+        filter,
+      })
+
+      if (includeClientRpcDependencies) {
+        return toRpcValueWithDependenciesResponse(
+          result,
+          result.dependencies ?? []
+        )
+      }
+
+      return result
+    },
+    {
+      memoize: getProductionRpcMemoizeOptions(),
+      concurrency: 8,
     }
   )
 

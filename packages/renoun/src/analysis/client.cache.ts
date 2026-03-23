@@ -15,6 +15,7 @@ export type ClientCachedRpcMethod =
   | 'getQuickInfoAtPosition'
   | 'getSourceTextMetadata'
   | 'resolveTypeAtLocationWithDependencies'
+  | 'resolveFileExportsWithDependencies'
   | 'getTokens'
   | 'getFileExports'
   | 'getOutlineRanges'
@@ -57,6 +58,7 @@ export const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
   'getQuickInfoAtPosition',
   'getSourceTextMetadata',
   'resolveTypeAtLocationWithDependencies',
+  'resolveFileExportsWithDependencies',
   'getTokens',
   'getFileExports',
   'getOutlineRanges',

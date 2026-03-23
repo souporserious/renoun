@@ -11,7 +11,6 @@ import {
   type FrontmatterParseResult,
 } from '@renoun/mdx/utils'
 
-import { getFileExportMetadata } from '../analysis/node-client.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import {
@@ -32,6 +31,10 @@ import {
   isPositionWithinOutlineRange,
   type OutlineRange,
 } from '../utils/get-outline-ranges.ts'
+import type {
+  FileExportStaticMetadata,
+  ModuleExport as JavaScriptFileExportMetadata,
+} from '../utils/get-file-exports.ts'
 import {
   isJavaScriptLikeExtension,
   type IsJavaScriptLikeExtension,
@@ -1935,7 +1938,8 @@ export class ModuleExport<Value> {
   #file: JavaScriptFile<any>
   #loader?: ModuleLoader<any>
   #slugCasing: SlugCasing
-  #metadata: Awaited<ReturnType<typeof getFileExportMetadata>> | undefined
+  #metadata: FileExportStaticMetadata | undefined
+  #staticLocation: JavaScriptFileExportMetadata | undefined
   #structureGitMetadata?: GitExportMetadata
   #structureWorkspaceChangeToken?: string
   #structureCacheSessionKey?: string
@@ -1949,12 +1953,15 @@ export class ModuleExport<Value> {
     name: string,
     file: JavaScriptFile<any>,
     loader?: ModuleLoader<any>,
-    slugCasing?: SlugCasing
+    slugCasing?: SlugCasing,
+    staticLocation?: JavaScriptFileExportMetadata
   ) {
     this.#name = name
     this.#file = file
     this.#loader = loader
     this.#slugCasing = slugCasing ?? 'kebab'
+    this.#staticLocation = staticLocation
+    this.#metadata = staticLocation?.metadata
     this.#structureGitMetadataSignature = createGitExportMetadataCacheSignature(
       createEmptyGitExportMetadata()
     )
@@ -1964,27 +1971,32 @@ export class ModuleExport<Value> {
     name: string,
     file: JavaScriptFile<any>,
     loader?: ModuleLoader<any>,
-    slugCasing?: SlugCasing
+    slugCasing?: SlugCasing,
+    staticLocation?: JavaScriptFileExportMetadata
   ): Promise<ModuleExport<Value>> {
-    const fileExport = new ModuleExport<Value>(name, file, loader, slugCasing)
-    await fileExport.getStaticMetadata()
-    return fileExport
+    return new ModuleExport<Value>(
+      name,
+      file,
+      loader,
+      slugCasing,
+      staticLocation
+    )
   }
 
   async #getLocation() {
-    return this.#file.getExportLocation(this.#name)
-  }
+    if (this.#staticLocation) {
+      return this.#staticLocation
+    }
 
-  async #isNotStatic() {
-    const location = await this.#getLocation()
-    return location === undefined
+    const location = await this.#file.getExportLocation(this.#name)
+    if (location !== undefined) {
+      this.#staticLocation = location
+    }
+
+    return location
   }
 
   protected async getStaticMetadata() {
-    if (await this.#isNotStatic()) {
-      return undefined
-    }
-
     if (this.#metadata !== undefined) {
       return this.#metadata
     }
@@ -2041,6 +2053,7 @@ export class ModuleExport<Value> {
 
   clearCachedValues(): void {
     this.#metadata = undefined
+    this.#staticLocation = undefined
     this.#staticPromise = undefined
     this.#runtimePromise = undefined
     this.#structureGitMetadata = undefined
@@ -2799,7 +2812,7 @@ export class JavaScriptFile<
     const cacheFilePath = normalizePathKey(filePath)
     const nodeKey = createCacheNodeKey('js.exports', {
       version: FS_ANALYSIS_CACHE_VERSION,
-      dependencyVersion: 2,
+      dependencyVersion: 3,
       snapshot: session.snapshot.id,
       filePath: cacheFilePath,
     })
@@ -2829,55 +2842,141 @@ export class JavaScriptFile<
     )
   }
 
-  /** Get all exports from the JavaScript file. */
-  async getExports() {
-    const fileExports = await this.#getExports()
+  /** Get all resolved export types from the JavaScript file. */
+  async getExportTypes(filter?: TypeFilter): Promise<Kind[]> {
+    const directory = this.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const filePath = this.absolutePath
+    const cacheFilePath = normalizePathKey(filePath)
+    const nodeKey = createCacheNodeKey('js.export.types', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      dependencyVersion: 1,
+      snapshot: session.snapshot.id,
+      filePath: cacheFilePath,
+      filter: filter ? serializeTypeFilterForCache(filter) : 'none',
+    })
 
-    const exports = await mapConcurrent(
-      fileExports,
-      {
-        concurrency: 8,
-      },
-      (exportMetadata) =>
-        this.getExport(exportMetadata.name as Extract<keyof Types, string>)
+    const resolvedTypes = await session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const typeResolution = await fileSystem.resolveFileExportsWithDependencies(
+          this.absolutePath,
+          filter
+        )
+        const dependencyPaths = typeResolution.dependencies.length
+          ? typeResolution.dependencies
+          : [filePath]
+
+        for (const dependencyPath of dependencyPaths) {
+          await ctx.recordFileDep(dependencyPath)
+        }
+
+        return typeResolution.resolvedTypes
+      }
     )
 
-    const fileSystem = this.getParent().getFileSystem()
     if (!(await fileSystem.shouldStripInternalAsync())) {
-      return exports
+      return resolvedTypes
     }
 
-    let writeIndex = 0
-    for (let readIndex = 0; readIndex < exports.length; readIndex++) {
-      const fileExport = exports[readIndex]
-      const tags = fileExport.getTags()
+    const publicTypes: Kind[] = []
+
+    for (const resolvedType of resolvedTypes) {
+      const tags =
+        'tags' in resolvedType && Array.isArray(resolvedType.tags)
+          ? resolvedType.tags
+          : undefined
+
       if (!tags || tags.length === 0) {
-        exports[writeIndex++] = fileExport
+        publicTypes.push(resolvedType)
         continue
       }
+
       let isPublic = false
-      for (let tagIndex = 0; tagIndex < tags.length; tagIndex++) {
-        const tag = tags[tagIndex]
+      for (const tag of tags) {
         if (!tag || tag.name !== 'internal') {
           isPublic = true
           break
         }
       }
+
       if (isPublic) {
-        exports[writeIndex++] = fileExport
+        publicTypes.push(resolvedType)
       }
     }
-    exports.length = writeIndex
-    return exports
+
+    return publicTypes
+  }
+
+  /** Get all exports from the JavaScript file. */
+  async getExports() {
+    const fileExports = await this.#getExports()
+    const fileSystem = this.getParent().getFileSystem()
+    const filteredExports =
+      !(await fileSystem.shouldStripInternalAsync())
+        ? fileExports
+        : fileExports.filter((fileExport) => {
+            const tags = fileExport.metadata?.jsDocMetadata?.tags
+
+            if (!tags || tags.length === 0) {
+              return true
+            }
+
+            for (let tagIndex = 0; tagIndex < tags.length; tagIndex++) {
+              const tag = tags[tagIndex]
+
+              if (!tag || tag.name !== 'internal') {
+                return true
+              }
+            }
+
+            return false
+          })
+
+    return filteredExports.map((exportMetadata) =>
+      this.#getOrCreateStaticExport(exportMetadata as any)
+    )
+  }
+
+  #getOrCreateStaticExport<
+    const ExportName extends Extract<keyof Types, string>,
+  >(exportMetadata: JavaScriptFileExportMetadata & { name: ExportName }) {
+    if (this.#exports.has(exportMetadata.name)) {
+      return this.#exports.get(exportMetadata.name)! as ModuleExport<
+        Types[ExportName]
+      >
+    }
+
+    const fileExport = new ModuleExport<Types[ExportName]>(
+      exportMetadata.name,
+      this as any,
+      this.#loader,
+      this.#slugCasing,
+      exportMetadata
+    )
+
+    this.#exports.set(exportMetadata.name, fileExport)
+
+    return fileExport
   }
 
   /** Get a JavaScript file export by name. */
   async getExport<const ExportName extends Extract<keyof Types, string>>(
     name: ExportName
   ): Promise<ModuleExport<Types[ExportName]>> {
-    if (await this.hasExport(name)) {
+    const staticExport = await this.getExportLocation(name)
+
+    if (staticExport) {
+      return this.#getOrCreateStaticExport(
+        staticExport as JavaScriptFileExportMetadata & { name: ExportName }
+      )
+    }
+
+    if (await this.#hasRuntimeExport(name)) {
       if (this.#exports.has(name)) {
-        return this.#exports.get(name)!
+        return this.#exports.get(name)! as ModuleExport<Types[ExportName]>
       }
 
       const fileExport = await ModuleExport.init<Types[ExportName]>(

@@ -79,10 +79,29 @@ function shouldDebugSnapshotRestoreMismatch(): boolean {
   )
 }
 
+function createLazyDirectoryMetadata<Entry>(options: {
+  hasVisibleDescendant: boolean
+  getMaterializedEntries: () => Entry[]
+}): DirectorySnapshotDirectoryMetadata<Entry> {
+  let materializedEntries: Entry[] | undefined
+
+  return {
+    hasVisibleDescendant: options.hasVisibleDescendant,
+    get materializedEntries() {
+      if (!materializedEntries) {
+        materializedEntries = options.getMaterializedEntries()
+      }
+
+      return materializedEntries
+    },
+  }
+}
+
 export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
   #entries: Entry[]
   #directories: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
   #materialized?: Entry[]
+  #materializedEntriesFactory?: () => Entry[]
   #dependencies?: Map<string, string>
   #lastValidatedAt: number
   #path: string
@@ -102,6 +121,7 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
     filterSignature?: string
     sortSignature?: string
     workspaceChangeToken?: string | null
+    materializedEntriesFactory?: () => Entry[]
     persistedEntries?: PersistedEntryMetadata<DirectoryType, Entry>[]
   }) {
     this.#entries = options.entries
@@ -114,6 +134,7 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
     this.#filterSignature = options.filterSignature ?? ''
     this.#sortSignature = options.sortSignature ?? ''
     this.#workspaceChangeToken = options.workspaceChangeToken
+    this.#materializedEntriesFactory = options.materializedEntriesFactory
     this.#persistedEntries = options.persistedEntries
   }
 
@@ -122,7 +143,12 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
 
   materialize(): Entry[] {
     if (!this.#materialized) {
-      this.#materialized = this.#entries.slice()
+      const materializedEntries = this.#materializedEntriesFactory
+        ? this.#materializedEntriesFactory()
+        : this.#entries
+
+      this.#materialized = materializedEntries.slice()
+      this.#materializedEntriesFactory = undefined
     }
 
     return this.#materialized
@@ -248,6 +274,9 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
     >()
     const persistedEntries: PersistedEntryMetadata<DirectoryType, Entry>[] = []
     const restoredEntriesByKey = new Map<string, Entry>()
+    const childRestorers: Array<
+      () => PersistedSnapshotRestoreResult<DirectoryType, Entry>
+    > = []
 
     for (const entry of payload.entries) {
       if (entry.kind === 'file') {
@@ -268,73 +297,110 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
         continue
       }
 
-      const childRestored = this.restorePersistedSnapshot(
-        entry.snapshot,
-        factory
-      )
       const restoredDirectory = factory.createDirectory(entry.path)
+      let childRestored:
+        | PersistedSnapshotRestoreResult<DirectoryType, Entry>
+        | undefined
+      const getChildRestored = () => {
+        if (!childRestored) {
+          childRestored = this.restorePersistedSnapshot(entry.snapshot, factory)
+        }
 
-      directories.set(restoredDirectory, {
-        hasVisibleDescendant: childRestored.snapshot.hasVisibleDescendant,
-        materializedEntries: childRestored.snapshot.materialize(),
-      })
+        return childRestored
+      }
+
+      childRestorers.push(getChildRestored)
+
+      directories.set(
+        restoredDirectory,
+        createLazyDirectoryMetadata({
+          hasVisibleDescendant: entry.snapshot.hasVisibleDescendant,
+          getMaterializedEntries: () => getChildRestored().snapshot.materialize(),
+        })
+      )
 
       immediateEntries.push(restoredDirectory)
       persistedEntries.push({
         kind: 'directory',
         path: entry.path,
         entry: restoredDirectory,
-        snapshot: childRestored.snapshot,
+        get snapshot() {
+          return getChildRestored().snapshot
+        },
       })
       restoredEntriesByKey.set(
         createPersistedEntryKey('directory', entry.path),
         restoredDirectory
       )
+    }
 
-      for (const [childKey, childEntry] of childRestored.restoredEntriesByKey) {
-        restoredEntriesByKey.set(childKey, childEntry)
+    let nestedEntriesRestored = false
+    const restoreNestedEntries = () => {
+      if (nestedEntriesRestored) {
+        return
+      }
+
+      nestedEntriesRestored = true
+
+      for (const getChildRestored of childRestorers) {
+        const restoredChild = getChildRestored()
+        restoredChild.snapshot.materialize()
+
+        for (const [childKey, childEntry] of restoredChild.restoredEntriesByKey) {
+          restoredEntriesByKey.set(childKey, childEntry)
+        }
       }
     }
 
-    const materializedEntries: Entry[] = []
-    for (const entry of payload.flatEntries) {
-      const restoredEntry = restoredEntriesByKey.get(
-        createPersistedEntryKey(entry.kind, entry.path)
-      )
-      if (restoredEntry) {
-        materializedEntries.push(restoredEntry as Entry)
+    const buildMaterializedEntries = () => {
+      restoreNestedEntries()
+
+      const materializedEntries: Entry[] = []
+
+      for (const entry of payload.flatEntries) {
+        const restoredEntry = restoredEntriesByKey.get(
+          createPersistedEntryKey(entry.kind, entry.path)
+        )
+
+        if (restoredEntry) {
+          materializedEntries.push(restoredEntry as Entry)
+        }
       }
+
+      return materializedEntries
     }
 
-    if (
-      materializedEntries.length !== payload.flatEntries.length &&
-      shouldDebugSnapshotRestoreMismatch()
-    ) {
-      const missingEntries = payload.flatEntries
-        .map((entry) => ({
-          kind: entry.kind,
-          path: entry.path,
-          found: !!restoredEntriesByKey.get(
-            createPersistedEntryKey(entry.kind, entry.path)
-          ),
-        }))
-        .filter((entry) => !entry.found)
+    const materializedEntries = () => buildMaterializedEntries()
 
-      console.log(
-        '[snapshot-restore-mismatch]',
-        JSON.stringify({
-          snapshotPath: payload.path,
-          entriesLength: payload.entries.length,
-          flatEntriesLength: payload.flatEntries.length,
-          materializedLength: materializedEntries.length,
-          missingEntries,
-        })
-      )
+    if (shouldDebugSnapshotRestoreMismatch()) {
+      const restoredMaterializedEntries = buildMaterializedEntries()
+
+      if (restoredMaterializedEntries.length !== payload.flatEntries.length) {
+        const missingEntries = payload.flatEntries
+          .map((entry) => ({
+            kind: entry.kind,
+            path: entry.path,
+            found: !!restoredEntriesByKey.get(
+              createPersistedEntryKey(entry.kind, entry.path)
+            ),
+          }))
+          .filter((entry) => !entry.found)
+
+        console.log(
+          '[snapshot-restore-mismatch]',
+          JSON.stringify({
+            snapshotPath: payload.path,
+            entriesLength: payload.entries.length,
+            flatEntriesLength: payload.flatEntries.length,
+            materializedLength: restoredMaterializedEntries.length,
+            missingEntries,
+          })
+        )
+      }
     }
 
     const snapshot = createDirectorySnapshot<DirectoryType, Entry>({
-      entries:
-        materializedEntries.length > 0 ? materializedEntries : immediateEntries,
+      entries: immediateEntries,
       directories,
       shouldIncludeSelf: payload.shouldIncludeSelf,
       hasVisibleDescendant: payload.hasVisibleDescendant,
@@ -344,6 +410,10 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
       filterSignature: payload.filterSignature,
       sortSignature: payload.sortSignature,
       workspaceChangeToken: payload.workspaceChangeToken,
+      materializedEntriesFactory:
+        payload.flatEntries.length > immediateEntries.length
+          ? materializedEntries
+          : undefined,
       persistedEntries,
     })
 
@@ -477,6 +547,7 @@ export function createDirectorySnapshot<
   filterSignature?: string
   sortSignature?: string
   workspaceChangeToken?: string | null
+  materializedEntriesFactory?: () => Entry[]
   persistedEntries?: PersistedEntryMetadata<DirectoryType, Entry>[]
 }): DirectorySnapshot<DirectoryType, Entry> {
   return new DirectorySnapshot<DirectoryType, Entry>({
@@ -492,6 +563,7 @@ export function createDirectorySnapshot<
     filterSignature: options.filterSignature,
     sortSignature: options.sortSignature,
     workspaceChangeToken: options.workspaceChangeToken,
+    materializedEntriesFactory: options.materializedEntriesFactory,
     persistedEntries: options.persistedEntries,
   })
 }

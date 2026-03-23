@@ -67,6 +67,10 @@ import {
   resolveTypeAtLocationWithDependencies as baseResolveTypeAtLocationWithDependencies,
   type ResolvedTypeAtLocationResult,
 } from '../utils/resolve-type-at-location.ts'
+import {
+  resolveFileExportsWithDependencies as baseResolveFileExportsWithDependencies,
+  type ResolvedFileExportsResult,
+} from '../utils/resolve-file-exports.ts'
 import type { Highlighter } from '../utils/create-highlighter.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { transpileSourceFile as baseTranspileSourceFile } from '../utils/transpile-source-file.ts'
@@ -93,6 +97,7 @@ import { getTypeScriptConfigDependencyPaths } from './tsconfig-dependencies.ts'
 
 const RUNTIME_ANALYSIS_CACHE_NAMES = {
   fileExports: 'fileExports',
+  fileExportTypes: 'fileExportTypes',
   outlineRanges: 'outlineRanges',
   fileExportMetadata: 'fileExportMetadata',
   fileExportStaticValue: 'fileExportStaticValue',
@@ -3458,6 +3463,7 @@ function createRuntimeFileExportsCacheNodeKey(
   compilerOptionsVersion: string
 ): string {
   return createRuntimeAnalysisCacheNodeKey(RUNTIME_ANALYSIS_CACHE_NAMES.fileExports, {
+    dataVersion: 2,
     compilerOptionsVersion,
     filePath: normalizeCacheFilePath(filePath),
   })
@@ -3536,6 +3542,11 @@ function toResolvedTypeAtLocationWithDependenciesCacheName(
 ): string {
   const filterKey = filter ? serializeTypeFilterForCache(filter) : 'none'
   return `${RUNTIME_ANALYSIS_CACHE_NAMES.resolveTypeAtLocationWithDependencies}:${position}:${kind}:${filterKey}`
+}
+
+function toResolvedFileExportsWithDependenciesCacheName(filter?: TypeFilter): string {
+  const filterKey = filter ? serializeTypeFilterForCache(filter) : 'none'
+  return `${RUNTIME_ANALYSIS_CACHE_NAMES.fileExportTypes}:${filterKey}`
 }
 
 function ensureProjectSourceFileLoaded(
@@ -4085,6 +4096,116 @@ export async function resolveCachedTypeAtLocationWithDependencies(
           options.filePath,
           ...(result.dependencies ?? []),
         ])
+        return [
+          ...Array.from(dependencyPaths.values()).map((path) => ({
+            kind: 'file' as const,
+            path,
+          })),
+          {
+            kind: 'const' as const,
+            name: 'program:compiler-options',
+            version: compilerOptionsVersion,
+          },
+        ]
+      },
+    }
+  )
+}
+
+export async function resolveCachedFileExportsWithDependencies(
+  project: Project,
+  options: {
+    filePath: string
+    filter?: TypeFilter
+  }
+): Promise<ResolvedFileExportsResult> {
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+  ) {
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
+    const nodeKey = createRuntimeAnalysisCacheNodeKey(
+      RUNTIME_ANALYSIS_CACHE_NAMES.fileExportTypes,
+      {
+        compilerOptionsVersion,
+        filePath: normalizeCacheFilePath(options.filePath),
+        filter: options.filter
+          ? serializeTypeFilterForCache(options.filter)
+          : 'none',
+      }
+    )
+
+    return getOrComputeRuntimeAnalysisCacheValue(
+      runtimeCacheStore,
+      nodeKey,
+      {
+        persist: true,
+        ...swrReadConfig,
+      },
+      async (context) => {
+        await recordProgramCompilerOptionsDependency(
+          context,
+          runtimeCacheStore,
+          project
+        )
+        await recordFileDependencyIfPossible(
+          context,
+          runtimeCacheStore,
+          options.filePath
+        )
+
+        const result = await baseResolveFileExportsWithDependencies(
+          project,
+          options.filePath,
+          options.filter
+        )
+        const dependencyPaths = new Set<string>([
+          options.filePath,
+          ...(result.dependencies ?? []),
+        ])
+
+        await recordFileDependenciesIfPossible(
+          context,
+          runtimeCacheStore,
+          Array.from(dependencyPaths.values())
+        )
+
+        if (shouldTrackRuntimeTypeScriptDependencies()) {
+          await recordRuntimeTypeScriptDependencySidecar(
+            context,
+            project,
+            runtimeCacheStore,
+            options.filePath,
+            compilerOptionsVersion
+          )
+        }
+
+        return result
+      }
+    )
+  }
+
+  return createFallbackProgramFileCache(
+    project,
+    options.filePath,
+    toResolvedFileExportsWithDependenciesCacheName(options.filter),
+    () =>
+      baseResolveFileExportsWithDependencies(
+        project,
+        options.filePath,
+        options.filter
+      ),
+    {
+      deps: (result) => {
+        const dependencyPaths = new Set<string>([
+          options.filePath,
+          ...(result.dependencies ?? []),
+        ])
+
         return [
           ...Array.from(dependencyPaths.values()).map((path) => ({
             kind: 'file' as const,

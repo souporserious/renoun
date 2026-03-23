@@ -16,7 +16,6 @@ import {
   type TypeFilter,
   type TypeOfKind,
 } from '../../utils/resolve-type.ts'
-import { mapConcurrent } from '../../utils/concurrency.ts'
 import { BaseDirectoryContext } from '../Context.tsx'
 import { normalizeBaseDirectory } from '../../utils/normalize-base-directory.ts'
 import { pathLikeToString, type PathLike } from '../../utils/path.ts'
@@ -331,14 +330,7 @@ async function ReferenceAsync({
   let resolvedType: Kind | Kind[] | undefined
 
   if (source instanceof JavaScriptFile) {
-    const exported = await mapConcurrent(
-      await source.getExports(),
-      {
-        concurrency: 8,
-      },
-      (fileExport) => fileExport.getType(filter)
-    )
-    resolvedType = exported.filter(Boolean) as Kind[]
+    resolvedType = await source.getExportTypes(filter)
   } else {
     resolvedType = await source.getType(filter)
   }
@@ -1535,6 +1527,13 @@ function ClassSection({
   components: InternalReferenceComponents
   id?: string
 }) {
+  const constructorNode = Object.prototype.hasOwnProperty.call(
+    node,
+    'constructor'
+  )
+    ? node.constructor
+    : undefined
+
   return (
     <TypeSection
       kind="Class"
@@ -1543,14 +1542,14 @@ function ClassSection({
       id={id}
       components={components}
     >
-      {node.constructor ? (
+      {constructorNode ? (
         <TypeDetail
           label="Constructor"
           components={components}
           kind="ClassConstructor"
         >
           <components.Signatures>
-            {node.constructor.signatures.map((signature, index) => (
+            {constructorNode.signatures.map((signature, index) => (
               <React.Fragment key={index}>
                 {renderConstructorSignature(signature, components, node.name)}
               </React.Fragment>

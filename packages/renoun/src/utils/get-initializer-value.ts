@@ -18,6 +18,14 @@ import {
   type LiteralExpressionValue,
 } from './resolve-expressions.ts'
 
+function safeRead<Value>(read: () => Value): Value | undefined {
+  try {
+    return read()
+  } catch {
+    return undefined
+  }
+}
+
 /** Gets the key for an initializer value. */
 export function getInitializerValueKey(
   property:
@@ -28,14 +36,18 @@ export function getInitializerValueKey(
 ) {
   /* Handle renamed properties */
   if (tsMorph.Node.isBindingElement(property)) {
-    const propertyNameNode = property.getPropertyNameNode()
+    const propertyNameNode = safeRead(() => property.getPropertyNameNode())
 
     if (propertyNameNode) {
-      return propertyNameNode.getText()
+      const propertyNameText = safeRead(() => propertyNameNode.getText())
+
+      if (propertyNameText) {
+        return propertyNameText
+      }
     }
   }
 
-  return property.getName()
+  return safeRead(() => property.getName())
 }
 
 /** Gets the initializer value for a single parameter or property. */
@@ -49,7 +61,7 @@ export function getInitializerValue(
     return
   }
 
-  const nameNode = declaration.getNameNode()
+  const nameNode = safeRead(() => declaration.getNameNode())
 
   if (!nameNode) {
     return
@@ -59,14 +71,18 @@ export function getInitializerValue(
 
   if (!('getInitializer' in declaration)) {
     const kindName = (
-      declaration as ParameterDeclaration | PropertyDeclaration
-    ).getKindName()
+      safeRead(() =>
+        (
+          declaration as ParameterDeclaration | PropertyDeclaration
+        ).getKindName()
+      ) ?? 'unknown'
+    )
     throw new Error(
       `[getDefaultValuesFromProperty] Property "${name}" of kind "${kindName}" does not have an initializer, so it cannot have a default value. This declaration should be filtered or file an issue for support.`
     )
   }
 
-  const initializer = declaration.getInitializer()
+  const initializer = safeRead(() => declaration.getInitializer())
   let initializerValue: LiteralExpressionValue = undefined
 
   if (initializer) {
@@ -81,9 +97,9 @@ export function getInitializerValue(
   }
 
   if (tsMorph.Node.isIdentifier(nameNode)) {
-    const references = declaration
-      .findReferencesAsNodes()
-      .map((reference) => reference.getParentOrThrow())
+    const references = (safeRead(() => declaration.findReferencesAsNodes()) ?? [])
+      .map((reference) => safeRead(() => reference.getParent()))
+      .filter(Boolean)
       .filter((reference) =>
         tsMorph.Node.isVariableDeclaration(reference)
       ) as VariableDeclaration[]
@@ -112,9 +128,9 @@ function getObjectBindingPatternInitializerValue(
 
   nameNode.getElements().forEach((element) => {
     const elementName = getInitializerValueKey(element)
-    const elementInitializer = element.getInitializer()
+    const elementInitializer = safeRead(() => element.getInitializer())
 
-    if (elementInitializer) {
+    if (elementName && elementInitializer) {
       let initializerValue = resolveInitializerValue(elementInitializer)
 
       if (initializerValue !== undefined) {
@@ -152,11 +168,11 @@ function resolveInitializerValue(initializer: Expression) {
     return resolvedValue
   }
 
-  const literalValue = initializer.getType().getLiteralValue()
+  const literalValue = safeRead(() => initializer.getType().getLiteralValue())
 
   if (literalValue !== undefined) {
     return literalValue
   }
 
-  return initializer.getText()
+  return safeRead(() => initializer.getText())
 }

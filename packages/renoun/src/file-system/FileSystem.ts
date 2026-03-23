@@ -8,6 +8,7 @@ import {
   getFileExportText,
   getFileExportStaticValue,
   getOutlineRanges,
+  resolveFileExportsWithDependencies,
   resolveTypeAtLocation,
   resolveTypeAtLocationWithDependencies,
 } from '../analysis/node-client.ts'
@@ -25,6 +26,7 @@ import {
 } from '../utils/path.ts'
 import { parseJsonWithComments } from '../utils/parse-json-with-comments.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
+import type { ResolvedFileExportsResult } from '../utils/resolve-file-exports.ts'
 import type { DirectoryEntry } from './types.ts'
 
 export type FileSystemWriteFileContent =
@@ -429,6 +431,20 @@ export abstract class BaseFileSystem {
     return this.prepareAnalysis(filePath).then(
       ({ filePath: preparedFilePath, analysisOptions }) =>
         getFileExports(preparedFilePath, analysisOptions)
+    )
+  }
+
+  resolveFileExportsWithDependencies(
+    filePath: string,
+    filter?: TypeFilter
+  ): Promise<ResolvedFileExportsResult> {
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        resolveFileExportsWithDependencies(
+          preparedFilePath,
+          filter,
+          analysisOptions
+        )
     )
   }
 

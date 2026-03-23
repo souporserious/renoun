@@ -20,6 +20,7 @@ import type { OutlineRange } from '../utils/get-outline-ranges.ts'
 import type { QuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
+import type { ResolvedFileExportsResult } from '../utils/resolve-file-exports.ts'
 import type { HighlighterInitializationOptions } from '../utils/highlighter-options.ts'
 import type { DistributiveOmit } from '../types.ts'
 import {
@@ -1662,6 +1663,43 @@ export async function getFileExports(
   const serverModules = await loadAnalysisClientServerModules()
   const project = serverModules.getProgram(analysisOptions)
   return serverModules.getCachedFileExports(project, filePath)
+}
+
+/**
+ * Resolve all file export types in a single dependency-aware analysis pass.
+ */
+export async function resolveFileExportsWithDependencies(
+  filePath: string,
+  filter?: TypeFilter,
+  analysisOptions?: AnalysisOptions
+): Promise<ResolvedFileExportsResult> {
+  const client = await getReadyClient()
+  if (client) {
+    const response = await callClientMethod<
+      {
+        filePath: string
+        filter?: TypeFilter
+        analysisOptions?: AnalysisOptions
+        includeClientRpcDependencies?: boolean
+      },
+      | ResolvedFileExportsResult
+      | ClientRpcValueWithDependenciesResponse<ResolvedFileExportsResult>
+    >(client, 'resolveFileExportsWithDependencies', {
+      filePath,
+      filter,
+      analysisOptions,
+      includeClientRpcDependencies: true,
+    })
+
+    return toClientRpcResponseValue(response)
+  }
+
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
+  return serverModules.resolveCachedFileExportsWithDependencies(project, {
+    filePath,
+    filter,
+  })
 }
 
 /**
