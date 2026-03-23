@@ -1,0 +1,15 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    {
+      "source": "/docs",
+      "destination": "/docs/introduction",
+      "permanent": false
+    },
+    {
+      "source": "/templates/checkout",
+      "destination": "https://buy.polar.sh/polar_cl_tLGZAbhF9AI7SNGdcj4jTixq23IFdbneKw0d34DDx16",
+      "permanent": false
+    }
+  ]
+}

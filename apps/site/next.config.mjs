@@ -24,24 +24,4 @@ export default withMDX({
   output: 'export',
   pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   transpilePackages: ['renoun'],
-  async redirects() {
-    const checkoutUrl = process.env.TEMPLATE_CHECKOUT_URL
-
-    if (!checkoutUrl) {
-      return []
-    }
-
-    return [
-      {
-        source: '/docs',
-        destination: '/docs/introduction',
-        permanent: false,
-      },
-      {
-        source: '/templates/checkout',
-        destination: checkoutUrl,
-        permanent: false,
-      },
-    ]
-  },
 })

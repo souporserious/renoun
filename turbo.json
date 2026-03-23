@@ -1,12 +1,7 @@
 {
   "$schema": "https://turborepo.org/schema.json",
   "ui": "tui",
-  "globalEnv": [
-    "FIGMA_TOKEN",
-    "GITHUB_SPONSORS_TOKEN",
-    "RENOUN_DEBUG",
-    "TEMPLATE_CHECKOUT_URL"
-  ],
+  "globalEnv": ["FIGMA_TOKEN", "GITHUB_SPONSORS_TOKEN", "RENOUN_DEBUG"],
   "tasks": {
     "dev": {
       "dependsOn": ["^build"],
