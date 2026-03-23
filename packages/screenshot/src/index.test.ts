@@ -347,6 +347,12 @@ async function expectCanvasToMatchSnapshot(
   name: string,
   sourceElement?: HTMLElement
 ): Promise<void> {
+  // Full browser screenshot runs can accumulate enough work that a few
+  // shadow/gradient-heavy cases need longer than Vitest's 5s default to
+  // observe two identical captures, but keep this below Vitest browser's
+  // 10s close grace period to avoid lingering matcher timeout handles.
+  const screenshotTimeoutMs = 9_000
+
   // Mount canvas to DOM for screenshot
   const testId = `screenshot-test-${name.replace(/\s+/g, '-')}`
   const wrapper = document.createElement('div')
@@ -364,7 +370,9 @@ async function expectCanvasToMatchSnapshot(
   try {
     // Use Vitest browser's expect.element and toMatchScreenshot for real PNG comparison
     const locator = page.getByTestId(testId)
-    await expect.element(locator).toMatchScreenshot(name)
+    await expect.element(locator).toMatchScreenshot(name, {
+      timeout: screenshotTimeoutMs,
+    })
   } catch (error) {
     // On failure, save a side-by-side comparison for debugging
     if (sourceElement) {
