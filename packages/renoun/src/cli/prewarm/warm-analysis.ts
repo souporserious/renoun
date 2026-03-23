@@ -1000,10 +1000,12 @@ async function warmFiles(
             }
 
             await analysisClientServer.getCachedTokens(project, {
+              allowErrors: snippet.allowErrors,
               value: sourceMetadata.value,
               language: sourceMetadata.language,
               filePath: sourceMetadata.filePath,
               highlighter: null,
+              showErrors: snippet.showErrors,
               theme: undefined,
               waitForWarmResult: true,
               highlighterLoader: getPrewarmHighlighter,

@@ -806,7 +806,7 @@ describe('prewarmRenounRpcServerCache', () => {
       createMockFileEntry('/repo/guides/valibot.mdx'),
     ])
     readFileMock.mockResolvedValue(`
-\`\`\`ts path="./examples/schema.ts"
+\`\`\`ts path="./examples/schema.ts" allowErrors="2307" showErrors={false}
 const schema = { answer: 42 }
 \`\`\`
 `)
@@ -835,9 +835,11 @@ const schema = { answer: 42 }
     expect(getTokensMock).toHaveBeenCalledWith(
       project,
       expect.objectContaining({
+        allowErrors: '2307',
         value: 'const schema = { answer: 42 }\n',
         language: 'ts',
         filePath: '/repo/guides/examples/schema.ts',
+        showErrors: false,
         theme: undefined,
         waitForWarmResult: true,
         highlighterLoader: expect.any(Function),

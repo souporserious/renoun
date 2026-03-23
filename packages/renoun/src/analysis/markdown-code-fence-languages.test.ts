@@ -104,4 +104,22 @@ describe('markdown code fence language extraction', () => {
       },
     ])
   })
+
+  test('preserves allowErrors strings and showErrors flags from code fence meta', () => {
+    const source = [
+      '```tsx allowErrors="2307" showErrors={false}',
+      "import { missing } from './missing'",
+      '```',
+    ].join('\n')
+
+    expect(extractCodeFenceSnippetsFromMarkdown(source)).toEqual([
+      {
+        allowErrors: '2307',
+        language: 'tsx',
+        showErrors: false,
+        shouldFormat: false,
+        value: "import { missing } from './missing'",
+      },
+    ])
+  })
 })

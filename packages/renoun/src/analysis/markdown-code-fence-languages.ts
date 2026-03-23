@@ -6,9 +6,10 @@ const CODE_FENCE_LANGUAGE_MAX_LENGTH = 64
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.mdx'])
 
 export interface MarkdownCodeFenceSnippet {
-  allowErrors?: boolean
+  allowErrors?: boolean | string
   language?: string
   path?: string
+  showErrors?: boolean
   shouldFormat: boolean
   value: string
 }
@@ -99,7 +100,8 @@ function parseCodeFenceInfoString(infoString: string): Omit<
   let language: string | undefined
   let path: string | undefined
   let shouldFormat = false
-  let allowErrors: boolean | undefined
+  let allowErrors: boolean | string | undefined
+  let showErrors: boolean | undefined
 
   if (rawLanguageToken) {
     const normalizedLanguage = normalizeFenceLanguageToken(rawLanguageToken)
@@ -149,8 +151,16 @@ function parseCodeFenceInfoString(infoString: string): Omit<
       continue
     }
 
-    if (key === 'allowErrors' && typeof parsedValue === 'boolean') {
+    if (
+      key === 'allowErrors' &&
+      (typeof parsedValue === 'boolean' || typeof parsedValue === 'string')
+    ) {
       allowErrors = parsedValue
+      continue
+    }
+
+    if (key === 'showErrors' && typeof parsedValue === 'boolean') {
+      showErrors = parsedValue
     }
   }
 
@@ -158,6 +168,7 @@ function parseCodeFenceInfoString(infoString: string): Omit<
     ...(allowErrors !== undefined ? { allowErrors } : {}),
     ...(language ? { language } : {}),
     ...(path ? { path } : {}),
+    ...(showErrors !== undefined ? { showErrors } : {}),
     shouldFormat,
   }
 }

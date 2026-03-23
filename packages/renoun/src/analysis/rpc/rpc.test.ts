@@ -100,6 +100,17 @@ describe('project WebSocket RPC', () => {
       })
     })
 
+    server.registerMethod('getCodeBlockTokens', () => {
+      const error = new Error(
+        '[renoun] Type errors found when rendering Tokens component for \n\n ⓧ Example diagnostic ts(2305)'
+      )
+
+      throw attachPublicError(error, {
+        code: RENOUN_PUBLIC_ERROR_CODES.GET_TOKENS_DIAGNOSTICS,
+        message: error.message,
+      })
+    })
+
     server.registerMethod('failPublicLike', () => {
       const error = new Error('Internal failure with secret details')
 
@@ -362,6 +373,26 @@ describe('project WebSocket RPC', () => {
       )
       expect(message).not.toMatch(
         /Internal server error while processing method "getTokens"/
+      )
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
+  it('shows allowlisted getCodeBlockTokens diagnostics in production', async () => {
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+
+    try {
+      await client.callMethod('getCodeBlockTokens', {})
+      throw new Error('Expected callMethod to throw')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      expect(message).toMatch(
+        /Type errors found when rendering Tokens component/
+      )
+      expect(message).not.toMatch(
+        /Internal server error while processing method "getCodeBlockTokens"/
       )
     } finally {
       process.env.NODE_ENV = previousNodeEnv

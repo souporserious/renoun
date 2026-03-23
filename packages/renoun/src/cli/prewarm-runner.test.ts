@@ -252,7 +252,9 @@ describe('runPrewarmSafely', () => {
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
 
-      expect(spawnMock).toHaveBeenCalledTimes(1)
+      await vi.waitFor(() => {
+        expect(spawnMock).toHaveBeenCalledTimes(1)
+      })
 
       await vi.advanceTimersByTimeAsync(PREWARM_REQUEST_TIMEOUT_MS)
       await vi.waitFor(() => {

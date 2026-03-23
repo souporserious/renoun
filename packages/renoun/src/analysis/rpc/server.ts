@@ -308,7 +308,10 @@ function resolveSafeProductionError(
   method: string,
   error: Error | undefined
 ): { code: RenounPublicErrorCode; message: string } | undefined {
-  if (!error || method !== 'getTokens') {
+  if (
+    !error ||
+    (method !== 'getTokens' && method !== 'getCodeBlockTokens')
+  ) {
     return undefined
   }
 
