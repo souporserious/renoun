@@ -3109,6 +3109,112 @@ describe('GitFileSystem', () => {
     }
   })
 
+  it.sequential(
+    'reuses the commit-scoped explicit-ref analysis worktree when another process wins the add race',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/index.js',
+              content: `export const value = 1`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        git(repoRoot, ['remote', 'add', 'origin', fileUrl])
+        git(repoRoot, ['push', '-u', 'origin', 'main'])
+
+        const originalSpawnWithResult = spawnModule.spawnWithResult
+        let simulatedRace = false
+        const spawnSpy = vi
+          .spyOn(spawnModule, 'spawnWithResult')
+          .mockImplementation(async (command, commandArguments, options) => {
+            if (
+              !simulatedRace &&
+              command === 'git' &&
+              commandArguments[0] === 'worktree' &&
+              commandArguments[1] === 'add'
+            ) {
+              simulatedRace = true
+              const analysisRoot = String(commandArguments[4] ?? '')
+              const refCommit = String(commandArguments[5] ?? '')
+
+              const winnerResult = await originalSpawnWithResult(
+                command,
+                commandArguments,
+                options
+              )
+              expect(winnerResult.status).toBe(0)
+
+              return {
+                status: 128,
+                stdout: '',
+                stderr:
+                  `fatal: Unable to create '${join(
+                    options.cwd,
+                    '.git',
+                    'worktrees',
+                    basename(analysisRoot),
+                    'index.lock'
+                  )}': File exists.\n\n` +
+                  'Another git process seems to be running in this repository.',
+              }
+            }
+
+            return originalSpawnWithResult(command, commandArguments, options)
+          })
+
+        using store = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src'],
+        })
+
+        const exports = await store.getFileExports('src/index.js')
+        const worktreeAddCall = spawnSpy.mock.calls.find(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments[0] === 'worktree' &&
+            commandArguments[1] === 'add'
+        )
+
+        expect(simulatedRace).toBe(true)
+        expect(exports.map((entry) => entry.name)).toContain('value')
+        expect(String(worktreeAddCall?.[1][4] ?? '')).toContain(
+          git(repoRoot, ['rev-parse', 'HEAD'])
+        )
+      } finally {
+        vi.restoreAllMocks()
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
   test('invalidates explicit-ref analysis caches when remote refs advance', async ({
     repoRoot,
     cacheDirectory,

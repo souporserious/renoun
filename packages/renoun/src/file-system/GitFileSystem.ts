@@ -222,7 +222,10 @@ interface NormalizedExportHistoryRefScope {
 const REMOTE_REF_CACHE_TTL_MS = 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
 const REF_IDENTITY_CACHE_TTL_MS = 60_000
+const ANALYSIS_WORKTREE_READY_WAIT_ATTEMPTS = 20
+const ANALYSIS_WORKTREE_READY_WAIT_DELAY_MS = 50
 const cachedRepoRefUpdateInFlight = new Map<string, Promise<void>>()
+const cachedAnalysisWorktreePreparationInFlight = new Map<string, Promise<void>>()
 const cachedRemoteRefSyncChecks = new Map<
   string,
   {
@@ -254,6 +257,23 @@ function getOrCreateInFlight<Value>(
   })
   map.set(key, promise)
   return promise
+}
+
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs)
+  })
+}
+
+function isGitWorktreeContentionError(stderr: string): boolean {
+  const normalized = stderr.toLowerCase()
+
+  return (
+    normalized.includes('index.lock') ||
+    normalized.includes('another git process seems to be running') ||
+    normalized.includes('already registered') ||
+    normalized.includes('already exists')
+  )
 }
 
 interface PrepareRepoOptions {
@@ -1013,18 +1033,60 @@ export class GitFileSystem
     )
   }
 
-  #resolveAnalysisRepoRootPath(): string {
+  #resolveAnalysisRepoRootPath(refCommit: string): string {
     return join(
       this.cacheDirectory,
       '_analysis',
       sanitizeCachePathSegment(this.#createAnalysisScopeBase()),
-      sanitizeCachePathSegment(this.ref)
+      sanitizeCachePathSegment(refCommit)
     )
+  }
+
+  async #readAnalysisRepoCommit(
+    analysisRoot: string
+  ): Promise<string | undefined> {
+    if (!existsSync(join(analysisRoot, '.git'))) {
+      return undefined
+    }
+
+    const currentCommit = await spawnWithStdout(
+      'git',
+      ['rev-parse', '--verify', 'HEAD^{commit}'],
+      {
+        cwd: analysisRoot,
+        maxBuffer: this.maxBufferBytes,
+      }
+    )
+      .then((output) => output.trim())
+      .catch(() => '')
+
+    return currentCommit.length > 0 ? currentCommit : undefined
+  }
+
+  async #waitForAnalysisRepoReady(
+    analysisRoot: string,
+    refCommit: string
+  ): Promise<boolean> {
+    for (
+      let attempt = 0;
+      attempt < ANALYSIS_WORKTREE_READY_WAIT_ATTEMPTS;
+      ++attempt
+    ) {
+      if ((await this.#readAnalysisRepoCommit(analysisRoot)) === refCommit) {
+        return true
+      }
+
+      if (attempt + 1 < ANALYSIS_WORKTREE_READY_WAIT_ATTEMPTS) {
+        await delay(ANALYSIS_WORKTREE_READY_WAIT_DELAY_MS)
+      }
+    }
+
+    return false
   }
 
   async #ensureAnalysisRepoReady(): Promise<string> {
     const refCommit = await this.#getRefCommit()
-    const analysisRoot = this.#resolveAnalysisRepoRootPath()
+    const analysisRoot = this.#resolveAnalysisRepoRootPath(refCommit)
 
     if (
       this.#analysisRepoRoot === analysisRoot &&
@@ -1038,16 +1100,53 @@ export class GitFileSystem
       return this.#analysisRepoRootPromise
     }
 
-    this.#analysisRepoRootPromise = (async () => {
-      await mkdir(dirname(analysisRoot), { recursive: true })
+    const sharedPreparationPromise = getOrCreateInFlight(
+      cachedAnalysisWorktreePreparationInFlight,
+      analysisRoot,
+      async () => {
+        await mkdir(dirname(analysisRoot), { recursive: true })
 
-      const gitDirectoryPath = join(analysisRoot, '.git')
-      if (existsSync(analysisRoot) && !existsSync(gitDirectoryPath)) {
-        await rm(analysisRoot, { recursive: true, force: true })
-        this.#preparedAnalysisScope.clear()
-      }
+        const gitDirectoryPath = join(analysisRoot, '.git')
+        if (existsSync(analysisRoot) && !existsSync(gitDirectoryPath)) {
+          await rm(analysisRoot, { recursive: true, force: true })
+          this.#preparedAnalysisScope.clear()
+        }
 
-      if (!existsSync(gitDirectoryPath)) {
+        const currentCommit = await this.#readAnalysisRepoCommit(analysisRoot)
+        if (currentCommit === refCommit) {
+          return
+        }
+
+        if (
+          currentCommit === undefined &&
+          existsSync(gitDirectoryPath) &&
+          (await this.#waitForAnalysisRepoReady(analysisRoot, refCommit))
+        ) {
+          return
+        }
+
+        if (
+          currentCommit !== undefined &&
+          currentCommit !== refCommit &&
+          existsSync(gitDirectoryPath)
+        ) {
+          const removeResult = await spawnWithResult(
+            'git',
+            ['worktree', 'remove', '--force', analysisRoot],
+            {
+              cwd: this.repoRoot,
+              maxBuffer: this.maxBufferBytes,
+              verbose: this.verbose,
+            }
+          )
+
+          if (removeResult.status !== 0 && existsSync(analysisRoot)) {
+            await rm(analysisRoot, { recursive: true, force: true })
+          }
+
+          this.#preparedAnalysisScope.clear()
+        }
+
         const result = await spawnWithResult(
           'git',
           ['worktree', 'add', '--detach', '--force', analysisRoot, refCommit],
@@ -1060,6 +1159,15 @@ export class GitFileSystem
 
         if (result.status !== 0) {
           const stderr = result.stderr ? String(result.stderr).trim() : ''
+
+          if (
+            stderr &&
+            isGitWorktreeContentionError(stderr) &&
+            (await this.#waitForAnalysisRepoReady(analysisRoot, refCommit))
+          ) {
+            return
+          }
+
           throw new Error(
             `[renoun] Failed to prepare analysis worktree "${analysisRoot}"${
               stderr ? `: ${stderr}` : ''
@@ -1068,51 +1176,22 @@ export class GitFileSystem
         }
 
         this.#preparedAnalysisScope.clear()
-      } else {
-        const currentCommit = await spawnWithStdout(
-          'git',
-          ['rev-parse', '--verify', 'HEAD^{commit}'],
-          {
-            cwd: analysisRoot,
-            maxBuffer: this.maxBufferBytes,
-          }
-        )
-          .then((output) => output.trim())
-          .catch(() => '')
-
-        if (currentCommit !== refCommit) {
-          const result = await spawnWithResult(
-            'git',
-            ['checkout', '--detach', '--force', refCommit],
-            {
-              cwd: analysisRoot,
-              maxBuffer: this.maxBufferBytes,
-              verbose: this.verbose,
-            }
-          )
-
-          if (result.status !== 0) {
-            const stderr = result.stderr ? String(result.stderr).trim() : ''
-            throw new Error(
-              `[renoun] Failed to update analysis worktree "${analysisRoot}"${
-                stderr ? `: ${stderr}` : ''
-              }`
-            )
-          }
-
-          this.#preparedAnalysisScope.clear()
-        }
       }
+    )
 
+    const analysisRepoRootPromise = sharedPreparationPromise.then(() => {
       this.#analysisRepoRoot = analysisRoot
       this.#analysisRepoCommit = refCommit
       return analysisRoot
-    })()
+    })
+    this.#analysisRepoRootPromise = analysisRepoRootPromise
 
     try {
-      return await this.#analysisRepoRootPromise
+      return await analysisRepoRootPromise
     } finally {
-      this.#analysisRepoRootPromise = null
+      if (this.#analysisRepoRootPromise === analysisRepoRootPromise) {
+        this.#analysisRepoRootPromise = null
+      }
     }
   }
 
@@ -4955,7 +5034,7 @@ export class GitFileSystem
     const analysisRoot =
       this.#analysisRepoRoot ??
       (this.#shouldUseIsolatedAnalysisRoot()
-        ? this.#resolveAnalysisRepoRootPath()
+        ? this.#resolveAnalysisRepoRootPath(this.#getResolvedObjectRefSync())
         : undefined)
 
     let relativePath = path
