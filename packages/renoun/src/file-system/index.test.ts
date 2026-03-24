@@ -5194,6 +5194,38 @@ date: 2024-12-24
       expect(fileEntry.description).toBe('Hello Docs')
     })
 
+    test('directory returns a flat structure for nested directories', async () => {
+      const fileSystem = new InMemoryFileSystem({
+        'docs/index.md': '# Home',
+        'docs/guides/intro.md': '# Intro',
+      })
+      const directory = new Directory({
+        fileSystem,
+        path: 'docs',
+      })
+
+      const structures = await directory.getStructure()
+
+      expect(structures).toHaveLength(4)
+      expect(
+        structures
+          .map((entry) => entry.relativePath)
+          .filter((path): path is string => path !== undefined)
+          .sort()
+      ).toEqual([
+        'docs',
+        'docs/guides',
+        'docs/guides/intro.md',
+        'docs/index.md',
+      ])
+      expect(
+        structures.every(
+          (entry) =>
+            !Object.prototype.hasOwnProperty.call(entry, 'children')
+        )
+      ).toBe(true)
+    })
+
     test('markdown file includes frontmatter and description', async () => {
       const fileSystem = new InMemoryFileSystem({
         'docs/page.md': [
@@ -5214,6 +5246,61 @@ date: 2024-12-24
       expect(structure.frontmatter?.description).toBe('Page Desc')
       expect(structure.description).toBe('Page Desc')
       expect(structure.relativePath).toBe('docs/page.md')
+    })
+
+    test('directory supports lightweight structure mode for export headers', async () => {
+      const fileSystem = new InMemoryFileSystem({
+        'docs/reference.ts': [
+          '/** Adds one. */',
+          'export const addOne = (value: number) => value + 1',
+        ].join('\n'),
+        'docs/page.mdx': [
+          '---',
+          'description: Page Desc',
+          '---',
+          '# Heading',
+          '',
+          '## Details',
+        ].join('\n'),
+      })
+      const resolveTypeSpy = vi.spyOn(
+        fileSystem,
+        'resolveTypeAtLocationWithDependencies'
+      )
+      const directory = new Directory({
+        path: 'docs',
+        fileSystem,
+      })
+
+      const structures = await directory.getStructure({
+        includeExports: 'headers',
+        includeSections: false,
+        includeGitDates: false,
+        includeResolvedTypes: false,
+      })
+
+      const reference = structures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/reference.ts'
+      )
+      const page = structures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/page.mdx'
+      )
+
+      expect(reference?.exports).toEqual([
+        expect.objectContaining({
+          kind: 'ModuleExport',
+          name: 'addOne',
+          resolvedType: undefined,
+          firstCommitDate: undefined,
+          lastCommitDate: undefined,
+        }),
+      ])
+      expect(reference?.firstCommitDate).toBeUndefined()
+      expect(page?.sections).toBeUndefined()
+      expect(page?.frontmatter?.description).toBe('Page Desc')
+      expect(resolveTypeSpy).not.toHaveBeenCalled()
     })
   })
 

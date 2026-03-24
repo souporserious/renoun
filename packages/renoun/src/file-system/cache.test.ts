@@ -35,6 +35,7 @@ import {
   createFingerprint,
 } from './Cache.ts'
 import { DirectorySnapshot } from './directory-snapshot.ts'
+import type { PersistedDirectorySnapshotV1 } from './directory-snapshot.ts'
 import {
   SqliteCacheStorePersistence,
   disposeCacheStorePersistence,
@@ -52,6 +53,7 @@ import type { FileStructure, GitExportMetadata, GitMetadata } from './types.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
 
 type SqliteComputeSlotPersistence = CacheStorePersistence & {
+  computeSlotTtlMs?: number
   acquireComputeSlot(
     nodeKey: string,
     owner: string,
@@ -347,9 +349,9 @@ class NonDeterministicNodeFileSystem extends NestedCwdNodeFileSystem {
   }
 }
 
-function createDeferredPromise() {
-  let resolve!: () => void
-  const promise = new Promise<void>((resolvePromise) => {
+function createDeferredPromise<Value = void>() {
+  let resolve!: (value: Value | PromiseLike<Value>) => void
+  const promise = new Promise<Value>((resolvePromise) => {
     resolve = resolvePromise
   })
 
@@ -472,6 +474,53 @@ async function withProductionSqliteCache<T>(
 
     rmSync(tmpDirectory, { recursive: true, force: true })
   }
+}
+
+function addLegacyDirectoryMtimeDeps(
+  snapshot: PersistedDirectorySnapshotV1
+): PersistedDirectorySnapshotV1 {
+  const dependencyEntries = new Map(snapshot.dependencySignatures)
+
+  for (const [dependencyKey, dependencyVersion] of snapshot.dependencySignatures) {
+    if (dependencyKey.startsWith('dir:')) {
+      dependencyEntries.set(
+        `dir-mtime:${dependencyKey.slice('dir:'.length)}`,
+        dependencyVersion
+      )
+    }
+  }
+
+  return {
+    ...snapshot,
+    dependencySignatures: Array.from(dependencyEntries.entries()).sort(
+      (first, second) => first[0].localeCompare(second[0])
+    ),
+    entries: snapshot.entries.map((entry) =>
+      entry.kind === 'directory'
+        ? {
+            ...entry,
+            snapshot: addLegacyDirectoryMtimeDeps(entry.snapshot),
+          }
+        : entry
+    ),
+  }
+}
+
+function hasLegacyDirectoryMtimeDeps(
+  snapshot: PersistedDirectorySnapshotV1
+): boolean {
+  if (
+    snapshot.dependencySignatures.some(([dependencyKey]) =>
+      dependencyKey.startsWith('dir-mtime:')
+    )
+  ) {
+    return true
+  }
+
+  return snapshot.entries.some(
+    (entry) =>
+      entry.kind === 'directory' && hasLegacyDirectoryMtimeDeps(entry.snapshot)
+  )
 }
 
 afterEach(() => {
@@ -4062,6 +4111,82 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('reuses persisted child structure metadata when rebuilding directory structure', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      const cacheDirectory = join(tmpDirectory, '.renoun', 'cache')
+      const token = `head:${'a'.repeat(40)};dirty:${'0'.repeat(40)};count:0;ignored-only:0`
+      const structureOptions = {
+        includeExports: 'headers' as const,
+        includeSections: false,
+        includeResolvedTypes: false,
+        includeGitDates: true,
+      }
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(
+        join(docsDirectory, 'index.ts'),
+        ['export const alpha = 1', 'export const beta = 2'].join('\n'),
+        'utf8'
+      )
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const firstFileSystem = new HeadAwareMetadataNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        token
+      )
+      ;(firstFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+
+      const firstDirectory = new Directory({
+        fileSystem: firstFileSystem,
+        path: workspaceDirectory,
+        cache: new Cache({ outputDirectory: cacheDirectory }),
+      })
+
+      const firstStructure = await firstDirectory.getStructure(structureOptions)
+      expect(
+        firstStructure.some(
+          (entry) =>
+            entry.kind === 'File' &&
+            entry.relativePath.endsWith('/docs/index.ts')
+        )
+      ).toBe(true)
+      expect(firstFileSystem.fileMetadataCalls).toBeGreaterThan(0)
+      expect(firstFileSystem.exportMetadataCalls).toBeGreaterThan(0)
+
+      await firstDirectory.getSession().cache.delete(
+        firstDirectory.getStructureCacheKey(structureOptions)
+      )
+
+      const secondFileSystem = new HeadAwareMetadataNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        token
+      )
+      ;(secondFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+
+      const secondDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: workspaceDirectory,
+        cache: new Cache({ outputDirectory: cacheDirectory }),
+      })
+
+      const secondStructure = await secondDirectory.getStructure(structureOptions)
+      const rebuiltFile = secondStructure.find(
+        (entry) =>
+          entry.kind === 'File' &&
+          entry.relativePath.endsWith('/docs/index.ts')
+      )
+
+      expect(rebuiltFile).toBeDefined()
+      expect(secondFileSystem.fileMetadataCalls).toBe(0)
+      expect(secondFileSystem.exportMetadataCalls).toBe(0)
+    })
+  })
+
   test('distinguishes workspace-change token cache lookups when values contain separators', async () => {
     const fileSystem = new TokenAwareNodeFileSystem(
       getRootDirectory(),
@@ -5077,6 +5202,92 @@ describe('sqlite cache persistence', () => {
     })
   })
 
+  test('strict hermetic mode sanitizes persisted legacy dir-mtime snapshot dependencies', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const workspacePathKey = normalizePathKey(workspaceDirectory)
+      const cacheOutputDirectory = join(tmpDirectory, '.renoun', 'cache')
+
+      mkdirSync(join(docsDirectory, 'guides'), { recursive: true })
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+      writeFileSync(join(docsDirectory, 'guides', 'intro.mdx'), '# Intro', 'utf8')
+
+      const seedDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+        cache: new Cache({
+          outputDirectory: cacheOutputDirectory,
+        }),
+      })
+
+      await seedDirectory.getEntries({
+        includeIndexAndReadmeFiles: true,
+      })
+
+      const seedSession = seedDirectory.getSession()
+      const snapshotKey = (
+        await seedSession.cache.listNodeKeysByPrefix('dir:')
+      ).find((key) => key.startsWith(`dir:${workspacePathKey}|`))
+
+      expect(snapshotKey).toBeDefined()
+
+      const persisted = await seedSession.cache.get<PersistedDirectorySnapshotV1>(
+        snapshotKey!
+      )
+
+      expect(persisted).toBeDefined()
+
+      await seedSession.cache.put(
+        snapshotKey!,
+        addLegacyDirectoryMtimeDeps(persisted!),
+        {
+          persist: true,
+        }
+      )
+      seedSession.cache.clearMemory()
+
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        const strictDirectory = new Directory({
+          fileSystem: createTempNodeFileSystem(tmpDirectory),
+          path: workspaceDirectory,
+          cache: new Cache({
+            outputDirectory: cacheOutputDirectory,
+            strictHermetic: true,
+          }),
+        })
+
+        const entries = await strictDirectory.getEntries({
+          includeIndexAndReadmeFiles: true,
+        })
+
+        expect(entries.map((entry) => entry.name)).toEqual([
+          'guides',
+          'index.mdx',
+        ])
+
+        const restored = await strictDirectory
+          .getSession()
+          .cache.get<PersistedDirectorySnapshotV1>(snapshotKey!)
+
+        expect(restored).toBeDefined()
+        expect(hasLegacyDirectoryMtimeDeps(restored!)).toBe(false)
+        expect(
+          warnSpy.mock.calls.some(([message]) => {
+            return (
+              typeof message === 'string' &&
+              message.includes('legacy directory mtime dependencies')
+            )
+          })
+        ).toBe(false)
+      } finally {
+        warnSpy.mockRestore()
+      }
+    })
+  })
+
   test('allows opting out of strict hermetic mode with cache option override', async () => {
     await withProductionSqliteCache(async (tmpDirectory) => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -5141,7 +5352,8 @@ describe('sqlite cache persistence', () => {
         path: workspaceDirectory,
         sort: {
           key: 'name',
-          compare: (left: string, right: string) => left.localeCompare(right),
+          compare: (left, right) =>
+            String(left).localeCompare(String(right)),
         },
       })
 
@@ -7424,8 +7636,8 @@ export type Metadata = Value`,
 
     const realFileSystem = new NodeFileSystem()
     const aliasFileSystem = new NodeFileSystem()
-    ;(realFileSystem as { repoRoot: string }).repoRoot = realRoot
-    ;(aliasFileSystem as { repoRoot: string }).repoRoot = aliasRoot
+    Reflect.set(realFileSystem, 'repoRoot', realRoot)
+    Reflect.set(aliasFileSystem, 'repoRoot', aliasRoot)
 
     try {
       const realSession = Session.for(realFileSystem)
@@ -9595,19 +9807,26 @@ export type Metadata = Value`,
 
       const persistedAfter = await sqlitePersistence.load(nodeKey)
       const memoryAfter = await store.get(nodeKey)
+      const resolvedConcurrentRevision = concurrentRevision
+      const resolvedLocalRevision = localRevision
+
+      expect(resolvedConcurrentRevision).toBeDefined()
+      expect(resolvedLocalRevision).toBeDefined()
 
       expect(
         (persistedAfter as { revision?: number } | undefined)?.revision
-      ).toBe(concurrentRevision)
-      expect(concurrentRevision).toBeGreaterThan(staleRevision)
+      ).toBe(resolvedConcurrentRevision)
+      expect(resolvedConcurrentRevision!).toBeGreaterThan(staleRevision)
       expect(
         (persistedAfter as { revision?: number } | undefined)?.revision
       ).toBeGreaterThan(bumpedRevision)
-      expect(localRevision).toBeGreaterThan(bumpedRevision)
-      expect(concurrentRevision).toBeGreaterThan(localRevision)
+      expect(resolvedLocalRevision!).toBeGreaterThan(bumpedRevision)
+      expect(resolvedConcurrentRevision!).toBeGreaterThan(
+        resolvedLocalRevision!
+      )
       expect(persistedAfter?.value).toEqual({ value: 'concurrent' })
       expect(memoryAfter).toEqual({ value: 'concurrent' })
-      expect(localRevision).toBe(staleRevision + 2)
+      expect(resolvedLocalRevision!).toBe(staleRevision + 2)
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
     }

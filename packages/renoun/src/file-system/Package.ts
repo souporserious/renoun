@@ -45,6 +45,11 @@ import {
   type WithDefaultTypes,
 } from './entries.ts'
 import { Session } from './Session.ts'
+import {
+  getStructureOptionsSignature,
+  normalizeStructureOptions,
+} from './structure-options.ts'
+import type { StructureOptions } from './types.ts'
 
 interface PackageJson {
   name?: string
@@ -1792,8 +1797,9 @@ export class Package<
   }
 
   /** @internal */
-  getStructureCacheKey() {
+  getStructureCacheKey(options?: StructureOptions) {
     const session = Session.for(this.#fileSystem, undefined, this.#cache)
+    const normalizedOptions = normalizeStructureOptions(options)
 
     return createStructureNodeKey('structure.package', {
       version: FS_STRUCTURE_CACHE_VERSION,
@@ -1802,14 +1808,16 @@ export class Package<
       explicitName: this.#hasExplicitName ? (this.#name ?? null) : null,
       sourceRootPath: normalizePathKey(this.#sourceRootPath),
       exportOverrides: this.#createExportOverridesStructureSignature(session),
+      options: getStructureOptionsSignature(normalizedOptions),
     })
   }
 
-  async getStructure(): Promise<
+  async getStructure(options?: StructureOptions): Promise<
     Array<PackageStructure | DirectoryStructure | FileStructure>
   > {
     const session = Session.for(this.#fileSystem, undefined, this.#cache)
-    const nodeKey = this.getStructureCacheKey()
+    const normalizedOptions = normalizeStructureOptions(options)
+    const nodeKey = this.getStructureCacheKey(normalizedOptions)
 
     return session.cache.getOrCompute(
       nodeKey,
@@ -1851,9 +1859,13 @@ export class Package<
         ]
 
         for (const directory of this.getExports()) {
-          const directoryStructures = await directory.getStructure()
+          const directoryStructures = await directory.getStructure(
+            normalizedOptions
+          )
           structures.push(...directoryStructures)
-          await ctx.recordNodeDep(directory.getStructureCacheKey())
+          await ctx.recordNodeDep(
+            directory.getStructureCacheKey(normalizedOptions)
+          )
         }
 
         return structures

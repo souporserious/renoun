@@ -123,6 +123,7 @@ import { spawnWithBuffer, spawnWithResult, spawnWithStdout } from './spawn.ts'
 import type { Cache } from './Cache.ts'
 import { resolveCacheRootDirectory } from './cache-directory.ts'
 import { Session } from './Session.ts'
+import { createWorkspaceChangeToken } from './workspace-change-token.ts'
 import {
   getWorkspaceChangedPathsSinceTokenFromGit,
   getWorkspaceChangeTokenFromGit,
@@ -1293,7 +1294,18 @@ export class GitFileSystem
 
   async getWorkspaceChangeToken(rootPath: string): Promise<string | null> {
     if (this.#refIsExplicit) {
-      return null
+      try {
+        return createWorkspaceChangeToken({
+          headCommit: await this.#getRefCommit(),
+          statusDigest: {
+            digest: 'clean',
+            count: 0,
+            ignoredOnly: false,
+          },
+        })
+      } catch {
+        return null
+      }
     }
 
     try {
@@ -1329,7 +1341,13 @@ export class GitFileSystem
     previousToken: string
   ): Promise<readonly string[] | null> {
     if (this.#refIsExplicit) {
-      return null
+      const currentToken = await this.getWorkspaceChangeToken(rootPath)
+
+      if (!currentToken || currentToken !== previousToken) {
+        return null
+      }
+
+      return []
     }
 
     try {

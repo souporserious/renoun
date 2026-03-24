@@ -133,7 +133,13 @@ import type {
   Section,
   GitMetadata,
   GitExportMetadata,
+  StructureOptions,
 } from './types.ts'
+import {
+  getStructureOptionsSignature,
+  normalizeStructureOptions,
+  type NormalizedStructureOptions,
+} from './structure-options.ts'
 
 /** A function that resolves the module runtime. */
 type ModuleRuntimeResult<Value> =
@@ -1260,11 +1266,21 @@ export class File<
     return token ?? undefined
   }
 
-  protected async resolveStructureCacheState(session: Session): Promise<{
+  protected async resolveStructureCacheState(
+    session: Session,
+    structureOptions: NormalizedStructureOptions
+  ): Promise<{
     nodeKey: string
-    gitMetadata: GitMetadata
+    gitMetadata?: GitMetadata
   }> {
-    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const optionsSignature = getStructureOptionsSignature(structureOptions)
+    if (!structureOptions.includeGitDates) {
+      return {
+        nodeKey: this.getStructureCacheKey(structureOptions),
+      }
+    }
+
+    const cacheSessionKey = this.#getStructureCacheSessionKey(optionsSignature)
     const cachedNodeKey = this.#structureCacheNodeKey
     const cachedGitMetadata = this.#structureGitMetadata
     const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
@@ -1280,6 +1296,7 @@ export class File<
         this.#refreshStructureCacheStateInBackground({
           session,
           cacheSessionKey,
+          structureOptions,
           expectedNodeKey: cachedNodeKey,
           cachedWorkspaceChangeToken,
         })
@@ -1302,22 +1319,17 @@ export class File<
       }
     }
 
-    const gitMetadata = await this.#loadGitMetadataForStructure()
+    const gitMetadata = isProductionEnvironment()
+      ? await this.#getCachedGitMetadata()
+      : await this.#loadGitMetadataForStructure()
     this.#structureGitMetadata = gitMetadata
     this.#structureGitMetadataSignature =
       createGitMetadataCacheSignature(gitMetadata)
-    const nodeKey = this.getStructureCacheKey()
+    const nodeKey = this.getStructureCacheKey(structureOptions)
     currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
     this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
     this.#structureCacheSessionKey = cacheSessionKey
     this.#structureCacheValidatedAtMs = Date.now()
-
-    if (
-      this.#structureCacheNodeKey &&
-      this.#structureCacheNodeKey !== nodeKey
-    ) {
-      await session.cache.delete(this.#structureCacheNodeKey)
-    }
 
     this.#structureCacheNodeKey = nodeKey
     return { nodeKey, gitMetadata }
@@ -1326,6 +1338,7 @@ export class File<
   #refreshStructureCacheStateInBackground(options: {
     session: Session
     cacheSessionKey: string
+    structureOptions: NormalizedStructureOptions
     expectedNodeKey: string
     cachedWorkspaceChangeToken: string
   }): void {
@@ -1344,8 +1357,8 @@ export class File<
 
     const refreshPromise = (async () => {
       const {
-        session,
         cacheSessionKey,
+        structureOptions,
         expectedNodeKey,
         cachedWorkspaceChangeToken,
       } = options
@@ -1384,11 +1397,7 @@ export class File<
       this.#structureCacheSessionKey = cacheSessionKey
       this.#structureCacheValidatedAtMs = Date.now()
 
-      const nextNodeKey = this.getStructureCacheKey()
-
-      if (expectedNodeKey !== nextNodeKey) {
-        await session.cache.delete(expectedNodeKey)
-      }
+      const nextNodeKey = this.getStructureCacheKey(structureOptions)
 
       this.#structureCacheNodeKey = nextNodeKey
     })()
@@ -1404,7 +1413,7 @@ export class File<
     this.#structureCacheRevalidationPromise = refreshPromise
   }
 
-  #getStructureCacheSessionKey() {
+  #getStructureCacheSessionKey(optionsSignature: string) {
     const session = this.#directory.getSession()
 
     return createCacheNodeKey('structure.file', {
@@ -1412,6 +1421,7 @@ export class File<
       snapshot: session.snapshot.id,
       filePath: normalizePathKey(this.absolutePath),
       extension: this.extension,
+      options: optionsSignature,
     })
   }
 
@@ -1523,10 +1533,12 @@ export class File<
   }
 
   protected async getFileStructureBase(
-    gitMetadata?: GitMetadata
+    gitMetadata?: GitMetadata,
+    structureOptions: NormalizedStructureOptions = normalizeStructureOptions()
   ): Promise<FileStructure> {
-    const resolvedGitMetadata =
-      gitMetadata ?? (await this.#loadGitMetadataForStructure())
+    const resolvedGitMetadata = structureOptions.includeGitDates
+      ? gitMetadata ?? (await this.#loadGitMetadataForStructure())
+      : undefined
 
     return {
       kind: 'File',
@@ -1537,29 +1549,34 @@ export class File<
       relativePath: this.workspacePath,
       extension: this.extension,
       depth: this.depth,
-      firstCommitDate: resolvedGitMetadata.firstCommitDate,
-      lastCommitDate: resolvedGitMetadata.lastCommitDate,
-      authors: resolvedGitMetadata.authors,
+      firstCommitDate: resolvedGitMetadata?.firstCommitDate,
+      lastCommitDate: resolvedGitMetadata?.lastCommitDate,
+      authors: resolvedGitMetadata?.authors,
     }
   }
 
   /** @internal */
-  getStructureCacheKey() {
+  getStructureCacheKey(options?: StructureOptions | NormalizedStructureOptions) {
     const session = this.#directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
 
     return createCacheNodeKey('structure.file', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
       filePath: normalizePathKey(this.absolutePath),
       extension: this.extension,
-      gitMetadata: this.#structureGitMetadataSignature,
+      gitMetadata: normalizedOptions.includeGitDates
+        ? this.#structureGitMetadataSignature
+        : 'none',
+      options: getStructureOptionsSignature(normalizedOptions),
     })
   }
 
-  async getStructure(): Promise<FileStructure> {
+  async getStructure(options?: StructureOptions): Promise<FileStructure> {
     const session = this.#directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
     const { nodeKey, gitMetadata } =
-      await this.resolveStructureCacheState(session)
+      await this.resolveStructureCacheState(session, normalizedOptions)
     const filePath = this.absolutePath
 
     return session.cache.getOrCompute(
@@ -1567,7 +1584,7 @@ export class File<
       { persist: true },
       async (ctx) => {
         await ctx.recordFileDep(filePath)
-        return this.getFileStructureBase(gitMetadata)
+        return this.getFileStructureBase(gitMetadata, normalizedOptions)
       }
     )
   }
@@ -2247,11 +2264,21 @@ export class ModuleExport<Value> {
     return token ?? undefined
   }
 
-  async #resolveStructureCacheNodeKey(session: Session): Promise<{
+  async #resolveStructureCacheNodeKey(
+    _session: Session,
+    structureOptions: NormalizedStructureOptions
+  ): Promise<{
     nodeKey: string
-    gitMetadata: GitExportMetadata
+    gitMetadata?: GitExportMetadata
   }> {
-    const cacheSessionKey = this.#getStructureCacheSessionKey()
+    const optionsSignature = getStructureOptionsSignature(structureOptions)
+    if (!structureOptions.includeGitDates) {
+      return {
+        nodeKey: this.getStructureCacheKey(structureOptions),
+      }
+    }
+
+    const cacheSessionKey = this.#getStructureCacheSessionKey(optionsSignature)
     const cachedNodeKey = this.#structureCacheNodeKey
     const cachedGitMetadata = this.#structureGitMetadata
     const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
@@ -2275,27 +2302,22 @@ export class ModuleExport<Value> {
       }
     }
 
-    const gitMetadata = await this.#loadGitExportMetadataForStructure()
+    const gitMetadata = isProductionEnvironment()
+      ? await this.#getCachedGitMetadata()
+      : await this.#loadGitExportMetadataForStructure()
     this.#structureGitMetadata = gitMetadata
     this.#structureGitMetadataSignature =
       createGitExportMetadataCacheSignature(gitMetadata)
-    const nodeKey = this.getStructureCacheKey()
+    const nodeKey = this.getStructureCacheKey(structureOptions)
     currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
     this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
     this.#structureCacheSessionKey = cacheSessionKey
-
-    if (
-      this.#structureCacheNodeKey &&
-      this.#structureCacheNodeKey !== nodeKey
-    ) {
-      await session.cache.delete(this.#structureCacheNodeKey)
-    }
 
     this.#structureCacheNodeKey = nodeKey
     return { nodeKey, gitMetadata }
   }
 
-  #getStructureCacheSessionKey() {
+  #getStructureCacheSessionKey(optionsSignature: string) {
     const directory = this.#file.getParent()
     const session = directory.getSession()
 
@@ -2304,6 +2326,7 @@ export class ModuleExport<Value> {
       snapshot: session.snapshot.id,
       filePath: normalizePathKey(this.#file.absolutePath),
       exportName: this.#name,
+      options: optionsSignature,
     })
   }
 
@@ -2375,16 +2398,20 @@ export class ModuleExport<Value> {
   }
 
   /** @internal */
-  getStructureCacheKey() {
+  getStructureCacheKey(options?: StructureOptions | NormalizedStructureOptions) {
     const directory = this.#file.getParent()
     const session = directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
 
     return createCacheNodeKey('structure.module-export', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
       filePath: normalizePathKey(this.#file.absolutePath),
       exportName: this.#name,
-      gitMetadata: this.#structureGitMetadataSignature,
+      gitMetadata: normalizedOptions.includeGitDates
+        ? this.#structureGitMetadataSignature
+        : 'none',
+      options: getStructureOptionsSignature(normalizedOptions),
     })
   }
 
@@ -2614,11 +2641,12 @@ export class ModuleExport<Value> {
     }
   }
 
-  async getStructure(): Promise<ModuleExportStructure> {
+  async getStructure(options?: StructureOptions): Promise<ModuleExportStructure> {
     const directory = this.#file.getParent()
     const session = directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
     const { nodeKey, gitMetadata } =
-      await this.#resolveStructureCacheNodeKey(session)
+      await this.#resolveStructureCacheNodeKey(session, normalizedOptions)
     const filePath = this.#file.absolutePath
     let typeResolutionFailed = false
 
@@ -2630,11 +2658,13 @@ export class ModuleExport<Value> {
 
         let resolvedType: Kind | undefined
 
-        try {
-          resolvedType = await this.getType()
-          await ctx.recordNodeDep(this.#getTypeNodeKey())
-        } catch {
-          typeResolutionFailed = true
+        if (normalizedOptions.includeResolvedTypes) {
+          try {
+            resolvedType = await this.getType()
+            await ctx.recordNodeDep(this.#getTypeNodeKey())
+          } catch {
+            typeResolutionFailed = true
+          }
         }
 
         const tags = this.getTags()
@@ -2674,8 +2704,8 @@ export class ModuleExport<Value> {
           description: this.description,
           tags: normalizedTags,
           resolvedType,
-          firstCommitDate: gitMetadata.firstCommitDate,
-          lastCommitDate: gitMetadata.lastCommitDate,
+          firstCommitDate: gitMetadata?.firstCommitDate,
+          lastCommitDate: gitMetadata?.lastCommitDate,
         }
       }
     )
@@ -3150,11 +3180,12 @@ export class JavaScriptFile<
     return fileSystem.getFoldingRanges(this.absolutePath)
   }
 
-  override async getStructure(): Promise<FileStructure> {
+  override async getStructure(options?: StructureOptions): Promise<FileStructure> {
     const directory = this.getParent()
     const session = directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
     const { nodeKey, gitMetadata } =
-      await this.resolveStructureCacheState(session)
+      await this.resolveStructureCacheState(session, normalizedOptions)
     const filePath = this.absolutePath
 
     return session.cache.getOrCompute(
@@ -3163,24 +3194,39 @@ export class JavaScriptFile<
       async (ctx) => {
         await ctx.recordFileDep(filePath)
 
-        const base = await this.getFileStructureBase(gitMetadata)
-        const fileExports = await this.getExports()
-        const exports: ModuleExportStructure[] = []
+        const base = await this.getFileStructureBase(
+          gitMetadata,
+          normalizedOptions
+        )
+        let exports: ModuleExportStructure[] | undefined
 
-        for (const fileExport of fileExports) {
-          if (typeof (fileExport as any).getStructure === 'function') {
-            const exportStructure = await (fileExport as any).getStructure()
-            exports.push(exportStructure)
+        if (normalizedOptions.includeExports) {
+          const fileExports = await this.getExports()
+          const collectedExports: ModuleExportStructure[] = []
+
+          for (const fileExport of fileExports) {
+            if (typeof (fileExport as any).getStructure === 'function') {
+              const exportStructure = await (fileExport as any).getStructure(
+                normalizedOptions
+              )
+              collectedExports.push(exportStructure)
+            }
+
+            if (
+              typeof (fileExport as any).getStructureCacheKey === 'function'
+            ) {
+              await ctx.recordNodeDep(
+                (fileExport as any).getStructureCacheKey(normalizedOptions)
+              )
+            }
           }
 
-          if (typeof (fileExport as any).getStructureCacheKey === 'function') {
-            await ctx.recordNodeDep((fileExport as any).getStructureCacheKey())
-          }
+          exports = collectedExports.length > 0 ? collectedExports : undefined
         }
 
         return {
           ...base,
-          exports: exports.length > 0 ? exports : undefined,
+          exports,
         }
       }
     )
@@ -4016,11 +4062,12 @@ export class MDXFile<
     return this.#sections ?? []
   }
 
-  override async getStructure(): Promise<FileStructure> {
+  override async getStructure(options?: StructureOptions): Promise<FileStructure> {
     const directory = this.getParent()
     const session = directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
     const { nodeKey, gitMetadata } =
-      await this.resolveStructureCacheState(session)
+      await this.resolveStructureCacheState(session, normalizedOptions)
     const filePath = this.absolutePath
 
     return session.cache.getOrCompute(
@@ -4029,13 +4076,18 @@ export class MDXFile<
       async (ctx) => {
         await ctx.recordFileDep(filePath)
 
-        const base = await this.getFileStructureBase(gitMetadata)
-        const [frontmatter, sections] = await Promise.all([
-          this.getFrontmatter().catch(() => undefined),
-          this.getSections().catch(() => undefined),
-        ])
+        const base = await this.getFileStructureBase(
+          gitMetadata,
+          normalizedOptions
+        )
+        const frontmatter = await this.getFrontmatter().catch(() => undefined)
+        const sections = normalizedOptions.includeSections
+          ? await this.getSections().catch(() => undefined)
+          : undefined
         await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
-        await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+        if (normalizedOptions.includeSections) {
+          await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+        }
 
         const description =
           (frontmatter?.['description'] as string | undefined) ??
@@ -4618,11 +4670,12 @@ export class MarkdownFile<
     return this.#sections ?? []
   }
 
-  override async getStructure(): Promise<FileStructure> {
+  override async getStructure(options?: StructureOptions): Promise<FileStructure> {
     const directory = this.getParent()
     const session = directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
     const { nodeKey, gitMetadata } =
-      await this.resolveStructureCacheState(session)
+      await this.resolveStructureCacheState(session, normalizedOptions)
     const filePath = this.absolutePath
 
     return session.cache.getOrCompute(
@@ -4631,13 +4684,18 @@ export class MarkdownFile<
       async (ctx) => {
         await ctx.recordFileDep(filePath)
 
-        const base = await this.getFileStructureBase(gitMetadata)
-        const [frontmatter, sections] = await Promise.all([
-          this.getFrontmatter().catch(() => undefined),
-          this.getSections().catch(() => undefined),
-        ])
+        const base = await this.getFileStructureBase(
+          gitMetadata,
+          normalizedOptions
+        )
+        const frontmatter = await this.getFrontmatter().catch(() => undefined)
+        const sections = normalizedOptions.includeSections
+          ? await this.getSections().catch(() => undefined)
+          : undefined
         await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
-        await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+        if (normalizedOptions.includeSections) {
+          await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
+        }
 
         const description =
           (frontmatter?.['description'] as string | undefined) ??
@@ -5246,6 +5304,32 @@ function pathKeysIntersect(firstPath: string, secondPath: string): boolean {
     firstKey.startsWith(`${secondKey}/`) ||
     secondKey.startsWith(`${firstKey}/`)
   )
+}
+
+function isPathKeyWithinRootScope(pathKey: string, rootPathKey: string): boolean {
+  const normalizedRootPathKey = normalizePathKey(rootPathKey)
+  if (normalizedRootPathKey === '.') {
+    return true
+  }
+
+  const normalizedPathKey = normalizePathKey(pathKey)
+  return (
+    normalizedPathKey === normalizedRootPathKey ||
+    normalizedPathKey.startsWith(`${normalizedRootPathKey}/`)
+  )
+}
+
+function hasDependencyPathKeyOutsideRootScope(
+  dependencyPathKeys: ReadonlySet<string>,
+  rootPathKey: string
+): boolean {
+  for (const dependencyPathKey of dependencyPathKeys) {
+    if (!isPathKeyWithinRootScope(dependencyPathKey, rootPathKey)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 function isSessionSnapshotPersistable(options: {
@@ -6650,9 +6734,20 @@ export class Directory<
     return ''
   }
 
+  #normalizePersistedDependencyPathForRestore(path: string | undefined): string {
+    if (typeof path !== 'string') {
+      return ''
+    }
+
+    return this.#normalizeWorkspaceRelativeSnapshotPath(path)
+  }
+
   #normalizePersistedDirectorySnapshot(
     persisted: PersistedDirectorySnapshotV1
-  ): PersistedDirectorySnapshotV1 {
+  ): {
+    snapshot: PersistedDirectorySnapshotV1
+    strippedLegacyDirectoryMtimeDeps: boolean
+  } {
     const normalizedEntries: PersistedDirectoryEntry[] = []
     const normalizedFlatEntries: Array<{
       kind: 'file' | 'directory'
@@ -6660,6 +6755,10 @@ export class Directory<
     }> = []
     const normalizedFlatEntryKeys = new Set<string>()
     const normalizedEntryKeys = new Set<string>()
+    const normalizedDependencyEntries = new Map<string, string>()
+    const directoryDependencyKeys = new Set<string>()
+    const legacyDirectoryMtimeDependencies: Array<[string, string]> = []
+    let strippedLegacyDirectoryMtimeDeps = false
 
     for (const flatEntry of persisted.flatEntries) {
       const normalizedFlatPath = this.#normalizePersistedEntryPathForRestore(
@@ -6730,8 +6829,79 @@ export class Directory<
       normalizedEntries.push({
         kind: 'directory',
         path: normalizedEntryPath,
-        snapshot: normalizedSnapshot,
+        snapshot: normalizedSnapshot.snapshot,
       })
+      strippedLegacyDirectoryMtimeDeps =
+        strippedLegacyDirectoryMtimeDeps ||
+        normalizedSnapshot.strippedLegacyDirectoryMtimeDeps
+    }
+
+    for (const dependency of persisted.dependencySignatures) {
+      if (!Array.isArray(dependency) || dependency.length !== 2) {
+        continue
+      }
+
+      const [dependencyKey, dependencySignature] = dependency
+      if (
+        typeof dependencyKey !== 'string' ||
+        dependencyKey.length === 0 ||
+        typeof dependencySignature !== 'string'
+      ) {
+        continue
+      }
+
+      const normalizedDependency =
+        this.#normalizePersistedDependencySignatureForRestore(
+          dependencyKey,
+          dependencySignature
+        )
+      if (!normalizedDependency) {
+        continue
+      }
+
+      const [normalizedDependencyKey, normalizedDependencySignature] =
+        normalizedDependency
+
+      if (normalizedDependencyKey.startsWith(DIRECTORY_DEPENDENCY_PREFIX)) {
+        directoryDependencyKeys.add(
+          normalizedDependencyKey.slice(DIRECTORY_DEPENDENCY_PREFIX.length)
+        )
+        normalizedDependencyEntries.set(
+          normalizedDependencyKey,
+          normalizedDependencySignature
+        )
+        continue
+      }
+
+      if (
+        normalizedDependencyKey.startsWith(DIRECTORY_MTIME_DEPENDENCY_PREFIX)
+      ) {
+        legacyDirectoryMtimeDependencies.push([
+          normalizedDependencyKey,
+          normalizedDependencySignature,
+        ])
+        continue
+      }
+
+      normalizedDependencyEntries.set(
+        normalizedDependencyKey,
+        normalizedDependencySignature
+      )
+    }
+
+    for (const [
+      dependencyKey,
+      dependencySignature,
+    ] of legacyDirectoryMtimeDependencies) {
+      const dependencyPath = dependencyKey.slice(
+        DIRECTORY_MTIME_DEPENDENCY_PREFIX.length
+      )
+      if (directoryDependencyKeys.has(dependencyPath)) {
+        strippedLegacyDirectoryMtimeDeps = true
+        continue
+      }
+
+      normalizedDependencyEntries.set(dependencyKey, dependencySignature)
     }
 
     const normalizedPath = this.#normalizePersistedSnapshotRootPath(
@@ -6739,11 +6909,45 @@ export class Directory<
     )
 
     return {
-      ...persisted,
-      path: normalizedPath,
-      entries: normalizedEntries,
-      flatEntries: normalizedFlatEntries,
+      snapshot: {
+        ...persisted,
+        path: normalizedPath,
+        dependencySignatures: Array.from(
+          normalizedDependencyEntries.entries()
+        ).sort((first, second) => first[0].localeCompare(second[0])),
+        entries: normalizedEntries,
+        flatEntries: normalizedFlatEntries,
+      },
+      strippedLegacyDirectoryMtimeDeps,
     }
+  }
+
+  #normalizePersistedDependencySignatureForRestore(
+    dependencyKey: string,
+    dependencySignature: string
+  ): [string, string] | undefined {
+    const prefix = dependencyKey.startsWith(FILE_DEPENDENCY_PREFIX)
+      ? FILE_DEPENDENCY_PREFIX
+      : dependencyKey.startsWith(DIRECTORY_DEPENDENCY_PREFIX)
+        ? DIRECTORY_DEPENDENCY_PREFIX
+        : dependencyKey.startsWith(DIRECTORY_MTIME_DEPENDENCY_PREFIX)
+          ? DIRECTORY_MTIME_DEPENDENCY_PREFIX
+          : undefined
+
+    if (!prefix) {
+      return [dependencyKey, dependencySignature]
+    }
+
+    const normalizedDependencyPath =
+      this.#normalizePersistedDependencyPathForRestore(
+        dependencyKey.slice(prefix.length)
+      )
+
+    if (!normalizedDependencyPath) {
+      return undefined
+    }
+
+    return [`${prefix}${normalizedDependencyPath}`, dependencySignature]
   }
 
   #normalizeWorkspaceRelativeSnapshotPath(path: string | undefined): string {
@@ -7108,28 +7312,43 @@ export class Directory<
       )
     }
 
-    const entries = (await directory.getEntries(entriesOptions)) as Array<
-      FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
-    >
-
-    return Promise.all(
-      entries.map(
-        async (
-          entry
-        ): Promise<
-          NavigationEntry<
-            FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
-          >
-        > => {
-          if (!(entry instanceof Directory)) {
-            return { entry }
-          }
-
-          const children = await entry.#getEntriesAsTree(entriesOptions)
-          return children.length > 0 ? { entry, children } : { entry }
-        }
-      )
+    const normalized = directory.#normalizeEntriesOptions(entriesOptions)
+    const mask = createOptionsMask(normalized)
+    const snapshot = await directory.#hydrateDirectorySnapshot(
+      directory,
+      normalized,
+      mask
     )
+
+    return directory.#materializeNavigationTreeFromSnapshot(snapshot) as Array<
+      NavigationEntry<
+        FileSystemEntry<ApplyDirectorySchema<LoaderTypes, Schema>>
+      >
+    >
+  }
+
+  #materializeNavigationTreeFromSnapshot(
+    snapshot: DirectorySnapshot<
+      Directory<LoaderTypes>,
+      FileSystemEntry<LoaderTypes>
+    >
+  ): NavigationEntry<FileSystemEntry<LoaderTypes>>[] {
+    return snapshot.materialize().map((entry) => {
+      if (!(entry instanceof Directory)) {
+        return { entry }
+      }
+
+      const childSnapshot = snapshot.getDirectoryMetadata(entry)?.snapshot
+      if (!childSnapshot) {
+        return { entry }
+      }
+
+      const children = entry.#materializeNavigationTreeFromSnapshot(
+        childSnapshot
+      )
+
+      return children.length > 0 ? { entry, children } : { entry }
+    })
   }
 
   async getTree(options?: {
@@ -7142,9 +7361,12 @@ export class Directory<
     return this.#getEntriesAsTree(options)
   }
 
-  async getStructure(): Promise<Array<DirectoryStructure | FileStructure>> {
+  async getStructure(
+    options?: StructureOptions
+  ): Promise<Array<DirectoryStructure | FileStructure>> {
     const session = this.#getSession()
     const directoryPath = this.absolutePath
+    const normalizedOptions = normalizeStructureOptions(options)
     type StructureCacheContext = {
       recordDirectoryDep(path: string): Promise<unknown>
       recordNodeDep(nodeKey: string): Promise<unknown>
@@ -7177,7 +7399,9 @@ export class Directory<
 
       for (const entry of entries) {
         if (typeof (entry as any).getStructure === 'function') {
-          const entryStructure = await (entry as any).getStructure()
+          const entryStructure = await (entry as any).getStructure(
+            normalizedOptions
+          )
           if (Array.isArray(entryStructure)) {
             structures.push(...entryStructure)
           } else {
@@ -7186,7 +7410,9 @@ export class Directory<
         }
 
         if (ctx && typeof (entry as any).getStructureCacheKey === 'function') {
-          await ctx.recordNodeDep((entry as any).getStructureCacheKey())
+          await ctx.recordNodeDep(
+            (entry as any).getStructureCacheKey(normalizedOptions)
+          )
         }
 
         if (ctx && entry instanceof File) {
@@ -7203,7 +7429,7 @@ export class Directory<
       return buildStructure()
     }
 
-    const nodeKey = this.getStructureCacheKey()
+    const nodeKey = this.getStructureCacheKey(normalizedOptions)
     const persist = this.#canPersistStructureCache()
 
     return session.cache.getOrCompute(nodeKey, { persist }, async (ctx) =>
@@ -7212,8 +7438,9 @@ export class Directory<
   }
 
   /** @internal */
-  getStructureCacheKey() {
+  getStructureCacheKey(options?: StructureOptions | NormalizedStructureOptions) {
     const session = this.#getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
 
     return createCacheNodeKey('structure.directory', {
       version: FS_STRUCTURE_CACHE_VERSION,
@@ -7223,6 +7450,7 @@ export class Directory<
       sortSignature: this.#getSortSignature(),
       basePathname: this.#basePathname ?? null,
       rootPath: this.getRootPath(),
+      options: getStructureOptionsSignature(normalizedOptions),
     })
   }
 
@@ -7560,6 +7788,24 @@ export class Directory<
       return undefined
     }
 
+    const normalizedPersisted =
+      this.#normalizePersistedDirectorySnapshot(persisted)
+    let restoredPersisted = normalizedPersisted.snapshot
+    const persistNormalizedSnapshot = async (
+      workspaceChangeToken: string | null
+    ) => {
+      restoredPersisted = {
+        ...restoredPersisted,
+        workspaceChangeToken,
+      }
+      await session.cache.put(snapshotKey, restoredPersisted, {
+        persist: true,
+        deps: toDirectorySnapshotDependencyIndexEntries(
+          restoredPersisted.dependencySignatures
+        ),
+      })
+    }
+
     const restorePersistedSnapshot = async (
       workspaceChangeToken: string | null
     ): Promise<
@@ -7568,7 +7814,7 @@ export class Directory<
     > => {
       try {
         const restored = this.#restorePersistedDirectorySnapshotPayload(
-          persisted,
+          restoredPersisted,
           workspaceChangeToken
         )
         if (!this.#isRestoredSnapshotWithinRootScope(restored)) {
@@ -7595,9 +7841,6 @@ export class Directory<
     const validateFileDependencies = options?.validateFileDependencies ?? true
     const validateDirectoryDependencies =
       options?.validateDirectoryDependencies ?? true
-    const shouldValidateDirectoryDependencies =
-      validateDirectoryDependencies &&
-      shouldTrackDirectoryMtime(this.getFileSystem(), this.#cache)
 
     const requiresIgnoredDependencyValidation =
       options?.includeGitIgnoredFiles ?? false
@@ -7607,7 +7850,7 @@ export class Directory<
     const currentWorkspaceToken = requiresIgnoredDependencyValidation
       ? markWorkspaceTokenForGitIgnoredSnapshots(currentWorkspaceTokenRaw)
       : currentWorkspaceTokenRaw
-    const persistedWorkspaceTokenRaw = persisted.workspaceChangeToken ?? null
+    const persistedWorkspaceTokenRaw = restoredPersisted.workspaceChangeToken ?? null
     const persistedWorkspaceToken = requiresIgnoredDependencyValidation
       ? markWorkspaceTokenForGitIgnoredSnapshots(persistedWorkspaceTokenRaw)
       : persistedWorkspaceTokenRaw
@@ -7617,20 +7860,13 @@ export class Directory<
     const persistedTokenIsTrusted = isTrustedWorkspaceChangeToken(
       persistedWorkspaceToken
     )
+    const rootPathKey = this.#normalizeWorkspaceRelativeSnapshotPath(
+      this.getRootPath()
+    )
+    const shouldValidateOutOfRootDependencies =
+      validateFileDependencies || this.#isStrictHermeticFileSystemMode()
     const persistWorkspaceToken = async (token: string) => {
-      await session.cache.put(
-        snapshotKey,
-        {
-          ...persisted,
-          workspaceChangeToken: token,
-        },
-        {
-          persist: true,
-          deps: toDirectorySnapshotDependencyIndexEntries(
-            persisted.dependencySignatures
-          ),
-        }
-      )
+      await persistNormalizedSnapshot(token)
     }
 
     const canUseTokenFastPath =
@@ -7652,12 +7888,40 @@ export class Directory<
 
       if (knownChangedPathKeys) {
         const dependencyPathKeys =
-          this.#collectPersistedDependencyPathKeys(persisted)
+          this.#collectPersistedDependencyPathKeys(restoredPersisted)
+        const hasOutOfRootDependencies = hasDependencyPathKeyOutsideRootScope(
+          dependencyPathKeys,
+          rootPathKey
+        )
         const hasIntersectingDependency =
           dependencyPathKeys.size > 0 &&
           pathKeySetsIntersect(dependencyPathKeys, knownChangedPathKeys)
 
         if (!hasIntersectingDependency) {
+          if (
+            hasOutOfRootDependencies &&
+            shouldValidateOutOfRootDependencies
+          ) {
+            const hasStaleOutOfRootDependencies =
+              await this.#isPersistedSnapshotStaleByFileDependencies(
+                restoredPersisted,
+                {
+                  validateFileDependencies: true,
+                  validateDirectoryDependencies: true,
+                  pathKeyFilter: (pathKey) =>
+                    !isPathKeyWithinRootScope(pathKey, rootPathKey),
+                }
+              )
+
+            if (hasStaleOutOfRootDependencies) {
+              await session.cache.delete(snapshotKey)
+              session.recordCacheMetric('persisted_miss')
+              session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
+              session.recordPersistedStaleReason('dep_changed')
+              return undefined
+            }
+          }
+
           await persistWorkspaceToken(currentWorkspaceToken)
           return await restorePersistedSnapshot(currentWorkspaceToken)
         }
@@ -7670,12 +7934,16 @@ export class Directory<
       }
     }
 
-    if (validateFileDependencies || shouldValidateDirectoryDependencies) {
+    if (normalizedPersisted.strippedLegacyDirectoryMtimeDeps) {
+      await persistNormalizedSnapshot(persistedWorkspaceTokenRaw)
+    }
+
+    if (validateFileDependencies || validateDirectoryDependencies) {
       const isStale = await this.#isPersistedSnapshotStaleByFileDependencies(
-        persisted,
+        restoredPersisted,
         {
           validateFileDependencies,
-          validateDirectoryDependencies: shouldValidateDirectoryDependencies,
+          validateDirectoryDependencies,
         }
       )
       if (isStale) {
@@ -7757,7 +8025,7 @@ export class Directory<
     workspaceChangeToken: string | null
   ): DirectorySnapshot<Directory<LoaderTypes>, FileSystemEntry<LoaderTypes>> {
     const normalizedPersistedSnapshot =
-      this.#normalizePersistedDirectorySnapshot(persisted)
+      this.#normalizePersistedDirectorySnapshot(persisted).snapshot
 
     const snapshot = DirectorySnapshot.fromPersistedSnapshot(
       normalizedPersistedSnapshot,
@@ -7865,6 +8133,7 @@ export class Directory<
     options: {
       validateFileDependencies: boolean
       validateDirectoryDependencies: boolean
+      pathKeyFilter?: (pathKey: string) => boolean
     }
   ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
@@ -7882,29 +8151,6 @@ export class Directory<
         DIRECTORY_MTIME_DEPENDENCY_PREFIX
       )
 
-      if (isDirectoryListingDependency && !strictHermetic) {
-        continue
-      }
-
-      if (isFileDependency && !options.validateFileDependencies) {
-        continue
-      }
-
-      if (isDirectoryMtimeDependency && strictHermetic) {
-        warnStrictHermeticFallbackOnce(
-          'strict-hermetic-directory-mtime-dependency',
-          'Strict hermetic mode detected legacy directory mtime dependencies and is forcing a snapshot rebuild.'
-        )
-        return true
-      }
-
-      if (
-        isDirectoryMtimeDependency &&
-        !options.validateDirectoryDependencies
-      ) {
-        continue
-      }
-
       if (
         !isDirectoryListingDependency &&
         !isFileDependency &&
@@ -7921,6 +8167,33 @@ export class Directory<
       } else {
         pathKey = pathWithType.slice(DIRECTORY_MTIME_DEPENDENCY_PREFIX.length)
       }
+
+      if (options.pathKeyFilter && !options.pathKeyFilter(pathKey)) {
+        continue
+      }
+
+      if (
+        isDirectoryListingDependency &&
+        !options.validateDirectoryDependencies
+      ) {
+        continue
+      }
+
+      if (isFileDependency && !options.validateFileDependencies) {
+        continue
+      }
+
+      if (isDirectoryMtimeDependency && strictHermetic) {
+        return true
+      }
+
+      if (
+        isDirectoryMtimeDependency &&
+        !options.validateDirectoryDependencies
+      ) {
+        continue
+      }
+
       const fileSystemPath = toFileSystemPathFromPathKey(pathKey)
       let currentSignature: string
       if (isDirectoryListingDependency) {
@@ -7966,7 +8239,10 @@ export class Directory<
   }
 
   async #isDependencySignaturesStale(
-    dependencies: ReadonlyMap<string, string>
+    dependencies: ReadonlyMap<string, string>,
+    options?: {
+      pathKeyFilter?: (pathKey: string) => boolean
+    }
   ): Promise<boolean> {
     const fileSystem = this.getFileSystem()
     const strictHermetic = this.#isStrictHermeticFileSystemMode()
@@ -7983,18 +8259,6 @@ export class Directory<
       )
       const isFileDependency = pathWithType.startsWith(FILE_DEPENDENCY_PREFIX)
 
-      if (isDirectoryMtime && strictHermetic) {
-        warnStrictHermeticFallbackOnce(
-          'strict-hermetic-directory-mtime-dependency',
-          'Strict hermetic mode detected legacy directory mtime dependencies and is forcing a snapshot rebuild.'
-        )
-        return true
-      }
-
-      if (isDirectoryMtime && !trackDirectoryMtime) {
-        continue
-      }
-
       const pathKey = isDirectoryListing
         ? pathWithType.slice(DIRECTORY_DEPENDENCY_PREFIX.length)
         : isDirectoryMtime
@@ -8002,6 +8266,19 @@ export class Directory<
           : isFileDependency
             ? pathWithType.slice(FILE_DEPENDENCY_PREFIX.length)
             : pathWithType
+
+      if (options?.pathKeyFilter && !options.pathKeyFilter(pathKey)) {
+        continue
+      }
+
+      if (isDirectoryMtime && strictHermetic) {
+        return true
+      }
+
+      if (isDirectoryMtime && !trackDirectoryMtime) {
+        continue
+      }
+
       const fileSystemPath = toFileSystemPathFromPathKey(pathKey)
 
       let currentSignature: string
@@ -8109,11 +8386,46 @@ export class Directory<
     const currentTokenIsTrusted = isTrustedWorkspaceChangeToken(
       currentWorkspaceToken
     )
+    const rootPathKey = this.#normalizeWorkspaceRelativeSnapshotPath(
+      this.getRootPath()
+    )
+    const dependencies = snapshot.getDependencies()
+    const dependencyPathKeys = dependencies
+      ? collectDependencyPathKeys(dependencies.entries())
+      : new Set<string>()
+    const hasOutOfRootDependencies = hasDependencyPathKeyOutsideRootScope(
+      dependencyPathKeys,
+      rootPathKey
+    )
+    const shouldValidateOutOfRootDependencies =
+      shouldValidatePersistedFileDependencies(
+        this.getFileSystem(),
+        this.#cache
+      ) || this.#isStrictHermeticFileSystemMode()
 
     if (currentWorkspaceToken === cachedWorkspaceToken) {
       if (!cachedTokenIsTrusted || !currentTokenIsTrusted) {
         return null
       }
+
+      if (
+        dependencies &&
+        hasOutOfRootDependencies &&
+        shouldValidateOutOfRootDependencies
+      ) {
+        const hasStaleOutOfRootDependencies = await this.#isDependencySignaturesStale(
+          dependencies,
+          {
+            pathKeyFilter: (pathKey) =>
+              !isPathKeyWithinRootScope(pathKey, rootPathKey),
+          }
+        )
+
+        if (hasStaleOutOfRootDependencies) {
+          return false
+        }
+      }
+
       if (options?.markValidatedAt !== undefined) {
         snapshot.markValidated(options.markValidatedAt)
       }
@@ -8137,15 +8449,29 @@ export class Directory<
       return null
     }
 
-    const dependencies = snapshot.getDependencies()
-    const dependencyPathKeys = dependencies
-      ? collectDependencyPathKeys(dependencies.entries())
-      : new Set<string>()
     const hasIntersectingDependency =
       dependencyPathKeys.size > 0 &&
       pathKeySetsIntersect(dependencyPathKeys, knownChangedPathKeys)
 
     if (!hasIntersectingDependency) {
+      if (
+        dependencies &&
+        hasOutOfRootDependencies &&
+        shouldValidateOutOfRootDependencies
+      ) {
+        const hasStaleOutOfRootDependencies = await this.#isDependencySignaturesStale(
+          dependencies,
+          {
+            pathKeyFilter: (pathKey) =>
+              !isPathKeyWithinRootScope(pathKey, rootPathKey),
+          }
+        )
+
+        if (hasStaleOutOfRootDependencies) {
+          return false
+        }
+      }
+
       snapshot.setWorkspaceChangeToken(currentWorkspaceToken)
       if (options?.markValidatedAt !== undefined) {
         snapshot.markValidated(options.markValidatedAt)
@@ -8215,10 +8541,6 @@ export class Directory<
   }> {
     const fileSystem = directory.getFileSystem()
     const strictHermetic = this.#isStrictHermeticFileSystemMode()
-    const trackDirectoryMtime = shouldTrackDirectoryMtime(
-      fileSystem,
-      this.#cache
-    )
 
     const rawEntries = await fileSystem.readDirectory(directory.#path)
     const dependencySignatures = new Map<string, string>()
@@ -8313,7 +8635,10 @@ export class Directory<
     const finalKeys = new Set<string>()
     const directoriesMap = new Map<
       Directory<LoaderTypes>,
-      DirectorySnapshotDirectoryMetadata<FileSystemEntry<LoaderTypes>>
+      DirectorySnapshotDirectoryMetadata<
+        Directory<LoaderTypes>,
+        FileSystemEntry<LoaderTypes>
+      >
     >()
 
     type DirectoryBuildResult =
@@ -8367,26 +8692,6 @@ export class Directory<
 
           if (!options.recursive && !passesFilterSelf) {
             return { kind: 'skip' }
-          }
-
-          if (trackDirectoryMtime) {
-            try {
-              const modifiedMs = await fileSystem.getFileLastModifiedMs(
-                entry.path
-              )
-              const signature =
-                modifiedMs === undefined ? 'missing' : String(modifiedMs)
-              dependencySignatures.set(
-                createDependencyPathKey(
-                  fileSystem,
-                  DIRECTORY_MTIME_DEPENDENCY_PREFIX,
-                  entry.path
-                ),
-                signature
-              )
-            } catch (error) {
-              reportBestEffortError('file-system/entries', error)
-            }
           }
 
           const childSnapshot = await this.#getDirectorySnapshot(
@@ -8529,25 +8834,6 @@ export class Directory<
       ),
       await this.#createDirectoryListingSignature(fileSystem, rawEntries)
     )
-    if (trackDirectoryMtime) {
-      try {
-        const directoryModifiedMs = await fileSystem.getFileLastModifiedMs(
-          directory.#path
-        )
-        dependencySignatures.set(
-          createDependencyPathKey(
-            fileSystem,
-            DIRECTORY_MTIME_DEPENDENCY_PREFIX,
-            directory.#path
-          ),
-          directoryModifiedMs === undefined
-            ? 'missing'
-            : String(directoryModifiedMs)
-        )
-      } catch (error) {
-        reportBestEffortError('file-system/entries', error)
-      }
-    }
 
     let shouldIncludeSelf = false
     for (const metadata of fileMetadata) {
@@ -8624,6 +8910,7 @@ export class Directory<
       directoriesMap.set(directoryEntry, {
         hasVisibleDescendant,
         materializedEntries: childrenEntries,
+        snapshot: childSnapshot,
       })
 
       if (options.recursive) {

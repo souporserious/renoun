@@ -564,7 +564,7 @@ describe('GitFileSystem', () => {
     }
   })
 
-  test('disables workspace token reuse for explicit refs', async ({
+  test('returns deterministic workspace tokens for explicit refs', async ({
     repoRoot,
     cacheDirectory,
   }) => {
@@ -578,10 +578,11 @@ describe('GitFileSystem', () => {
     })
 
     try {
-      expect(await store.getWorkspaceChangeToken('.')).toBeNull()
-      expect(
-        await store.getWorkspaceChangedPathsSinceToken('.', 'head:any')
-      ).toBeNull()
+      const firstToken = await store.getWorkspaceChangeToken('.')
+      expect(firstToken).not.toBeNull()
+      expect(await store.getWorkspaceChangedPathsSinceToken('.', firstToken!)).toEqual(
+        []
+      )
       expect(await store.readFile('src/index.ts')).toBe(
         `export const value = 1`
       )
@@ -590,7 +591,12 @@ describe('GitFileSystem', () => {
       commitFile(repoRoot, 'src/index.ts', `export const value = 2`, 'update')
       git(repoRoot, ['checkout', 'feature'])
 
-      expect(await store.getWorkspaceChangeToken('.')).toBeNull()
+      const secondToken = await store.getWorkspaceChangeToken('.')
+      expect(secondToken).not.toBeNull()
+      expect(secondToken).not.toBe(firstToken)
+      expect(
+        await store.getWorkspaceChangedPathsSinceToken('.', firstToken!)
+      ).toBeNull()
       expect(await store.readFile('src/index.ts')).toBe(
         `export const value = 2`
       )

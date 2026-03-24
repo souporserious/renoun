@@ -7,6 +7,7 @@ export type {
   ModuleExportStructure,
   PackageStructure,
   Section,
+  StructureOptions,
   WorkspaceStructure,
 } from './types.ts'
 

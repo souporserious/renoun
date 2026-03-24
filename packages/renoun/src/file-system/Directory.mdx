@@ -72,3 +72,24 @@ const allEntries = await docs.getEntries()
 const gettingStarted = await docs.getFile('getting-started', 'mdx')
 const apiReference = docs.getDirectory('api')
 ```
+
+## Navigation and indexing
+
+Use `getTree()` when you need navigational structure, such as sidebars or static params:
+
+```ts
+const navigation = await docs.getTree()
+```
+
+Use `getStructure()` when you need a lightweight flat index for search, manifests, feeds, or sitemap-like exports:
+
+```ts
+const searchIndex = await docs.getStructure({
+  includeExports: 'headers',
+  includeSections: false,
+  includeResolvedTypes: false,
+  includeGitDates: false,
+})
+```
+
+`getStructure()` already returns a flat array of directory and file structures, so `getTree()` remains the dedicated navigation API and no extra `flatten` option is needed today.

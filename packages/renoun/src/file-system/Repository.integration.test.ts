@@ -19,12 +19,35 @@ import type { ExportHistoryGenerator, ExportHistoryReport } from './types.ts'
 
 const INTEGRATION_TIMEOUT_MS = 20_000
 
+type SerializableNavigationInput = {
+  entry: { name: string; depth: number; getPathname: () => string }
+  children?: SerializableNavigationInput[]
+}
+
+type SerializedNavigationEntry = {
+  name: string
+  depth: number
+  path: string
+  children?: SerializedNavigationEntry[]
+}
+
 async function drain(
   gen: ExportHistoryGenerator
 ): Promise<ExportHistoryReport> {
   let result = await gen.next()
   while (!result.done) result = await gen.next()
   return result.value
+}
+
+function serializeNavigationEntries(
+  entries: SerializableNavigationInput[]
+): SerializedNavigationEntry[] {
+  return entries.map(({ entry, children }) => ({
+    name: entry.name,
+    depth: entry.depth,
+    path: entry.getPathname(),
+    ...(children ? { children: serializeNavigationEntries(children) } : {}),
+  }))
 }
 
 const GIT_ENV = {
@@ -192,8 +215,13 @@ describe('Repository public remote integration', () => {
             exportName: 'branch',
           })
         )
+        const lastCommitSha = report.lastCommitSha
 
-        expect(report.lastCommitSha.length).toBeGreaterThan(0)
+        if (!lastCommitSha) {
+          throw new Error('expected export history to include lastCommitSha')
+        }
+
+        expect(lastCommitSha.length).toBeGreaterThan(0)
         expect(report.nameToId.branch).toHaveLength(1)
         expect(Object.keys(report.exports)).toHaveLength(1)
         expect(report.exports[report.nameToId.branch[0]]).toBeDefined()
@@ -317,6 +345,101 @@ describe('Repository public remote integration', () => {
         expect(secondReport.generatedAt).toBe(firstReport.generatedAt)
         expect(secondReport.lastCommitSha).toBe(firstReport.lastCommitSha)
         expect(exports.map((entry) => entry.name)).toEqual(['branch'])
+      } finally {
+        vi.restoreAllMocks()
+        firstFileSystem?.close()
+        secondFileSystem?.close()
+        closeGitDirectory(firstDirectory)
+        closeGitDirectory(secondDirectory)
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+        rmSync(cacheRoot, { recursive: true, force: true })
+      }
+    },
+    INTEGRATION_TIMEOUT_MS
+  )
+
+  test(
+    'reuses warm getTree snapshots across fresh git-backed directory instances',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const cacheRoot = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      let firstDirectory: Directory | undefined
+      let secondDirectory: Directory | undefined
+      let firstFileSystem: GitFileSystem | undefined
+      let secondFileSystem: GitFileSystem | undefined
+
+      initRepo(repoRoot)
+      git(repoRoot, ['branch', '-m', 'dev'])
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/nodes/core/Node.js',
+              content: `export const core = 'core'`,
+            },
+            {
+              filename: 'src/nodes/math/basic/Add.js',
+              content: `export const add = (left, right) => left + right`,
+            },
+            {
+              filename: 'src/nodes/math/basic/Subtract.js',
+              content: `export const subtract = (left, right) => left - right`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        git(bareRepo, ['symbolic-ref', 'HEAD', 'refs/heads/dev'])
+
+        const firstRemote = createPublicRemoteRepository({
+          fileUrl: pathToFileURL(bareRepo).toString(),
+          cacheRoot,
+          ref: 'dev',
+        })
+        firstFileSystem = firstRemote.fileSystem
+        firstDirectory = new Directory({
+          path: 'src/nodes',
+          filter: '**/*.js',
+          repository: firstRemote.repository,
+        })
+
+        const firstTree = serializeNavigationEntries(await firstDirectory.getTree())
+
+        const secondRemote = createPublicRemoteRepository({
+          fileUrl: pathToFileURL(bareRepo).toString(),
+          cacheRoot,
+          ref: 'dev',
+        })
+        secondFileSystem = secondRemote.fileSystem
+        const secondReadDirectory = vi.spyOn(secondFileSystem, 'readDirectory')
+        secondDirectory = new Directory({
+          path: 'src/nodes',
+          filter: '**/*.js',
+          repository: secondRemote.repository,
+        })
+
+        const secondTree = serializeNavigationEntries(
+          await secondDirectory.getTree()
+        )
+
+        expect(secondTree).toEqual(firstTree)
+        expect(secondReadDirectory.mock.calls.length).toBeLessThanOrEqual(1)
       } finally {
         vi.restoreAllMocks()
         firstFileSystem?.close()

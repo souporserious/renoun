@@ -1,9 +1,13 @@
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { parseBooleanProcessEnv } from '../utils/env.ts'
 
-export interface DirectorySnapshotDirectoryMetadata<Entry = unknown> {
+export interface DirectorySnapshotDirectoryMetadata<
+  DirectoryType extends Entry = any,
+  Entry = unknown,
+> {
   hasVisibleDescendant: boolean
   materializedEntries: Entry[]
+  snapshot?: DirectorySnapshot<DirectoryType, Entry>
 }
 
 export interface PersistedDirectoryFileEntry {
@@ -79,11 +83,13 @@ function shouldDebugSnapshotRestoreMismatch(): boolean {
   )
 }
 
-function createLazyDirectoryMetadata<Entry>(options: {
+function createLazyDirectoryMetadata<DirectoryType extends Entry, Entry>(options: {
   hasVisibleDescendant: boolean
   getMaterializedEntries: () => Entry[]
-}): DirectorySnapshotDirectoryMetadata<Entry> {
+  getSnapshot?: () => DirectorySnapshot<DirectoryType, Entry>
+}): DirectorySnapshotDirectoryMetadata<DirectoryType, Entry> {
   let materializedEntries: Entry[] | undefined
+  let snapshot: DirectorySnapshot<DirectoryType, Entry> | undefined
 
   return {
     hasVisibleDescendant: options.hasVisibleDescendant,
@@ -94,12 +100,26 @@ function createLazyDirectoryMetadata<Entry>(options: {
 
       return materializedEntries
     },
+    get snapshot() {
+      if (!options.getSnapshot) {
+        return undefined
+      }
+
+      if (!snapshot) {
+        snapshot = options.getSnapshot()
+      }
+
+      return snapshot
+    },
   }
 }
 
 export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
   #entries: Entry[]
-  #directories: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
+  #directories: Map<
+    DirectoryType,
+    DirectorySnapshotDirectoryMetadata<DirectoryType, Entry>
+  >
   #materialized?: Entry[]
   #materializedEntriesFactory?: () => Entry[]
   #dependencies?: Map<string, string>
@@ -112,7 +132,10 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
 
   constructor(options: {
     entries: Entry[]
-    directories: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
+    directories: Map<
+      DirectoryType,
+      DirectorySnapshotDirectoryMetadata<DirectoryType, Entry>
+    >
     shouldIncludeSelf: boolean
     hasVisibleDescendant: boolean
     dependencies?: Map<string, string>
@@ -156,7 +179,7 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
 
   getDirectoryMetadata(
     directory: DirectoryType
-  ): DirectorySnapshotDirectoryMetadata<Entry> | undefined {
+  ): DirectorySnapshotDirectoryMetadata<DirectoryType, Entry> | undefined {
     return this.#directories.get(directory)
   }
 
@@ -270,7 +293,7 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
     const immediateEntries: Entry[] = []
     const directories = new Map<
       DirectoryType,
-      DirectorySnapshotDirectoryMetadata<Entry>
+      DirectorySnapshotDirectoryMetadata<DirectoryType, Entry>
     >()
     const persistedEntries: PersistedEntryMetadata<DirectoryType, Entry>[] = []
     const restoredEntriesByKey = new Map<string, Entry>()
@@ -316,6 +339,7 @@ export class DirectorySnapshot<DirectoryType extends Entry, Entry = unknown> {
         createLazyDirectoryMetadata({
           hasVisibleDescendant: entry.snapshot.hasVisibleDescendant,
           getMaterializedEntries: () => getChildRestored().snapshot.materialize(),
+          getSnapshot: () => getChildRestored().snapshot,
         })
       )
 
@@ -538,7 +562,10 @@ export function createDirectorySnapshot<
   Entry = unknown,
 >(options: {
   entries: Entry[]
-  directories?: Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>
+  directories?: Map<
+    DirectoryType,
+    DirectorySnapshotDirectoryMetadata<DirectoryType, Entry>
+  >
   shouldIncludeSelf: boolean
   hasVisibleDescendant: boolean
   dependencies?: Map<string, string>
@@ -554,7 +581,10 @@ export function createDirectorySnapshot<
     entries: options.entries,
     directories:
       options.directories ??
-      new Map<DirectoryType, DirectorySnapshotDirectoryMetadata<Entry>>(),
+      new Map<
+        DirectoryType,
+        DirectorySnapshotDirectoryMetadata<DirectoryType, Entry>
+      >(),
     shouldIncludeSelf: options.shouldIncludeSelf,
     hasVisibleDescendant: options.hasVisibleDescendant,
     dependencies: options.dependencies,

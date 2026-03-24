@@ -27,10 +27,15 @@ import {
 } from './PackageManager.ts'
 import { Package } from './Package.ts'
 import { Session } from './Session.ts'
+import {
+  getStructureOptionsSignature,
+  normalizeStructureOptions,
+} from './structure-options.ts'
 import type {
   DirectoryStructure,
   FileStructure,
   PackageStructure,
+  StructureOptions,
   WorkspaceStructure,
 } from './types.ts'
 
@@ -313,23 +318,26 @@ export class Workspace {
   }
 
   /** @internal */
-  getStructureCacheKey() {
+  getStructureCacheKey(options?: StructureOptions) {
     const session = Session.for(this.#fileSystem, undefined, this.#cache)
+    const normalizedOptions = normalizeStructureOptions(options)
 
     return createStructureNodeKey('structure.workspace', {
       version: FS_STRUCTURE_CACHE_VERSION,
       snapshot: session.snapshot.id,
       workspaceRoot: normalizePathKey(this.#workspaceRoot),
+      options: getStructureOptionsSignature(normalizedOptions),
     })
   }
 
-  async getStructure(): Promise<
+  async getStructure(options?: StructureOptions): Promise<
     Array<
       WorkspaceStructure | PackageStructure | DirectoryStructure | FileStructure
     >
   > {
     const session = Session.for(this.#fileSystem, undefined, this.#cache)
-    const nodeKey = this.getStructureCacheKey()
+    const normalizedOptions = normalizeStructureOptions(options)
+    const nodeKey = this.getStructureCacheKey(normalizedOptions)
 
     return session.cache.getOrCompute(
       nodeKey,
@@ -397,9 +405,9 @@ export class Workspace {
         for (const pkg of this.#createPackages(
           packageResolution.packageEntries
         )) {
-          const packageStructures = await pkg.getStructure()
+          const packageStructures = await pkg.getStructure(normalizedOptions)
           structures.push(...packageStructures)
-          await ctx.recordNodeDep(pkg.getStructureCacheKey())
+          await ctx.recordNodeDep(pkg.getStructureCacheKey(normalizedOptions))
         }
 
         return structures

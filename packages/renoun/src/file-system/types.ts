@@ -302,6 +302,13 @@ export interface ModuleExportStructure extends BaseStructure {
   lastCommitDate?: Date
 }
 
+export interface StructureOptions {
+  includeExports?: boolean | 'headers'
+  includeSections?: boolean
+  includeGitDates?: boolean
+  includeResolvedTypes?: boolean
+}
+
 export type FileSystemStructure =
   | WorkspaceStructure
   | PackageStructure

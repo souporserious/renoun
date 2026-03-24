@@ -135,6 +135,19 @@ beforeAll(async () => {
     recursive: true,
     includeDirectoryNamedFiles: true,
   })
+  await cachedDocs.getTree()
+  await cachedDocs.getStructure({
+    includeExports: 'headers',
+    includeSections: false,
+    includeResolvedTypes: false,
+    includeGitDates: false,
+  })
+  await cachedDocs.getStructure({
+    includeExports: 'headers',
+    includeSections: false,
+    includeResolvedTypes: false,
+    includeGitDates: true,
+  })
   process.env.NODE_ENV = originalEnv
 
   // Development-mode cache warm for comparison to production cached path
@@ -464,6 +477,48 @@ describe('Cached path (NODE_ENV=production)', () => {
         await cachedDocs.getEntries({
           recursive: true,
           includeDirectoryNamedFiles: true,
+        })
+      })
+    },
+    BENCH_OPTIONS
+  )
+})
+
+describe('Indexing APIs (NODE_ENV=production)', () => {
+  bench(
+    'docs (getTree, hot cache)',
+    async () => {
+      await withProduction(async () => {
+        await cachedDocs.getTree()
+      })
+    },
+    BENCH_OPTIONS
+  )
+
+  bench(
+    'docs (getStructure headers no git, hot cache)',
+    async () => {
+      await withProduction(async () => {
+        await cachedDocs.getStructure({
+          includeExports: 'headers',
+          includeSections: false,
+          includeResolvedTypes: false,
+          includeGitDates: false,
+        })
+      })
+    },
+    BENCH_OPTIONS
+  )
+
+  bench(
+    'docs (getStructure headers with git, hot cache)',
+    async () => {
+      await withProduction(async () => {
+        await cachedDocs.getStructure({
+          includeExports: 'headers',
+          includeSections: false,
+          includeResolvedTypes: false,
+          includeGitDates: true,
         })
       })
     },
