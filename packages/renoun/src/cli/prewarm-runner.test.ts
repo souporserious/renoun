@@ -30,6 +30,12 @@ function ensureTypeScriptWorkerLaunchSupport(): void {
   }
 }
 
+async function settleAsyncPrewarmWork(): Promise<void> {
+  await vi.dynamicImportSettled()
+  await Promise.resolve()
+  await Promise.resolve()
+}
+
 beforeEach(() => {
   process.execArgv = previousExecArgv.slice()
   vi.resetModules()
@@ -143,6 +149,7 @@ describe('runPrewarmSafely', () => {
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(prewarmMock).toHaveBeenCalledTimes(1)
     })
+    await settleAsyncPrewarmWork()
   })
 
   test('falls back to inline prewarm when the worker reports an error', async () => {
@@ -189,6 +196,7 @@ describe('runPrewarmSafely', () => {
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(prewarmMock).toHaveBeenCalledTimes(1)
     })
+    await settleAsyncPrewarmWork()
   })
 
   test('falls back to inline prewarm after a worker timeout before continuing queued work', async () => {
@@ -252,9 +260,8 @@ describe('runPrewarmSafely', () => {
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'a.json' } })
       runPrewarmSafely({ analysisOptions: { tsConfigFilePath: 'b.json' } })
 
-      await vi.waitFor(() => {
-        expect(spawnMock).toHaveBeenCalledTimes(1)
-      })
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(children).toHaveLength(1)
 
       await vi.advanceTimersByTimeAsync(PREWARM_REQUEST_TIMEOUT_MS)
       await vi.waitFor(() => {
@@ -266,13 +273,12 @@ describe('runPrewarmSafely', () => {
       expect(spawnMock).toHaveBeenCalledTimes(1)
 
       firstInlineFallback.resolve()
+      await settleAsyncPrewarmWork()
 
-      await vi.waitFor(() => {
-        expect(spawnMock).toHaveBeenCalledTimes(2)
-      })
+      expect(spawnMock).toHaveBeenCalledTimes(2)
 
       children[1]?.emit('exit', 0, null)
-      await Promise.resolve()
+      await settleAsyncPrewarmWork()
     } finally {
       vi.useRealTimers()
     }
