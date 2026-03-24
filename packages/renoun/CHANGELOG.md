@@ -1,5 +1,12 @@
 # renoun
 
+## 11.7.0
+
+### Minor Changes
+
+- 61077ca: Improves persisted directory snapshots for warm `Directory#getTree()` calls so
+  git-backed directories can rebuild navigation faster across instances.
+
 ## 11.6.0
 
 ### Minor Changes
