@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { realpathSync } from 'node:fs'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import {
   cp,
   lstat,
@@ -72,6 +72,19 @@ const watchMock = vi.fn(
 
 const spawnMock = vi.fn(
   (command: string, args: string[], options?: Record<string, unknown>) => {
+    if (args[1] === 'typegen') {
+      const cwd =
+        typeof options?.['cwd'] === 'string' ? options['cwd'] : undefined
+      if (cwd) {
+        mkdirSync(join(cwd, '.next', 'types'), { recursive: true })
+        writeFileSync(
+          join(cwd, '.next', 'types', 'routes.d.ts'),
+          'declare global { interface PageProps<T> {} type LayoutProps<T> = { children?: unknown } }\nexport {}\n',
+          'utf8'
+        )
+      }
+    }
+
     const child = new EventEmitter() as EventEmitter & {
       pid: number
       kill: ReturnType<typeof vi.fn>
@@ -223,6 +236,13 @@ describe('runAppCommand integration', () => {
     )
     await mkdir(nodeModulesExampleDir, { recursive: true })
     await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
+    await mkdir(join(nodeModulesExampleDir, '.next', 'types'), {
+      recursive: true,
+    })
+    await writeFile(
+      join(nodeModulesExampleDir, '.next', 'types', 'routes.d.ts'),
+      'declare global { interface PageProps<T> {} }\nexport {}\n'
+    )
 
     const projectPackageJson = {
       name: 'app-integration',
@@ -416,6 +436,13 @@ describe('runAppCommand integration', () => {
     )
     await mkdir(nodeModulesExampleDir, { recursive: true })
     await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
+    await mkdir(join(nodeModulesExampleDir, '.next', 'types'), {
+      recursive: true,
+    })
+    await writeFile(
+      join(nodeModulesExampleDir, '.next', 'types', 'routes.d.ts'),
+      'declare global { interface PageProps<T> {} }\nexport {}\n'
+    )
 
     await writeFile(
       join(projectRoot, 'package.json'),
@@ -495,7 +522,7 @@ describe('runAppCommand integration', () => {
     }
   })
 
-  test('prewarms analysis cache before build commands', async () => {
+  test('runs next typegen before prewarming build analysis when route types are missing', async () => {
     const tmpRoot = realpathSync(
       await mkdtemp(join(tmpdir(), 'renoun-app-build-test-'))
     )
@@ -576,8 +603,16 @@ describe('runAppCommand integration', () => {
           tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
         },
       })
-      expect(spawnMock).toHaveBeenCalledTimes(1)
-      const [, , spawnOptions] = spawnMock.mock.calls[0]
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      expect(spawnMock.mock.calls[0]?.[1]).toEqual([
+        '/fake/framework-bin.ts',
+        'typegen',
+      ])
+      expect(spawnMock.mock.calls[1]?.[1]).toEqual([
+        '/fake/framework-bin.ts',
+        'build',
+      ])
+      const [, , spawnOptions] = spawnMock.mock.calls[1]
       expect(spawnOptions?.env).toMatchObject({
         RENOUN_RUNTIME_DIRECTORY: runtimeRoot,
         [PROCESS_ENV_KEYS.renounServerClientRpcCache]: '1',
@@ -585,6 +620,107 @@ describe('runAppCommand integration', () => {
           DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS
         ),
       })
+    } finally {
+      exitSpy.mockRestore()
+      processOnSpy.mockRestore()
+      await rm(tmpRoot, { recursive: true, force: true })
+    }
+  })
+
+  test('continues with build prewarm when Next.js route type config is missing', async () => {
+    const tmpRoot = realpathSync(
+      await mkdtemp(join(tmpdir(), 'renoun-app-build-skip-test-'))
+    )
+    const projectRoot = join(tmpRoot, 'project')
+    await mkdir(projectRoot, { recursive: true })
+
+    const nodeModulesExampleDir = join(
+      projectRoot,
+      'node_modules',
+      '@renoun',
+      'blog'
+    )
+    await mkdir(nodeModulesExampleDir, { recursive: true })
+    await cp(BLOG_APP_PATH, nodeModulesExampleDir, { recursive: true })
+    await writeFile(
+      join(nodeModulesExampleDir, 'tsconfig.json'),
+      JSON.stringify(
+        {
+          compilerOptions: {
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            target: 'ESNext',
+          },
+          include: ['app/**/*.tsx'],
+        },
+        null,
+        2
+      )
+    )
+
+    await writeFile(
+      join(projectRoot, 'package.json'),
+      JSON.stringify(
+        {
+          name: 'app-integration',
+          version: '1.0.0',
+          dependencies: { '@renoun/blog': 'workspace:*' },
+          devDependencies: { renoun: 'workspace:*' },
+        },
+        null,
+        2
+      )
+    )
+
+    let resolveExit!: (code: number) => void
+    let exitResolved = false
+    const exitPromise = new Promise<number>((resolve) => {
+      resolveExit = resolve
+    })
+    const exitSpy = vi.spyOn(process, 'exit').mockImplementation(((
+      code?: number
+    ) => {
+      if (!exitResolved) {
+        exitResolved = true
+        resolveExit(code ?? 0)
+      }
+      return undefined as never
+    }) as unknown as typeof process.exit)
+
+    const originalProcessOn = process.on.bind(process)
+    const processOnSpy = vi.spyOn(process, 'on').mockImplementation(((
+      event: string,
+      listener: (...args: unknown[]) => void
+    ) => {
+      if (
+        event === 'uncaughtException' ||
+        event === 'unhandledRejection' ||
+        event === 'SIGINT' ||
+        event === 'SIGTERM'
+      ) {
+        return process
+      }
+
+      return originalProcessOn(
+        event as Parameters<typeof originalProcessOn>[0],
+        listener as Parameters<typeof originalProcessOn>[1]
+      )
+    }) as unknown as typeof process.on)
+
+    process.chdir(projectRoot)
+
+    try {
+      await runAppCommand({ command: 'build', args: [] })
+      const exitCode = await exitPromise
+      expect(exitCode).toBe(0)
+
+      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
+      expect(runPrewarmSafelyMock).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+      expect(spawnMock.mock.calls[0]?.[1]).toEqual([
+        '/fake/framework-bin.ts',
+        'build',
+      ])
     } finally {
       exitSpy.mockRestore()
       processOnSpy.mockRestore()

@@ -1,3 +1,8 @@
+import { rmSync } from 'node:fs'
+import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
+
 import { describe, expect, test } from 'vitest'
 
 import {
@@ -90,6 +95,23 @@ function waitForDuration(ms: number) {
   return new Promise<void>((resolve) => {
     setTimeout(() => resolve(), ms)
   })
+}
+
+async function createWorkspace(files: Record<string, string>) {
+  const workspacePath = await mkdtemp(join(tmpdir(), 'renoun-get-tokens-'))
+
+  for (const [relativePath, contents] of Object.entries(files)) {
+    const absolutePath = join(workspacePath, relativePath)
+    await mkdir(dirname(absolutePath), { recursive: true })
+    await writeFile(absolutePath, contents, 'utf8')
+  }
+
+  return {
+    workspacePath,
+    [Symbol.dispose]() {
+      rmSync(workspacePath, { recursive: true, force: true })
+    },
+  }
 }
 
 describe('createPlainTextTokenizedLines', () => {
@@ -498,5 +520,45 @@ describe('getTokens metadata integration', () => {
     })
 
     expect(metadataCollectorCalled).toBe(true)
+  })
+
+  test.concurrent('throws targeted guidance for missing Next.js route-aware type config', async () => {
+    using workspace = await createWorkspace({
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'next-env.d.ts': '/// <reference types="next" />\n',
+      'src/page.ts':
+        "export default async function Page(props: PageProps<'/example'>) {\n  return props\n}\n",
+    })
+
+    const filePath = join(workspace.workspacePath, 'src/page.ts')
+    const project = new Project({
+      tsConfigFilePath: join(workspace.workspacePath, 'tsconfig.json'),
+    })
+    const tokensPromise = getTokens({
+      project,
+      value: project.getSourceFileOrThrow(filePath).getFullText(),
+      language: 'ts',
+      filePath,
+      highlighter: createStubHighlighter([
+        ["export default async function Page(props: PageProps<'/example'>) {"],
+        ['  return props'],
+        ['}'],
+      ]),
+      theme: 'default',
+    })
+
+    await expect(tokensPromise).rejects.toThrow(
+      'This looks like a Next.js route-aware type configuration issue.'
+    )
+    await expect(tokensPromise).rejects.toThrow(
+      'Add "next-env.d.ts" and ".next/types/**/*.ts" to tsconfig.json#include'
+    )
   })
 })

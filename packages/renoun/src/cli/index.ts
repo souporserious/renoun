@@ -4,6 +4,11 @@ import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isRenounDebugEnabled } from '../utils/env.ts'
 import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
 import { createBuildAnalysisClientRuntime } from './build-analysis-runtime.ts'
+import {
+  ensureNextGeneratedTypes,
+  getMissingNextGeneratedTypesConfigWarning,
+  shouldSkipBuildPrewarmForMissingNextGeneratedTypes,
+} from './build-prewarm-guard.ts'
 
 type Framework = 'next' | 'vite' | 'waku'
 type AnalysisCliRuntime = {
@@ -192,24 +197,56 @@ if (firstArgument === 'validate') {
             allowInlineFallback: false,
           })
         } else {
-          process.stdout.write(
-            '[renoun] Prewarming analysis cache for build...\n'
-          )
+          const prewarmOptions = createDefaultPrewarmOptions()
+          const nextGeneratedTypesStatus = await ensureNextGeneratedTypes({
+            framework: firstArgument as Framework,
+            rootPath: process.cwd(),
+            tsConfigFilePath: prewarmOptions.analysisOptions?.tsConfigFilePath,
+            log: (message) => {
+              process.stdout.write(`[renoun] ${message}\n`)
+            },
+          })
+          const missingNextGeneratedTypesConfigWarning =
+            getMissingNextGeneratedTypesConfigWarning(nextGeneratedTypesStatus)
 
-          try {
-            const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
-            await prewarmRenounRpcServerCache(createDefaultPrewarmOptions())
-            process.stdout.write('[renoun] Analysis cache prewarmed\n')
-          } catch (error) {
-            getDebugLogger().warn(
-              'Failed to prewarm Renoun RPC cache before framework build',
-              () => ({
-                data: {
-                  framework: firstArgument,
-                  error: error instanceof Error ? error.message : String(error),
-                },
-              })
+          if (missingNextGeneratedTypesConfigWarning) {
+            process.stdout.write(
+              `[renoun] ${missingNextGeneratedTypesConfigWarning}\n`
             )
+          }
+
+          const shouldSkipBuildPrewarm =
+            shouldSkipBuildPrewarmForMissingNextGeneratedTypes({
+              framework: firstArgument as Framework,
+              rootPath: process.cwd(),
+              tsConfigFilePath: prewarmOptions.analysisOptions?.tsConfigFilePath,
+            })
+
+          if (shouldSkipBuildPrewarm) {
+            process.stdout.write(
+              '[renoun] Skipping analysis cache prewarm until Next.js generated types exist\n'
+            )
+          } else {
+            process.stdout.write(
+              '[renoun] Prewarming analysis cache for build...\n'
+            )
+
+            try {
+              const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
+              await prewarmRenounRpcServerCache(prewarmOptions)
+              process.stdout.write('[renoun] Analysis cache prewarmed\n')
+            } catch (error) {
+              getDebugLogger().warn(
+                'Failed to prewarm Renoun RPC cache before framework build',
+                () => ({
+                  data: {
+                    framework: firstArgument,
+                    error:
+                      error instanceof Error ? error.message : String(error),
+                  },
+                })
+              )
+            }
           }
         }
 

@@ -1,4 +1,7 @@
 import { EventEmitter } from 'node:events'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 
@@ -12,6 +15,19 @@ import { DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS } from './build-analysis
 
 const spawnMock = vi.fn(
   (command: string, args: string[], options?: Record<string, unknown>) => {
+    if (args[1] === 'typegen') {
+      const cwd =
+        typeof options?.['cwd'] === 'string' ? options['cwd'] : undefined
+      if (cwd) {
+        mkdirSync(join(cwd, '.next', 'types'), { recursive: true })
+        writeFileSync(
+          join(cwd, '.next', 'types', 'routes.d.ts'),
+          'declare global { interface PageProps<T> {} type LayoutProps<T> = { children?: unknown } }\nexport {}\n',
+          'utf8'
+        )
+      }
+    }
+
     const child = new EventEmitter() as EventEmitter & {
       pid: number
       kill: ReturnType<typeof vi.fn>
@@ -252,6 +268,65 @@ describe('renoun CLI index integration', () => {
       })
     } finally {
       exitSpy.mockRestore()
+    }
+  })
+
+  test('runs next typegen before framework build prewarm when route types are missing', async () => {
+    const workspacePath = await mkdtemp(
+      join(tmpdir(), 'renoun-framework-build-skip-')
+    )
+    await writeFile(
+      join(workspacePath, 'tsconfig.json'),
+      JSON.stringify(
+        {
+          compilerOptions: {
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            target: 'ESNext',
+          },
+          include: ['next-env.d.ts', '.next/types/**/*.ts', '**/*.ts'],
+        },
+        null,
+        2
+      )
+    )
+    await writeFile(
+      join(workspacePath, 'next-env.d.ts'),
+      '/// <reference types="next" />\n'
+    )
+    await mkdir(join(workspacePath, 'app'), { recursive: true })
+    await writeFile(
+      join(workspacePath, 'app', 'page.tsx'),
+      'export default function Page() { return null }\n'
+    )
+    process.chdir(workspacePath)
+    process.argv = ['node', 'renoun', 'next', 'build']
+
+    const exitSpy = vi
+      .spyOn(process, 'exit')
+      .mockImplementation((() => undefined as never) as typeof process.exit)
+
+    await import('./index.ts')
+
+    try {
+      expect(createServerMock).toHaveBeenCalledTimes(1)
+      expect(prewarmRenounRpcServerCacheDirectMock).toHaveBeenCalledTimes(1)
+      expect(runPrewarmSafelyMock).not.toHaveBeenCalled()
+      expect(spawnMock).toHaveBeenCalledTimes(2)
+      expect(spawnMock.mock.calls[0]?.[1]).toEqual([
+        '/fake/framework-bin.ts',
+        'typegen',
+      ])
+      expect(spawnMock.mock.calls[1]?.[1]).toEqual([
+        '/fake/framework-bin.ts',
+        'build',
+      ])
+      await waitForAssertion(() => {
+        expect(exitSpy).toHaveBeenCalledWith(0)
+      })
+    } finally {
+      exitSpy.mockRestore()
+      await rm(workspacePath, { recursive: true, force: true })
     }
   })
 

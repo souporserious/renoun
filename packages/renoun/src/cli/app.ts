@@ -25,6 +25,11 @@ import { getDebugLogger } from '../utils/debug.ts'
 import { resolveFrameworkBinFile, type Framework } from './framework.ts'
 import { createBuildAnalysisClientRuntime } from './build-analysis-runtime.ts'
 import {
+  ensureNextGeneratedTypes,
+  getMissingNextGeneratedTypesConfigWarning,
+  shouldSkipBuildPrewarmForMissingNextGeneratedTypes,
+} from './build-prewarm-guard.ts'
+import {
   createDefaultPrewarmOptions,
   runPrewarmSafely,
 } from './prewarm-runner.ts'
@@ -493,24 +498,49 @@ export async function runAppCommand({
     }
 
     if (command === 'build') {
-      log('Prewarming analysis cache for build...')
+      const prewarmOptions = createDefaultPrewarmOptions(runtimeDirectory)
+      const nextGeneratedTypesStatus = await ensureNextGeneratedTypes({
+        framework: resolvedExample.framework,
+        rootPath: runtimeDirectory,
+        tsConfigFilePath: prewarmOptions.analysisOptions?.tsConfigFilePath,
+        log,
+      })
+      const missingNextGeneratedTypesConfigWarning =
+        getMissingNextGeneratedTypesConfigWarning(nextGeneratedTypesStatus)
 
-      try {
-        const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
-        await prewarmRenounRpcServerCache(
-          createDefaultPrewarmOptions(runtimeDirectory)
+      if (missingNextGeneratedTypesConfigWarning) {
+        log(missingNextGeneratedTypesConfigWarning)
+      }
+
+      const shouldSkipBuildPrewarm =
+        shouldSkipBuildPrewarmForMissingNextGeneratedTypes({
+          framework: resolvedExample.framework,
+          rootPath: runtimeDirectory,
+          tsConfigFilePath: prewarmOptions.analysisOptions?.tsConfigFilePath,
+        })
+
+      if (shouldSkipBuildPrewarm) {
+        log(
+          'Skipping analysis cache prewarm until Next.js generated types exist'
         )
-        log('Analysis cache prewarmed')
-      } catch (error) {
-        getDebugLogger().warn(
-          'Failed to prewarm Renoun RPC cache before build',
-          () => ({
-            data: {
-              error: error instanceof Error ? error.message : String(error),
-              runtimeDirectory,
-            },
-          })
-        )
+      } else {
+        log('Prewarming analysis cache for build...')
+
+        try {
+          const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
+          await prewarmRenounRpcServerCache(prewarmOptions)
+          log('Analysis cache prewarmed')
+        } catch (error) {
+          getDebugLogger().warn(
+            'Failed to prewarm Renoun RPC cache before build',
+            () => ({
+              data: {
+                error: error instanceof Error ? error.message : String(error),
+                runtimeDirectory,
+              },
+            })
+          )
+        }
       }
     }
 
