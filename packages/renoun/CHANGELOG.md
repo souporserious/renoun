@@ -1,5 +1,63 @@
 # renoun
 
+## 11.6.0
+
+### Minor Changes
+
+- 6630740: Refactors `Tokens` to use slot-based `components` overrides for token spans, diagnostics, and quick info popovers.
+
+  ### Breaking Changes
+
+  `Tokens` no longer accepts `css`, `className`, or `style` props. Move those overrides to the new `components` slots instead:
+
+  ```diff
+  <Tokens
+  --  css={{
+  --    popover: {
+  --      marginTop: '0.5rem',
+  --    },
+  --  }}
+  --  className={{
+  --    token: 'custom-token',
+  --  }}
+  +  components={{
+  +    Popover: {
+  +      css: {
+  +        marginTop: '0.5rem',
+  +      },
+  +    },
+  +    Token: {
+  +      className: 'custom-token',
+  +    },
+  +  }}
+  />
+  ```
+
+  Use `components.Token`, `components.Error`, and `components.Popover` for the old `token`, `error`, and `popover` override targets.
+
+### Patch Changes
+
+- f010e01: Fixes clone-backed explicit remote refs so warm export-history reads avoid duplicate remote freshness checks and concurrent identical history requests share in-flight work.
+- f28b5e7: Improves multi-worker performance and reliability for repository history and analysis.
+  - Deduplicates export history work across workers using persisted cache
+  - Fixes React streaming/Suspense issues for `History` loading
+  - Reduces redundant git checks with caching and smarter probes
+  - Expands CLI prewarm discovery to include export history
+  - Fixes `Reference` edge cases and crashes
+  - Optimizes directory snapshot and export type resolution
+
+- 19a4969: Tightens cache invalidation across development, CI, and production-oriented analysis flows.
+  - Stops non-production RPC memoization for source text metadata and token requests so local edits cannot be masked by a stale websocket cache layer.
+  - Enables strict hermetic file-system cache defaults in CI and lets runtime analysis snapshots honor the shared environment default again.
+
+- 55f2b65: Fixes explicit-ref analysis for cached git repositories so export and type lookups use the selected ref, and keeps Next.js app caches under `.next/cache/renoun` instead of creating extra `.renoun/cache` roots.
+- 0d20c96: Fixes remote git directory and file reads after switching a repository ref to a branch that only exists as a remote-tracking ref in the cached clone.
+- ec9ac52: Fixes explicit remote ref invalidation for cached git repositories so branch updates refresh file reads, sync reads, and analysis caches against the latest fetched ref.
+- b24b405: Improves build performance and reliability by fixing large analysis RPC responses, making prewarm invalidation incremental, and reducing code block analysis round trips.
+- 934c769: Implements stable theme cache key.
+- d9c6048: Fixes `GitVirtualFileSystem#getFileExports` so remote archive-backed files initialize before export enumeration.
+- 7aefedb: Export all `History` component types.
+
 ## 11.5.0
 
 ### Minor Changes

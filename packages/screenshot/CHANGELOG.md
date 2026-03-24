@@ -1,5 +1,12 @@
 # @renoun/screenshot
 
+## 0.3.3
+
+### Patch Changes
+
+- ce6fd10: Fixes WebGL and canvas capture by snapshotting canvas content at screenshot start before async resource preparation runs. Falls back to a visible placeholder with a clear warning when browser security restrictions prevent cross-origin or tainted canvas pixels from being copied.
+- 28e4b29: Use placeholder when canvas is tainted.
+
 ## 0.3.2
 
 ### Patch Changes
