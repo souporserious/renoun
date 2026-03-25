@@ -59,6 +59,12 @@ export interface DirectoryEntriesRequest {
   filterExtensions: Set<string> | null
 }
 
+export interface DirectoryStructureRequest {
+  directoryPath: string
+  options?: Record<string, unknown>
+  repository?: PrewarmRepositoryInput
+}
+
 export interface FileRequest {
   directoryPath: string
   path: string
@@ -86,13 +92,14 @@ type RenounMethodTarget =
 
 export interface RenounPrewarmTargets {
   directoryGetEntries: DirectoryEntriesRequest[]
+  directoryGetStructure: DirectoryStructureRequest[]
   fileGetFile: FileRequest[]
   exportHistory: ExportHistoryRequest[]
 }
 
 type PendingRenounCallsite = {
   callExpression: CallExpression
-  methodName: 'getEntries' | 'getFile' | 'getExportHistory'
+  methodName: 'getEntries' | 'getFile' | 'getStructure' | 'getExportHistory'
   aliases: RenounAliases
 }
 
@@ -136,6 +143,7 @@ export async function collectRenounPrewarmTargets(
   >()
 
   const getEntriesRequests = new Map<string, DirectoryEntriesRequest>()
+  const getStructureRequests = new Map<string, DirectoryStructureRequest>()
   const getFileRequests: FileRequest[] = []
   const exportHistoryRequests: ExportHistoryRequest[] = []
   const pendingCallsites: PendingRenounCallsite[] = []
@@ -286,6 +294,19 @@ export async function collectRenounPrewarmTargets(
       continue
     }
 
+    if (methodName === 'getStructure') {
+      if (methodTarget.kind !== 'directory') {
+        continue
+      }
+
+      addDirectoryStructureRequest(getStructureRequests, {
+        directoryPath: methodTarget.declaration.path,
+        repository: methodTarget.declaration.repository?.input,
+        options: resolveDirectoryGetStructureOptions(callExpression),
+      })
+      continue
+    }
+
     const fileRequest = resolveGetFileCall(callExpression, methodTarget)
 
     if (fileRequest !== undefined) {
@@ -311,6 +332,7 @@ export async function collectRenounPrewarmTargets(
 
   return {
     directoryGetEntries: Array.from(getEntriesRequests.values()),
+    directoryGetStructure: Array.from(getStructureRequests.values()),
     fileGetFile: getFileRequests,
     exportHistory: exportHistoryRequests,
   }
@@ -456,6 +478,7 @@ function collectRenounDeclarations(
     const methodName = expression.getName()
     if (
       methodName !== 'getEntries' &&
+      methodName !== 'getStructure' &&
       methodName !== 'getFile' &&
       methodName !== 'getExportHistory'
     ) {
@@ -481,6 +504,7 @@ function isLikelyRenounSourceFile(sourceFile: SourceFile): boolean {
     sourceText.includes('getRepository') ||
     sourceText.includes('getExportHistory') ||
     sourceText.includes('getEntries') ||
+    sourceText.includes('getStructure') ||
     sourceText.includes('getFile')
   )
 }
@@ -1102,6 +1126,59 @@ function resolveDirectoryGetEntriesOptions(callExpression: CallExpression): {
         : true,
     filterExtensions,
   }
+}
+
+function resolveDirectoryGetStructureOptions(
+  callExpression: CallExpression
+): Record<string, unknown> | undefined {
+  const firstArgument = callExpression.getArguments()[0]
+  const optionsArgument =
+    firstArgument && Node.isExpression(firstArgument)
+      ? firstArgument
+      : undefined
+
+  if (!optionsArgument) {
+    return undefined
+  }
+
+  const value = resolveLiteralExpression(optionsArgument)
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined
+}
+
+function addDirectoryStructureRequest(
+  requests: Map<string, DirectoryStructureRequest>,
+  request: DirectoryStructureRequest
+): void {
+  const key = JSON.stringify({
+    directoryPath: request.directoryPath,
+    repository: normalizePrewarmDirectoryStructureValue(request.repository),
+    options: normalizePrewarmDirectoryStructureValue(request.options),
+  })
+
+  if (!requests.has(key)) {
+    requests.set(key, request)
+  }
+}
+
+function normalizePrewarmDirectoryStructureValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizePrewarmDirectoryStructureValue(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [
+          key,
+          normalizePrewarmDirectoryStructureValue(entryValue),
+        ])
+    )
+  }
+
+  return value
 }
 
 function parseFilterExtensions(

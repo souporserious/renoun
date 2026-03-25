@@ -88,8 +88,10 @@ const searchIndex = await docs.getStructure({
   includeExports: 'headers',
   includeSections: false,
   includeResolvedTypes: false,
-  includeGitDates: false,
+  includeGitDates: 'first',
 })
 ```
+
+For payload-sensitive indexes, `includeGitDates` accepts `false`, `'first'`, `'last'`, or `'both'` (`true` remains an alias for `'both'`). File `authors` are opt-in via `includeAuthors: true`, and header-mode exports omit `tags` unless you pass `includeTags: true`.
 
 `getStructure()` already returns a flat array of directory and file structures, so `getTree()` remains the dedicated navigation API and no extra `flatten` option is needed today.

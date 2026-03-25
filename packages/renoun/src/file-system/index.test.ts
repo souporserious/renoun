@@ -5251,7 +5251,10 @@ date: 2024-12-24
     test('directory supports lightweight structure mode for export headers', async () => {
       const fileSystem = new InMemoryFileSystem({
         'docs/reference.ts': [
-          '/** Adds one. */',
+          '/**',
+          ' * Adds one.',
+          ' * @deprecated Prefer addTwo.',
+          ' */',
           'export const addOne = (value: number) => value + 1',
         ].join('\n'),
         'docs/page.mdx': [
@@ -5292,6 +5295,7 @@ date: 2024-12-24
         expect.objectContaining({
           kind: 'ModuleExport',
           name: 'addOne',
+          tags: undefined,
           resolvedType: undefined,
           firstCommitDate: undefined,
           lastCommitDate: undefined,
@@ -5301,6 +5305,26 @@ date: 2024-12-24
       expect(page?.sections).toBeUndefined()
       expect(page?.frontmatter?.description).toBe('Page Desc')
       expect(resolveTypeSpy).not.toHaveBeenCalled()
+
+      const structuresWithTags = await directory.getStructure({
+        includeExports: 'headers',
+        includeSections: false,
+        includeGitDates: false,
+        includeResolvedTypes: false,
+        includeTags: true,
+      })
+      const referenceWithTags = structuresWithTags.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/reference.ts'
+      )
+
+      expect(referenceWithTags?.exports).toEqual([
+        expect.objectContaining({
+          kind: 'ModuleExport',
+          name: 'addOne',
+          tags: [expect.objectContaining({ name: 'deprecated' })],
+        }),
+      ])
     })
   })
 

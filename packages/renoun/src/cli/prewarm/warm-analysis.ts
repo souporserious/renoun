@@ -19,6 +19,7 @@ import { isJavaScriptLikeExtension } from '../../utils/is-javascript-like-extens
 import type { Highlighter } from '../../utils/create-highlighter.ts'
 import type {
   DirectoryEntriesRequest,
+  DirectoryStructureRequest,
   ExportHistoryRequest,
   FileRequest,
   RenounPrewarmTargets,
@@ -29,6 +30,10 @@ const PREWARM_FILE_CACHE_CONCURRENCY = Math.max(
   Math.min(32, cpus().length * 2)
 )
 const PREWARM_EXPORT_HISTORY_CONCURRENCY = Math.max(
+  1,
+  Math.min(4, Math.ceil(cpus().length / 4))
+)
+const PREWARM_STRUCTURE_CONCURRENCY = Math.max(
   1,
   Math.min(4, Math.ceil(cpus().length / 4))
 )
@@ -189,6 +194,14 @@ export async function warmRenounPrewarmTargets(
     }))
   }
 
+  if (targets.directoryGetStructure.length > 0) {
+    logger.debug('Collecting Directory#getStructure callsites', () => ({
+      data: {
+        directories: targets.directoryGetStructure.length,
+      },
+    }))
+  }
+
   if (targets.exportHistory.length > 0) {
     logger.debug('Collecting Repository#getExportHistory callsites', () => ({
       data: {
@@ -222,7 +235,11 @@ export async function warmRenounPrewarmTargets(
     mergeWarmTask(task, warmFilesByPath)
   }
 
-  if (warmFilesByPath.size === 0 && targets.exportHistory.length === 0) {
+  if (
+    warmFilesByPath.size === 0 &&
+    targets.directoryGetStructure.length === 0 &&
+    targets.exportHistory.length === 0
+  ) {
     logger.debug('No prewarm files were discovered')
     return {
       fileGetDependencyPathsByRequestKey: {},
@@ -232,6 +249,7 @@ export async function warmRenounPrewarmTargets(
   logger.debug('Prewarming renoun cache targets', () => ({
     data: {
       files: warmFilesByPath.size,
+      directoryStructures: targets.directoryGetStructure.length,
       exportHistories: targets.exportHistory.length,
     },
   }))
@@ -246,6 +264,12 @@ export async function warmRenounPrewarmTargets(
       : Promise.resolve<WarmRenounPrewarmTargetsResult>({
           fileGetDependencyPathsByRequestKey: {},
         }),
+    targets.directoryGetStructure.length > 0
+      ? warmDirectoryStructureRequests(targets.directoryGetStructure, {
+          analysisOptions: options.analysisOptions,
+          logger,
+        })
+      : Promise.resolve(),
     targets.exportHistory.length > 0
       ? warmExportHistoryRequests(targets.exportHistory, { logger })
       : Promise.resolve(),
@@ -505,6 +529,51 @@ function getFileRequestKey(request: FileRequest): string {
     .slice()
     .sort()
     .join('\0')}`
+}
+
+async function warmDirectoryStructureRequests(
+  requests: DirectoryStructureRequest[],
+  options: {
+    analysisOptions: AnalysisOptions | undefined
+    logger: ReturnType<typeof getDebugLogger>
+  }
+): Promise<void> {
+  const { Directory } = await loadEntriesModule()
+  const fileSystemsByTsConfigPath = new Map<string, NodeFileSystem>()
+
+  await forEachConcurrent(
+    requests,
+    {
+      concurrency: PREWARM_STRUCTURE_CONCURRENCY,
+    },
+    async (request) => {
+      try {
+        const fileSystem = getEntryWarmFileSystem(
+          fileSystemsByTsConfigPath,
+          options.analysisOptions
+        )
+        const directory = new Directory({
+          path: request.directoryPath,
+          fileSystem,
+          ...(request.repository
+            ? { repository: request.repository as any }
+            : {}),
+        })
+
+        await directory.getStructure(request.options as any)
+      } catch (error) {
+        options.logger.warn(
+          'Skipping renoun Directory#getStructure prewarm target',
+          () => ({
+            data: {
+              directoryPath: request.directoryPath,
+              error: formatPrewarmError(error),
+            },
+          })
+        )
+      }
+    }
+  )
 }
 
 async function warmExportHistoryRequests(

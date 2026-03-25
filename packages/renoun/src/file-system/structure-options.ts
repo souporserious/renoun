@@ -1,17 +1,37 @@
-import type { StructureOptions } from './types.ts'
+import type { StructureGitDatesOption, StructureOptions } from './types.ts'
+
+export type NormalizedStructureGitDates = false | 'first' | 'last' | 'both'
 
 export interface NormalizedStructureOptions {
   includeExports: boolean | 'headers'
   includeSections: boolean
-  includeGitDates: boolean
+  includeGitDates: NormalizedStructureGitDates
+  includeAuthors: boolean
+  includeTags: boolean
   includeResolvedTypes: boolean
 }
 
 export const DEFAULT_STRUCTURE_OPTIONS: NormalizedStructureOptions = {
   includeExports: true,
   includeSections: true,
-  includeGitDates: true,
+  includeGitDates: 'both',
+  includeAuthors: false,
+  includeTags: true,
   includeResolvedTypes: true,
+}
+
+function normalizeStructureGitDates(
+  includeGitDates: StructureGitDatesOption | undefined
+): NormalizedStructureGitDates {
+  if (includeGitDates === false) {
+    return false
+  }
+
+  if (includeGitDates === 'first' || includeGitDates === 'last') {
+    return includeGitDates
+  }
+
+  return 'both'
 }
 
 export function normalizeStructureOptions(
@@ -24,13 +44,51 @@ export function normalizeStructureOptions(
   const includeExports = options.includeExports ?? true
   const includeResolvedTypes =
     includeExports === true ? options.includeResolvedTypes ?? true : false
+  const includeGitDates = normalizeStructureGitDates(options.includeGitDates)
+  const includeTags =
+    includeExports === false ? false : options.includeTags ?? includeExports !== 'headers'
 
   return {
     includeExports,
     includeSections: options.includeSections ?? true,
-    includeGitDates: options.includeGitDates ?? true,
+    includeGitDates,
+    includeAuthors: options.includeAuthors ?? false,
+    includeTags,
     includeResolvedTypes,
   }
+}
+
+export function includesGitDates(
+  options?: StructureOptions | NormalizedStructureOptions
+): boolean {
+  return normalizeStructureOptions(options).includeGitDates !== false
+}
+
+export function includesFirstCommitDate(
+  options?: StructureOptions | NormalizedStructureOptions
+): boolean {
+  const includeGitDates = normalizeStructureOptions(options).includeGitDates
+  return includeGitDates === 'first' || includeGitDates === 'both'
+}
+
+export function includesLastCommitDate(
+  options?: StructureOptions | NormalizedStructureOptions
+): boolean {
+  const includeGitDates = normalizeStructureOptions(options).includeGitDates
+  return includeGitDates === 'last' || includeGitDates === 'both'
+}
+
+export function includesAuthors(
+  options?: StructureOptions | NormalizedStructureOptions
+): boolean {
+  return normalizeStructureOptions(options).includeAuthors
+}
+
+export function includesGitMetadata(
+  options?: StructureOptions | NormalizedStructureOptions
+): boolean {
+  const normalized = normalizeStructureOptions(options)
+  return normalized.includeAuthors || normalized.includeGitDates !== false
 }
 
 export function getStructureOptionsSignature(
@@ -40,6 +98,8 @@ export function getStructureOptionsSignature(
     options &&
     'includeGitDates' in options &&
     'includeSections' in options &&
+    'includeAuthors' in options &&
+    'includeTags' in options &&
     'includeResolvedTypes' in options &&
     'includeExports' in options
       ? options
@@ -48,7 +108,9 @@ export function getStructureOptionsSignature(
   return [
     `exports:${normalized.includeExports}`,
     `sections:${normalized.includeSections ? '1' : '0'}`,
-    `git:${normalized.includeGitDates ? '1' : '0'}`,
+    `git:${normalized.includeGitDates === false ? '0' : normalized.includeGitDates}`,
+    `authors:${normalized.includeAuthors ? '1' : '0'}`,
+    `tags:${normalized.includeTags ? '1' : '0'}`,
     `types:${normalized.includeResolvedTypes ? '1' : '0'}`,
   ].join('|')
 }

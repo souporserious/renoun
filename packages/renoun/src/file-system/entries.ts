@@ -133,6 +133,7 @@ import type {
   Section,
   GitMetadata,
   GitExportMetadata,
+  GitModuleMetadata,
   StructureOptions,
 } from './types.ts'
 import {
@@ -325,6 +326,19 @@ function isGitExportMetadataProvider(
   )
 }
 
+interface GitModuleMetadataProvider {
+  getModuleMetadata(path: string): Promise<GitModuleMetadata>
+}
+
+function isGitModuleMetadataProvider(
+  fileSystem: BaseFileSystem
+): fileSystem is BaseFileSystem & GitModuleMetadataProvider {
+  return (
+    typeof (fileSystem as Partial<GitModuleMetadataProvider>)
+      .getModuleMetadata === 'function'
+  )
+}
+
 function createEmptyGitMetadata(): GitMetadata {
   return {
     authors: [],
@@ -491,6 +505,41 @@ function deserializeGitExportMetadataFromCache(
   }
 }
 
+function normalizeModuleExportTags(
+  tags:
+    | Array<{
+        name: string
+        text?: unknown
+      }>
+    | undefined
+): Array<{ name: string; value?: string }> | undefined {
+  if (!tags || tags.length === 0) {
+    return undefined
+  }
+
+  const normalizedTags = tags.map((tag) => {
+    const text = tag.text
+    let value: string | undefined
+
+    if (Array.isArray(text)) {
+      value = text
+        .map((part: any) => (typeof part === 'string' ? part : part?.text))
+        .filter(Boolean)
+        .join('')
+        .trim()
+    } else if (typeof text === 'string') {
+      value = text
+    }
+
+    return {
+      name: tag.name,
+      value: value && value.length > 0 ? value : undefined,
+    }
+  })
+
+  return normalizedTags.length > 0 ? normalizedTags : undefined
+}
+
 function getGitHistoryDependencyName(rootPath: string): string {
   return `git-history:${normalizePathKey(rootPath)}`
 }
@@ -576,6 +625,31 @@ async function getGitExportMetadataForPath(
   }
 
   return createEmptyGitExportMetadata()
+}
+
+async function getGitModuleMetadataForPath(
+  repository: RepositoryInput | undefined,
+  fileSystem: BaseFileSystem,
+  path: string
+): Promise<GitModuleMetadata | undefined> {
+  try {
+    const normalizedRepository = normalizeRepositoryInput(repository)
+    if (normalizedRepository) {
+      const repoFileSystem = normalizedRepository.getFileSystem()
+      if (isGitModuleMetadataProvider(repoFileSystem)) {
+        const repositoryPath = fileSystem.getRelativePathToWorkspace(path)
+        return repoFileSystem.getModuleMetadata(repositoryPath)
+      }
+    }
+
+    if (isGitModuleMetadataProvider(fileSystem)) {
+      return fileSystem.getModuleMetadata(path)
+    }
+  } catch {
+    return undefined
+  }
+
+  return undefined
 }
 
 /** A record of loaders for different file extensions. */
@@ -1274,7 +1348,10 @@ export class File<
     gitMetadata?: GitMetadata
   }> {
     const optionsSignature = getStructureOptionsSignature(structureOptions)
-    if (!structureOptions.includeGitDates) {
+    if (
+      structureOptions.includeGitDates === false &&
+      !structureOptions.includeAuthors
+    ) {
       return {
         nodeKey: this.getStructureCacheKey(structureOptions),
       }
@@ -1536,7 +1613,15 @@ export class File<
     gitMetadata?: GitMetadata,
     structureOptions: NormalizedStructureOptions = normalizeStructureOptions()
   ): Promise<FileStructure> {
-    const resolvedGitMetadata = structureOptions.includeGitDates
+    const shouldIncludeGitMetadata =
+      structureOptions.includeGitDates !== false || structureOptions.includeAuthors
+    const includeFirstCommitDate =
+      structureOptions.includeGitDates === 'first' ||
+      structureOptions.includeGitDates === 'both'
+    const includeLastCommitDate =
+      structureOptions.includeGitDates === 'last' ||
+      structureOptions.includeGitDates === 'both'
+    const resolvedGitMetadata = shouldIncludeGitMetadata
       ? gitMetadata ?? (await this.#loadGitMetadataForStructure())
       : undefined
 
@@ -1549,10 +1634,24 @@ export class File<
       relativePath: this.workspacePath,
       extension: this.extension,
       depth: this.depth,
-      firstCommitDate: resolvedGitMetadata?.firstCommitDate,
-      lastCommitDate: resolvedGitMetadata?.lastCommitDate,
-      authors: resolvedGitMetadata?.authors,
+      firstCommitDate: includeFirstCommitDate
+        ? resolvedGitMetadata?.firstCommitDate
+        : undefined,
+      lastCommitDate: includeLastCommitDate
+        ? resolvedGitMetadata?.lastCommitDate
+        : undefined,
+      authors: structureOptions.includeAuthors
+        ? resolvedGitMetadata?.authors
+        : undefined,
     }
+  }
+
+  protected async buildStructureValue(
+    normalizedOptions: NormalizedStructureOptions,
+    gitMetadata?: GitMetadata,
+    _mode: 'cached' | 'manifest' = 'cached'
+  ): Promise<FileStructure> {
+    return this.getFileStructureBase(gitMetadata, normalizedOptions)
   }
 
   /** @internal */
@@ -1565,11 +1664,26 @@ export class File<
       snapshot: session.snapshot.id,
       filePath: normalizePathKey(this.absolutePath),
       extension: this.extension,
-      gitMetadata: normalizedOptions.includeGitDates
+      gitMetadata:
+        normalizedOptions.includeGitDates !== false || normalizedOptions.includeAuthors
         ? this.#structureGitMetadataSignature
-        : 'none',
+          : 'none',
       options: getStructureOptionsSignature(normalizedOptions),
     })
+  }
+
+  /** @internal */
+  async buildStructureManifest(
+    options?: StructureOptions | NormalizedStructureOptions
+  ): Promise<FileStructure> {
+    const session = this.#directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
+    const { gitMetadata } = await this.resolveStructureCacheState(
+      session,
+      normalizedOptions
+    )
+
+    return this.buildStructureValue(normalizedOptions, gitMetadata, 'manifest')
   }
 
   async getStructure(options?: StructureOptions): Promise<FileStructure> {
@@ -1584,7 +1698,7 @@ export class File<
       { persist: true },
       async (ctx) => {
         await ctx.recordFileDep(filePath)
-        return this.getFileStructureBase(gitMetadata, normalizedOptions)
+        return this.buildStructureValue(normalizedOptions, gitMetadata)
       }
     )
   }
@@ -2272,7 +2386,7 @@ export class ModuleExport<Value> {
     gitMetadata?: GitExportMetadata
   }> {
     const optionsSignature = getStructureOptionsSignature(structureOptions)
-    if (!structureOptions.includeGitDates) {
+    if (structureOptions.includeGitDates === false) {
       return {
         nodeKey: this.getStructureCacheKey(structureOptions),
       }
@@ -2408,7 +2522,7 @@ export class ModuleExport<Value> {
       snapshot: session.snapshot.id,
       filePath: normalizePathKey(this.#file.absolutePath),
       exportName: this.#name,
-      gitMetadata: normalizedOptions.includeGitDates
+      gitMetadata: normalizedOptions.includeGitDates !== false
         ? this.#structureGitMetadataSignature
         : 'none',
       options: getStructureOptionsSignature(normalizedOptions),
@@ -2667,30 +2781,6 @@ export class ModuleExport<Value> {
           }
         }
 
-        const tags = this.getTags()
-        const normalizedTags =
-          tags?.map((tag) => {
-            const text = tag.text as unknown
-            let value: string | undefined
-
-            if (Array.isArray(text)) {
-              value = text
-                .map((part: any) =>
-                  typeof part === 'string' ? part : part?.text
-                )
-                .filter(Boolean)
-                .join('')
-                .trim()
-            } else if (typeof text === 'string') {
-              value = text
-            }
-
-            return {
-              name: tag.name,
-              value: value && value.length > 0 ? value : undefined,
-            }
-          }) ?? undefined
-
         const slug = this.slug
         const pathname = this.#file.getPathname()
 
@@ -2702,10 +2792,20 @@ export class ModuleExport<Value> {
           path: `${pathname}#${slug}`,
           relativePath: `${this.#file.workspacePath}#${slug}`,
           description: this.description,
-          tags: normalizedTags,
+          tags: normalizedOptions.includeTags
+            ? normalizeModuleExportTags(this.getTags())
+            : undefined,
           resolvedType,
-          firstCommitDate: gitMetadata?.firstCommitDate,
-          lastCommitDate: gitMetadata?.lastCommitDate,
+          firstCommitDate:
+            normalizedOptions.includeGitDates === 'first' ||
+            normalizedOptions.includeGitDates === 'both'
+              ? gitMetadata?.firstCommitDate
+              : undefined,
+          lastCommitDate:
+            normalizedOptions.includeGitDates === 'last' ||
+            normalizedOptions.includeGitDates === 'both'
+              ? gitMetadata?.lastCommitDate
+              : undefined,
         }
       }
     )
@@ -2872,6 +2972,68 @@ export class JavaScriptFile<
     )
   }
 
+  async #getFilteredExportMetadata() {
+    const fileExports = await this.#getExports()
+    const fileSystem = this.getParent().getFileSystem()
+
+    if (!(await fileSystem.shouldStripInternalAsync())) {
+      return fileExports
+    }
+
+    return fileExports.filter((exportMetadata) => {
+      const tags = exportMetadata.metadata?.jsDocMetadata?.tags
+
+      if (!tags || tags.length === 0) {
+        return true
+      }
+
+      for (let tagIndex = 0; tagIndex < tags.length; tagIndex++) {
+        const tag = tags[tagIndex]
+
+        if (!tag || tag.name !== 'internal') {
+          return true
+        }
+      }
+
+      return false
+    })
+  }
+
+  #getStaticExportStructure(
+    exportMetadata: JavaScriptFileExportMetadata,
+    options: NormalizedStructureOptions,
+    gitMetadata?: GitExportMetadata
+  ): ModuleExportStructure {
+    const displayName =
+      exportMetadata.name === 'default' ? this.name : exportMetadata.name
+    const slug = createSlug(displayName, this.#slugCasing)
+    const tags = exportMetadata.metadata?.jsDocMetadata?.tags
+
+    return {
+      kind: 'ModuleExport',
+      name: displayName,
+      title: formatNameAsTitle(displayName),
+      slug,
+      path: `${this.getPathname()}#${slug}`,
+      relativePath: `${this.workspacePath}#${slug}`,
+      description: exportMetadata.metadata?.jsDocMetadata?.description,
+      tags: options.includeTags
+        ? normalizeModuleExportTags(
+            tags?.filter((tag) => tag?.name !== 'template')
+          )
+        : undefined,
+      resolvedType: undefined,
+      firstCommitDate:
+        options.includeGitDates === 'first' || options.includeGitDates === 'both'
+          ? gitMetadata?.firstCommitDate
+          : undefined,
+      lastCommitDate:
+        options.includeGitDates === 'last' || options.includeGitDates === 'both'
+          ? gitMetadata?.lastCommitDate
+          : undefined,
+    }
+  }
+
   /** Get all resolved export types from the JavaScript file. */
   async getExportTypes(filter?: TypeFilter): Promise<Kind[]> {
     const directory = this.getParent()
@@ -2942,31 +3104,137 @@ export class JavaScriptFile<
 
   /** Get all exports from the JavaScript file. */
   async getExports() {
-    const fileExports = await this.#getExports()
-    const fileSystem = this.getParent().getFileSystem()
-    const filteredExports =
-      !(await fileSystem.shouldStripInternalAsync())
-        ? fileExports
-        : fileExports.filter((fileExport) => {
-            const tags = fileExport.metadata?.jsDocMetadata?.tags
-
-            if (!tags || tags.length === 0) {
-              return true
-            }
-
-            for (let tagIndex = 0; tagIndex < tags.length; tagIndex++) {
-              const tag = tags[tagIndex]
-
-              if (!tag || tag.name !== 'internal') {
-                return true
-              }
-            }
-
-            return false
-          })
+    const filteredExports = await this.#getFilteredExportMetadata()
 
     return filteredExports.map((exportMetadata) =>
       this.#getOrCreateStaticExport(exportMetadata as any)
+    )
+  }
+
+  #getExportStructuresCacheNodeKey(
+    options: StructureOptions | NormalizedStructureOptions
+  ) {
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const normalizedOptions = normalizeStructureOptions(options)
+
+    return createCacheNodeKey('structure.file.exports', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizePathKey(this.absolutePath),
+      options: getStructureOptionsSignature(normalizedOptions),
+    })
+  }
+
+  #getGitModuleMetadataCacheNodeKey(session: Session) {
+    return createCacheNodeKey('git.module.metadata', {
+      version: FS_STRUCTURE_CACHE_VERSION,
+      snapshot: session.snapshot.id,
+      filePath: normalizePathKey(this.absolutePath),
+      rootPath: normalizePathKey(this.getParent().getRootPath()),
+    })
+  }
+
+  async #getCachedGitModuleMetadata(): Promise<GitModuleMetadata | undefined> {
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const fileSystem = directory.getFileSystem()
+    const filePath = this.absolutePath
+    const gitHistoryDependency = await resolveGitHistoryDependency(
+      session,
+      directory.getRootPath()
+    )
+    const nodeKey = this.#getGitModuleMetadataCacheNodeKey(session)
+    const moduleMetadata = await session.cache.getOrCompute<
+      GitModuleMetadata | null
+    >(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
+      },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        recordGitHistoryDependency(ctx, gitHistoryDependency)
+
+        return (
+          (await getGitModuleMetadataForPath(
+            directory.getRepositoryIfAvailable(),
+            fileSystem,
+            filePath
+          )) ?? null
+        )
+      }
+    )
+
+    return moduleMetadata ?? undefined
+  }
+
+  async #getExportStructures(
+    options: NormalizedStructureOptions
+  ): Promise<ModuleExportStructure[] | undefined> {
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const filePath = this.absolutePath
+    const nodeKey = this.#getExportStructuresCacheNodeKey(options)
+    const gitHistoryDependency = options.includeGitDates !== false
+      ? await resolveGitHistoryDependency(session, directory.getRootPath())
+      : undefined
+    const structures = await session.cache.getOrCompute(
+      nodeKey,
+      {
+        persist: true,
+        constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
+      },
+      async (ctx) => {
+        await ctx.recordFileDep(filePath)
+        recordGitHistoryDependency(ctx, gitHistoryDependency)
+        return (await this.#buildExportStructuresValue(options)) ?? []
+      }
+    )
+
+    return structures.length > 0 ? structures : undefined
+  }
+
+  async #buildExportStructuresValue(
+    options: NormalizedStructureOptions
+  ): Promise<ModuleExportStructure[] | undefined> {
+    const exportMetadata = await this.#getFilteredExportMetadata()
+
+    if (exportMetadata.length === 0) {
+      return undefined
+    }
+
+    if (!options.includeResolvedTypes) {
+      if (options.includeGitDates === false) {
+        return exportMetadata.map((metadata) =>
+          this.#getStaticExportStructure(metadata, options)
+        )
+      }
+
+      const moduleMetadata = await this.#getCachedGitModuleMetadata()
+
+      if (moduleMetadata) {
+        return exportMetadata.map((metadata) =>
+          this.#getStaticExportStructure(
+            metadata,
+            options,
+            moduleMetadata.exports[metadata.name]
+          )
+        )
+      }
+    }
+
+    const fileExports = exportMetadata.map((metadata) =>
+      this.#getOrCreateStaticExport(metadata as any)
+    )
+
+    return mapConcurrent(
+      fileExports,
+      {
+        concurrency: Math.min(8, fileExports.length || 1),
+      },
+      async (fileExport) => fileExport.getStructure(options)
     )
   }
 
@@ -3180,6 +3448,27 @@ export class JavaScriptFile<
     return fileSystem.getFoldingRanges(this.absolutePath)
   }
 
+  protected override async buildStructureValue(
+    normalizedOptions: NormalizedStructureOptions,
+    gitMetadata?: GitMetadata,
+    mode: 'cached' | 'manifest' = 'cached'
+  ): Promise<FileStructure> {
+    const base = await this.getFileStructureBase(gitMetadata, normalizedOptions)
+    let exports: ModuleExportStructure[] | undefined
+
+    if (normalizedOptions.includeExports) {
+      exports =
+        mode === 'manifest'
+          ? await this.#buildExportStructuresValue(normalizedOptions)
+          : await this.#getExportStructures(normalizedOptions)
+    }
+
+    return {
+      ...base,
+      exports,
+    }
+  }
+
   override async getStructure(options?: StructureOptions): Promise<FileStructure> {
     const directory = this.getParent()
     const session = directory.getSession()
@@ -3187,47 +3476,27 @@ export class JavaScriptFile<
     const { nodeKey, gitMetadata } =
       await this.resolveStructureCacheState(session, normalizedOptions)
     const filePath = this.absolutePath
+    const exportStructuresNodeKey = normalizedOptions.includeExports
+      ? this.#getExportStructuresCacheNodeKey(normalizedOptions)
+      : undefined
+    const shouldRecordExportStructureNodeDep =
+      normalizedOptions.includeResolvedTypes
 
     return session.cache.getOrCompute(
       nodeKey,
       { persist: true },
       async (ctx) => {
         await ctx.recordFileDep(filePath)
-
-        const base = await this.getFileStructureBase(
-          gitMetadata,
-          normalizedOptions
+        const structure = await this.buildStructureValue(
+          normalizedOptions,
+          gitMetadata
         )
-        let exports: ModuleExportStructure[] | undefined
 
-        if (normalizedOptions.includeExports) {
-          const fileExports = await this.getExports()
-          const collectedExports: ModuleExportStructure[] = []
-
-          for (const fileExport of fileExports) {
-            if (typeof (fileExport as any).getStructure === 'function') {
-              const exportStructure = await (fileExport as any).getStructure(
-                normalizedOptions
-              )
-              collectedExports.push(exportStructure)
-            }
-
-            if (
-              typeof (fileExport as any).getStructureCacheKey === 'function'
-            ) {
-              await ctx.recordNodeDep(
-                (fileExport as any).getStructureCacheKey(normalizedOptions)
-              )
-            }
-          }
-
-          exports = collectedExports.length > 0 ? collectedExports : undefined
+        if (shouldRecordExportStructureNodeDep && exportStructuresNodeKey) {
+          await ctx.recordNodeDep(exportStructuresNodeKey)
         }
 
-        return {
-          ...base,
-          exports,
-        }
+        return structure
       }
     )
   }
@@ -4075,32 +4344,40 @@ export class MDXFile<
       { persist: true },
       async (ctx) => {
         await ctx.recordFileDep(filePath)
-
-        const base = await this.getFileStructureBase(
-          gitMetadata,
-          normalizedOptions
+        const structure = await this.buildStructureValue(
+          normalizedOptions,
+          gitMetadata
         )
-        const frontmatter = await this.getFrontmatter().catch(() => undefined)
-        const sections = normalizedOptions.includeSections
-          ? await this.getSections().catch(() => undefined)
-          : undefined
         await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
         if (normalizedOptions.includeSections) {
           await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
         }
 
-        const description =
-          (frontmatter?.['description'] as string | undefined) ??
-          (sections && sections.length > 0 ? sections[0]!.title : undefined)
-
-        return {
-          ...base,
-          frontmatter,
-          sections,
-          description,
-        }
+        return structure
       }
     )
+  }
+
+  protected override async buildStructureValue(
+    normalizedOptions: NormalizedStructureOptions,
+    gitMetadata?: GitMetadata,
+    _mode: 'cached' | 'manifest' = 'cached'
+  ): Promise<FileStructure> {
+    const base = await this.getFileStructureBase(gitMetadata, normalizedOptions)
+    const frontmatter = await this.getFrontmatter().catch(() => undefined)
+    const sections = normalizedOptions.includeSections
+      ? await this.getSections().catch(() => undefined)
+      : undefined
+    const description =
+      (frontmatter?.['description'] as string | undefined) ??
+      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+
+    return {
+      ...base,
+      frontmatter,
+      sections,
+      description,
+    }
   }
 
   /** Check if an export exists at runtime in the MDX file. */
@@ -4683,32 +4960,40 @@ export class MarkdownFile<
       { persist: true },
       async (ctx) => {
         await ctx.recordFileDep(filePath)
-
-        const base = await this.getFileStructureBase(
-          gitMetadata,
-          normalizedOptions
+        const structure = await this.buildStructureValue(
+          normalizedOptions,
+          gitMetadata
         )
-        const frontmatter = await this.getFrontmatter().catch(() => undefined)
-        const sections = normalizedOptions.includeSections
-          ? await this.getSections().catch(() => undefined)
-          : undefined
         await ctx.recordNodeDep(this.#getFrontmatterCacheNodeKey())
         if (normalizedOptions.includeSections) {
           await ctx.recordNodeDep(this.#getSectionsCacheNodeKey())
         }
 
-        const description =
-          (frontmatter?.['description'] as string | undefined) ??
-          (sections && sections.length > 0 ? sections[0]!.title : undefined)
-
-        return {
-          ...base,
-          frontmatter,
-          sections,
-          description,
-        }
+        return structure
       }
     )
+  }
+
+  protected override async buildStructureValue(
+    normalizedOptions: NormalizedStructureOptions,
+    gitMetadata?: GitMetadata,
+    _mode: 'cached' | 'manifest' = 'cached'
+  ): Promise<FileStructure> {
+    const base = await this.getFileStructureBase(gitMetadata, normalizedOptions)
+    const frontmatter = await this.getFrontmatter().catch(() => undefined)
+    const sections = normalizedOptions.includeSections
+      ? await this.getSections().catch(() => undefined)
+      : undefined
+    const description =
+      (frontmatter?.['description'] as string | undefined) ??
+      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+
+    return {
+      ...base,
+      frontmatter,
+      sections,
+      description,
+    }
   }
 
   /** Get the runtime value of an export in the Markdown file. (Permissive signature for union compatibility.) */
@@ -7367,14 +7652,27 @@ export class Directory<
     const session = this.#getSession()
     const directoryPath = this.absolutePath
     const normalizedOptions = normalizeStructureOptions(options)
-    type StructureCacheContext = {
-      recordDirectoryDep(path: string): Promise<unknown>
-      recordNodeDep(nodeKey: string): Promise<unknown>
-      recordFileDep(path: string): Promise<unknown>
-    }
+    const gitHistoryDependency =
+      normalizedOptions.includeGitDates !== false || normalizedOptions.includeAuthors
+      ? await resolveGitHistoryDependency(session, this.getRootPath())
+      : undefined
+    const shouldBuildFileStructuresInline =
+      !normalizedOptions.includeResolvedTypes
+    const shouldRecordChildStructureNodeDeps =
+      normalizedOptions.includeResolvedTypes
+    type StructureCacheContext = Pick<
+      CacheStoreComputeContext,
+      'recordDirectoryDep' | 'recordNodeDep' | 'recordFileDep' | 'recordConstDep'
+    >
     const buildStructure = async (ctx?: StructureCacheContext) => {
       if (ctx) {
         await ctx.recordDirectoryDep(directoryPath)
+        if (gitHistoryDependency) {
+          ctx.recordConstDep(
+            gitHistoryDependency.name,
+            gitHistoryDependency.version
+          )
+        }
       }
 
       const relativePath = this.workspacePath
@@ -7393,32 +7691,64 @@ export class Directory<
       ]
 
       const entries = await this.getEntries({
+        recursive: true,
         includeDirectoryNamedFiles: true,
         includeIndexAndReadmeFiles: true,
-      })
+      } as any)
+      const structureConcurrency = shouldBuildFileStructuresInline
+        ? Math.min(24, entries.length || 1)
+        : Math.min(8, entries.length || 1)
 
-      for (const entry of entries) {
-        if (typeof (entry as any).getStructure === 'function') {
-          const entryStructure = await (entry as any).getStructure(
-            normalizedOptions
-          )
-          if (Array.isArray(entryStructure)) {
-            structures.push(...entryStructure)
-          } else {
-            structures.push(entryStructure)
+      const entryStructures = await mapConcurrent(
+        entries,
+        {
+          concurrency: structureConcurrency,
+        },
+        async (entry) => {
+          if (entry instanceof Directory) {
+            return {
+              kind: 'directory' as const,
+              structure: {
+                kind: 'Directory' as const,
+                name: entry.name,
+                title: entry.title,
+                slug: entry.slug,
+                path: entry.getPathname(),
+                relativePath: entry.workspacePath,
+                depth: entry.depth,
+              },
+              dependencyPath: entry.absolutePath,
+            }
+          }
+
+          const structure = shouldBuildFileStructuresInline
+            ? await entry.buildStructureManifest(normalizedOptions)
+            : await entry.getStructure(normalizedOptions)
+
+          return {
+            kind: 'file' as const,
+            structure,
+            dependencyPath: entry.absolutePath,
+            nodeKey: shouldBuildFileStructuresInline
+              ? undefined
+              : entry.getStructureCacheKey(normalizedOptions),
+          }
+        }
+      )
+
+      for (const entryStructure of entryStructures) {
+        structures.push(entryStructure.structure)
+
+        if (ctx && entryStructure.nodeKey) {
+          if (shouldRecordChildStructureNodeDeps) {
+            await ctx.recordNodeDep(entryStructure.nodeKey)
           }
         }
 
-        if (ctx && typeof (entry as any).getStructureCacheKey === 'function') {
-          await ctx.recordNodeDep(
-            (entry as any).getStructureCacheKey(normalizedOptions)
-          )
-        }
-
-        if (ctx && entry instanceof File) {
-          await ctx.recordFileDep(entry.absolutePath)
-        } else if (ctx && entry instanceof Directory) {
-          await ctx.recordDirectoryDep(entry.absolutePath)
+        if (ctx && entryStructure.kind === 'file') {
+          await ctx.recordFileDep(entryStructure.dependencyPath)
+        } else if (ctx) {
+          await ctx.recordDirectoryDep(entryStructure.dependencyPath)
         }
       }
 
@@ -7432,8 +7762,13 @@ export class Directory<
     const nodeKey = this.getStructureCacheKey(normalizedOptions)
     const persist = this.#canPersistStructureCache()
 
-    return session.cache.getOrCompute(nodeKey, { persist }, async (ctx) =>
-      buildStructure(ctx)
+    return session.cache.getOrCompute(
+      nodeKey,
+      {
+        persist,
+        constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
+      },
+      async (ctx) => buildStructure(ctx)
     )
   }
 

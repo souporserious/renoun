@@ -49,7 +49,12 @@ import { NodeFileSystem } from './NodeFileSystem.ts'
 import { Session } from './Session.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
 import { Collection, Directory, File, Package, Workspace } from './index.tsx'
-import type { FileStructure, GitExportMetadata, GitMetadata } from './types.ts'
+import type {
+  FileStructure,
+  GitExportMetadata,
+  GitMetadata,
+  GitModuleMetadata,
+} from './types.ts'
 import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-location.ts'
 
 type SqliteComputeSlotPersistence = CacheStorePersistence & {
@@ -334,6 +339,39 @@ class HeadAwareMetadataNodeFileSystem extends NestedCwdNodeFileSystem {
   ): Promise<GitExportMetadata> {
     this.exportMetadataCalls += 1
     return this.exportMetadata
+  }
+}
+
+class HeadAwareModuleMetadataNodeFileSystem extends HeadAwareMetadataNodeFileSystem {
+  moduleMetadataCalls = 0
+  moduleExportMetadata: Record<string, GitExportMetadata> = {
+    alpha: {
+      firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+      lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+      firstCommitHash: 'a1',
+      lastCommitHash: 'b2',
+    },
+    beta: {
+      firstCommitDate: new Date('2024-01-02T00:00:00.000Z'),
+      lastCommitDate: new Date('2024-02-02T00:00:00.000Z'),
+      firstCommitHash: 'a2',
+      lastCommitHash: 'b3',
+    },
+  }
+
+  async getModuleMetadata(path: string): Promise<GitModuleMetadata> {
+    this.moduleMetadataCalls += 1
+
+    return {
+      kind: 'module',
+      path: normalizePathKey(path),
+      ref: 'head',
+      refCommit: 'head',
+      firstCommitDate: this.fileMetadata.firstCommitDate?.toISOString(),
+      lastCommitDate: this.fileMetadata.lastCommitDate?.toISOString(),
+      authors: this.fileMetadata.authors,
+      exports: this.moduleExportMetadata,
+    }
   }
 }
 
@@ -1470,9 +1508,18 @@ export type Metadata = Value`,
     const directory = new Directory({ fileSystem })
     const file = await directory.getFile('index', 'ts')
     const valueExport = await file.getExport('value')
+    const fileStructureOptions = {
+      includeGitDates: 'last' as const,
+      includeAuthors: true,
+    }
+    const exportStructureOptions = {
+      includeGitDates: 'last' as const,
+    }
 
-    const firstFileStructure = await file.getStructure()
-    const firstExportStructure = await valueExport.getStructure()
+    const firstFileStructure = await file.getStructure(fileStructureOptions)
+    const firstExportStructure = await valueExport.getStructure(
+      exportStructureOptions
+    )
 
     fileSystem.fileMetadata = {
       authors: [
@@ -1493,23 +1540,93 @@ export type Metadata = Value`,
       lastCommitHash: 'b2',
     }
 
-    const secondFileStructure = await file.getStructure()
-    const secondExportStructure = await valueExport.getStructure()
+    const secondFileStructure = await file.getStructure(fileStructureOptions)
+    const secondExportStructure = await valueExport.getStructure(
+      exportStructureOptions
+    )
 
+    expect(firstFileStructure.firstCommitDate).toBeUndefined()
     expect(firstFileStructure.lastCommitDate?.toISOString()).toBe(
       '2024-01-01T00:00:00.000Z'
     )
+    expect(secondFileStructure.firstCommitDate).toBeUndefined()
     expect(secondFileStructure.lastCommitDate?.toISOString()).toBe(
       '2024-02-01T00:00:00.000Z'
     )
     expect(firstFileStructure.authors?.[0]?.commitCount).toBe(1)
     expect(secondFileStructure.authors?.[0]?.commitCount).toBe(2)
+    expect(firstExportStructure.firstCommitDate).toBeUndefined()
     expect(firstExportStructure.lastCommitDate?.toISOString()).toBe(
       '2024-01-01T00:00:00.000Z'
     )
+    expect(secondExportStructure.firstCommitDate).toBeUndefined()
     expect(secondExportStructure.lastCommitDate?.toISOString()).toBe(
       '2024-02-01T00:00:00.000Z'
     )
+  })
+
+  test('omits authors by default and supports first-date-only structures', async () => {
+    class MetadataAwareInMemoryFileSystem extends InMemoryFileSystem {
+      fileMetadata: GitMetadata = {
+        authors: [
+          {
+            name: 'Ada',
+            commitCount: 2,
+            firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+            lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+          },
+        ],
+        firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+      }
+      exportMetadata: GitExportMetadata = {
+        firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+        lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+        firstCommitHash: 'a1',
+        lastCommitHash: 'b2',
+      }
+
+      async getGitFileMetadata(_path: string): Promise<GitMetadata> {
+        return this.fileMetadata
+      }
+
+      async getGitExportMetadata(
+        _path: string,
+        _startLine: number,
+        _endLine: number
+      ): Promise<GitExportMetadata> {
+        return this.exportMetadata
+      }
+    }
+
+    const fileSystem = new MetadataAwareInMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const valueExport = await file.getExport('value')
+
+    const fileStructure = await file.getStructure({
+      includeGitDates: 'first',
+    })
+    const fileStructureWithAuthors = await file.getStructure({
+      includeGitDates: 'first',
+      includeAuthors: true,
+    })
+    const exportStructure = await valueExport.getStructure({
+      includeGitDates: 'first',
+    })
+
+    expect(fileStructure.firstCommitDate?.toISOString()).toBe(
+      '2024-01-01T00:00:00.000Z'
+    )
+    expect(fileStructure.lastCommitDate).toBeUndefined()
+    expect(fileStructure.authors).toBeUndefined()
+    expect(fileStructureWithAuthors.authors?.[0]?.commitCount).toBe(2)
+    expect(exportStructure.firstCommitDate?.toISOString()).toBe(
+      '2024-01-01T00:00:00.000Z'
+    )
+    expect(exportStructure.lastCommitDate).toBeUndefined()
   })
 
   test('recomputes file and export git metadata after session reset when workspace token is unchanged', async () => {
@@ -1625,6 +1742,54 @@ export type Metadata = Value`,
     expect(fileSystem.exportMetadataCalls).toBeGreaterThan(
       priorExportMetadataCalls
     )
+  })
+
+  test('uses module-level git metadata for header-only JavaScript structures', async () => {
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-module-structure-'
+    )
+    const scopedCwd = join(tempDirectory, 'scoped-cwd')
+    const tsConfigPath = join(tempDirectory, 'tsconfig.json')
+    const fileSystem = new HeadAwareModuleMetadataNodeFileSystem(
+      scopedCwd,
+      tsConfigPath,
+      'head:a'
+    )
+
+    mkdirSync(scopedCwd, { recursive: true })
+    writeFileSync(
+      join(scopedCwd, 'index.ts'),
+      ['export const alpha = 1', 'export const beta = 2'].join('\n'),
+      'utf8'
+    )
+    writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+    try {
+      const directory = new Directory({ fileSystem })
+      const file = await directory.getFile('index', 'ts')
+
+      const structure = await file.getStructure({
+        includeExports: 'headers',
+        includeSections: false,
+        includeResolvedTypes: false,
+        includeGitDates: true,
+      })
+
+      expect(fileSystem.moduleMetadataCalls).toBe(1)
+      expect(fileSystem.exportMetadataCalls).toBe(0)
+      expect(
+        structure.exports?.map((entry) => [
+          entry.name,
+          entry.lastCommitDate?.toISOString(),
+        ])
+      ).toEqual([
+        ['alpha', '2024-02-01T00:00:00.000Z'],
+        ['beta', '2024-02-02T00:00:00.000Z'],
+      ])
+    } finally {
+      Session.reset(fileSystem)
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
   })
 
   test('invalidates cached markdown sections on NodeFileSystem when files change', async () => {
@@ -4184,6 +4349,83 @@ describe('sqlite cache persistence', () => {
       expect(rebuiltFile).toBeDefined()
       expect(secondFileSystem.fileMetadataCalls).toBe(0)
       expect(secondFileSystem.exportMetadataCalls).toBe(0)
+    })
+  })
+
+  test('reuses persisted directory structure manifest when workspace token is unchanged', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      const cacheDirectory = join(tmpDirectory, '.renoun', 'cache')
+      const token = `head:${'a'.repeat(40)};dirty:${'0'.repeat(40)};count:0;ignored-only:0`
+      const structureOptions = {
+        includeExports: 'headers' as const,
+        includeSections: false,
+        includeResolvedTypes: false,
+        includeGitDates: true,
+      }
+
+      mkdirSync(docsDirectory, { recursive: true })
+      writeFileSync(
+        join(docsDirectory, 'index.ts'),
+        ['export const alpha = 1', 'export const beta = 2'].join('\n'),
+        'utf8'
+      )
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const firstFileSystem = new HeadAwareModuleMetadataNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        token
+      )
+      ;(firstFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+      const firstExportsSpy = vi.spyOn(firstFileSystem, 'getFileExports')
+
+      const firstDirectory = new Directory({
+        fileSystem: firstFileSystem,
+        path: workspaceDirectory,
+        cache: new Cache({ outputDirectory: cacheDirectory }),
+      })
+
+      const firstStructure = await firstDirectory.getStructure(structureOptions)
+      expect(
+        firstStructure.some(
+          (entry) =>
+            entry.kind === 'File' &&
+            entry.relativePath.endsWith('/docs/index.ts')
+        )
+      ).toBe(true)
+      expect(firstFileSystem.fileMetadataCalls).toBeGreaterThan(0)
+      expect(firstFileSystem.moduleMetadataCalls).toBeGreaterThan(0)
+      expect(firstExportsSpy).toHaveBeenCalled()
+
+      const secondFileSystem = new HeadAwareModuleMetadataNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        token
+      )
+      ;(secondFileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+      const secondExportsSpy = vi.spyOn(secondFileSystem, 'getFileExports')
+
+      const secondDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: workspaceDirectory,
+        cache: new Cache({ outputDirectory: cacheDirectory }),
+      })
+
+      const secondStructure = await secondDirectory.getStructure(structureOptions)
+      expect(
+        secondStructure.some(
+          (entry) =>
+            entry.kind === 'File' &&
+            entry.relativePath.endsWith('/docs/index.ts')
+        )
+      ).toBe(true)
+      expect(secondFileSystem.fileMetadataCalls).toBe(0)
+      expect(secondFileSystem.moduleMetadataCalls).toBe(0)
+      expect(secondFileSystem.exportMetadataCalls).toBe(0)
+      expect(secondExportsSpy).not.toHaveBeenCalled()
     })
   })
 

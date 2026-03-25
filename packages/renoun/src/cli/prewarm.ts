@@ -23,6 +23,7 @@ import {
 import {
   collectRenounPrewarmTargets,
   type DirectoryEntriesRequest,
+  type DirectoryStructureRequest,
   type ExportHistoryRequest,
   type FileRequest,
   type RenounPrewarmTargets,
@@ -75,6 +76,7 @@ let prewarmWorkspaceGateStoreByKey:
 
 export type {
   DirectoryEntriesRequest,
+  DirectoryStructureRequest,
   ExportHistoryRequest,
   FileRequest,
   RenounPrewarmTargets,
@@ -246,6 +248,15 @@ function toNormalizedPrewarmTargets(
       .sort((left, right) => {
         return JSON.stringify(left).localeCompare(JSON.stringify(right))
       }),
+    directoryGetStructure: targets.directoryGetStructure
+      .map((request) => ({
+        directoryPath: normalizePathKey(request.directoryPath),
+        repository: request.repository ?? null,
+        options: request.options ?? null,
+      }))
+      .sort((left, right) => {
+        return JSON.stringify(left).localeCompare(JSON.stringify(right))
+      }),
     fileGetFile: targets.fileGetFile
       .map((request) => ({
         directoryPath: normalizePathKey(request.directoryPath),
@@ -411,8 +422,21 @@ function selectIncrementalPrewarmTargets(options: {
     return false
   })
 
+  const directoryGetStructure =
+    options.currentTargets.directoryGetStructure.filter((request) => {
+      const directoryPath = normalizePathKey(request.directoryPath)
+      for (const changedPath of absoluteChangedPaths) {
+        if (isPathWithinScope(changedPath, directoryPath)) {
+          return true
+        }
+      }
+
+      return false
+    })
+
   return {
     directoryGetEntries,
+    directoryGetStructure,
     fileGetFile,
     exportHistory:
       absoluteChangedPaths.size > 0 ? options.currentTargets.exportHistory : [],
@@ -464,6 +488,7 @@ async function runPrewarmAnalysis(options?: {
 
   if (
     targets.directoryGetEntries.length === 0 &&
+    targets.directoryGetStructure.length === 0 &&
     targets.fileGetFile.length === 0 &&
     targets.exportHistory.length === 0
   ) {
@@ -488,6 +513,7 @@ async function runPrewarmAnalysis(options?: {
   const targetsToWarm = incrementalTargets ?? targets
   if (
     targetsToWarm.directoryGetEntries.length === 0 &&
+    targetsToWarm.directoryGetStructure.length === 0 &&
     targetsToWarm.fileGetFile.length === 0 &&
     targetsToWarm.exportHistory.length === 0
   ) {

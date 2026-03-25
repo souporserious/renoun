@@ -60,6 +60,8 @@ const entryGetExportTypesMock = vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetExportsMock = vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetOutlineRangesMock =
   vi.fn<(filePath: string) => Promise<unknown>>()
+const entryGetStructureMock =
+  vi.fn<(directoryPath: string, options?: unknown) => Promise<unknown>>()
 const entryGetSectionsMock = vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetStaticExportValueMock =
   vi.fn<(filePath: string, name: string) => Promise<unknown>>()
@@ -142,8 +144,16 @@ function createMockWarmEntryFile(filePath: string) {
 class MockEntriesDirectory {
   readonly #path: string
 
-  constructor(options?: { path?: string }) {
+  constructor(options?: {
+    path?: string
+    fileSystem?: unknown
+    repository?: unknown
+  }) {
     this.#path = resolve(options?.path ?? '.')
+  }
+
+  async getStructure(options?: unknown) {
+    return entryGetStructureMock(this.#path, options)
   }
 
   async getFile(path: string | string[], extension?: string | string[]) {
@@ -273,6 +283,7 @@ beforeEach(() => {
   entryGetExportTypesMock.mockResolvedValue([])
   entryGetExportsMock.mockResolvedValue([])
   entryGetOutlineRangesMock.mockResolvedValue([])
+  entryGetStructureMock.mockResolvedValue([])
   entryGetSectionsMock.mockResolvedValue([])
   entryGetStaticExportValueMock.mockResolvedValue(undefined)
   getMarkdownSectionsMock.mockReturnValue([])
@@ -405,6 +416,34 @@ describe('prewarmRenounRpcServerCache', () => {
 
     expect(getProjectMock).toHaveBeenCalledWith(analysisOptions)
     expect(readDirectoryMock).toHaveBeenCalled()
+  })
+
+  test('prewarms Directory#getStructure callsites', async () => {
+    project.createSourceFile(
+      '/repo/src/search.ts',
+      `
+        import { Directory } from 'renoun'
+
+        const docs = new Directory('/repo/docs')
+
+        docs.getStructure({
+          includeExports: 'headers',
+          includeSections: false,
+          includeResolvedTypes: false,
+          includeGitDates: true,
+        })
+      `,
+      { overwrite: true }
+    )
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetStructureMock).toHaveBeenCalledWith('/repo/docs', {
+      includeExports: 'headers',
+      includeSections: false,
+      includeResolvedTypes: false,
+      includeGitDates: true,
+    })
   })
 
   test('is a no-op when server environment variables are missing', async () => {
@@ -1124,6 +1163,43 @@ describe('collectRenounPrewarmTargets', () => {
         includeDirectoryNamedFiles: true,
         includeIndexAndReadmeFiles: true,
         filterExtensions: null,
+      },
+    ])
+  })
+
+  test('collects Directory#getStructure callsites with literal options', async () => {
+    project.createSourceFile(
+      '/repo/src/search.ts',
+      `
+        import { Directory } from 'renoun'
+
+        const docs = new Directory({
+          path: '/repo/docs',
+          repository: { path: 'owner/repo', ref: 'main' },
+        })
+
+        docs.getStructure({
+          includeExports: 'headers',
+          includeSections: false,
+          includeResolvedTypes: false,
+          includeGitDates: true,
+        })
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.directoryGetStructure).toEqual([
+      {
+        directoryPath: '/repo/docs',
+        repository: { path: 'owner/repo', ref: 'main' },
+        options: {
+          includeExports: 'headers',
+          includeSections: false,
+          includeResolvedTypes: false,
+          includeGitDates: true,
+        },
       },
     ])
   })
