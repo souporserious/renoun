@@ -62,6 +62,7 @@ type WarmFileMethod =
   | 'getCodeFenceTokens'
   | 'getExportTypes'
   | 'getExports'
+  | 'getGitMetadata'
   | 'getSections'
 
 interface WarmFileTask {
@@ -385,7 +386,10 @@ async function collectWarmFilesFromDirectoryTargets(
             continue
           }
 
-          const methods = determineDirectoryWarmMethods(extension)
+          const methods =
+            request.methods && request.methods.length > 0
+              ? new Set<WarmFileMethod>(request.methods)
+              : determineDirectoryWarmMethods(extension)
           if (methods.size === 0) {
             continue
           }
@@ -865,6 +869,7 @@ function determineGetFileWarmMethods(extension: string): Set<WarmFileMethod> {
     // both export headers and export types for JS-like files.
     methods.add('getExports')
     methods.add('getExportTypes')
+    methods.add('getGitMetadata')
     methods.add('getSections')
     return methods
   }
@@ -1125,8 +1130,11 @@ async function getTypeScriptDependencyPaths(
 }
 
 type WarmEntryFile = {
+  getAuthors?: () => Promise<unknown>
+  getFirstCommitDate?: () => Promise<unknown>
   getExportTypes?: () => Promise<unknown>
   getExports?: () => Promise<unknown>
+  getLastCommitDate?: () => Promise<unknown>
   getOutlineRanges?: () => Promise<unknown>
   getSections?: () => Promise<unknown>
   getStaticExportValue?: (name: string) => Promise<unknown>
@@ -1184,6 +1192,13 @@ async function warmEntryFileCaches(
     typeof file.getExports === 'function'
   ) {
     await file.getExports()
+  }
+
+  if (
+    warmFile.methods.has('getGitMetadata') &&
+    typeof file.getLastCommitDate === 'function'
+  ) {
+    await file.getLastCommitDate()
   }
 
   if (warmFile.methods.has('getSections')) {

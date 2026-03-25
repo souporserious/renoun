@@ -302,11 +302,13 @@ export interface ModuleExportStructure extends BaseStructure {
   lastCommitDate?: Date
 }
 
+export type StructureDescriptionOption = false | 'snippet' | 'full'
 export type StructureGitDatesOption = boolean | 'first' | 'last' | 'both'
 
 export interface StructureOptions {
   includeExports?: boolean | 'headers'
   includeSections?: boolean
+  includeDescriptions?: StructureDescriptionOption
   includeGitDates?: StructureGitDatesOption
   includeAuthors?: boolean
   includeTags?: boolean

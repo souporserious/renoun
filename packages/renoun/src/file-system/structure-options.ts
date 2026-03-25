@@ -1,10 +1,16 @@
-import type { StructureGitDatesOption, StructureOptions } from './types.ts'
+import type {
+  StructureDescriptionOption,
+  StructureGitDatesOption,
+  StructureOptions,
+} from './types.ts'
 
+export type NormalizedStructureDescriptions = false | 'snippet' | 'full'
 export type NormalizedStructureGitDates = false | 'first' | 'last' | 'both'
 
 export interface NormalizedStructureOptions {
   includeExports: boolean | 'headers'
   includeSections: boolean
+  includeDescriptions: NormalizedStructureDescriptions
   includeGitDates: NormalizedStructureGitDates
   includeAuthors: boolean
   includeTags: boolean
@@ -14,10 +20,21 @@ export interface NormalizedStructureOptions {
 export const DEFAULT_STRUCTURE_OPTIONS: NormalizedStructureOptions = {
   includeExports: true,
   includeSections: true,
+  includeDescriptions: 'full',
   includeGitDates: 'both',
   includeAuthors: false,
   includeTags: true,
   includeResolvedTypes: true,
+}
+
+function normalizeStructureDescriptions(
+  includeDescriptions: StructureDescriptionOption | undefined
+): NormalizedStructureDescriptions {
+  if (includeDescriptions === false || includeDescriptions === 'snippet') {
+    return includeDescriptions
+  }
+
+  return 'full'
 }
 
 function normalizeStructureGitDates(
@@ -44,6 +61,9 @@ export function normalizeStructureOptions(
   const includeExports = options.includeExports ?? true
   const includeResolvedTypes =
     includeExports === true ? options.includeResolvedTypes ?? true : false
+  const includeDescriptions = normalizeStructureDescriptions(
+    options.includeDescriptions
+  )
   const includeGitDates = normalizeStructureGitDates(options.includeGitDates)
   const includeTags =
     includeExports === false ? false : options.includeTags ?? includeExports !== 'headers'
@@ -51,6 +71,7 @@ export function normalizeStructureOptions(
   return {
     includeExports,
     includeSections: options.includeSections ?? true,
+    includeDescriptions,
     includeGitDates,
     includeAuthors: options.includeAuthors ?? false,
     includeTags,
@@ -98,6 +119,7 @@ export function getStructureOptionsSignature(
     options &&
     'includeGitDates' in options &&
     'includeSections' in options &&
+    'includeDescriptions' in options &&
     'includeAuthors' in options &&
     'includeTags' in options &&
     'includeResolvedTypes' in options &&
@@ -108,6 +130,7 @@ export function getStructureOptionsSignature(
   return [
     `exports:${normalized.includeExports}`,
     `sections:${normalized.includeSections ? '1' : '0'}`,
+    `descriptions:${normalized.includeDescriptions}`,
     `git:${normalized.includeGitDates === false ? '0' : normalized.includeGitDates}`,
     `authors:${normalized.includeAuthors ? '1' : '0'}`,
     `tags:${normalized.includeTags ? '1' : '0'}`,

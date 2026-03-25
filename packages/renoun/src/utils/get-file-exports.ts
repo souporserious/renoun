@@ -12,6 +12,7 @@ const tsMorph = getTsMorph()
 import { getDebugLogger } from './debug.ts'
 import {
   getDeclarationLocation,
+  type DeclarationPosition,
   type DeclarationLocation,
 } from './get-declaration-location.ts'
 import { getExportPosition } from './get-export-position.ts'
@@ -22,13 +23,24 @@ import {
   emitTelemetryEvent,
   emitTelemetryHistogram,
 } from './telemetry.ts'
+import {
+  EXTENSION_PRIORITY,
+  INDEX_FILE_CANDIDATES,
+  formatExportId,
+  looksLikeFilePath,
+  parseExportId,
+  scanModuleExports,
+  type ExportItem,
+} from '../file-system/export-analysis.ts'
+import { directoryName, joinPaths } from './path.ts'
 
 export interface ModuleExport {
   name: string
   path: string
   position: number
   kind: SyntaxKind
-  metadata: FileExportStaticMetadata
+  declarationPosition?: DeclarationPosition
+  metadata?: FileExportStaticMetadata
 }
 
 export interface FileExportStaticMetadata {
@@ -50,20 +62,312 @@ const exportableKinds = new Set([
   tsMorph.SyntaxKind.TypeAliasDeclaration,
 ])
 
-/** Returns metadata about the exports of a file. */
-export function getFileExports(
+export interface FileExportsWithDependenciesResult {
+  exports: ModuleExport[]
+  dependencies: string[]
+}
+
+function readProjectFileIfExists(
+  project: Project,
+  filePath: string
+): string | undefined {
+  const sourceFile = project.getSourceFile(filePath)
+  if (sourceFile) {
+    return sourceFile.getFullText()
+  }
+
+  try {
+    return project.getFileSystem().readFileSync(filePath)
+  } catch {
+    return undefined
+  }
+}
+
+function resolveRelativeModulePath(
+  project: Project,
+  filePath: string,
+  specifier: string
+): string | undefined {
+  if (!specifier.startsWith('.')) {
+    return undefined
+  }
+
+  const fileSystem = project.getFileSystem()
+  const basePath = joinPaths(directoryName(filePath), specifier)
+  const candidates = new Set<string>()
+
+  if (looksLikeFilePath(specifier)) {
+    candidates.add(basePath)
+  } else {
+    for (const extension of EXTENSION_PRIORITY) {
+      candidates.add(`${basePath}${extension}`)
+    }
+
+    for (const indexFileCandidate of INDEX_FILE_CANDIDATES) {
+      candidates.add(joinPaths(basePath, indexFileCandidate))
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (
+      project.getSourceFile(candidate) ||
+      fileSystem.fileExistsSync(candidate)
+    ) {
+      return candidate
+    }
+  }
+
+  return undefined
+}
+
+function shouldUseRawExportFastPath(rawExports: Map<string, ExportItem>) {
+  let relativeReexportCount = 0
+
+  for (const [, item] of rawExports) {
+    if (item.id === '__LOCAL__') {
+      continue
+    }
+
+    if (item.id.startsWith('__NAMESPACE__')) {
+      return false
+    }
+
+    if (item.id.startsWith('__FROM__')) {
+      const specifier = item.id.slice(8)
+      if (!specifier.startsWith('.')) {
+        return false
+      }
+      relativeReexportCount += 1
+      continue
+    }
+
+    if (item.id.startsWith('__STAR__')) {
+      const specifier = item.id.slice(8)
+      if (!specifier.startsWith('.')) {
+        return false
+      }
+      relativeReexportCount += 1
+    }
+  }
+
+  return relativeReexportCount > 0
+}
+
+function sortModuleExports(exports: ModuleExport[]) {
+  exports.sort((first, second) => {
+    const pathComparison = first.path.localeCompare(second.path)
+    if (pathComparison !== 0) {
+      return pathComparison
+    }
+
+    return first.position - second.position
+  })
+
+  return exports
+}
+
+function resolveRawExportsFromProject(
+  filePath: string,
+  rawExports: Map<string, ExportItem>,
+  project: Project,
+  cache: Map<string, Map<string, ExportItem>>,
+  visiting: Set<string>,
+  dependencies: Set<string>
+): Map<string, ExportItem> | undefined {
+  if (visiting.has(filePath)) {
+    return new Map()
+  }
+
+  dependencies.add(filePath)
+  const fileIdentity = (name: string) => formatExportId(filePath, name)
+  const results = new Map<string, ExportItem>()
+  const localExports: Array<[string, ExportItem]> = []
+  const fromExports: Array<[string, ExportItem, string]> = []
+  const starExports: Array<[string, ExportItem, string]> = []
+
+  for (const [name, rawItem] of rawExports) {
+    if (rawItem.id === '__LOCAL__') {
+      localExports.push([name, rawItem])
+      continue
+    }
+
+    if (rawItem.id.startsWith('__FROM__')) {
+      fromExports.push([name, rawItem, rawItem.id.slice(8)])
+      continue
+    }
+
+    if (rawItem.id.startsWith('__STAR__')) {
+      starExports.push([name, rawItem, rawItem.id.slice(8)])
+      continue
+    }
+
+    return undefined
+  }
+
+  for (const [name, rawItem] of localExports) {
+    results.set(name, { ...rawItem, id: fileIdentity(name) })
+  }
+
+  const nextVisiting = new Set(visiting)
+  nextVisiting.add(filePath)
+  const childExportMaps = new Map<string, Map<string, ExportItem>>()
+  const externalSpecifiers = new Set<string>()
+
+  for (const [, , specifier] of fromExports) {
+    externalSpecifiers.add(specifier)
+  }
+  for (const [, , specifier] of starExports) {
+    externalSpecifiers.add(specifier)
+  }
+
+  for (const specifier of externalSpecifiers) {
+    const resolvedPath = resolveRelativeModulePath(project, filePath, specifier)
+
+    if (!resolvedPath) {
+      return undefined
+    }
+
+    dependencies.add(resolvedPath)
+
+    if (!childExportMaps.has(resolvedPath)) {
+      let childExports = cache.get(resolvedPath)
+
+      if (!childExports) {
+        const childContent = readProjectFileIfExists(project, resolvedPath)
+        if (!childContent) {
+          return undefined
+        }
+
+        const childRawExports = scanModuleExports(resolvedPath, childContent)
+        childExports = resolveRawExportsFromProject(
+          resolvedPath,
+          childRawExports,
+          project,
+          cache,
+          nextVisiting,
+          dependencies
+        )
+
+        if (!childExports) {
+          return undefined
+        }
+
+        cache.set(resolvedPath, childExports)
+      }
+
+      childExportMaps.set(resolvedPath, childExports)
+    }
+  }
+
+  for (const [name, rawItem, specifier] of fromExports) {
+    const resolvedPath = resolveRelativeModulePath(project, filePath, specifier)
+    const childExports =
+      resolvedPath !== undefined ? childExportMaps.get(resolvedPath) : undefined
+    const sourceName = rawItem.sourceName ?? name
+    const targetExport = childExports?.get(sourceName)
+
+    if (!targetExport) {
+      return undefined
+    }
+
+    results.set(name, targetExport)
+  }
+
+  for (const [, , specifier] of starExports) {
+    const resolvedPath = resolveRelativeModulePath(project, filePath, specifier)
+    const childExports =
+      resolvedPath !== undefined ? childExportMaps.get(resolvedPath) : undefined
+
+    if (!childExports) {
+      return undefined
+    }
+
+    for (const [childName, childExport] of childExports) {
+      if (childName !== 'default' && !results.has(childName)) {
+        results.set(childName, childExport)
+      }
+    }
+  }
+
+  return results
+}
+
+function tryGetRawFileExportsWithDependencies(
   filePath: string,
   project: Project
-): ModuleExport[] {
+): FileExportsWithDependenciesResult | undefined {
+  const sourceFile = ensureProjectSourceFile(filePath, project)
+  const rawExports = scanModuleExports(filePath, sourceFile.getFullText())
+
+  if (!shouldUseRawExportFastPath(rawExports)) {
+    return undefined
+  }
+
+  const dependencies = new Set<string>([filePath])
+  const resolvedExports = resolveRawExportsFromProject(
+    filePath,
+    rawExports,
+    project,
+    new Map(),
+    new Set(),
+    dependencies
+  )
+
+  if (!resolvedExports) {
+    return undefined
+  }
+
+  const exportDeclarations: ModuleExport[] = []
+
+  for (const [name, item] of resolvedExports) {
+    const parsed = parseExportId(item.id)
+
+    if (
+      !parsed ||
+      item.position === undefined ||
+      item.syntaxKind === undefined
+    ) {
+      return undefined
+    }
+
+    exportDeclarations.push({
+      name,
+      path: parsed.file,
+      position: item.position,
+      kind: item.syntaxKind,
+      declarationPosition: item.declarationPosition,
+    })
+  }
+
+  return {
+    exports: sortModuleExports(exportDeclarations),
+    dependencies: Array.from(dependencies),
+  }
+}
+
+/** Returns metadata about the exports of a file. */
+export function getFileExportsWithDependencies(
+  filePath: string,
+  project: Project
+): FileExportsWithDependenciesResult {
   const startedAt = performance.now()
   const fields = {
     filePathHash: hashString(filePath).slice(0, 12),
   }
 
   try {
-    const exports = getDebugLogger().trackOperation(
+    const result = getDebugLogger().trackOperation(
       'get-file-exports',
       () => {
+        const fastPathResult = tryGetRawFileExportsWithDependencies(
+          filePath,
+          project
+        )
+
+        if (fastPathResult) {
+          return fastPathResult
+        }
+
         const sourceFile = ensureProjectSourceFile(filePath, project)
 
         const processStart = performance.now()
@@ -89,7 +393,7 @@ export function getFileExports(
             continue
           }
 
-          const fileExport: ModuleExport = {
+          exportDeclarations.push({
             name,
             path: node.getSourceFile().getFilePath(),
             position: getExportPosition(node),
@@ -99,29 +403,18 @@ export function getFileExports(
               name,
               node
             ),
-          }
-          let insertAt = exportDeclarations.length
-
-          for (let index = 0; index < insertAt; index++) {
-            const existing = exportDeclarations[index]
-            const isPathBefore =
-              fileExport.path.localeCompare(existing.path) < 0
-            const isSamePath = fileExport.path === existing.path
-            const isPositionBefore = fileExport.position < existing.position
-
-            if (isPathBefore || (isSamePath && isPositionBefore)) {
-              insertAt = index
-              break
-            }
-          }
-
-          exportDeclarations.splice(insertAt, 0, fileExport)
+          })
         }
 
-        return exportDeclarations
+        return {
+          exports: sortModuleExports(exportDeclarations),
+          dependencies: Array.from(
+            new Set<string>([filePath, ...exportDeclarations.map((item) => item.path)])
+          ),
+        }
       },
       { data: { filePath } }
-    ) as ModuleExport[]
+    ) as FileExportsWithDependenciesResult
 
     const durationMs = performance.now() - startedAt
     emitTelemetryHistogram({
@@ -133,11 +426,11 @@ export function getFileExports(
       fields: {
         ...fields,
         durationMs,
-        exportCount: exports.length,
+        exportCount: result.exports.length,
       },
     })
 
-    return exports
+    return result
   } catch (error) {
     const durationMs = performance.now() - startedAt
     emitTelemetryCounter({
@@ -153,6 +446,13 @@ export function getFileExports(
     })
     throw error
   }
+}
+
+export function getFileExports(
+  filePath: string,
+  project: Project
+): ModuleExport[] {
+  return getFileExportsWithDependencies(filePath, project).exports
 }
 
 export function ensureProjectSourceFile(

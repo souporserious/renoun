@@ -1,7 +1,10 @@
 import { dirname, isAbsolute, resolve } from 'node:path'
 
 import { isFilePathGitIgnored } from '../../utils/is-file-path-git-ignored.ts'
-import { hasJavaScriptLikeExtension } from '../../utils/is-javascript-like-extension.ts'
+import {
+  hasJavaScriptLikeExtension,
+  isJavaScriptLikeExtension,
+} from '../../utils/is-javascript-like-extension.ts'
 import { ensureRelativePath, resolveSchemePath } from '../../utils/path.ts'
 import {
   resolveLiteralExpression,
@@ -57,6 +60,7 @@ export interface DirectoryEntriesRequest {
   includeDirectoryNamedFiles: boolean
   includeIndexAndReadmeFiles: boolean
   filterExtensions: Set<string> | null
+  methods?: FileRequestMethod[]
 }
 
 export interface DirectoryStructureRequest {
@@ -72,7 +76,11 @@ export interface FileRequest {
   methods?: FileRequestMethod[]
 }
 
-export type FileRequestMethod = 'getExportTypes' | 'getExports' | 'getSections'
+export type FileRequestMethod =
+  | 'getExportTypes'
+  | 'getExports'
+  | 'getGitMetadata'
+  | 'getSections'
 
 export interface ExportHistoryRequest {
   repository: PrewarmRepositoryInput
@@ -99,7 +107,12 @@ export interface RenounPrewarmTargets {
 
 type PendingRenounCallsite = {
   callExpression: CallExpression
-  methodName: 'getEntries' | 'getFile' | 'getStructure' | 'getExportHistory'
+  methodName:
+    | 'getEntries'
+    | 'getFile'
+    | 'getStructure'
+    | 'getExportHistory'
+    | 'getTree'
   aliases: RenounAliases
 }
 
@@ -267,8 +280,16 @@ export async function collectRenounPrewarmTargets(
       continue
     }
 
-    if (methodName === 'getEntries') {
-      const options = resolveDirectoryGetEntriesOptions(callExpression)
+    if (methodName === 'getEntries' || methodName === 'getTree') {
+      const options =
+        methodName === 'getTree'
+          ? {
+              recursive: true,
+              includeDirectoryNamedFiles: true,
+              includeIndexAndReadmeFiles: true,
+              filterExtensions: null,
+            }
+          : resolveDirectoryGetEntriesOptions(callExpression)
 
       if (methodTarget.kind === 'directory') {
         addDirectoryEntriesRequest(getEntriesRequests, {
@@ -307,11 +328,18 @@ export async function collectRenounPrewarmTargets(
       continue
     }
 
-    const fileRequest = resolveGetFileCall(callExpression, methodTarget)
+    const fileRequestTarget = resolveGetFileCall(callExpression, methodTarget)
 
-    if (fileRequest !== undefined) {
-      getFileRequests.push(fileRequest)
+    if (!fileRequestTarget) {
+      continue
     }
+
+    if (fileRequestTarget.kind === 'file') {
+      getFileRequests.push(fileRequestTarget.request)
+      continue
+    }
+
+    addDirectoryEntriesRequest(getEntriesRequests, fileRequestTarget.request)
   }
 
   for (const [
@@ -478,6 +506,7 @@ function collectRenounDeclarations(
     const methodName = expression.getName()
     if (
       methodName !== 'getEntries' &&
+      methodName !== 'getTree' &&
       methodName !== 'getStructure' &&
       methodName !== 'getFile' &&
       methodName !== 'getExportHistory'
@@ -504,6 +533,7 @@ function isLikelyRenounSourceFile(sourceFile: SourceFile): boolean {
     sourceText.includes('getRepository') ||
     sourceText.includes('getExportHistory') ||
     sourceText.includes('getEntries') ||
+    sourceText.includes('getTree') ||
     sourceText.includes('getStructure') ||
     sourceText.includes('getFile')
   )
@@ -700,23 +730,16 @@ function resolveRenounSymbol(
 function resolveGetFileCall(
   callExpression: CallExpression,
   methodTarget: RenounMethodTarget
-): FileRequest | undefined {
+):
+  | { kind: 'file'; request: FileRequest }
+  | { kind: 'directory'; request: DirectoryEntriesRequest }
+  | undefined {
   if (methodTarget.kind !== 'directory') {
     return undefined
   }
 
   const args = callExpression.getArguments()
   const pathArgument = args[0]
-
-  if (!pathArgument || !Node.isExpression(pathArgument)) {
-    return undefined
-  }
-
-  const pathArg = resolveLiteralExpression(pathArgument)
-  if (typeof pathArg !== 'string') {
-    return undefined
-  }
-
   const extensionArgument = args[1]
   const extensionExpression = extensionArgument
     ? Node.isExpression(extensionArgument)
@@ -730,13 +753,42 @@ function resolveGetFileCall(
     return undefined
   }
 
+  const inferredMethods = inferGetFileRequestMethods(callExpression)
+  const pathArg =
+    pathArgument && Node.isExpression(pathArgument)
+      ? resolveLiteralExpression(pathArgument)
+      : undefined
+
+  if (typeof pathArg === 'string') {
+    return {
+      kind: 'file',
+      request: {
+        directoryPath,
+        path: pathArg,
+        extensions,
+        ...toFileRequestMethodsValue(inferredMethods),
+      },
+    }
+  }
+
+  const fallbackMethods =
+    inferredMethods ?? determineDynamicGetFileFallbackMethods(extensions)
+
+  if (!fallbackMethods) {
+    return undefined
+  }
+
   return {
-    directoryPath,
-    path: pathArg,
-    extensions,
-    ...toFileRequestMethodsValue(
-      inferGetFileRequestMethods(callExpression)
-    ),
+    kind: 'directory',
+    request: {
+      directoryPath,
+      recursive: true,
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+      filterExtensions:
+        extensions && extensions.length > 0 ? new Set(extensions) : null,
+      methods: fallbackMethods,
+    },
   }
 }
 
@@ -763,6 +815,20 @@ function inferGetFileRequestMethods(
   return Array.from(methods.values()).sort((left, right) =>
     left.localeCompare(right)
   )
+}
+
+function determineDynamicGetFileFallbackMethods(
+  extensions?: string[]
+): FileRequestMethod[] | undefined {
+  if (
+    extensions &&
+    extensions.length > 0 &&
+    extensions.every((extension) => !isJavaScriptLikeExtension(extension))
+  ) {
+    return undefined
+  }
+
+  return ['getExports', 'getExportTypes', 'getGitMetadata', 'getSections']
 }
 
 function analyzeGetFileUsageNode(
@@ -946,6 +1012,15 @@ function applyGetFileConsumerWarmMethods(
 ): boolean {
   if (FILE_EXPORT_HEADER_METHOD_NAMES.has(methodName)) {
     methods.add('getExports')
+    return true
+  }
+
+  if (
+    methodName === 'getFirstCommitDate' ||
+    methodName === 'getLastCommitDate' ||
+    methodName === 'getAuthors'
+  ) {
+    methods.add('getGitMetadata')
     return true
   }
 
@@ -1280,6 +1355,7 @@ function addDirectoryEntriesRequest(
         request.filterExtensions === null
           ? null
           : new Set(request.filterExtensions),
+      ...(request.methods ? { methods: [...request.methods].sort() } : {}),
     })
     return
   }
@@ -1292,12 +1368,32 @@ function addDirectoryEntriesRequest(
 
   if (existing.filterExtensions === null || request.filterExtensions === null) {
     existing.filterExtensions = null
-    return
+  } else {
+    for (const extension of request.filterExtensions) {
+      existing.filterExtensions.add(extension)
+    }
   }
 
-  for (const extension of request.filterExtensions) {
-    existing.filterExtensions.add(extension)
+  if (request.methods && request.methods.length > 0) {
+    existing.methods = mergePrewarmMethods(existing.methods, request.methods)
   }
+}
+
+function mergePrewarmMethods(
+  left: FileRequestMethod[] | undefined,
+  right: FileRequestMethod[] | undefined
+): FileRequestMethod[] | undefined {
+  if (!left || left.length === 0) {
+    return right && right.length > 0 ? [...right].sort() : undefined
+  }
+
+  if (!right || right.length === 0) {
+    return [...left].sort()
+  }
+
+  return Array.from(new Set([...left, ...right])).sort((a, b) =>
+    a.localeCompare(b)
+  )
 }
 
 function mergeCollectionGetEntriesRequest(

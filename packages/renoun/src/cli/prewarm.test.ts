@@ -58,6 +58,8 @@ const getSourceTextMetadataMock = vi.fn<(...args: any[]) => Promise<unknown>>()
 const getTokensMock = vi.fn<(...args: any[]) => Promise<unknown>>()
 const entryGetExportTypesMock = vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetExportsMock = vi.fn<(filePath: string) => Promise<unknown>>()
+const entryGetLastCommitDateMock =
+  vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetOutlineRangesMock =
   vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetStructureMock =
@@ -132,6 +134,7 @@ class MockNodeFileSystem {
 
 function createMockWarmEntryFile(filePath: string) {
   return {
+    getLastCommitDate: () => entryGetLastCommitDateMock(filePath),
     getExportTypes: () => entryGetExportTypesMock(filePath),
     getExports: () => entryGetExportsMock(filePath),
     getOutlineRanges: () => entryGetOutlineRangesMock(filePath),
@@ -282,6 +285,7 @@ beforeEach(() => {
   getTokensMock.mockResolvedValue([])
   entryGetExportTypesMock.mockResolvedValue([])
   entryGetExportsMock.mockResolvedValue([])
+  entryGetLastCommitDateMock.mockResolvedValue(undefined)
   entryGetOutlineRangesMock.mockResolvedValue([])
   entryGetStructureMock.mockResolvedValue([])
   entryGetSectionsMock.mockResolvedValue([])
@@ -429,6 +433,7 @@ describe('prewarmRenounRpcServerCache', () => {
         docs.getStructure({
           includeExports: 'headers',
           includeSections: false,
+          includeDescriptions: 'snippet',
           includeResolvedTypes: false,
           includeGitDates: true,
         })
@@ -441,9 +446,66 @@ describe('prewarmRenounRpcServerCache', () => {
     expect(entryGetStructureMock).toHaveBeenCalledWith('/repo/docs', {
       includeExports: 'headers',
       includeSections: false,
+      includeDescriptions: 'snippet',
       includeResolvedTypes: false,
       includeGitDates: true,
     })
+  })
+
+  test('prewarms dynamic getFile reference routes by warming matching directory files', async () => {
+    project.createSourceFile(
+      '/repo/src/page.tsx',
+      `
+        import { Directory, Reference } from 'renoun'
+
+        const docs = new Directory('/repo/docs')
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'ts')
+          await file.getExports()
+          await file.getLastCommitDate()
+          return <Reference source={file} />
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      const entriesByPath = new Map<
+        string,
+        Array<{
+          name: string
+          path: string
+          isDirectory: boolean
+          isFile: boolean
+        }>
+      >([
+        [
+          '/repo/docs',
+          [
+            createMockFileEntry('/repo/docs/a.ts'),
+            createMockFileEntry('/repo/docs/b.ts'),
+          ],
+        ],
+      ])
+
+      return entriesByPath.get(directoryPath) ?? []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual([
+      '/repo/docs/a.ts',
+      '/repo/docs/b.ts',
+    ])
+    expect(
+      entryGetExportTypesMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
+    expect(
+      entryGetLastCommitDateMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
   })
 
   test('is a no-op when server environment variables are missing', async () => {
@@ -1181,6 +1243,7 @@ describe('collectRenounPrewarmTargets', () => {
         docs.getStructure({
           includeExports: 'headers',
           includeSections: false,
+          includeDescriptions: 'snippet',
           includeResolvedTypes: false,
           includeGitDates: true,
         })
@@ -1197,6 +1260,7 @@ describe('collectRenounPrewarmTargets', () => {
         options: {
           includeExports: 'headers',
           includeSections: false,
+          includeDescriptions: 'snippet',
           includeResolvedTypes: false,
           includeGitDates: true,
         },
@@ -1517,6 +1581,71 @@ describe('collectRenounPrewarmTargets', () => {
         path: 'direct',
         extensions: ['ts'],
         methods: ['getExportTypes'],
+      },
+    ])
+  })
+
+  test('falls back to directory-wide prewarm for dynamic getFile paths with inferred consumers', async () => {
+    project.createSourceFile(
+      '/repo/src/dynamic-reference.tsx',
+      `
+        import { Directory, Reference } from 'renoun'
+
+        const docs = new Directory('/repo/docs')
+
+        async function render(pathname: string) {
+          const file = docs.getFile(pathname, 'ts')
+          const exports = await file.getExports()
+          await file.getLastCommitDate()
+
+          const page = <Reference source={file} />
+
+          void exports
+          return page
+        }
+
+        void render
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.fileGetFile).toEqual([])
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: '/repo/docs',
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: new Set(['ts']),
+        methods: ['getExportTypes', 'getExports', 'getGitMetadata'],
+      },
+    ])
+  })
+
+  test('treats getTree callsites as recursive directory prewarm targets', async () => {
+    project.createSourceFile(
+      '/repo/src/routes.ts',
+      `
+        import { Directory } from 'renoun'
+
+        const docs = new Directory('/repo/docs')
+
+        docs.getTree()
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: '/repo/docs',
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: null,
       },
     ])
   })

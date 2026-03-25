@@ -7,6 +7,7 @@ export type {
   ModuleExportStructure,
   PackageStructure,
   Section,
+  StructureDescriptionOption,
   StructureGitDatesOption,
   StructureOptions,
   WorkspaceStructure,

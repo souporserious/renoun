@@ -219,4 +219,38 @@ describe('Reference', () => {
       closeRepository(repository)
     }
   })
+
+  test('renders all exports for very large modules with batched type resolution', async () => {
+    const workspaceRoot = createProjectFixture({
+      sourceText: Array.from({ length: 121 }, (_, index) => {
+        return `export const export${index} = ${index}`
+      }).join('\n'),
+    })
+    const repository = Repository.resolve({
+      path: workspaceRoot,
+      cache: new Cache({
+        outputDirectory: join(workspaceRoot, '.cache'),
+      }),
+    })!
+
+    try {
+      const getTypeSpy = vi.spyOn(ModuleExport.prototype, 'getType')
+
+      try {
+        const element = await Reference({
+          source: join(workspaceRoot, 'src', 'index.ts'),
+          repository,
+        })
+        const markup = renderToStaticMarkup(<>{element}</>)
+
+        expect(markup).toContain('export0')
+        expect(markup).toContain('export120')
+        expect(getTypeSpy).not.toHaveBeenCalled()
+      } finally {
+        getTypeSpy.mockRestore()
+      }
+    } finally {
+      closeRepository(repository)
+    }
+  })
 })

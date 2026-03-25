@@ -5248,6 +5248,92 @@ date: 2024-12-24
       expect(structure.relativePath).toBe('docs/page.md')
     })
 
+    test('structure supports full, snippet, and omitted descriptions', async () => {
+      const fileSystem = new InMemoryFileSystem({
+        'docs/page.md': [
+          '---',
+          'description: "Intro   text here."',
+          '---',
+          '# Heading',
+        ].join('\n'),
+        'docs/reference.ts': [
+          '/**',
+          ' * Adds one.',
+          ' *',
+          ' * ```ts',
+          ' * addOne(1)',
+          ' * ```',
+          ' *',
+          ' * Returns   a value after   cleanup.',
+          ' */',
+          'export const addOne = (value: number) => value + 1',
+        ].join('\n'),
+      })
+      const directory = new Directory({
+        path: 'docs',
+        fileSystem,
+      })
+
+      const fullStructures = await directory.getStructure({
+        includeExports: 'headers',
+        includeSections: false,
+        includeDescriptions: 'full',
+        includeGitDates: false,
+        includeResolvedTypes: false,
+      })
+      const snippetStructures = await directory.getStructure({
+        includeExports: 'headers',
+        includeSections: false,
+        includeDescriptions: 'snippet',
+        includeGitDates: false,
+        includeResolvedTypes: false,
+      })
+      const structuresWithoutDescriptions = await directory.getStructure({
+        includeExports: 'headers',
+        includeSections: false,
+        includeDescriptions: false,
+        includeGitDates: false,
+        includeResolvedTypes: false,
+      })
+
+      const fullPage = fullStructures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/page.md'
+      )
+      const snippetPage = snippetStructures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/page.md'
+      )
+      const pageWithoutDescription = structuresWithoutDescriptions.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/page.md'
+      )
+      const fullReference = fullStructures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/reference.ts'
+      )
+      const snippetReference = snippetStructures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/reference.ts'
+      )
+      const referenceWithoutDescription = structuresWithoutDescriptions.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/reference.ts'
+      )
+
+      expect(fullPage?.description).toBe('Intro   text here.')
+      expect(snippetPage?.description).toBe('Intro text here.')
+      expect(pageWithoutDescription?.description).toBeUndefined()
+
+      expect(fullReference?.exports?.[0]?.description).toContain('```ts')
+      expect(snippetReference?.exports?.[0]?.description).toBe(
+        'Adds one. Returns a value after cleanup.'
+      )
+      expect(
+        referenceWithoutDescription?.exports?.[0]?.description
+      ).toBeUndefined()
+    })
+
     test('directory supports lightweight structure mode for export headers', async () => {
       const fileSystem = new InMemoryFileSystem({
         'docs/reference.ts': [
@@ -5323,6 +5409,61 @@ date: 2024-12-24
           kind: 'ModuleExport',
           name: 'addOne',
           tags: [expect.objectContaining({ name: 'deprecated' })],
+        }),
+      ])
+    })
+
+    test('structure uses declaration or file-stem names for default exports', async () => {
+      const fileSystem = new InMemoryFileSystem({
+        'docs/property-node.js': 'export default class PropertyNode {}',
+        'docs/anonymous-default.js': 'export default function () {}',
+      })
+      const directory = new Directory({
+        path: 'docs',
+        fileSystem,
+      })
+      const propertyFile = await directory.getFile('property-node', 'js')
+      const propertyExport = await propertyFile.getExport('default')
+      const propertyExportStructure = await propertyExport.getStructure({
+        includeDescriptions: false,
+        includeGitDates: false,
+        includeResolvedTypes: false,
+      })
+      const structures = await directory.getStructure({
+        includeExports: 'headers',
+        includeSections: false,
+        includeDescriptions: false,
+        includeGitDates: false,
+        includeResolvedTypes: false,
+      })
+      const propertyStructure = structures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' && entry.relativePath === 'docs/property-node.js'
+      )
+      const anonymousStructure = structures.find(
+        (entry): entry is FileStructure =>
+          entry.kind === 'File' &&
+          entry.relativePath === 'docs/anonymous-default.js'
+      )
+
+      expect(propertyExportStructure).toEqual(
+        expect.objectContaining({
+          name: 'PropertyNode',
+          slug: 'property-node',
+        })
+      )
+      expect(propertyStructure?.exports).toEqual([
+        expect.objectContaining({
+          name: 'PropertyNode',
+          slug: 'property-node',
+          path: '/docs/property-node#property-node',
+        }),
+      ])
+      expect(anonymousStructure?.exports).toEqual([
+        expect.objectContaining({
+          name: 'anonymous-default',
+          slug: 'anonymous-default',
+          path: '/docs/anonymous-default#anonymous-default',
         }),
       ])
     })

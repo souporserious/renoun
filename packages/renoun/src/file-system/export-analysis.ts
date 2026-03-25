@@ -3,6 +3,7 @@ import { ts } from 'ts-morph'
 
 import { normalizePath, joinPaths, trimLeadingDotSlash } from '../utils/path.ts'
 import { hasJavaScriptLikeExtension } from '../utils/is-javascript-like-extension.ts'
+import type { DeclarationPosition } from '../utils/get-declaration-location.ts'
 import type { DirectoryEntry } from './types.ts'
 
 /** Separator used in export IDs (format: "path/to/file.ts::exportName") */
@@ -74,6 +75,15 @@ export interface ExportItem {
 
   /** The ending line number of the export (1-based) */
   endLine?: number
+
+  /** The starting character offset of the resolved declaration node. */
+  position?: number
+
+  /** The syntax kind of the resolved declaration node. */
+  syntaxKind?: ts.SyntaxKind
+
+  /** The declaration line/column range of the resolved node. */
+  declarationPosition?: DeclarationPosition
 
   /** Whether the export is deprecated */
   deprecated?: true
@@ -542,8 +552,32 @@ export function scanModuleExports(
     return { bodyHash, signatureHash, signatureText }
   }
 
+  function getNodeLocation(node: ts.Node) {
+    const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile))
+    const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd())
+
+    return {
+      position: node.getStart(sourceFile),
+      syntaxKind: node.kind,
+      declarationPosition: {
+        start: {
+          line: start.line + 1,
+          column: start.character + 1,
+        },
+        end: {
+          line: end.line + 1,
+          column: end.character + 1,
+        },
+      },
+    }
+  }
+
   function getHashesAndLines(node: ts.Node) {
-    return { ...getHashes(node), ...getLineNumbers(node) }
+    return {
+      ...getHashes(node),
+      ...getLineNumbers(node),
+      ...getNodeLocation(node),
+    }
   }
 
   ts.forEachChild(sourceFile, (node) => {
@@ -663,6 +697,7 @@ export function scanModuleExports(
             id: '__LOCAL__',
             ...getHashes(declaration),
             ...statementLines,
+            ...getNodeLocation(declaration),
             ...(deprecatedInfo ?? {}),
           })
         } else if (
@@ -676,6 +711,7 @@ export function scanModuleExports(
               id: '__LOCAL__',
               ...getHashes(declaration),
               ...statementLines,
+              ...getNodeLocation(declaration),
               ...(deprecatedInfo ?? declarationDeprecations.get(name) ?? {}),
             })
           })

@@ -68,7 +68,13 @@ import type {
   FileSystemWriteFileContent,
   FileWritableStream,
 } from './FileSystem.ts'
-import type { Cache, CacheStoreComputeContext } from './Cache.ts'
+import {
+  isDisposedCacheStoreError,
+  type Cache,
+  type CacheStore,
+  type CacheStoreComputeContext,
+  type CacheStorePutOptions,
+} from './Cache.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
@@ -192,6 +198,40 @@ export type {
   DirectorySchemaOption,
   ModuleExportValidator,
 } from './schema.ts'
+
+async function deleteCacheNodeBestEffort(
+  cache: Pick<CacheStore, 'delete'>,
+  nodeKey: string
+): Promise<boolean> {
+  try {
+    await cache.delete(nodeKey)
+    return true
+  } catch (error) {
+    if (isDisposedCacheStoreError(error, 'delete')) {
+      return false
+    }
+
+    throw error
+  }
+}
+
+async function putCacheValueBestEffort<Value>(
+  cache: Pick<CacheStore, 'put'>,
+  nodeKey: string,
+  value: Value,
+  options: CacheStorePutOptions = {}
+): Promise<boolean> {
+  try {
+    await cache.put(nodeKey, value, options)
+    return true
+  } catch (error) {
+    if (isDisposedCacheStoreError(error, 'put')) {
+      return false
+    }
+
+    throw error
+  }
+}
 
 /** Utility type that infers the schema output from validator functions or a [Standard Schema](https://github.com/standard-schema/standard-schema?tab=readme-ov-file#standard-schema-spec). */
 export type InferModuleExports<Exports> = {
@@ -538,6 +578,53 @@ function normalizeModuleExportTags(
   })
 
   return normalizedTags.length > 0 ? normalizedTags : undefined
+}
+
+const STRUCTURE_DESCRIPTION_SNIPPET_LENGTH = 140
+const STRUCTURE_DESCRIPTION_ELLIPSIS = '...'
+const STRUCTURE_DESCRIPTION_CODE_FENCE_PATTERN =
+  /(```[\s\S]*?```|~~~[\s\S]*?~~~)/g
+
+function getStructureDescription(
+  description: string | undefined,
+  options: NormalizedStructureOptions
+): string | undefined {
+  if (!description || options.includeDescriptions === false) {
+    return undefined
+  }
+
+  if (options.includeDescriptions === 'full') {
+    return description
+  }
+
+  return createStructureDescriptionSnippet(description)
+}
+
+function createStructureDescriptionSnippet(
+  description: string
+): string | undefined {
+  const sanitized = description
+    .replace(STRUCTURE_DESCRIPTION_CODE_FENCE_PATTERN, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (sanitized.length === 0) {
+    return undefined
+  }
+
+  if (sanitized.length <= STRUCTURE_DESCRIPTION_SNIPPET_LENGTH) {
+    return sanitized
+  }
+
+  const trimmed = sanitized
+    .slice(
+      0,
+      STRUCTURE_DESCRIPTION_SNIPPET_LENGTH -
+        STRUCTURE_DESCRIPTION_ELLIPSIS.length
+    )
+    .trimEnd()
+
+  return `${trimmed}${STRUCTURE_DESCRIPTION_ELLIPSIS}`
 }
 
 function getGitHistoryDependencyName(rootPath: string): string {
@@ -2177,7 +2264,7 @@ export class ModuleExport<Value> {
   /** Get the name of the export. Default exports will use the file name or declaration name if available. */
   get name() {
     if (this.#metadata === undefined) {
-      return this.#name === 'default' ? this.#file.name : this.#name
+      return this.#name === 'default' ? this.#file.baseName : this.#name
     }
     return this.#metadata?.name || this.#name
   }
@@ -2277,7 +2364,9 @@ export class ModuleExport<Value> {
 
   /** Get the start and end position of the export in the file system. */
   getPosition() {
-    return this.#metadata?.location.position
+    return (
+      this.#metadata?.location.position ?? this.#staticLocation?.declarationPosition
+    )
   }
 
   /** Get the edit URL to the file export source for the configured git repository. */
@@ -2286,9 +2375,13 @@ export class ModuleExport<Value> {
       repository?: Repository
     }
   ) {
+    const startLine =
+      this.#metadata?.location?.position.start.line ??
+      this.#staticLocation?.declarationPosition?.start.line
+
     return this.#file.getEditUrl({
       ref: options?.ref,
-      line: this.#metadata?.location?.position.start.line,
+      line: startLine,
       repository: options?.repository,
     })
   }
@@ -2299,9 +2392,13 @@ export class ModuleExport<Value> {
       repository?: Repository
     }
   ) {
+    const startLine =
+      this.#metadata?.location?.position.start.line ??
+      this.#staticLocation?.declarationPosition?.start.line
+
     return this.#file.getSourceUrl({
       ref: options?.ref,
-      line: this.#metadata?.location?.position.start.line,
+      line: startLine,
       repository: options?.repository,
     })
   }
@@ -2317,10 +2414,15 @@ export class ModuleExport<Value> {
   /** Get the URI to the file export source code for the configured editor. */
   getEditorUri(options?: Omit<GetEditorUriOptions, 'path'>) {
     const path = this.#file.absolutePath
+    const location =
+      this.#metadata?.location ??
+      (this.#staticLocation?.declarationPosition
+        ? {
+            position: this.#staticLocation.declarationPosition,
+          }
+        : undefined)
 
-    if (this.#metadata?.location) {
-      const location = this.#metadata.location
-
+    if (location) {
       return getEditorUri({
         path,
         line: options?.line ?? location.position.start.line,
@@ -2338,6 +2440,13 @@ export class ModuleExport<Value> {
   }
 
   async #loadGitExportMetadata(): Promise<GitExportMetadata> {
+    const moduleMetadata = await this.#file.getCachedGitModuleMetadata()
+    const cachedExportMetadata = moduleMetadata?.exports[this.#name]
+
+    if (cachedExportMetadata) {
+      return cachedExportMetadata
+    }
+
     const metadata = await this.getStaticMetadata()
 
     if (!metadata?.location) {
@@ -2791,7 +2900,10 @@ export class ModuleExport<Value> {
           slug,
           path: `${pathname}#${slug}`,
           relativePath: `${this.#file.workspacePath}#${slug}`,
-          description: this.description,
+          description: getStructureDescription(
+            this.description,
+            normalizedOptions
+          ),
           tags: normalizedOptions.includeTags
             ? normalizeModuleExportTags(this.getTags())
             : undefined,
@@ -2811,7 +2923,7 @@ export class ModuleExport<Value> {
     )
 
     if (typeResolutionFailed) {
-      await session.cache.delete(nodeKey)
+      await deleteCacheNodeBestEffort(session.cache, nodeKey)
     }
 
     return structure
@@ -3005,7 +3117,9 @@ export class JavaScriptFile<
     gitMetadata?: GitExportMetadata
   ): ModuleExportStructure {
     const displayName =
-      exportMetadata.name === 'default' ? this.name : exportMetadata.name
+      exportMetadata.name === 'default'
+        ? exportMetadata.metadata?.name || this.baseName
+        : exportMetadata.name
     const slug = createSlug(displayName, this.#slugCasing)
     const tags = exportMetadata.metadata?.jsDocMetadata?.tags
 
@@ -3016,7 +3130,10 @@ export class JavaScriptFile<
       slug,
       path: `${this.getPathname()}#${slug}`,
       relativePath: `${this.workspacePath}#${slug}`,
-      description: exportMetadata.metadata?.jsDocMetadata?.description,
+      description: getStructureDescription(
+        exportMetadata.metadata?.jsDocMetadata?.description,
+        options
+      ),
       tags: options.includeTags
         ? normalizeModuleExportTags(
             tags?.filter((tag) => tag?.name !== 'template')
@@ -3135,7 +3252,8 @@ export class JavaScriptFile<
     })
   }
 
-  async #getCachedGitModuleMetadata(): Promise<GitModuleMetadata | undefined> {
+  /** @internal */
+  async getCachedGitModuleMetadata(): Promise<GitModuleMetadata | undefined> {
     const directory = this.getParent()
     const session = directory.getSession()
     const fileSystem = directory.getFileSystem()
@@ -3212,7 +3330,7 @@ export class JavaScriptFile<
         )
       }
 
-      const moduleMetadata = await this.#getCachedGitModuleMetadata()
+      const moduleMetadata = await this.getCachedGitModuleMetadata()
 
       if (moduleMetadata) {
         return exportMetadata.map((metadata) =>
@@ -4368,9 +4486,11 @@ export class MDXFile<
     const sections = normalizedOptions.includeSections
       ? await this.getSections().catch(() => undefined)
       : undefined
-    const description =
+    const description = getStructureDescription(
       (frontmatter?.['description'] as string | undefined) ??
-      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+        (sections && sections.length > 0 ? sections[0]!.title : undefined),
+      normalizedOptions
+    )
 
     return {
       ...base,
@@ -4984,9 +5104,11 @@ export class MarkdownFile<
     const sections = normalizedOptions.includeSections
       ? await this.getSections().catch(() => undefined)
       : undefined
-    const description =
+    const description = getStructureDescription(
       (frontmatter?.['description'] as string | undefined) ??
-      (sections && sections.length > 0 ? sections[0]!.title : undefined)
+        (sections && sections.length > 0 ? sections[0]!.title : undefined),
+      normalizedOptions
+    )
 
     return {
       ...base,
@@ -8119,7 +8241,7 @@ export class Directory<
       session.recordCacheMetric('persisted_miss')
       session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
       session.recordPersistedStaleReason('shape_mismatch')
-      await session.cache.delete(snapshotKey)
+      await deleteCacheNodeBestEffort(session.cache, snapshotKey)
       return undefined
     }
 
@@ -8133,12 +8255,17 @@ export class Directory<
         ...restoredPersisted,
         workspaceChangeToken,
       }
-      await session.cache.put(snapshotKey, restoredPersisted, {
-        persist: true,
-        deps: toDirectorySnapshotDependencyIndexEntries(
-          restoredPersisted.dependencySignatures
-        ),
-      })
+      await putCacheValueBestEffort(
+        session.cache,
+        snapshotKey,
+        restoredPersisted,
+        {
+          persist: true,
+          deps: toDirectorySnapshotDependencyIndexEntries(
+            restoredPersisted.dependencySignatures
+          ),
+        }
+      )
     }
 
     const restorePersistedSnapshot = async (
@@ -8159,7 +8286,7 @@ export class Directory<
         session.recordDirectorySnapshotHit(snapshotKey, 'persisted')
         return restored
       } catch (error) {
-        await session.cache.delete(snapshotKey)
+        await deleteCacheNodeBestEffort(session.cache, snapshotKey)
         session.recordCacheMetric('persisted_miss')
         session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
         session.recordPersistedStaleReason('shape_mismatch')
@@ -8249,7 +8376,7 @@ export class Directory<
               )
 
             if (hasStaleOutOfRootDependencies) {
-              await session.cache.delete(snapshotKey)
+              await deleteCacheNodeBestEffort(session.cache, snapshotKey)
               session.recordCacheMetric('persisted_miss')
               session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
               session.recordPersistedStaleReason('dep_changed')
@@ -8261,7 +8388,7 @@ export class Directory<
           return await restorePersistedSnapshot(currentWorkspaceToken)
         }
 
-        await session.cache.delete(snapshotKey)
+        await deleteCacheNodeBestEffort(session.cache, snapshotKey)
         session.recordCacheMetric('persisted_miss')
         session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
         session.recordPersistedStaleReason('token_changed')
@@ -8282,7 +8409,7 @@ export class Directory<
         }
       )
       if (isStale) {
-        await session.cache.delete(snapshotKey)
+        await deleteCacheNodeBestEffort(session.cache, snapshotKey)
         session.recordCacheMetric('persisted_miss')
         session.recordDirectorySnapshotMiss(snapshotKey, 'persisted')
         session.recordPersistedStaleReason('dep_changed')
@@ -8423,7 +8550,7 @@ export class Directory<
       : []
     const persisted = snapshot.toPersistedSnapshot()
 
-    await session.cache.put(snapshotKey, persisted, {
+    await putCacheValueBestEffort(session.cache, snapshotKey, persisted, {
       persist: true,
       deps: dependencyEntries,
     })
@@ -10274,7 +10401,7 @@ export class Collection<
     const computeNavigationIndex = async () => {
       let payload = await computeNavigationPayload()
       if (!isPersistedCollectionNavigationPathsV1(payload)) {
-        await sharedSession.cache.delete(nodeKey)
+        await deleteCacheNodeBestEffort(sharedSession.cache, nodeKey)
         payload = await computeNavigationPayload()
       }
 
@@ -10317,7 +10444,7 @@ export class Collection<
           return staleNavigationIndex
         }
 
-        await sharedSession.cache.delete(nodeKey)
+        await deleteCacheNodeBestEffort(sharedSession.cache, nodeKey)
       }
     }
 

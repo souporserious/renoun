@@ -244,6 +244,10 @@ function toNormalizedPrewarmTargets(
         includeDirectoryNamedFiles: request.includeDirectoryNamedFiles,
         includeIndexAndReadmeFiles: request.includeIndexAndReadmeFiles,
         filterExtensions: normalizeFilterExtensions(request.filterExtensions),
+        methods:
+          request.methods?.slice().sort((left, right) =>
+            left.localeCompare(right)
+          ) ?? null,
       }))
       .sort((left, right) => {
         return JSON.stringify(left).localeCompare(JSON.stringify(right))

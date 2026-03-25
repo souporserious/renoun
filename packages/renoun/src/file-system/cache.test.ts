@@ -1792,6 +1792,49 @@ export type Metadata = Value`,
     }
   })
 
+  test('reuses module-level git metadata for JavaScript export commit dates', async () => {
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-module-export-dates-'
+    )
+    const scopedCwd = join(tempDirectory, 'scoped-cwd')
+    const tsConfigPath = join(tempDirectory, 'tsconfig.json')
+    const fileSystem = new HeadAwareModuleMetadataNodeFileSystem(
+      scopedCwd,
+      tsConfigPath,
+      'head:a'
+    )
+
+    mkdirSync(scopedCwd, { recursive: true })
+    writeFileSync(
+      join(scopedCwd, 'index.ts'),
+      ['export const alpha = 1', 'export const beta = 2'].join('\n'),
+      'utf8'
+    )
+    writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+    try {
+      const directory = new Directory({ fileSystem })
+      const file = await directory.getFile('index', 'ts')
+      const [alpha, beta] = await Promise.all([
+        file.getExport('alpha'),
+        file.getExport('beta'),
+      ])
+
+      const [alphaCommitDate, betaCommitDate] = await Promise.all([
+        alpha.getFirstCommitDate(),
+        beta.getFirstCommitDate(),
+      ])
+
+      expect(fileSystem.moduleMetadataCalls).toBe(1)
+      expect(fileSystem.exportMetadataCalls).toBe(0)
+      expect(alphaCommitDate?.toISOString()).toBe('2024-01-01T00:00:00.000Z')
+      expect(betaCommitDate?.toISOString()).toBe('2024-01-02T00:00:00.000Z')
+    } finally {
+      Session.reset(fileSystem)
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
+  })
+
   test('invalidates cached markdown sections on NodeFileSystem when files change', async () => {
     const tempDirectory = createTmpRenounCacheDirectory('renoun-cache-node-')
     const scopedCwd = join(tempDirectory, 'scoped-cwd')
@@ -5323,6 +5366,85 @@ describe('sqlite cache persistence', () => {
     } finally {
       process.env.NODE_ENV = previousNodeEnv
     }
+  })
+
+  test('treats disposed-cache snapshot cleanup as a cache miss during restore', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const docsDirectory = join(tmpDirectory, 'docs')
+      const workspaceDirectory = relativePath(getRootDirectory(), docsDirectory)
+
+      mkdirSync(join(docsDirectory, 'guides', 'advanced'), { recursive: true })
+      writeFileSync(
+        join(docsDirectory, 'guides', 'intro.mdx'),
+        '# Intro',
+        'utf8'
+      )
+      writeFileSync(
+        join(docsDirectory, 'guides', 'advanced', 'getting-started.mdx'),
+        '# Getting Started',
+        'utf8'
+      )
+      writeFileSync(join(docsDirectory, 'index.mdx'), '# Home', 'utf8')
+
+      const firstDirectory = new Directory({
+        fileSystem: createTempNodeFileSystem(tmpDirectory),
+        path: workspaceDirectory,
+      })
+
+      const firstEntries = await firstDirectory.getEntries({
+        recursive: true,
+        includeIndexAndReadmeFiles: true,
+      })
+      const firstPaths = firstEntries
+        .filter((entry): entry is File => entry instanceof File)
+        .map((entry) => entry.workspacePath)
+        .sort()
+
+      const firstSession = firstDirectory.getSession()
+      const snapshotKey = Array.from(firstSession.directorySnapshots.keys())[0]
+      expect(snapshotKey).toBeDefined()
+
+      await firstSession.cache.put(snapshotKey!, { version: 999 } as any, {
+        persist: true,
+      })
+
+      const secondFileSystem = createTempNodeFileSystem(tmpDirectory)
+      const secondReadDirectory = vi.spyOn(secondFileSystem, 'readDirectory')
+      const secondDirectory = new Directory({
+        fileSystem: secondFileSystem,
+        path: workspaceDirectory,
+      })
+      const secondSession = secondDirectory.getSession()
+      const originalDelete = secondSession.cache.delete.bind(secondSession.cache)
+      const deleteSpy = vi
+        .spyOn(secondSession.cache, 'delete')
+        .mockImplementation(async (nodeKey: string) => {
+          if (nodeKey === snapshotKey) {
+            throw new Error(
+              '[renoun] Cache store operation "delete" cannot continue because the store has been disposed.'
+            )
+          }
+
+          return originalDelete(nodeKey)
+        })
+
+      try {
+        const secondEntries = await secondDirectory.getEntries({
+          recursive: true,
+          includeIndexAndReadmeFiles: true,
+        })
+        const secondPaths = secondEntries
+          .filter((entry): entry is File => entry instanceof File)
+          .map((entry) => entry.workspacePath)
+          .sort()
+
+        expect(secondPaths).toEqual(firstPaths)
+        expect(deleteSpy).toHaveBeenCalledWith(snapshotKey)
+        expect(secondReadDirectory).toHaveBeenCalled()
+      } finally {
+        deleteSpy.mockRestore()
+      }
+    })
   })
 
   test('does not persist function-based directory snapshot options', async () => {

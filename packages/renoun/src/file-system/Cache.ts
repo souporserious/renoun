@@ -127,6 +127,38 @@ export interface CacheStoreComputeContext {
   recordNodeDep(nodeKey: string): Promise<string>
 }
 
+const CACHE_STORE_DISPOSED_ERROR_PREFIX =
+  '[renoun] Cache store operation "'
+const CACHE_STORE_DISPOSED_ERROR_SUFFIX =
+  '" cannot continue because the store has been disposed.'
+
+function createDisposedCacheStoreError(operation: string): Error {
+  return new Error(
+    `${CACHE_STORE_DISPOSED_ERROR_PREFIX}${operation}${CACHE_STORE_DISPOSED_ERROR_SUFFIX}`
+  )
+}
+
+export function isDisposedCacheStoreError(
+  error: unknown,
+  operation?: string
+): boolean {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  if (typeof operation === 'string' && operation.length > 0) {
+    return (
+      error.message ===
+      `${CACHE_STORE_DISPOSED_ERROR_PREFIX}${operation}${CACHE_STORE_DISPOSED_ERROR_SUFFIX}`
+    )
+  }
+
+  return (
+    error.message.startsWith(CACHE_STORE_DISPOSED_ERROR_PREFIX) &&
+    error.message.endsWith(CACHE_STORE_DISPOSED_ERROR_SUFFIX)
+  )
+}
+
 export interface CacheStoreFreshnessMismatch {
   depKey: string
   expectedVersion: string
@@ -781,9 +813,24 @@ export class CacheStore {
       return
     }
 
-    throw new Error(
-      `[renoun] Cache store operation "${operation}" cannot continue because the store has been disposed.`
-    )
+    throw createDisposedCacheStoreError(operation)
+  }
+
+  async #deleteIfActive(nodeKey: string): Promise<boolean> {
+    if (this.#disposed) {
+      return false
+    }
+
+    try {
+      await this.delete(nodeKey)
+      return true
+    } catch (error) {
+      if (isDisposedCacheStoreError(error, 'delete')) {
+        return false
+      }
+
+      throw error
+    }
   }
 
   async getOrCompute<Value>(
@@ -2473,7 +2520,10 @@ export class CacheStore {
     }
 
     if (this.#dependencyGraph.isNodeDirty(nodeKey)) {
-      await this.delete(nodeKey)
+      const deleted = await this.#deleteIfActive(nodeKey)
+      if (!deleted) {
+        return undefined
+      }
       this.#retainStaleEntry(nodeKey, persistedEntry, 'persisted-graph-dirty')
       this.#logCacheOperation('clear', nodeKey, {
         source: 'persisted',
@@ -2496,7 +2546,10 @@ export class CacheStore {
       return persistedEntry
     }
 
-    await this.delete(nodeKey)
+    const deleted = await this.#deleteIfActive(nodeKey)
+    if (!deleted) {
+      return undefined
+    }
     this.#retainStaleEntry(nodeKey, persistedEntry, 'persisted-stale')
     this.#logCacheOperation('clear', nodeKey, {
       source: 'persisted',

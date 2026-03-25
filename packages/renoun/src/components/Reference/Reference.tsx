@@ -1,11 +1,7 @@
 import React, { Suspense } from 'react'
 import { dirname, resolve } from 'node:path'
 
-import {
-  Directory,
-  JavaScriptFile,
-  type ModuleExport,
-} from '../../file-system/entries.ts'
+import { Directory, JavaScriptFile, type ModuleExport } from '../../file-system/entries.ts'
 import {
   Repository,
   type RepositoryInput,
