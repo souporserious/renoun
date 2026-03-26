@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { getTsMorph } from './ts-morph.ts'
 import type {
   Project,
@@ -47,7 +48,7 @@ import {
   getInitializerValueKey,
   getInitializerValue,
 } from './get-initializer-value.ts'
-import { getJsDocMetadata } from './get-js-doc-metadata.ts'
+import { getJsDocMetadata as computeJsDocMetadata } from './get-js-doc-metadata.ts'
 import { getSymbolDescription } from './get-symbol-description.ts'
 import { getRootDirectory } from './get-root-directory.ts'
 
@@ -141,11 +142,11 @@ function safeGetParameterParent(
 }
 
 function safeGetDeclarationLocation(node: Node) {
-  return safeRead(() => getDeclarationLocation(node))
+  return safeRead(() => getCachedDeclarationLocation(node))
 }
 
 function safeGetJsDocMetadataValue(node: Node) {
-  return safeRead(() => getJsDocMetadata(node))
+  return safeRead(() => getCachedJsDocMetadata(node))
 }
 
 function safeGetSymbolDescription(symbol: Symbol): string | undefined {
@@ -889,6 +890,79 @@ const jsDocTypeOwners = new WeakMap<Node, Node>()
 /** Tracks aliases currently being expanded to prevent recursive type references. */
 const resolvingAliasSymbols = new Set<Symbol>()
 
+const declarationLocationCache = new WeakMap<
+  Node,
+  ReturnType<typeof getDeclarationLocation>
+>()
+const jsDocMetadataValueCache = new WeakMap<
+  Node,
+  ReturnType<typeof computeJsDocMetadata>
+>()
+const symbolMetadataCache = new WeakMap<
+  Symbol,
+  Map<string, ReturnType<typeof getSymbolMetadata>>
+>()
+
+interface TypeResolutionMemoEntry {
+  result: Kind | undefined
+  dependencies: string[]
+}
+
+interface TypeResolutionMemoContext {
+  entries: Map<string, TypeResolutionMemoEntry>
+  resolvingKeys: Set<string>
+}
+
+const typeResolutionMemoContextStorage = new AsyncLocalStorage<
+  TypeResolutionMemoContext[]
+>()
+
+export function withTypeResolutionMemoization<Result>(
+  callback: () => Result
+): Result {
+  const activeContexts = typeResolutionMemoContextStorage.getStore() ?? []
+
+  return typeResolutionMemoContextStorage.run(
+    [
+      ...activeContexts,
+      {
+        entries: new Map<string, TypeResolutionMemoEntry>(),
+        resolvingKeys: new Set<string>(),
+      },
+    ],
+    callback
+  )
+}
+
+function getActiveTypeResolutionMemoContext() {
+  return typeResolutionMemoContextStorage.getStore()?.at(-1)
+}
+
+function createTypeResolutionMemoKey(type: Type, enclosingNode: Node): string {
+  const sourceFile = enclosingNode.getSourceFile()
+
+  return [
+    type.compilerType.id,
+    sourceFile.getFilePath(),
+    enclosingNode.getStart(),
+    enclosingNode.getKind(),
+  ].join(':')
+}
+
+function createSymbolMetadataCacheKey(enclosingNode?: Node): string {
+  if (!enclosingNode) {
+    return '__none__'
+  }
+
+  const sourceFile = enclosingNode.getSourceFile()
+
+  return [
+    sourceFile.getFilePath(),
+    enclosingNode.getStart(),
+    enclosingNode.getKind(),
+  ].join(':')
+}
+
 /**
  * Converts a Function type to a FunctionType for use in type expressions.
  * This is needed because Kind.Function is not part of Kind.TypeExpression.
@@ -1074,6 +1148,33 @@ export function resolveType(
   defaultValues?: Record<string, unknown> | unknown,
   dependencies?: Set<string>
 ): Kind | undefined {
+  const memoContext =
+    defaultValues === undefined ? getActiveTypeResolutionMemoContext() : undefined
+  const memoKey =
+    memoContext && enclosingNode
+      ? createTypeResolutionMemoKey(type, enclosingNode)
+      : undefined
+  const outerDependencies = dependencies
+
+  if (memoContext && memoKey) {
+    const cachedEntry = memoContext.entries.get(memoKey)
+
+    if (cachedEntry) {
+      if (outerDependencies) {
+        for (const dependencyPath of cachedEntry.dependencies) {
+          outerDependencies.add(dependencyPath)
+        }
+      }
+
+      return cachedEntry.result
+    }
+
+    if (!memoContext.resolvingKeys.has(memoKey)) {
+      memoContext.resolvingKeys.add(memoKey)
+      dependencies = new Set<string>()
+    }
+  }
+
   resolvingTypes.add(type.compilerType.id)
 
   try {
@@ -1085,11 +1186,11 @@ export function resolveType(
       type.getSymbol() ||
       /* Finally, try to get the symbol of the apparent type */
       type.getApparentType().getSymbol()
-    const symbolMetadata = getSymbolMetadata(symbol, enclosingNode)
+    const symbolMetadata = getCachedSymbolMetadata(symbol, enclosingNode)
     const symbolDeclaration = enclosingNode ?? getPrimaryDeclaration(symbol)
     const declaration = symbolDeclaration || enclosingNode
     const declarationLocation = declaration
-      ? getDeclarationLocation(declaration)
+      ? getCachedDeclarationLocation(declaration)
       : undefined
     let typeText = type.getText(enclosingNode, TYPE_FORMAT_FLAGS)
 
@@ -1793,15 +1894,34 @@ export function resolveType(
       return undefined
     }
 
-    return {
+    const result = {
       ...(metadataDeclaration && !shouldSkipMetadata
-        ? getJsDocMetadata(metadataDeclaration)
+        ? getCachedJsDocMetadata(metadataDeclaration)
         : {}),
       ...resolvedType,
       ...(shouldSkipMetadata ? {} : declarationLocation),
     }
+
+    if (memoContext && memoKey && dependencies) {
+      memoContext.entries.set(memoKey, {
+        result,
+        dependencies: Array.from(dependencies),
+      })
+    }
+
+    if (outerDependencies && dependencies !== outerDependencies && dependencies) {
+      for (const dependencyPath of dependencies) {
+        outerDependencies.add(dependencyPath)
+      }
+    }
+
+    return result
   } finally {
     resolvingTypes.delete(type.compilerType.id)
+
+    if (memoContext && memoKey) {
+      memoContext.resolvingKeys.delete(memoKey)
+    }
   }
 }
 
@@ -6255,6 +6375,29 @@ function isDeclarationExported(
 }
 
 /** Gather metadata about a symbol. */
+function getCachedSymbolMetadata(symbol?: Symbol, enclosingNode?: Node) {
+  if (!symbol) {
+    return getSymbolMetadata(symbol, enclosingNode)
+  }
+
+  const cacheKey = createSymbolMetadataCacheKey(enclosingNode)
+  let symbolCache = symbolMetadataCache.get(symbol)
+
+  if (!symbolCache) {
+    symbolCache = new Map<string, ReturnType<typeof getSymbolMetadata>>()
+    symbolMetadataCache.set(symbol, symbolCache)
+  }
+
+  const cached = symbolCache.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  const metadata = getSymbolMetadata(symbol, enclosingNode)
+  symbolCache.set(cacheKey, metadata)
+  return metadata
+}
+
 function getSymbolMetadata(
   symbol?: Symbol,
   enclosingNode?: Node
@@ -6373,8 +6516,39 @@ function getSymbolMetadata(
   }
 }
 
+function getCachedDeclarationLocation(declaration: Node) {
+  const cached = declarationLocationCache.get(declaration)
+  if (cached) {
+    return cached
+  }
+
+  const location = getDeclarationLocation(declaration)
+  declarationLocationCache.set(declaration, location)
+  return location
+}
+
 /** Gets the location of a declaration. */
 function getDeclarationLocation(declaration: Node): {
+  /** The file path for the symbol declaration relative to the project. */
+  filePath?: string
+
+  /** The line and column number of the symbol declaration. */
+  position?: {
+    start: { line: number; column: number }
+    end: { line: number; column: number }
+  }
+} {
+  const cached = declarationLocationCache.get(declaration)
+  if (cached) {
+    return cached
+  }
+
+  const location = computeDeclarationLocation(declaration)
+  declarationLocationCache.set(declaration, location)
+  return location
+}
+
+function computeDeclarationLocation(declaration: Node): {
   /** The file path for the symbol declaration relative to the project. */
   filePath?: string
 
@@ -6394,6 +6568,32 @@ function getDeclarationLocation(declaration: Node): {
       end: sourceFile.getLineAndColumnAtPos(declaration.getEnd()),
     },
   }
+}
+
+function getCachedJsDocMetadata(
+  node: Node
+): ReturnType<typeof computeJsDocMetadata> {
+  const cached = jsDocMetadataValueCache.get(node)
+  if (cached) {
+    return cached
+  }
+
+  const metadata = getJsDocMetadata(node)
+  jsDocMetadataValueCache.set(node, metadata)
+  return metadata
+}
+
+function getJsDocMetadata(
+  node: Node
+): ReturnType<typeof computeJsDocMetadata> {
+  const cached = jsDocMetadataValueCache.get(node)
+  if (cached) {
+    return cached
+  }
+
+  const metadata = computeJsDocMetadata(node)
+  jsDocMetadataValueCache.set(node, metadata)
+  return metadata
 }
 
 /** Calculate a file path of a source file relative to the project root. */

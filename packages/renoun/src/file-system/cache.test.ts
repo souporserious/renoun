@@ -49,7 +49,11 @@ import { NodeFileSystem } from './NodeFileSystem.ts'
 import { Session } from './Session.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
 import { Collection, Directory, File, Package, Workspace } from './index.tsx'
+import { FS_ANALYSIS_CACHE_VERSION, createCacheNodeKey } from './cache-key.ts'
 import type {
+  ExportHistoryGenerator,
+  ExportHistoryOptions,
+  ExportHistoryReport,
   FileStructure,
   GitExportMetadata,
   GitMetadata,
@@ -372,6 +376,73 @@ class HeadAwareModuleMetadataNodeFileSystem extends HeadAwareMetadataNodeFileSys
       authors: this.fileMetadata.authors,
       exports: this.moduleExportMetadata,
     }
+  }
+}
+
+class HeadAwareExportHistoryNodeFileSystem extends HeadAwareModuleMetadataNodeFileSystem {
+  exportHistoryCalls = 0
+  exportHistoryReport: ExportHistoryReport = {
+    generatedAt: '2024-02-01T00:00:00.000Z',
+    repo: '/repo',
+    entryFiles: ['index.ts'],
+    exports: Object.create(null),
+    nameToId: Object.create(null),
+  }
+
+  override async getModuleMetadata(path: string): Promise<GitModuleMetadata> {
+    this.moduleMetadataCalls += 1
+
+    return {
+      kind: 'module',
+      path: normalizePathKey(path),
+      ref: 'head',
+      refCommit: 'head',
+      firstCommitDate: this.fileMetadata.firstCommitDate?.toISOString(),
+      lastCommitDate: this.fileMetadata.lastCommitDate?.toISOString(),
+      authors: this.fileMetadata.authors,
+      exports: {},
+    }
+  }
+
+  async *getExportHistory(
+    _options: ExportHistoryOptions = {}
+  ): ExportHistoryGenerator {
+    this.exportHistoryCalls += 1
+    return this.exportHistoryReport
+  }
+}
+
+function createSyntheticExportHistoryReport(
+  entryFile: string,
+  exportNames: string[]
+): ExportHistoryReport {
+  const exports: ExportHistoryReport['exports'] = Object.create(null)
+  const nameToId: ExportHistoryReport['nameToId'] = Object.create(null)
+
+  for (const [index, name] of exportNames.entries()) {
+    const timestamp = Date.UTC(2024, 0, index + 1)
+    const id = `${entryFile}::${name}`
+
+    nameToId[name] = [id]
+    exports[id] = [
+      {
+        kind: 'Added',
+        sha: `sha-${index}`,
+        unix: timestamp / 1000,
+        date: new Date(timestamp).toISOString(),
+        name,
+        filePath: entryFile,
+        id,
+      },
+    ]
+  }
+
+  return {
+    generatedAt: '2024-02-01T00:00:00.000Z',
+    repo: '/repo',
+    entryFiles: [entryFile],
+    exports,
+    nameToId,
   }
 }
 
@@ -1565,6 +1636,59 @@ export type Metadata = Value`,
     )
   })
 
+  test('does not block getExports behind an in-flight reference-data compute', async () => {
+    class SlowGitMetadataInMemoryFileSystem extends InMemoryFileSystem {
+      readonly gitMetadataStarted = createDeferredPromise<void>()
+      readonly releaseGitMetadata = createDeferredPromise<void>()
+
+      async getGitFileMetadata(_path: string): Promise<GitMetadata> {
+        this.gitMetadataStarted.resolve()
+        await this.releaseGitMetadata.promise
+
+        return {
+          authors: [],
+          firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+          lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+        }
+      }
+
+      async getGitExportMetadata(
+        _path: string,
+        _startLine: number,
+        _endLine: number
+      ): Promise<GitExportMetadata> {
+        return {
+          firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+          lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+          firstCommitHash: 'a1',
+          lastCommitHash: 'b2',
+        }
+      }
+    }
+
+    const fileSystem = new SlowGitMetadataInMemoryFileSystem({
+      'index.ts': 'export const value = 1',
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+    const referenceDataPromise = file.getCachedReferenceData()
+
+    await fileSystem.gitMetadataStarted.promise
+
+    const timedOut = Symbol('timedOut')
+    const exportsResult = await Promise.race([
+      file.getExports(),
+      waitForMilliseconds(50).then(() => timedOut),
+    ])
+
+    expect(exportsResult).not.toBe(timedOut)
+    expect(Array.isArray(exportsResult)).toBe(true)
+    expect((exportsResult as unknown[]).length).toBe(1)
+
+    fileSystem.releaseGitMetadata.resolve()
+    await referenceDataPromise
+  })
+
   test('omits authors by default and supports first-date-only structures', async () => {
     class MetadataAwareInMemoryFileSystem extends InMemoryFileSystem {
       fileMetadata: GitMetadata = {
@@ -1829,6 +1953,147 @@ export type Metadata = Value`,
       expect(fileSystem.exportMetadataCalls).toBe(0)
       expect(alphaCommitDate?.toISOString()).toBe('2024-01-01T00:00:00.000Z')
       expect(betaCommitDate?.toISOString()).toBe('2024-01-02T00:00:00.000Z')
+    } finally {
+      Session.reset(fileSystem)
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('reuses one file-level export history scan for repeated barrel export commit dates', async () => {
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-export-history-dates-'
+    )
+    const scopedCwd = join(tempDirectory, 'scoped-cwd')
+    const tsConfigPath = join(tempDirectory, 'tsconfig.json')
+    const fileSystem = new HeadAwareExportHistoryNodeFileSystem(
+      scopedCwd,
+      tsConfigPath,
+      'head:a'
+    )
+    const exportNames = Array.from({ length: 48 }, (_, index) => `value${index}`)
+
+    mkdirSync(scopedCwd, { recursive: true })
+    writeFileSync(
+      join(scopedCwd, 'index.ts'),
+      exportNames
+        .map((name) => `export * from './exports/${name}.ts'`)
+        .join('\n'),
+      'utf8'
+    )
+
+    for (const [index, name] of exportNames.entries()) {
+      const exportFilePath = join(scopedCwd, 'exports', `${name}.ts`)
+      mkdirSync(dirname(exportFilePath), { recursive: true })
+      writeFileSync(
+        exportFilePath,
+        `export const ${name} = ${index}`,
+        'utf8'
+      )
+    }
+
+    fileSystem.exportHistoryReport = createSyntheticExportHistoryReport(
+      'index.ts',
+      exportNames
+    )
+    writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+    try {
+      const directory = new Directory({ fileSystem })
+      const file = await directory.getFile('index', 'ts')
+      const exports = await file.getExports()
+      const firstCommitDates = await Promise.all(
+        exports.map((entry) => entry.getFirstCommitDate())
+      )
+      const secondCommitDates = await Promise.all(
+        exports.map((entry) => entry.getFirstCommitDate())
+      )
+      const firstCommitDateByName = new Map(
+        exports.map((entry, index) => [
+          entry.name,
+          firstCommitDates[index]?.toISOString(),
+        ])
+      )
+
+      expect(exports).toHaveLength(exportNames.length)
+      expect(fileSystem.moduleMetadataCalls).toBe(1)
+      expect(fileSystem.exportHistoryCalls).toBe(1)
+      expect(fileSystem.exportMetadataCalls).toBe(0)
+      expect(firstCommitDates.every((date) => date instanceof Date)).toBe(true)
+      expect(secondCommitDates.every((date) => date instanceof Date)).toBe(true)
+      expect(firstCommitDateByName.get('value0')).toBe(
+        '2024-01-01T00:00:00.000Z'
+      )
+      expect(firstCommitDateByName.get('value47')).toBe(
+        '2024-02-17T00:00:00.000Z'
+      )
+    } finally {
+      Session.reset(fileSystem)
+      rmSync(tempDirectory, { recursive: true, force: true })
+    }
+  })
+
+  test('reuses persisted barrel export git dates after a full session reset', async () => {
+    const tempDirectory = createTmpRenounCacheDirectory(
+      'renoun-cache-export-history-reset-'
+    )
+    const scopedCwd = join(tempDirectory, 'scoped-cwd')
+    const tsConfigPath = join(tempDirectory, 'tsconfig.json')
+    const fileSystem = new HeadAwareExportHistoryNodeFileSystem(
+      scopedCwd,
+      tsConfigPath,
+      'head:a'
+    )
+    const exportNames = Array.from({ length: 24 }, (_, index) => `value${index}`)
+
+    mkdirSync(scopedCwd, { recursive: true })
+    writeFileSync(
+      join(scopedCwd, 'index.ts'),
+      exportNames
+        .map((name) => `export * from './exports/${name}.ts'`)
+        .join('\n'),
+      'utf8'
+    )
+
+    for (const [index, name] of exportNames.entries()) {
+      const exportFilePath = join(scopedCwd, 'exports', `${name}.ts`)
+      mkdirSync(dirname(exportFilePath), { recursive: true })
+      writeFileSync(
+        exportFilePath,
+        `export const ${name} = ${index}`,
+        'utf8'
+      )
+    }
+
+    fileSystem.exportHistoryReport = createSyntheticExportHistoryReport(
+      'index.ts',
+      exportNames
+    )
+    writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+    try {
+      const firstDirectory = new Directory({ fileSystem })
+      const firstFile = await firstDirectory.getFile('index', 'ts')
+      const firstExports = await firstFile.getExports()
+      const firstSnapshotId = firstDirectory.getSession().snapshot.id
+
+      await Promise.all(firstExports.map((entry) => entry.getFirstCommitDate()))
+
+      expect(fileSystem.exportHistoryCalls).toBe(1)
+
+      Session.reset(fileSystem)
+
+      const secondDirectory = new Directory({ fileSystem })
+      const secondFile = await secondDirectory.getFile('index', 'ts')
+      const secondExports = await secondFile.getExports()
+
+      expect(secondDirectory.getSession().snapshot.id).not.toBe(firstSnapshotId)
+
+      await Promise.all(
+        secondExports.map((entry) => entry.getFirstCommitDate())
+      )
+
+      expect(fileSystem.exportHistoryCalls).toBe(1)
+      expect(fileSystem.exportMetadataCalls).toBe(0)
     } finally {
       Session.reset(fileSystem)
       rmSync(tempDirectory, { recursive: true, force: true })
@@ -6513,6 +6778,447 @@ export type Metadata = Value`,
       } finally {
         typeResolverSpy.mockRestore()
       }
+    })
+  })
+
+  test('reuses persisted export types across worker sessions despite workspace token changes', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+
+      class StableTokenExportTypeNodeFileSystem extends NestedCwdNodeFileSystem {
+        #workspaceChangeToken: string
+
+        constructor(token: string) {
+          super(
+            getRootDirectory(),
+            tsConfigPath,
+            join(tmpDirectory, '.renoun', 'cache')
+          )
+          this.#workspaceChangeToken = token
+        }
+
+        override async getWorkspaceChangeToken(
+          _rootPath: string
+        ): Promise<string> {
+          return this.#workspaceChangeToken
+        }
+      }
+
+      const createWorkerFileSystem = (token: string) => {
+        const fileSystem = new StableTokenExportTypeNodeFileSystem(token)
+        ;(fileSystem as { repoRoot?: string }).repoRoot = tmpDirectory
+        return fileSystem
+      }
+
+      writeFileSync(
+        join(tmpDirectory, 'a.ts'),
+        `import type { Value } from './b'
+export type Metadata = Value`,
+        'utf8'
+      )
+      writeFileSync(
+        join(tmpDirectory, 'b.ts'),
+        'export type Value = { name: string }',
+        'utf8'
+      )
+
+      const exportResolverSpy = vi.spyOn(
+        NodeFileSystem.prototype,
+        'resolveFileExportsWithDependencies'
+      )
+      const resolveTypesForDependency = (dependencyContent: string) => {
+        if (dependencyContent.includes('count')) {
+          return [
+            {
+              kind: 'TypeAlias',
+              name: 'Metadata',
+              text: 'Metadata = { count: number; total: number }',
+              type: {
+                kind: 'TypeLiteral',
+                text: '{ count: number; total: number }',
+                members: [
+                  {
+                    kind: 'PropertySignature',
+                    name: 'count',
+                    text: 'count',
+                    type: { kind: 'Number', text: 'number' } as any,
+                  },
+                  {
+                    kind: 'PropertySignature',
+                    name: 'total',
+                    text: 'total',
+                    type: { kind: 'Number', text: 'number' } as any,
+                  },
+                ],
+              } as any,
+              typeParameters: [],
+            } as any,
+          ]
+        }
+
+        return [
+          {
+            kind: 'TypeAlias',
+            name: 'Metadata',
+            text: 'Metadata = { name: string }',
+            type: {
+              kind: 'TypeLiteral',
+              text: '{ name: string }',
+              members: [
+                {
+                  kind: 'PropertySignature',
+                  name: 'name',
+                  text: 'name',
+                  type: { kind: 'String', text: 'string' } as any,
+                },
+              ],
+            } as any,
+            typeParameters: [],
+          } as any,
+        ]
+      }
+
+      try {
+        exportResolverSpy.mockImplementation(async function (
+          this: NodeFileSystem,
+          filePath: string,
+          _filter?: unknown
+        ): Promise<any> {
+          const dependencyPath = resolvePath(dirname(filePath), 'b.ts')
+          const dependencyContent = await this.readFile(dependencyPath)
+
+          return {
+            resolvedTypes: resolveTypesForDependency(dependencyContent),
+            dependencies: [filePath, dependencyPath],
+          }
+        })
+
+        const firstWorkerDirectory = new Directory({
+          fileSystem: createWorkerFileSystem('stable-token'),
+          path: tmpDirectory,
+        })
+        const firstFile = await firstWorkerDirectory.getFile('a', 'ts')
+        const firstTypes = await firstFile.getExportTypes()
+        const firstSerializedTypes = JSON.stringify(firstTypes)
+
+        expect(firstTypes).toHaveLength(1)
+
+        const secondWorkerDirectory = new Directory({
+          fileSystem: createWorkerFileSystem('stable-token'),
+          path: tmpDirectory,
+        })
+        const secondFile = await secondWorkerDirectory.getFile('a', 'ts')
+        const secondTypes = await secondFile.getExportTypes()
+
+        expect(JSON.stringify(secondTypes)).toBe(firstSerializedTypes)
+        expect(exportResolverSpy).toHaveBeenCalledTimes(1)
+
+        const thirdWorkerDirectory = new Directory({
+          fileSystem: createWorkerFileSystem('stable-token-next'),
+          path: tmpDirectory,
+        })
+        const thirdFile = await thirdWorkerDirectory.getFile('a', 'ts')
+        const thirdTypes = await thirdFile.getExportTypes()
+
+        expect(JSON.stringify(thirdTypes)).toBe(firstSerializedTypes)
+        expect(exportResolverSpy).toHaveBeenCalledTimes(1)
+
+        writeFileSync(
+          join(tmpDirectory, 'b.ts'),
+          'export type Value = { count: number; total: number }',
+          'utf8'
+        )
+
+        const fourthWorkerDirectory = new Directory({
+          fileSystem: createWorkerFileSystem('stable-token-build-output'),
+          path: tmpDirectory,
+        })
+        const fourthFile = await fourthWorkerDirectory.getFile('a', 'ts')
+        const fourthTypes = await fourthFile.getExportTypes()
+
+        expect(JSON.stringify(fourthTypes)).not.toBe(firstSerializedTypes)
+        expect(exportResolverSpy).toHaveBeenCalledTimes(2)
+      } finally {
+        exportResolverSpy.mockRestore()
+      }
+    })
+  })
+
+  test('reuses persisted reference data across worker sessions despite workspace token changes', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      const referenceDataCacheDirectory = join(tmpDirectory, '.renoun', 'cache')
+      const moduleExportMetadata: Record<string, GitExportMetadata> = {
+        Metadata: {
+          firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+          lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+          firstCommitHash: 'a1',
+          lastCommitHash: 'b1',
+        },
+      }
+      let fileExportCalls = 0
+      let moduleMetadataCalls = 0
+      let fileMetadataCalls = 0
+      let exportTypeCalls = 0
+
+      class StableTokenReferenceDataNodeFileSystem extends NodeFileSystem {
+        readonly #workspaceChangeToken: string
+
+        constructor(token: string) {
+          super({
+            tsConfigPath,
+            outputDirectory: referenceDataCacheDirectory,
+          })
+          this.#workspaceChangeToken = token
+        }
+
+        override getAbsolutePath(path: string): string {
+          return resolvePath(tmpDirectory, path)
+        }
+
+        override isFilePathGitIgnored(_filePath: string): boolean {
+          return false
+        }
+
+        override async getWorkspaceChangeToken(
+          _rootPath: string
+        ): Promise<string> {
+          return this.#workspaceChangeToken
+        }
+
+        override async getGitFileMetadata(_path: string): Promise<GitMetadata> {
+          fileMetadataCalls += 1
+          return {
+            authors: [
+              {
+                name: 'Ada',
+                commitCount: 1,
+                firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+                lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+              },
+            ],
+            firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+            lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+          }
+        }
+
+        override async getModuleMetadata(path: string): Promise<GitModuleMetadata> {
+          moduleMetadataCalls += 1
+
+          return {
+            kind: 'module',
+            path: normalizePathKey(path),
+            ref: 'head',
+            refCommit: 'head',
+            authors: [
+              {
+                name: 'Ada',
+                commitCount: 1,
+                firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+                lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+              },
+            ],
+            firstCommitDate: '2024-01-01T00:00:00.000Z',
+            lastCommitDate: '2024-02-01T00:00:00.000Z',
+            exports: moduleExportMetadata,
+          }
+        }
+
+        override async getFileExports(filePath: string): Promise<any[]> {
+          fileExportCalls += 1
+
+          return NodeFileSystem.prototype.getFileExports.call(this, filePath)
+        }
+
+        override async resolveFileExportsWithDependencies(
+          _filePath: string
+        ): Promise<any> {
+          exportTypeCalls += 1
+
+          return {
+            resolvedTypes: [
+              {
+                kind: 'TypeAlias',
+                name: 'Metadata',
+                text: 'Metadata = { name: string }',
+                type: {
+                  kind: 'TypeLiteral',
+                  text: '{ name: string }',
+                  members: [
+                    {
+                      kind: 'PropertySignature',
+                      name: 'name',
+                      text: 'name',
+                      type: { kind: 'String', text: 'string' } as any,
+                    },
+                  ],
+                } as any,
+                typeParameters: [],
+              } as any,
+            ],
+            dependencies: [resolvePath(tmpDirectory, 'a.ts')],
+          }
+        }
+      }
+
+      const createWorkerFileSystem = (token: string) =>
+        new StableTokenReferenceDataNodeFileSystem(token)
+
+      writeFileSync(
+        join(tmpDirectory, 'a.ts'),
+        'export type Metadata = { name: string }',
+        'utf8'
+      )
+
+      const readReferenceData = async (token: string) => {
+        const directory = new Directory({
+          fileSystem: createWorkerFileSystem(token),
+          path: tmpDirectory,
+        })
+        const file = await directory.getFile('a', 'ts')
+        const exports = await file.getExports()
+
+        return {
+          lastCommitDate: await file.getLastCommitDate(),
+          exportFirstCommitDates: await Promise.all(
+            exports.map((entry) => entry.getFirstCommitDate())
+          ),
+          exportTypes: await file.getExportTypes(),
+        }
+      }
+
+      const firstResult = await readReferenceData('stable-token')
+      const secondResult = await readReferenceData('stable-token')
+
+      expect(firstResult.lastCommitDate?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
+      )
+      expect(
+        firstResult.exportFirstCommitDates[0]?.toISOString()
+      ).toBe('2024-01-01T00:00:00.000Z')
+      expect(firstResult.exportTypes).toHaveLength(1)
+      expect(secondResult.lastCommitDate?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
+      )
+      expect(fileExportCalls).toBe(1)
+      expect(moduleMetadataCalls).toBe(1)
+      expect(fileMetadataCalls).toBe(0)
+      expect(exportTypeCalls).toBe(1)
+
+      const thirdResult = await readReferenceData('stable-token-next')
+
+      expect(thirdResult.lastCommitDate?.toISOString()).toBe(
+        '2024-02-01T00:00:00.000Z'
+      )
+      expect(moduleMetadataCalls).toBe(1)
+      expect(fileMetadataCalls).toBe(0)
+      expect(exportTypeCalls).toBe(1)
+    })
+  })
+
+  test('reuses persisted reference base data after the snapshot-scoped exports child is evicted', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      const referenceDataCacheDirectory = join(tmpDirectory, '.renoun', 'cache')
+      let fileExportCalls = 0
+      let moduleMetadataCalls = 0
+
+      class StableTokenReferenceDataNodeFileSystem extends NodeFileSystem {
+        readonly #workspaceChangeToken: string
+
+        constructor(token: string) {
+          super({
+            tsConfigPath,
+            outputDirectory: referenceDataCacheDirectory,
+          })
+          this.#workspaceChangeToken = token
+        }
+
+        override getAbsolutePath(path: string): string {
+          return resolvePath(tmpDirectory, path)
+        }
+
+        override isFilePathGitIgnored(_filePath: string): boolean {
+          return false
+        }
+
+        override async getWorkspaceChangeToken(
+          _rootPath: string
+        ): Promise<string> {
+          return this.#workspaceChangeToken
+        }
+
+        override async getModuleMetadata(path: string): Promise<GitModuleMetadata> {
+          moduleMetadataCalls += 1
+
+          return {
+            kind: 'module',
+            path: normalizePathKey(path),
+            ref: 'head',
+            refCommit: 'head',
+            authors: [
+              {
+                name: 'Ada',
+                commitCount: 1,
+                firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+                lastCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+              },
+            ],
+            firstCommitDate: '2024-01-01T00:00:00.000Z',
+            lastCommitDate: '2024-02-01T00:00:00.000Z',
+            exports: {
+              Metadata: {
+                firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+                lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+                firstCommitHash: 'a1',
+                lastCommitHash: 'b1',
+              },
+            },
+          }
+        }
+
+        override async getFileExports(filePath: string): Promise<any[]> {
+          fileExportCalls += 1
+          return NodeFileSystem.prototype.getFileExports.call(this, filePath)
+        }
+      }
+
+      writeFileSync(
+        join(tmpDirectory, 'a.ts'),
+        'export type Metadata = { name: string }',
+        'utf8'
+      )
+
+      const createWorkerDirectory = (token: string) =>
+        new Directory({
+          fileSystem: new StableTokenReferenceDataNodeFileSystem(token),
+          path: tmpDirectory,
+        })
+
+      const firstDirectory = createWorkerDirectory('stable-token')
+      const firstFile = await firstDirectory.getFile('a', 'ts')
+      await firstFile.getLastCommitDate()
+
+      expect(fileExportCalls).toBe(1)
+      expect(moduleMetadataCalls).toBe(1)
+
+      const firstSession = firstDirectory.getSession()
+      const exportsNodeKey = createCacheNodeKey('js.exports', {
+        version: FS_ANALYSIS_CACHE_VERSION,
+        dependencyVersion: 3,
+        snapshot: firstSession.snapshot.id,
+        filePath: normalizePathKey(firstFile.absolutePath),
+      })
+
+      await firstSession.cache.delete(exportsNodeKey)
+
+      const secondDirectory = createWorkerDirectory('stable-token-next')
+      const secondFile = await secondDirectory.getFile('a', 'ts')
+      const lastCommitDate = await secondFile.getLastCommitDate()
+
+      expect(lastCommitDate?.toISOString()).toBe('2024-02-01T00:00:00.000Z')
+      expect(fileExportCalls).toBe(1)
+      expect(moduleMetadataCalls).toBe(1)
     })
   })
 

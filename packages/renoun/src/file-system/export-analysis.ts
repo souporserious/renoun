@@ -92,6 +92,32 @@ export interface ExportItem {
   deprecatedMessage?: string
 }
 
+export interface ScanModuleExportsOptions {
+  /**
+   * Whether to compute stable body/signature hashes for each export.
+   *
+   * Disable this when callers only need export names and declaration
+   * locations, since hashing dominates cold large-barrel scans.
+   */
+  includeHashes?: boolean
+
+  /**
+   * Whether to compute 1-based start/end line numbers for each export.
+   *
+   * Disable this when callers only need declaration positions, since the
+   * line-number work is otherwise duplicated.
+   */
+  includeLines?: boolean
+
+  /**
+   * Whether to compute deprecation metadata from JSDoc and comments.
+   *
+   * Disable this for bulk header discovery where deprecation data is not
+   * consumed, since comment scanning is expensive on large barrels.
+   */
+  includeDeprecation?: boolean
+}
+
 interface DeprecatedInfo {
   deprecated: true
   deprecatedMessage?: string
@@ -507,9 +533,13 @@ export function getBindingIdentifiers(node: ts.BindingName): string[] {
  */
 export function scanModuleExports(
   fileName: string,
-  content: string
+  content: string,
+  options: ScanModuleExportsOptions = {}
 ): Map<string, ExportItem> {
   const exports = new Map<string, ExportItem>()
+  const includeHashes = options.includeHashes !== false
+  const includeLines = options.includeLines !== false
+  const includeDeprecation = options.includeDeprecation !== false
 
   const sourceFile = ts.createSourceFile(
     fileName,
@@ -519,14 +549,21 @@ export function scanModuleExports(
     getScriptKindForPath(fileName)
   )
 
-  const printer = getSharedTsPrinter()
-  const declarationDeprecations = new Map<string, DeprecatedInfo>()
+  const printer = includeHashes ? getSharedTsPrinter() : undefined
+  const declarationDeprecations = includeDeprecation
+    ? new Map<string, DeprecatedInfo>()
+    : undefined
   // Pre-pass: collect top-level declaration nodes by name so that
   // `export default X;` can resolve `X` to the actual declaration
   // and use its hash/signature instead of the static export statement.
   const topLevelDeclarations = new Map<string, ts.Node>()
+  const topLevelNamespaceImports = new Map<string, string>()
 
   function getLineNumbers(node: ts.Node) {
+    if (!includeLines) {
+      return {}
+    }
+
     const startPos = node.getStart(sourceFile)
     const endPos = node.getEnd()
     const startLine =
@@ -536,13 +573,21 @@ export function scanModuleExports(
   }
 
   function getHashes(node: ts.Node) {
+    if (!includeHashes) {
+      return {
+        bodyHash: '',
+        signatureHash: '',
+        signatureText: '',
+      }
+    }
+
     const fullText = node.getText(sourceFile).replace(/\s+/g, ' ')
     const bodyHash = createHash('sha1')
       .update(fullText)
       .digest('hex')
       .substring(0, 8)
 
-    const signatureText = getCanonicalSurface(node, sourceFile, printer)
+    const signatureText = getCanonicalSurface(node, sourceFile, printer!)
     const surfaceText = signatureText.replace(/\s+/g, ' ')
     const signatureHash = createHash('sha1')
       .update(surfaceText)
@@ -581,15 +626,38 @@ export function scanModuleExports(
   }
 
   ts.forEachChild(sourceFile, (node) => {
+    if (ts.isImportDeclaration(node)) {
+      const importClause = node.importClause
+      const moduleSpecifier = node.moduleSpecifier
+
+      if (
+        importClause &&
+        moduleSpecifier &&
+        ts.isStringLiteral(moduleSpecifier) &&
+        importClause.namedBindings &&
+        ts.isNamespaceImport(importClause.namedBindings)
+      ) {
+        topLevelNamespaceImports.set(
+          importClause.namedBindings.name.text,
+          moduleSpecifier.text
+        )
+      }
+
+      return
+    }
+
     if (ts.isVariableStatement(node)) {
-      const statementInfo = getDeprecatedInfo(node, sourceFile)
+      const statementInfo = includeDeprecation
+        ? getDeprecatedInfo(node, sourceFile)
+        : null
       node.declarationList.declarations.forEach((declaration) => {
-        const declarationInfo =
-          getDeprecatedInfo(declaration, sourceFile) ?? statementInfo
+        const declarationInfo = includeDeprecation
+          ? getDeprecatedInfo(declaration, sourceFile) ?? statementInfo
+          : null
         if (ts.isIdentifier(declaration.name)) {
           topLevelDeclarations.set(declaration.name.text, declaration)
         }
-        if (!declarationInfo) {
+        if (!declarationInfo || !declarationDeprecations) {
           return
         }
         if (ts.isIdentifier(declaration.name)) {
@@ -617,8 +685,10 @@ export function scanModuleExports(
       if (node.name && ts.isIdentifier(node.name)) {
         topLevelDeclarations.set(node.name.text, node)
       }
-      const info = getDeprecatedInfo(node, sourceFile)
-      if (info && node.name && ts.isIdentifier(node.name)) {
+      const info = includeDeprecation
+        ? getDeprecatedInfo(node, sourceFile)
+        : null
+      if (info && declarationDeprecations && node.name && ts.isIdentifier(node.name)) {
         declarationDeprecations.set(node.name.text, info)
       }
     }
@@ -666,8 +736,20 @@ export function scanModuleExports(
         // static export specifier text.
         node.exportClause.elements.forEach((element) => {
           const localName = element.propertyName?.text ?? element.name.text
-          const deprecatedInfo = declarationDeprecations.get(element.name.text)
+          const deprecatedInfo = declarationDeprecations?.get(element.name.text)
+          const namespaceModule = topLevelNamespaceImports.get(localName)
           const declNode = topLevelDeclarations.get(localName)
+
+          if (namespaceModule) {
+            exports.set(element.name.text, {
+              name: element.name.text,
+              id: `__NAMESPACE__${namespaceModule}`,
+              ...getHashesAndLines(element),
+              ...(deprecatedInfo ?? {}),
+            })
+            return
+          }
+
           exports.set(element.name.text, {
             name: element.name.text,
             id: '__LOCAL__',
@@ -681,16 +763,19 @@ export function scanModuleExports(
 
     // Variable Statement: export const x = 1;
     if (ts.isVariableStatement(node) && hasExportModifier(node)) {
-      const statementInfo = getDeprecatedInfo(node, sourceFile)
+      const statementInfo = includeDeprecation
+        ? getDeprecatedInfo(node, sourceFile)
+        : null
       // Use the statement's lines for variable declarations
       const statementLines = getLineNumbers(node)
       node.declarationList.declarations.forEach((declaration) => {
-        const deprecatedInfo =
-          getDeprecatedInfo(declaration, sourceFile) ??
-          statementInfo ??
-          (ts.isIdentifier(declaration.name)
-            ? declarationDeprecations.get(declaration.name.text)
-            : null)
+        const deprecatedInfo = includeDeprecation
+          ? getDeprecatedInfo(declaration, sourceFile) ??
+            statementInfo ??
+            (ts.isIdentifier(declaration.name)
+              ? declarationDeprecations?.get(declaration.name.text)
+              : null)
+          : null
         if (ts.isIdentifier(declaration.name)) {
           exports.set(declaration.name.text, {
             name: declaration.name.text,
@@ -712,7 +797,9 @@ export function scanModuleExports(
               ...getHashes(declaration),
               ...statementLines,
               ...getNodeLocation(declaration),
-              ...(deprecatedInfo ?? declarationDeprecations.get(name) ?? {}),
+              ...(deprecatedInfo ??
+                declarationDeprecations?.get(name) ??
+                {}),
             })
           })
         }
@@ -729,11 +816,12 @@ export function scanModuleExports(
         ts.isEnumDeclaration(node)) &&
       hasExportModifier(node)
     ) {
-      const deprecatedInfo =
-        getDeprecatedInfo(node, sourceFile) ??
-        (node.name && ts.isIdentifier(node.name)
-          ? declarationDeprecations.get(node.name.text)
-          : null)
+      const deprecatedInfo = includeDeprecation
+        ? getDeprecatedInfo(node, sourceFile) ??
+          (node.name && ts.isIdentifier(node.name)
+            ? declarationDeprecations?.get(node.name.text)
+            : null)
+        : null
       if (node.name && ts.isIdentifier(node.name)) {
         exports.set(node.name.text, {
           name: node.name.text,
@@ -760,7 +848,9 @@ export function scanModuleExports(
 
     // Export Assignment: export default x; / export = x;
     if (ts.isExportAssignment(node)) {
-      const deprecatedInfo = getDeprecatedInfo(node, sourceFile)
+      const deprecatedInfo = includeDeprecation
+        ? getDeprecatedInfo(node, sourceFile)
+        : null
 
       // When the expression is a simple identifier (e.g. `export default Foo;`),
       // resolve it to the actual top-level declaration so that the hash reflects

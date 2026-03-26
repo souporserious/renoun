@@ -1,4 +1,4 @@
-import { basename, extname, resolve } from 'node:path'
+import { basename, extname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   afterEach,
@@ -56,8 +56,14 @@ const resolveFileExportsWithDependenciesMock =
   vi.fn<(...args: any[]) => Promise<unknown>>()
 const getSourceTextMetadataMock = vi.fn<(...args: any[]) => Promise<unknown>>()
 const getTokensMock = vi.fn<(...args: any[]) => Promise<unknown>>()
+const entryGetCachedReferenceBaseDataMock =
+  vi.fn<(filePath: string) => Promise<unknown>>()
+const entryGetCachedReferenceDataMock =
+  vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetExportTypesMock = vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetExportsMock = vi.fn<(filePath: string) => Promise<unknown>>()
+const entryGetCachedGitExportMetadataByNameMock =
+  vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetLastCommitDateMock =
   vi.fn<(filePath: string) => Promise<unknown>>()
 const entryGetOutlineRangesMock =
@@ -134,6 +140,17 @@ class MockNodeFileSystem {
 
 function createMockWarmEntryFile(filePath: string) {
   return {
+    absolutePath: filePath,
+    extension: extname(filePath).replace(/^\./, ''),
+    isDirectory: false,
+    isFile: true,
+    relativePath: basename(filePath),
+    workspacePath: filePath,
+    getCachedReferenceBaseData: () =>
+      entryGetCachedReferenceBaseDataMock(filePath),
+    getCachedReferenceData: () => entryGetCachedReferenceDataMock(filePath),
+    getCachedGitExportMetadataByName: () =>
+      entryGetCachedGitExportMetadataByNameMock(filePath),
     getLastCommitDate: () => entryGetLastCommitDateMock(filePath),
     getExportTypes: () => entryGetExportTypesMock(filePath),
     getExports: () => entryGetExportsMock(filePath),
@@ -141,22 +158,196 @@ function createMockWarmEntryFile(filePath: string) {
     getSections: () => entryGetSectionsMock(filePath),
     getStaticExportValue: (name: string) =>
       entryGetStaticExportValueMock(filePath, name),
+    getPathname() {
+      const currentRelativePath =
+        typeof this.relativePath === 'string'
+          ? this.relativePath
+          : basename(filePath)
+      const normalizedRelativePath = currentRelativePath.replace(/\\/g, '/')
+      const withoutExtension = normalizedRelativePath.replace(/\.[^.]+$/u, '')
+      const pathname = withoutExtension.replace(/\/(index|readme)$/iu, '')
+      return pathname ? `/${pathname}` : '/'
+    },
   }
 }
 
 class MockEntriesDirectory {
   readonly #path: string
+  readonly #logicalRepositoryPath: string | undefined
 
   constructor(options?: {
     path?: string
     fileSystem?: unknown
     repository?: unknown
   }) {
-    this.#path = resolve(options?.path ?? '.')
+    this.#logicalRepositoryPath =
+      options?.repository && options?.path && !String(options.path).startsWith('/')
+        ? resolve('/repo', String(options.path))
+        : undefined
+    const basePath =
+      options?.repository && options?.path && !String(options.path).startsWith('/')
+        ? resolve('/repo', String(options.path))
+        : resolve(options?.path ?? '.')
+    this.#path = basePath
+  }
+
+  #getRepositoryRelativePath(filePath: string): string | undefined {
+    if (!this.#logicalRepositoryPath) {
+      return undefined
+    }
+
+    const normalizedFilePath = resolve(filePath).replace(/\\/g, '/')
+    if (!normalizedFilePath.includes('/.next/cache/renoun/')) {
+      return undefined
+    }
+
+    const normalizedLogicalRepositoryPath =
+      this.#logicalRepositoryPath.replace(/\\/g, '/')
+    const logicalRepositorySuffix = normalizedLogicalRepositoryPath.replace(
+      /^\/repo\//u,
+      ''
+    )
+    const marker = `/${logicalRepositorySuffix}/`
+    const markerIndex = normalizedFilePath.indexOf(marker)
+
+    if (markerIndex === -1) {
+      return undefined
+    }
+
+    return normalizedFilePath.slice(markerIndex + marker.length)
   }
 
   async getStructure(options?: unknown) {
     return entryGetStructureMock(this.#path, options)
+  }
+
+  async getEntries(options?: {
+    recursive?: boolean
+    includeDirectoryNamedFiles?: boolean
+    includeIndexAndReadmeFiles?: boolean
+  }) {
+    const collect = async (directoryPath: string): Promise<any[]> => {
+      const entries = await readDirectoryMock(directoryPath)
+      const files: any[] = []
+
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          if (options?.recursive) {
+            files.push(...(await collect(entry.path)))
+          }
+          continue
+        }
+
+        if (!entry.isFile) {
+          continue
+        }
+
+        const filePath = resolve(entry.path)
+        const baseNameWithoutExtensions = basename(filePath).replace(
+          /\.[^.]+/g,
+          ''
+        )
+        const parentName = basename(resolve(directoryPath))
+
+        if (
+          options?.includeIndexAndReadmeFiles === false &&
+          /^(index|readme)$/i.test(baseNameWithoutExtensions)
+        ) {
+          continue
+        }
+
+        if (
+          options?.includeDirectoryNamedFiles === false &&
+          baseNameWithoutExtensions.toLowerCase() === parentName.toLowerCase()
+        ) {
+          continue
+        }
+
+        const repositoryRelativePath = this.#getRepositoryRelativePath(filePath)
+
+        files.push({
+          ...createMockWarmEntryFile(filePath),
+          absolutePath: filePath,
+          relativePath: repositoryRelativePath ?? relative(this.#path, filePath),
+          workspacePath: filePath,
+          extension: extname(filePath).replace(/^\./, ''),
+        })
+      }
+
+      return files
+    }
+
+    return collect(this.#path)
+  }
+
+  async getTree(options?: {
+    includeIndexAndReadmeFiles?: boolean
+  }): Promise<
+    Array<{
+      entry: unknown
+      children?: Array<{
+        entry: unknown
+        children?: unknown[]
+      }>
+    }>
+  > {
+    const build = async (
+      directoryPath: string
+    ): Promise<
+      Array<{
+        entry: unknown
+        children?: Array<{
+          entry: unknown
+          children?: unknown[]
+        }>
+      }>
+    > => {
+      const entries = await readDirectoryMock(directoryPath)
+      const nodes: Array<{
+        entry: unknown
+        children?: Array<{
+          entry: unknown
+          children?: unknown[]
+        }>
+      }> = []
+
+      for (const entry of entries) {
+        if (entry.isDirectory) {
+          const children = await build(entry.path)
+          const directoryEntry = {
+            isDirectory: true,
+            isFile: false,
+            relativePath: basename(resolve(entry.path)),
+            workspacePath: resolve(entry.path),
+          }
+          nodes.push(children.length > 0 ? { entry: directoryEntry, children } : { entry: directoryEntry })
+          continue
+        }
+
+        if (!entry.isFile) {
+          continue
+        }
+
+        const filePath = resolve(entry.path)
+        const baseNameWithoutExtensions = basename(filePath).replace(
+          /\.[^.]+/g,
+          ''
+        )
+
+        if (
+          options?.includeIndexAndReadmeFiles === false &&
+          /^(index|readme)$/i.test(baseNameWithoutExtensions)
+        ) {
+          continue
+        }
+
+        nodes.push({ entry: createMockWarmEntryFile(filePath) })
+      }
+
+      return nodes
+    }
+
+    return build(this.#path)
   }
 
   async getFile(path: string | string[], extension?: string | string[]) {
@@ -227,6 +418,8 @@ beforeAll(async () => {
 
   vi.doMock(entriesModuleSpecifier, () => ({
     Directory: MockEntriesDirectory,
+    isFile: (entry: { isFile?: boolean; absolutePath?: string }) =>
+      entry?.isFile === true || typeof entry?.absolutePath === 'string',
   }))
 
   vi.doMock(nodeClientModuleSpecifier, () => ({
@@ -283,8 +476,11 @@ beforeEach(() => {
         : '/virtual/snippet.ts',
   }))
   getTokensMock.mockResolvedValue([])
+  entryGetCachedReferenceBaseDataMock.mockResolvedValue(undefined)
+  entryGetCachedReferenceDataMock.mockResolvedValue(undefined)
   entryGetExportTypesMock.mockResolvedValue([])
   entryGetExportsMock.mockResolvedValue([])
+  entryGetCachedGitExportMetadataByNameMock.mockResolvedValue({})
   entryGetLastCommitDateMock.mockResolvedValue(undefined)
   entryGetOutlineRangesMock.mockResolvedValue([])
   entryGetStructureMock.mockResolvedValue([])
@@ -504,7 +700,17 @@ describe('prewarmRenounRpcServerCache', () => {
       entryGetExportTypesMock.mock.calls.map((call) => call[0]).sort()
     ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
     expect(
+      entryGetCachedReferenceBaseDataMock.mock.calls
+        .map((call) => call[0])
+        .sort()
+    ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
+    expect(
       entryGetLastCommitDateMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
+    expect(
+      entryGetCachedGitExportMetadataByNameMock.mock.calls
+        .map((call) => call[0])
+        .sort()
     ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
   })
 
@@ -773,9 +979,54 @@ describe('prewarmRenounRpcServerCache', () => {
     await prewarmRenounRpcServerCache!({ analysisOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/docs/reference.js')
+    expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledWith(
+      '/repo/docs/reference.js'
+    )
     expect(entryGetExportTypesMock).toHaveBeenCalledWith(
       '/repo/docs/reference.js'
     )
+    expect(
+      entryGetCachedReferenceBaseDataMock.mock.invocationCallOrder[0]
+    ).toBeLessThan(entryGetExportsMock.mock.invocationCallOrder[0]!)
+    expect(
+      entryGetCachedReferenceBaseDataMock.mock.invocationCallOrder[0]
+    ).toBeLessThan(entryGetExportTypesMock.mock.invocationCallOrder[0]!)
+  })
+
+  test('does not prewarm shared reference data for export-only getFile targets', async () => {
+    project.createSourceFile(
+      '/repo/src/headers-only-route.ts',
+      `
+        import { Directory } from 'renoun'
+
+        const docs = new Directory('/repo/docs')
+        const file = docs.getFile('headers', 'js')
+
+        await file.getExports()
+      `,
+      { overwrite: true }
+    )
+
+    fileExistsMock.mockImplementation(async (path) => {
+      return path === '/repo/docs/headers.js'
+    })
+    fileExistsSyncMock.mockImplementation((path) => {
+      return path === '/repo/tsconfig.json'
+    })
+    readDirectoryMock.mockImplementation(async (path) => {
+      if (path === '/repo/docs/headers.js') {
+        throw new Error('Not a directory')
+      }
+
+      return []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/docs/headers.js')
+    expect(entryGetCachedReferenceBaseDataMock).not.toHaveBeenCalled()
+    expect(entryGetCachedReferenceDataMock).not.toHaveBeenCalled()
+    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
   })
 
   test('skips prewarm work when changed paths miss all cached targets', async () => {
@@ -1033,11 +1284,285 @@ const schema = { answer: 42 }
     await prewarmRenounRpcServerCache!({ analysisOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/src/nodes/TSL.js')
+    expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledWith(
+      '/repo/src/nodes/TSL.js'
+    )
     expect(entryGetExportTypesMock).toHaveBeenCalledWith(
       '/repo/src/nodes/TSL.js'
     )
     expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
     expect(repositoryGetExportHistoryMock).toHaveBeenCalledWith(undefined)
+  })
+
+  test('prewarms repository-backed dynamic getFile reference routes by warming matching repository files', async () => {
+    project.createSourceFile(
+      '/repo/src/remote-dynamic-reference.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const remoteRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: remoteRepository,
+        })
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+          return <Reference source={file} />
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return [
+          createMockFileEntry('/repo/src/nodes/TSL.js'),
+          createMockFileEntry('/repo/src/nodes/nodes.js'),
+        ]
+      }
+
+      return []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual([
+      '/repo/src/nodes/TSL.js',
+      '/repo/src/nodes/nodes.js',
+    ])
+    expect(
+      entryGetCachedReferenceBaseDataMock.mock.calls
+        .map((call) => call[0])
+        .sort()
+    ).toEqual(['/repo/src/nodes/TSL.js', '/repo/src/nodes/nodes.js'])
+    expect(
+      entryGetExportTypesMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual(['/repo/src/nodes/TSL.js', '/repo/src/nodes/nodes.js'])
+    expect(
+      entryGetLastCommitDateMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual(['/repo/src/nodes/TSL.js', '/repo/src/nodes/nodes.js'])
+    expect(
+      entryGetCachedGitExportMetadataByNameMock.mock.calls
+        .map((call) => call[0])
+        .sort()
+    ).toEqual(['/repo/src/nodes/TSL.js', '/repo/src/nodes/nodes.js'])
+    expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
+  })
+
+  test('prewarms repository-backed dynamic getFile routes even when materialized cache paths are gitignored', async () => {
+    project.createSourceFile(
+      '/repo/src/remote-dynamic-reference-gitignored.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const remoteRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: remoteRepository,
+        })
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+          return <Reference source={file} />
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    isFilePathGitIgnoredMock.mockImplementation((filePath: string) => {
+      return filePath.includes('/.next/cache/renoun/')
+    })
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return [
+          createMockFileEntry(
+            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/TSL.js'
+          ),
+          createMockFileEntry(
+            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/nodes.js'
+          ),
+        ]
+      }
+
+      return []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual([
+      '/repo/src/nodes/TSL.js',
+      '/repo/src/nodes/nodes.js',
+    ])
+    expect(
+      entryGetCachedReferenceBaseDataMock.mock.calls
+        .map((call) => call[0])
+        .sort()
+    ).toEqual([
+      '/repo/src/nodes/TSL.js',
+      '/repo/src/nodes/nodes.js',
+    ])
+    expect(
+      entryGetExportTypesMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual([
+      '/repo/src/nodes/TSL.js',
+      '/repo/src/nodes/nodes.js',
+    ])
+    expect(
+      entryGetLastCommitDateMock.mock.calls.map((call) => call[0]).sort()
+    ).toEqual([
+      '/repo/src/nodes/TSL.js',
+      '/repo/src/nodes/nodes.js',
+    ])
+    expect(
+      entryGetCachedGitExportMetadataByNameMock.mock.calls
+        .map((call) => call[0])
+        .sort()
+    ).toEqual([
+      '/repo/src/nodes/TSL.js',
+      '/repo/src/nodes/nodes.js',
+    ])
+  })
+
+  test('limits high-fanout leaf-only route prewarm to a bounded representative sample', async () => {
+    project.createSourceFile(
+      '/repo/src/high-fanout-reference-route.tsx',
+      `
+        import { Directory, Reference, Repository, Section } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          filter: '**/*.js',
+          repository: docsRepository,
+        })
+
+        docs.getTree()
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+
+          return (
+            <>
+              <Reference source={file} />
+              <Section source={file} />
+            </>
+          )
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return Array.from({ length: 100 }, (_, index) =>
+          createMockFileEntry(`/repo/src/nodes/Leaf${index}.js`)
+        )
+      }
+
+      return []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetExportsMock).toHaveBeenCalledTimes(16)
+    expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledTimes(16)
+    expect(entryGetLastCommitDateMock).toHaveBeenCalledTimes(16)
+    expect(entryGetCachedGitExportMetadataByNameMock).toHaveBeenCalledTimes(16)
+    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
+    expect(entryGetOutlineRangesMock).not.toHaveBeenCalled()
+  })
+
+  test('preserves directory constructor filters when prewarming repository-backed dynamic reference routes', async () => {
+    project.createSourceFile(
+      '/repo/src/remote-dynamic-reference-filtered.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const remoteRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          filter: '**/*.js',
+          repository: remoteRepository,
+        })
+
+        docs.getTree()
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+          return <Reference source={file} />
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    isFilePathGitIgnoredMock.mockImplementation((filePath: string) => {
+      return filePath.includes('/.next/cache/renoun/')
+    })
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return [
+          createMockFileEntry(
+            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/TSL.js'
+          ),
+          createMockFileEntry(
+            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/Guide.mdx'
+          ),
+        ]
+      }
+
+      return []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetExportsMock.mock.calls.map((call) => call[0])).toEqual([
+      '/repo/src/nodes/TSL.js',
+    ])
+    expect(entryGetCachedReferenceBaseDataMock.mock.calls.map((call) => call[0])).toEqual([
+      '/repo/src/nodes/TSL.js',
+    ])
+    expect(entryGetExportTypesMock.mock.calls.map((call) => call[0])).toEqual([
+      '/repo/src/nodes/TSL.js',
+    ])
+    expect(entryGetLastCommitDateMock.mock.calls.map((call) => call[0])).toEqual([
+      '/repo/src/nodes/TSL.js',
+    ])
+    expect(
+      entryGetCachedGitExportMetadataByNameMock.mock.calls.map((call) => call[0])
+    ).toEqual([
+      '/repo/src/nodes/TSL.js',
+    ])
   })
 
   test('bails out for unresolved Directory constructors during prewarm', async () => {
@@ -1624,6 +2149,106 @@ describe('collectRenounPrewarmTargets', () => {
     ])
   })
 
+  test('preserves repository scope for dynamic getFile fallback targets', async () => {
+    project.createSourceFile(
+      '/repo/src/repository-dynamic-reference.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+
+        async function render(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+
+          return <Reference source={file} />
+        }
+
+        void render
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.fileGetFile).toEqual([])
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: './src/nodes',
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: new Set(['js']),
+        repository: {
+          path: 'owner/repo',
+          ref: 'main',
+        },
+        sparsePaths: ['./src/nodes'],
+        methods: ['getExportTypes', 'getExports', 'getGitMetadata'],
+      },
+    ])
+  })
+
+  test('preserves directory constructor filters for repository-backed getTree routes', async () => {
+    project.createSourceFile(
+      '/repo/src/repository-filtered-tree.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          filter: '**/*.js',
+          repository: docsRepository,
+        })
+
+        docs.getTree()
+
+        async function render(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+
+          return <Reference source={file} />
+        }
+
+        void render
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.fileGetFile).toEqual([])
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: './src/nodes',
+        recursive: true,
+        leafOnly: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: new Set(['js']),
+        repository: {
+          path: 'owner/repo',
+          ref: 'main',
+        },
+        sparsePaths: ['./src/nodes'],
+        methods: ['getExportTypes', 'getExports', 'getGitMetadata'],
+      },
+    ])
+  })
+
   test('treats getTree callsites as recursive directory prewarm targets', async () => {
     project.createSourceFile(
       '/repo/src/routes.ts',
@@ -1643,6 +2268,7 @@ describe('collectRenounPrewarmTargets', () => {
       {
         directoryPath: '/repo/docs',
         recursive: true,
+        leafOnly: true,
         includeDirectoryNamedFiles: true,
         includeIndexAndReadmeFiles: true,
         filterExtensions: null,

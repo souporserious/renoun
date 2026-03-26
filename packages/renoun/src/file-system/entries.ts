@@ -104,6 +104,7 @@ import {
   FS_ANALYSIS_CACHE_VERSION,
   FS_STRUCTURE_CACHE_VERSION,
   createCacheNodeKey,
+  createPersistentCacheNodeKey,
   serializeTypeFilterForCache,
 } from './cache-key.ts'
 import {
@@ -120,6 +121,7 @@ import {
 } from './loader-core.ts'
 import { inferMediaType } from './mime.ts'
 import type { Snapshot } from './Snapshot.ts'
+import { startRpcBuildProfile } from '../analysis/rpc/build-profile.ts'
 import {
   applyModuleSchemaToModule,
   isStandardSchema,
@@ -137,6 +139,10 @@ import type {
   ModuleExportStructure,
   ContentSection,
   Section,
+  ExportChange,
+  ExportHistoryGenerator,
+  ExportHistoryOptions,
+  ExportHistoryReport,
   GitMetadata,
   GitExportMetadata,
   GitModuleMetadata,
@@ -379,6 +385,19 @@ function isGitModuleMetadataProvider(
   )
 }
 
+interface GitExportHistoryProvider {
+  getExportHistory(options?: ExportHistoryOptions): ExportHistoryGenerator
+}
+
+function isGitExportHistoryProvider(
+  fileSystem: BaseFileSystem
+): fileSystem is BaseFileSystem & GitExportHistoryProvider {
+  return (
+    typeof (fileSystem as Partial<GitExportHistoryProvider>).getExportHistory ===
+    'function'
+  )
+}
+
 function createEmptyGitMetadata(): GitMetadata {
   return {
     authors: [],
@@ -434,6 +453,42 @@ type PersistedGitExportMetadata = {
   lastCommitDate?: string
   firstCommitHash?: string
   lastCommitHash?: string
+}
+
+type PersistedGitExportMetadataByName = Record<
+  string,
+  PersistedGitExportMetadata
+>
+
+interface JavaScriptFileReferenceBaseData {
+  exportMetadata: JavaScriptFileExportMetadata[]
+  gitMetadataByName: Record<string, GitExportMetadata>
+  fileGitMetadata: GitMetadata
+}
+
+interface JavaScriptFileReferenceBaseDataSnapshot {
+  referenceBaseData: JavaScriptFileReferenceBaseData
+  dependencyPaths: string[]
+}
+
+interface JavaScriptFileResolvedTypesData {
+  resolvedTypes: Kind[]
+  typeDependencies: string[]
+}
+
+interface JavaScriptFileReferenceData
+  extends JavaScriptFileReferenceBaseData,
+    JavaScriptFileResolvedTypesData {}
+
+type PersistedJavaScriptFileReferenceBaseData = {
+  exportMetadata: JavaScriptFileExportMetadata[]
+  gitMetadataByName: PersistedGitExportMetadataByName
+  fileGitMetadata: PersistedGitMetadata
+}
+
+type PersistedJavaScriptFileResolvedTypesData = {
+  resolvedTypes: Kind[]
+  typeDependencies: string[]
 }
 
 function toGitMetadataDateValue(value?: Date): string | undefined {
@@ -545,6 +600,116 @@ function deserializeGitExportMetadataFromCache(
   }
 }
 
+function serializeGitExportMetadataRecordForCache(
+  metadataByName: Record<string, GitExportMetadata>
+): PersistedGitExportMetadataByName {
+  const serialized: PersistedGitExportMetadataByName = Object.create(null)
+
+  for (const [name, metadata] of Object.entries(metadataByName)) {
+    serialized[name] = serializeGitExportMetadataForCache(metadata)
+  }
+
+  return serialized
+}
+
+function deserializeGitExportMetadataRecordFromCache(
+  metadataByName: PersistedGitExportMetadataByName | null | undefined
+): Record<string, GitExportMetadata> {
+  const deserialized: Record<string, GitExportMetadata> = Object.create(null)
+
+  if (!metadataByName) {
+    return deserialized
+  }
+
+  for (const [name, metadata] of Object.entries(metadataByName)) {
+    deserialized[name] = deserializeGitExportMetadataFromCache(metadata)
+  }
+
+  return deserialized
+}
+
+function createGitMetadataFromModuleMetadata(
+  metadata: Pick<GitModuleMetadata, 'authors' | 'firstCommitDate' | 'lastCommitDate'>
+): GitMetadata {
+  return {
+    authors: metadata.authors.map((author) => ({
+      ...author,
+      firstCommitDate:
+        author.firstCommitDate instanceof Date
+          ? new Date(author.firstCommitDate)
+          : undefined,
+      lastCommitDate:
+        author.lastCommitDate instanceof Date
+          ? new Date(author.lastCommitDate)
+          : undefined,
+    })),
+    firstCommitDate: toGitMetadataDate(metadata.firstCommitDate),
+    lastCommitDate: toGitMetadataDate(metadata.lastCommitDate),
+  }
+}
+
+function serializeJavaScriptFileReferenceBaseDataForCache(
+  referenceData: JavaScriptFileReferenceBaseData
+): PersistedJavaScriptFileReferenceBaseData {
+  return {
+    exportMetadata: referenceData.exportMetadata,
+    gitMetadataByName: serializeGitExportMetadataRecordForCache(
+      referenceData.gitMetadataByName
+    ),
+    fileGitMetadata: serializeGitMetadataForCache(referenceData.fileGitMetadata),
+  }
+}
+
+function deserializeJavaScriptFileReferenceBaseDataFromCache(
+  referenceData: PersistedJavaScriptFileReferenceBaseData
+): JavaScriptFileReferenceBaseData {
+  return {
+    exportMetadata: referenceData.exportMetadata,
+    gitMetadataByName: deserializeGitExportMetadataRecordFromCache(
+      referenceData.gitMetadataByName
+    ),
+    fileGitMetadata: deserializeGitMetadataFromCache(
+      referenceData.fileGitMetadata
+    ),
+  }
+}
+
+function serializeJavaScriptFileResolvedTypesDataForCache(
+  resolvedTypesData: JavaScriptFileResolvedTypesData
+): PersistedJavaScriptFileResolvedTypesData {
+  return {
+    resolvedTypes: resolvedTypesData.resolvedTypes,
+    typeDependencies: resolvedTypesData.typeDependencies,
+  }
+}
+
+function deserializeJavaScriptFileResolvedTypesDataFromCache(
+  resolvedTypesData: PersistedJavaScriptFileResolvedTypesData
+): JavaScriptFileResolvedTypesData {
+  return {
+    resolvedTypes: resolvedTypesData.resolvedTypes,
+    typeDependencies: resolvedTypesData.typeDependencies,
+  }
+}
+
+const EXPORT_TYPES_VALUE_CACHE_VERSION = `${FS_ANALYSIS_CACHE_VERSION}:1`
+const EXPORT_TYPES_VALUE_CACHE_DEPENDENCY = {
+  name: 'export-types-value-cache',
+  version: EXPORT_TYPES_VALUE_CACHE_VERSION,
+} as const
+const REFERENCE_BASE_VALUE_CACHE_VERSION =
+  `${FS_ANALYSIS_CACHE_VERSION}:${FS_STRUCTURE_CACHE_VERSION}:2`
+const REFERENCE_BASE_VALUE_CACHE_DEPENDENCY = {
+  name: 'reference-base-value-cache',
+  version: REFERENCE_BASE_VALUE_CACHE_VERSION,
+} as const
+const REFERENCE_RESOLVED_TYPES_VALUE_CACHE_VERSION =
+  `${FS_ANALYSIS_CACHE_VERSION}:2`
+const REFERENCE_RESOLVED_TYPES_VALUE_CACHE_DEPENDENCY = {
+  name: 'reference-resolved-types-value-cache',
+  version: REFERENCE_RESOLVED_TYPES_VALUE_CACHE_VERSION,
+} as const
+
 function normalizeModuleExportTags(
   tags:
     | Array<{
@@ -631,12 +796,93 @@ function getGitHistoryDependencyName(rootPath: string): string {
   return `git-history:${normalizePathKey(rootPath)}`
 }
 
+function getPersistentCacheScope(
+  directory: Directory<any, any>,
+  fileSystem: BaseFileSystem,
+  scopePath: string
+): string {
+  const repository = directory.getRepositoryIfAvailable()
+
+  if (repository) {
+    return `repository:${repository.toString()}`
+  }
+
+  try {
+    return `workspace:${normalizePathKey(
+      fileSystem.getAbsolutePath(scopePath)
+    )}`
+  } catch {
+    return `workspace:${normalizePathKey(scopePath)}`
+  }
+}
+
+function createExportTypesValueCacheNodeKey(options: {
+  scope: string
+  workspaceRootPath: string
+  filePath: string
+  filter: string
+  analysisMetadata: unknown
+}): string {
+  return createPersistentCacheNodeKey({
+    domain: 'export-types',
+    domainVersion: EXPORT_TYPES_VALUE_CACHE_VERSION,
+    namespace: 'file',
+    payload: {
+      scope: options.scope,
+      workspaceRootPath: normalizePathKey(options.workspaceRootPath),
+      filePath: normalizePathKey(options.filePath),
+      filter: options.filter,
+      analysisMetadata: options.analysisMetadata,
+    },
+  })
+}
+
+function createReferenceBaseValueCacheNodeKey(options: {
+  scope: string
+  workspaceRootPath: string
+  filePath: string
+  stripInternal: boolean
+  analysisMetadata: unknown
+}): string {
+  return createPersistentCacheNodeKey({
+    domain: 'reference-base',
+    domainVersion: REFERENCE_BASE_VALUE_CACHE_VERSION,
+    namespace: 'file',
+    payload: {
+      scope: options.scope,
+      workspaceRootPath: normalizePathKey(options.workspaceRootPath),
+      filePath: normalizePathKey(options.filePath),
+      stripInternal: options.stripInternal,
+      analysisMetadata: options.analysisMetadata,
+    },
+  })
+}
+
+function createReferenceResolvedTypesValueCacheNodeKey(options: {
+  scope: string
+  workspaceRootPath: string
+  filePath: string
+  analysisMetadata: unknown
+}): string {
+  return createPersistentCacheNodeKey({
+    domain: 'reference-resolved-types',
+    domainVersion: REFERENCE_RESOLVED_TYPES_VALUE_CACHE_VERSION,
+    namespace: 'file',
+    payload: {
+      scope: options.scope,
+      workspaceRootPath: normalizePathKey(options.workspaceRootPath),
+      filePath: normalizePathKey(options.filePath),
+      analysisMetadata: options.analysisMetadata,
+    },
+  })
+}
+
 async function resolveGitHistoryDependency(
   session: Session,
   rootPath: string
 ): Promise<{ name: string; version: string } | undefined> {
   const token = await session.getWorkspaceChangeToken(rootPath)
-  const version = token ? (extractHeadFromWorkspaceToken(token) ?? token) : null
+  const version = token ? extractHeadFromWorkspaceToken(token) : null
 
   if (!version) {
     return undefined
@@ -731,6 +977,121 @@ async function getGitModuleMetadataForPath(
 
     if (isGitModuleMetadataProvider(fileSystem)) {
       return fileSystem.getModuleMetadata(path)
+    }
+  } catch {
+    return undefined
+  }
+
+  return undefined
+}
+
+async function drainExportHistoryGenerator(
+  generator: ExportHistoryGenerator
+): Promise<ExportHistoryReport> {
+  let result = await generator.next()
+
+  while (!result.done) {
+    result = await generator.next()
+  }
+
+  return result.value
+}
+
+function createGitExportMetadataFromHistoryChanges(
+  name: string,
+  changes: ExportChange[]
+): GitExportMetadata | undefined {
+  let firstMatching: ExportChange | undefined
+  let lastMatching: ExportChange | undefined
+  let firstAny: ExportChange | undefined
+  let lastAny: ExportChange | undefined
+
+  for (const change of changes) {
+    if (!firstAny || change.unix < firstAny.unix) {
+      firstAny = change
+    }
+    if (!lastAny || change.unix > lastAny.unix) {
+      lastAny = change
+    }
+
+    if (change.name !== name) {
+      continue
+    }
+
+    if (!firstMatching || change.unix < firstMatching.unix) {
+      firstMatching = change
+    }
+
+    if (!lastMatching || change.unix > lastMatching.unix) {
+      lastMatching = change
+    }
+  }
+
+  const firstChange = firstMatching ?? firstAny
+  const lastChange = lastMatching ?? lastAny
+
+  if (!firstChange && !lastChange) {
+    return undefined
+  }
+
+  return {
+    firstCommitDate: firstChange ? new Date(firstChange.date) : undefined,
+    lastCommitDate: lastChange ? new Date(lastChange.date) : undefined,
+    firstCommitHash: firstChange?.sha,
+    lastCommitHash: lastChange?.sha,
+  }
+}
+
+function createGitExportMetadataRecordFromHistoryReport(
+  report: ExportHistoryReport
+): Record<string, GitExportMetadata> {
+  const metadataByName: Record<string, GitExportMetadata> = Object.create(null)
+
+  for (const [name, ids] of Object.entries(report.nameToId)) {
+    const changes: ExportChange[] = []
+
+    for (const id of ids) {
+      const exportChanges = report.exports[id]
+
+      if (exportChanges && exportChanges.length > 0) {
+        changes.push(...exportChanges)
+      }
+    }
+
+    const metadata = createGitExportMetadataFromHistoryChanges(name, changes)
+
+    if (metadata) {
+      metadataByName[name] = metadata
+    }
+  }
+
+  return metadataByName
+}
+
+async function getGitExportHistoryMetadataForPath(
+  repository: RepositoryInput | undefined,
+  fileSystem: BaseFileSystem,
+  path: string
+): Promise<Record<string, GitExportMetadata> | undefined> {
+  try {
+    const normalizedRepository = normalizeRepositoryInput(repository)
+    if (normalizedRepository) {
+      const repoFileSystem = normalizedRepository.getFileSystem()
+      if (isGitExportHistoryProvider(repoFileSystem)) {
+        const repositoryPath = fileSystem.getRelativePathToWorkspace(path)
+        const report = await drainExportHistoryGenerator(
+          repoFileSystem.getExportHistory({ entry: repositoryPath })
+        )
+        return createGitExportMetadataRecordFromHistoryReport(report)
+      }
+    }
+
+    if (isGitExportHistoryProvider(fileSystem)) {
+      const workspacePath = fileSystem.getRelativePathToWorkspace(path)
+      const report = await drainExportHistoryGenerator(
+        fileSystem.getExportHistory({ entry: workspacePath })
+      )
+      return createGitExportMetadataRecordFromHistoryReport(report)
     }
   } catch {
     return undefined
@@ -1448,21 +1809,23 @@ export class File<
     const cachedNodeKey = this.#structureCacheNodeKey
     const cachedGitMetadata = this.#structureGitMetadata
     const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const isProduction = isProductionEnvironment()
+    const isDevelopment = isDevelopmentEnvironment()
     const canUseCachedMetadata =
       this.#structureCacheSessionKey === cacheSessionKey &&
       cachedNodeKey !== undefined &&
       cachedGitMetadata !== undefined &&
-      cachedWorkspaceChangeToken !== undefined
+      (isProduction || cachedWorkspaceChangeToken !== undefined)
     let currentWorkspaceChangeToken: string | undefined
 
     if (canUseCachedMetadata) {
-      if (isDevelopmentEnvironment()) {
+      if (isDevelopment) {
         this.#refreshStructureCacheStateInBackground({
           session,
           cacheSessionKey,
           structureOptions,
           expectedNodeKey: cachedNodeKey,
-          cachedWorkspaceChangeToken,
+          cachedWorkspaceChangeToken: cachedWorkspaceChangeToken!,
         })
         return {
           nodeKey: cachedNodeKey,
@@ -1470,11 +1833,19 @@ export class File<
         }
       }
 
-      currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
-      if (
-        currentWorkspaceChangeToken !== undefined &&
-        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
-      ) {
+      if (!isProduction) {
+        currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
+        if (
+          currentWorkspaceChangeToken !== undefined &&
+          cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+        ) {
+          this.#structureCacheValidatedAtMs = Date.now()
+          return {
+            nodeKey: cachedNodeKey,
+            gitMetadata: cachedGitMetadata,
+          }
+        }
+      } else {
         this.#structureCacheValidatedAtMs = Date.now()
         return {
           nodeKey: cachedNodeKey,
@@ -1483,15 +1854,21 @@ export class File<
       }
     }
 
-    const gitMetadata = isProductionEnvironment()
+    const gitMetadata = isProduction
       ? await this.#getCachedGitMetadata()
       : await this.#loadGitMetadataForStructure()
     this.#structureGitMetadata = gitMetadata
     this.#structureGitMetadataSignature =
       createGitMetadataCacheSignature(gitMetadata)
     const nodeKey = this.getStructureCacheKey(structureOptions)
-    currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
-    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+
+    if (!isProduction) {
+      currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
+      this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    } else {
+      this.#structureWorkspaceChangeToken = undefined
+    }
+
     this.#structureCacheSessionKey = cacheSessionKey
     this.#structureCacheValidatedAtMs = Date.now()
 
@@ -2439,12 +2816,17 @@ export class ModuleExport<Value> {
     })
   }
 
-  async #loadGitExportMetadata(): Promise<GitExportMetadata> {
-    const moduleMetadata = await this.#file.getCachedGitModuleMetadata()
-    const cachedExportMetadata = moduleMetadata?.exports[this.#name]
+  async #loadGitExportMetadataValue(
+    options: { useFileCache: boolean }
+  ): Promise<GitExportMetadata> {
+    if (options.useFileCache) {
+      const cachedExportMetadata = await this.#file.getCachedGitExportMetadata(
+        this.#name
+      )
 
-    if (cachedExportMetadata) {
-      return cachedExportMetadata
+      if (cachedExportMetadata) {
+        return cachedExportMetadata
+      }
     }
 
     const metadata = await this.getStaticMetadata()
@@ -2474,7 +2856,7 @@ export class ModuleExport<Value> {
 
   async #loadGitExportMetadataForStructure(): Promise<GitExportMetadata> {
     try {
-      return await this.#loadGitExportMetadata()
+      return await this.#loadGitExportMetadataValue({ useFileCache: false })
     } catch {
       return createEmptyGitExportMetadata()
     }
@@ -2505,19 +2887,27 @@ export class ModuleExport<Value> {
     const cachedNodeKey = this.#structureCacheNodeKey
     const cachedGitMetadata = this.#structureGitMetadata
     const cachedWorkspaceChangeToken = this.#structureWorkspaceChangeToken
+    const isProduction = isProductionEnvironment()
     const canUseCachedMetadata =
       this.#structureCacheSessionKey === cacheSessionKey &&
       cachedNodeKey !== undefined &&
       cachedGitMetadata !== undefined &&
-      cachedWorkspaceChangeToken !== undefined
+      (isProduction || cachedWorkspaceChangeToken !== undefined)
     let currentWorkspaceChangeToken: string | undefined
 
     if (canUseCachedMetadata) {
-      currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
-      if (
-        currentWorkspaceChangeToken !== undefined &&
-        cachedWorkspaceChangeToken === currentWorkspaceChangeToken
-      ) {
+      if (!isProduction) {
+        currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
+        if (
+          currentWorkspaceChangeToken !== undefined &&
+          cachedWorkspaceChangeToken === currentWorkspaceChangeToken
+        ) {
+          return {
+            nodeKey: cachedNodeKey,
+            gitMetadata: cachedGitMetadata,
+          }
+        }
+      } else {
         return {
           nodeKey: cachedNodeKey,
           gitMetadata: cachedGitMetadata,
@@ -2525,15 +2915,21 @@ export class ModuleExport<Value> {
       }
     }
 
-    const gitMetadata = isProductionEnvironment()
+    const gitMetadata = isProduction
       ? await this.#getCachedGitMetadata()
       : await this.#loadGitExportMetadataForStructure()
     this.#structureGitMetadata = gitMetadata
     this.#structureGitMetadataSignature =
       createGitExportMetadataCacheSignature(gitMetadata)
     const nodeKey = this.getStructureCacheKey(structureOptions)
-    currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
-    this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+
+    if (!isProduction) {
+      currentWorkspaceChangeToken = await this.#getCurrentWorkspaceChangeToken()
+      this.#structureWorkspaceChangeToken = currentWorkspaceChangeToken
+    } else {
+      this.#structureWorkspaceChangeToken = undefined
+    }
+
     this.#structureCacheSessionKey = cacheSessionKey
 
     this.#structureCacheNodeKey = nodeKey
@@ -2553,46 +2949,27 @@ export class ModuleExport<Value> {
     })
   }
 
-  async #getGitMetadataCacheNodeKey(session: Session) {
-    const metadata = await this.getStaticMetadata()
-    const location = metadata?.location
-
-    return createCacheNodeKey('git.export.metadata', {
-      version: FS_STRUCTURE_CACHE_VERSION,
-      snapshot: session.snapshot.id,
-      filePath: normalizePathKey(this.#file.absolutePath),
-      exportName: this.#name,
-      position: location?.position ?? null,
-    })
-  }
-
   async #getCachedGitMetadata(): Promise<GitExportMetadata> {
-    const directory = this.#file.getParent()
-    const session = directory.getSession()
-    const filePath = this.#file.absolutePath
-    const nodeKey = await this.#getGitMetadataCacheNodeKey(session)
-    const gitHistoryDependency = await resolveGitHistoryDependency(
-      session,
-      directory.getRootPath()
-    )
-    const persisted =
-      await session.cache.getOrCompute<PersistedGitExportMetadata>(
-        nodeKey,
-        {
-          persist: true,
-          constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
-          staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
-        },
-        async (ctx) => {
-          await ctx.recordFileDep(filePath)
-          recordGitHistoryDependency(ctx, gitHistoryDependency)
-          return serializeGitExportMetadataForCache(
-            await this.#loadGitExportMetadataForStructure()
-          )
-        }
-      )
+    const pendingMetadataByName = this.#file.getPendingGitExportMetadataByName()
 
-    return deserializeGitExportMetadataFromCache(persisted)
+    if (pendingMetadataByName) {
+      const metadataByName = await pendingMetadataByName
+      const cachedGitMetadata = metadataByName[this.#name]
+
+      if (cachedGitMetadata) {
+        return cachedGitMetadata
+      }
+    }
+
+    const gitMetadata = await this.#file.getCachedGitExportMetadata(this.#name)
+
+    if (gitMetadata) {
+      return gitMetadata
+    }
+
+    const loadedGitMetadata = await this.#loadGitExportMetadataForStructure()
+
+    return loadedGitMetadata ?? createEmptyGitExportMetadata()
   }
 
   /** Get the first git commit date that touched this export. */
@@ -2951,6 +3328,22 @@ export class JavaScriptFile<
   #slugCasing?: SlugCasing
   #modulePromise?: Promise<any>
   #sections?: Section[]
+  #referenceBaseData?: JavaScriptFileReferenceBaseData
+  #referenceBaseDataPromise?: Promise<JavaScriptFileReferenceBaseData>
+  #referenceBaseDataSnapshotId?: string
+  #referenceBaseDataSession?: Session
+  #referenceBaseDataSessionResetVersion?: number
+  #referenceResolvedTypesData?: JavaScriptFileResolvedTypesData
+  #referenceResolvedTypesDataPromise?: Promise<JavaScriptFileResolvedTypesData>
+  #referenceResolvedTypesDataSnapshotId?: string
+  #referenceResolvedTypesDataSession?: Session
+  #referenceResolvedTypesDataSessionResetVersion?: number
+  #gitExportMetadataByName?:
+    | Record<string, GitExportMetadata>
+    | null
+  #gitExportMetadataByNameSnapshotId?: string
+  #gitExportMetadataByNameSession?: Session
+  #gitExportMetadataByNameSessionResetVersion?: number
 
   constructor({
     loader,
@@ -2975,6 +3368,20 @@ export class JavaScriptFile<
     this.#exports.clear()
     this.#modulePromise = undefined
     this.#sections = undefined
+    this.#referenceBaseData = undefined
+    this.#referenceBaseDataPromise = undefined
+    this.#referenceBaseDataSnapshotId = undefined
+    this.#referenceBaseDataSession = undefined
+    this.#referenceBaseDataSessionResetVersion = undefined
+    this.#referenceResolvedTypesData = undefined
+    this.#referenceResolvedTypesDataPromise = undefined
+    this.#referenceResolvedTypesDataSnapshotId = undefined
+    this.#referenceResolvedTypesDataSession = undefined
+    this.#referenceResolvedTypesDataSessionResetVersion = undefined
+    this.#gitExportMetadataByName = undefined
+    this.#gitExportMetadataByNameSnapshotId = undefined
+    this.#gitExportMetadataByNameSession = undefined
+    this.#gitExportMetadataByNameSessionResetVersion = undefined
   }
 
   #getModule() {
@@ -3046,18 +3453,23 @@ export class JavaScriptFile<
   }
 
   /** Get all export names and positions from the JavaScript file. */
+  #getExportsCacheNodeKey(session: Session) {
+    const filePath = this.absolutePath
+
+    return createCacheNodeKey('js.exports', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      dependencyVersion: 3,
+      snapshot: session.snapshot.id,
+      filePath: normalizePathKey(filePath),
+    })
+  }
+
   async #getExports() {
     const directory = this.getParent()
     const fileSystem = directory.getFileSystem()
     const session = directory.getSession()
     const filePath = this.absolutePath
-    const cacheFilePath = normalizePathKey(filePath)
-    const nodeKey = createCacheNodeKey('js.exports', {
-      version: FS_ANALYSIS_CACHE_VERSION,
-      dependencyVersion: 3,
-      snapshot: session.snapshot.id,
-      filePath: cacheFilePath,
-    })
+    const nodeKey = this.#getExportsCacheNodeKey(session)
 
     return session.cache.getOrCompute(
       nodeKey,
@@ -3151,81 +3563,787 @@ export class JavaScriptFile<
     }
   }
 
-  /** Get all resolved export types from the JavaScript file. */
-  async getExportTypes(filter?: TypeFilter): Promise<Kind[]> {
-    const directory = this.getParent()
-    const fileSystem = directory.getFileSystem()
-    const session = directory.getSession()
-    const filePath = this.absolutePath
-    const cacheFilePath = normalizePathKey(filePath)
-    const nodeKey = createCacheNodeKey('js.export.types', {
-      version: FS_ANALYSIS_CACHE_VERSION,
+  #getCurrentReferenceBaseData() {
+    const currentSession = this.getParent().peekSession()
+
+    if (
+      this.#referenceBaseData &&
+      this.#referenceBaseDataSnapshotId !== undefined &&
+      currentSession === this.#referenceBaseDataSession &&
+      currentSession?.getResetVersion() ===
+        this.#referenceBaseDataSessionResetVersion
+    ) {
+      return this.#referenceBaseData
+    }
+
+    return undefined
+  }
+
+  #getPendingReferenceBaseData():
+    | Promise<JavaScriptFileReferenceBaseData>
+    | undefined {
+    const currentSession = this.getParent().peekSession()
+
+    if (
+      this.#referenceBaseDataPromise &&
+      this.#referenceBaseDataSnapshotId !== undefined &&
+      currentSession === this.#referenceBaseDataSession &&
+      currentSession?.getResetVersion() ===
+        this.#referenceBaseDataSessionResetVersion
+    ) {
+      return this.#referenceBaseDataPromise
+    }
+
+    return undefined
+  }
+
+  #getCurrentReferenceResolvedTypesData() {
+    const currentSession = this.getParent().peekSession()
+
+    if (
+      this.#referenceResolvedTypesData &&
+      this.#referenceResolvedTypesDataSnapshotId !== undefined &&
+      currentSession === this.#referenceResolvedTypesDataSession &&
+      currentSession?.getResetVersion() ===
+        this.#referenceResolvedTypesDataSessionResetVersion
+    ) {
+      return this.#referenceResolvedTypesData
+    }
+
+    return undefined
+  }
+
+  #getPendingReferenceResolvedTypesData():
+    | Promise<JavaScriptFileResolvedTypesData>
+    | undefined {
+    const currentSession = this.getParent().peekSession()
+
+    if (
+      this.#referenceResolvedTypesDataPromise &&
+      this.#referenceResolvedTypesDataSnapshotId !== undefined &&
+      currentSession === this.#referenceResolvedTypesDataSession &&
+      currentSession?.getResetVersion() ===
+        this.#referenceResolvedTypesDataSessionResetVersion
+    ) {
+      return this.#referenceResolvedTypesDataPromise
+    }
+
+    return undefined
+  }
+
+  #getReferenceBaseDataCacheNodeKey(session: Session, stripInternal: boolean) {
+    return createCacheNodeKey('js.reference-base-data', {
+      version: REFERENCE_BASE_VALUE_CACHE_VERSION,
       dependencyVersion: 1,
       snapshot: session.snapshot.id,
-      filePath: cacheFilePath,
-      filter: filter ? serializeTypeFilterForCache(filter) : 'none',
+      filePath: normalizePathKey(this.absolutePath),
+      stripInternal,
     })
+  }
 
-    const resolvedTypes = await session.cache.getOrCompute(
-      nodeKey,
-      { persist: true },
-      async (ctx) => {
-        const typeResolution = await fileSystem.resolveFileExportsWithDependencies(
-          this.absolutePath,
-          filter
-        )
-        const dependencyPaths = typeResolution.dependencies.length
-          ? typeResolution.dependencies
-          : [filePath]
+  #getReferenceResolvedTypesCacheNodeKey(session: Session) {
+    return createCacheNodeKey('js.reference-resolved-types', {
+      version: REFERENCE_RESOLVED_TYPES_VALUE_CACHE_VERSION,
+      dependencyVersion: 1,
+      snapshot: session.snapshot.id,
+      filePath: normalizePathKey(this.absolutePath),
+    })
+  }
 
-        for (const dependencyPath of dependencyPaths) {
-          await ctx.recordFileDep(dependencyPath)
+  async #getPersistentReferenceCacheContext(): Promise<
+    | {
+        scope: string
+        workspaceRootPath: string
+        workspaceRelativeFilePath: string
+        analysisMetadata: unknown
+      }
+    | undefined
+  > {
+    const directory = this.getParent()
+    const fileSystem = directory.getFileSystem()
+    const workspaceRootPath = normalizePathKey(
+      fileSystem.getRelativePathToWorkspace('.')
+    )
+    const workspaceRelativeFilePath = normalizePathKey(
+      fileSystem.getRelativePathToWorkspace(this.absolutePath)
+    )
+
+    if (!fileSystem.usesPersistentCacheByDefault()) {
+      return undefined
+    }
+
+    return {
+      scope: getPersistentCacheScope(directory, fileSystem, workspaceRootPath),
+      workspaceRootPath,
+      workspaceRelativeFilePath,
+      analysisMetadata: fileSystem.getAnalysisCacheMetadata(),
+    }
+  }
+
+  #clearReferenceBaseDataState(): void {
+    this.#referenceBaseData = undefined
+    this.#referenceBaseDataPromise = undefined
+    this.#referenceBaseDataSnapshotId = undefined
+    this.#referenceBaseDataSession = undefined
+    this.#referenceBaseDataSessionResetVersion = undefined
+    this.#gitExportMetadataByName = undefined
+    this.#gitExportMetadataByNameSnapshotId = undefined
+    this.#gitExportMetadataByNameSession = undefined
+    this.#gitExportMetadataByNameSessionResetVersion = undefined
+  }
+
+  #clearReferenceResolvedTypesDataState(): void {
+    this.#referenceResolvedTypesData = undefined
+    this.#referenceResolvedTypesDataPromise = undefined
+    this.#referenceResolvedTypesDataSnapshotId = undefined
+    this.#referenceResolvedTypesDataSession = undefined
+    this.#referenceResolvedTypesDataSessionResetVersion = undefined
+  }
+
+  async #buildGitHistorySnapshotValue(
+    exportMetadata: readonly JavaScriptFileExportMetadata[]
+  ): Promise<{
+    fileGitMetadata: GitMetadata
+    gitMetadataByName: Record<string, GitExportMetadata>
+  }> {
+    const directory = this.getParent()
+    const fileSystem = directory.getFileSystem()
+    const filePath = this.absolutePath
+    const gitMetadataByName: Record<string, GitExportMetadata> =
+      Object.create(null)
+    let fileGitMetadata = createEmptyGitMetadata()
+
+    const moduleMetadata = await getGitModuleMetadataForPath(
+      directory.getRepositoryIfAvailable(),
+      fileSystem,
+      filePath
+    )
+
+    if (moduleMetadata) {
+      fileGitMetadata = createGitMetadataFromModuleMetadata(moduleMetadata)
+
+      for (const metadata of exportMetadata) {
+        const gitMetadata = moduleMetadata.exports[metadata.name]
+
+        if (gitMetadata) {
+          gitMetadataByName[metadata.name] = gitMetadata
+        }
+      }
+    } else {
+      fileGitMetadata = await getGitFileMetadataForPath(
+        directory.getRepositoryIfAvailable(),
+        fileSystem,
+        filePath
+      )
+    }
+
+    const missingNames = exportMetadata
+      .map((metadata) => metadata.name)
+      .filter((name) => gitMetadataByName[name] === undefined)
+
+    if (missingNames.length === 0) {
+      return {
+        fileGitMetadata,
+        gitMetadataByName,
+      }
+    }
+
+    const historyMetadataByName = await getGitExportHistoryMetadataForPath(
+      directory.getRepositoryIfAvailable(),
+      fileSystem,
+      filePath
+    )
+
+    for (const name of missingNames) {
+      const gitMetadata = historyMetadataByName?.[name]
+
+      if (gitMetadata) {
+        gitMetadataByName[name] = gitMetadata
+      }
+    }
+
+    const fallbackExportMetadata = exportMetadata.filter(
+      (metadata) => gitMetadataByName[metadata.name] === undefined
+    )
+
+    if (fallbackExportMetadata.length === 0) {
+      return {
+        fileGitMetadata,
+        gitMetadataByName,
+      }
+    }
+
+    const resolvedFallbackMetadata = await mapConcurrent(
+      fallbackExportMetadata,
+      {
+        concurrency: Math.min(8, fallbackExportMetadata.length || 1),
+      },
+      async (metadata) => {
+        const declarationLocation = metadata.metadata?.location
+
+        if (!declarationLocation) {
+          return {
+            name: metadata.name,
+            metadata: undefined,
+          }
         }
 
-        return typeResolution.resolvedTypes
+        const startLine = declarationLocation.position.start.line
+        const endLine = Math.max(startLine, declarationLocation.position.end.line)
+
+        return {
+          name: metadata.name,
+          metadata: await getGitExportMetadataForPath(
+            directory.getRepositoryIfAvailable(),
+            fileSystem,
+            metadata.path,
+            startLine,
+            endLine
+          ),
+        }
       }
     )
 
-    if (!(await fileSystem.shouldStripInternalAsync())) {
-      return resolvedTypes
+    for (const entry of resolvedFallbackMetadata) {
+      if (entry.metadata) {
+        gitMetadataByName[entry.name] = entry.metadata
+      }
     }
 
-    const publicTypes: Kind[] = []
+    return {
+      fileGitMetadata,
+      gitMetadataByName,
+    }
+  }
 
-    for (const resolvedType of resolvedTypes) {
-      const tags =
-        'tags' in resolvedType && Array.isArray(resolvedType.tags)
-          ? resolvedType.tags
-          : undefined
+  async #readReferenceBaseExportMetadataSnapshot(
+    stripInternal: boolean
+  ): Promise<{
+    exportMetadata: JavaScriptFileExportMetadata[]
+    dependencyPaths: string[]
+  }> {
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const fileSystem = directory.getFileSystem()
+    const filePath = this.absolutePath
+    const cachedFileExports =
+      await session.cache.getWithFreshness<JavaScriptFileExportMetadata[]>(
+        this.#getExportsCacheNodeKey(session),
+        {
+          recordNodeDependency: false,
+        }
+      )
+    const fileExports =
+      cachedFileExports.fresh && cachedFileExports.value !== undefined
+        ? cachedFileExports.value
+        : await fileSystem.getFileExports(filePath)
+    const dependencyPaths = new Set<string>([filePath])
 
-      if (!tags || tags.length === 0) {
-        publicTypes.push(resolvedType)
-        continue
+    for (const fileExport of fileExports) {
+      if (
+        typeof fileExport.path === 'string' &&
+        fileExport.path.length > 0
+      ) {
+        dependencyPaths.add(fileExport.path)
+      }
+    }
+
+    const exportMetadata = stripInternal
+      ? fileExports.filter((entry) => {
+          const tags = entry.metadata?.jsDocMetadata?.tags
+
+          if (!tags || tags.length === 0) {
+            return true
+          }
+
+          for (const tag of tags) {
+            if (!tag || tag.name !== 'internal') {
+              return true
+            }
+          }
+
+          return false
+        })
+      : fileExports
+
+    return {
+      exportMetadata,
+      dependencyPaths: Array.from(dependencyPaths.values()),
+    }
+  }
+
+  async #buildReferenceBaseDataValue(
+    stripInternal: boolean
+  ): Promise<JavaScriptFileReferenceBaseDataSnapshot> {
+    const exportSnapshot =
+      await this.#readReferenceBaseExportMetadataSnapshot(stripInternal)
+    const historySnapshot = await this.#buildGitHistorySnapshotValue(
+      exportSnapshot.exportMetadata
+    )
+
+    return {
+      referenceBaseData: {
+        exportMetadata: exportSnapshot.exportMetadata,
+        gitMetadataByName: historySnapshot.gitMetadataByName,
+        fileGitMetadata: historySnapshot.fileGitMetadata,
+      },
+      dependencyPaths: exportSnapshot.dependencyPaths,
+    }
+  }
+
+  /** @internal */
+  async getCachedReferenceBaseData(): Promise<JavaScriptFileReferenceBaseData> {
+    const finishBuildProfile = startRpcBuildProfile(
+      'entry.getCachedReferenceBaseData',
+      {
+        filePath: this.absolutePath,
+      }
+    )
+    const directory = this.getParent()
+    const session = directory.getSession()
+    const snapshotId = session.snapshot.id
+    const currentReferenceBaseData = this.#getCurrentReferenceBaseData()
+
+    if (currentReferenceBaseData) {
+      finishBuildProfile()
+      return currentReferenceBaseData
+    }
+
+    const pendingReferenceBaseData = this.#getPendingReferenceBaseData()
+
+    if (pendingReferenceBaseData) {
+      return pendingReferenceBaseData.finally(() => {
+        finishBuildProfile()
+      })
+    }
+
+    this.#clearReferenceBaseDataState()
+
+    const fileSystem = directory.getFileSystem()
+    const stripInternal = await fileSystem.shouldStripInternalAsync()
+    const nodeKey = this.#getReferenceBaseDataCacheNodeKey(
+      session,
+      stripInternal
+    )
+    const persistentContext =
+      await this.#getPersistentReferenceCacheContext()
+    const stableNodeKey = persistentContext
+      ? createReferenceBaseValueCacheNodeKey({
+          scope: persistentContext.scope,
+          workspaceRootPath: persistentContext.workspaceRootPath,
+          filePath: persistentContext.workspaceRelativeFilePath,
+          stripInternal,
+          analysisMetadata: persistentContext.analysisMetadata,
+        })
+      : undefined
+    const shouldRetainResolvedValue = stableNodeKey !== undefined
+    const gitHistoryDependency = await resolveGitHistoryDependency(
+      session,
+      directory.getRootPath()
+    )
+
+    const promise = (async () => {
+      if (stableNodeKey) {
+        const persisted =
+          await session.cache.getOrCompute<PersistedJavaScriptFileReferenceBaseData>(
+            stableNodeKey,
+            {
+              persist: true,
+              constDeps: gitHistoryDependency
+                ? [REFERENCE_BASE_VALUE_CACHE_DEPENDENCY, gitHistoryDependency]
+                : [REFERENCE_BASE_VALUE_CACHE_DEPENDENCY],
+              staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
+            },
+            async (ctx) => {
+              ctx.recordConstDep(
+                REFERENCE_BASE_VALUE_CACHE_DEPENDENCY.name,
+                REFERENCE_BASE_VALUE_CACHE_DEPENDENCY.version
+              )
+              recordGitHistoryDependency(ctx, gitHistoryDependency)
+              const referenceBaseDataSnapshot =
+                await this.#buildReferenceBaseDataValue(stripInternal)
+
+              for (const dependencyPath of referenceBaseDataSnapshot.dependencyPaths) {
+                await ctx.recordFileDep(dependencyPath)
+              }
+
+              return serializeJavaScriptFileReferenceBaseDataForCache(
+                referenceBaseDataSnapshot.referenceBaseData
+              )
+            }
+          )
+
+        return deserializeJavaScriptFileReferenceBaseDataFromCache(persisted)
       }
 
-      let isPublic = false
-      for (const tag of tags) {
-        if (!tag || tag.name !== 'internal') {
-          isPublic = true
-          break
+      const persisted =
+        await session.cache.getOrCompute<PersistedJavaScriptFileReferenceBaseData>(
+          nodeKey,
+          {
+            persist: true,
+            constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
+            staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
+          },
+          async (ctx) => {
+            recordGitHistoryDependency(ctx, gitHistoryDependency)
+            const referenceBaseDataSnapshot =
+              await this.#buildReferenceBaseDataValue(stripInternal)
+
+            for (const dependencyPath of referenceBaseDataSnapshot.dependencyPaths) {
+              await ctx.recordFileDep(dependencyPath)
+            }
+            return serializeJavaScriptFileReferenceBaseDataForCache(
+              referenceBaseDataSnapshot.referenceBaseData
+            )
+          }
+        )
+
+      return deserializeJavaScriptFileReferenceBaseDataFromCache(persisted)
+    })()
+
+    this.#referenceBaseDataSnapshotId = snapshotId
+    this.#referenceBaseDataPromise = promise
+    this.#referenceBaseDataSession = session
+    this.#referenceBaseDataSessionResetVersion = session.getResetVersion()
+
+    try {
+      const referenceBaseData = await promise
+
+      if (this.#referenceBaseDataPromise === promise) {
+        this.#referenceBaseData = shouldRetainResolvedValue
+          ? referenceBaseData
+          : undefined
+        this.#referenceBaseDataPromise = undefined
+        this.#referenceBaseDataSnapshotId = shouldRetainResolvedValue
+          ? snapshotId
+          : undefined
+        this.#referenceBaseDataSession = shouldRetainResolvedValue
+          ? session
+          : undefined
+        this.#referenceBaseDataSessionResetVersion = shouldRetainResolvedValue
+          ? session.getResetVersion()
+          : undefined
+        this.#gitExportMetadataByName = shouldRetainResolvedValue
+          ? referenceBaseData.gitMetadataByName
+          : undefined
+        this.#gitExportMetadataByNameSnapshotId = shouldRetainResolvedValue
+          ? snapshotId
+          : undefined
+        this.#gitExportMetadataByNameSession = shouldRetainResolvedValue
+          ? session
+          : undefined
+        this.#gitExportMetadataByNameSessionResetVersion =
+          shouldRetainResolvedValue ? session.getResetVersion() : undefined
+      }
+
+      finishBuildProfile()
+      return referenceBaseData
+    } catch (error) {
+      if (this.#referenceBaseDataPromise === promise) {
+        this.#clearReferenceBaseDataState()
+      }
+
+      finishBuildProfile({ error: true })
+      throw error
+    }
+  }
+
+  async #readPersistedReferenceBaseDataIfAvailable():
+    Promise<JavaScriptFileReferenceBaseData | undefined> {
+    const currentReferenceBaseData = this.#getCurrentReferenceBaseData()
+
+    if (currentReferenceBaseData) {
+      return currentReferenceBaseData
+    }
+
+    const session = this.getParent().getSession()
+    const persistentContext =
+      await this.#getPersistentReferenceCacheContext()
+
+    if (!persistentContext) {
+      return undefined
+    }
+
+    const stripInternal =
+      await this.getParent().getFileSystem().shouldStripInternalAsync()
+    const stableNodeKey = createReferenceBaseValueCacheNodeKey({
+      scope: persistentContext.scope,
+      workspaceRootPath: persistentContext.workspaceRootPath,
+      filePath: persistentContext.workspaceRelativeFilePath,
+      stripInternal,
+      analysisMetadata: persistentContext.analysisMetadata,
+    })
+    const freshness =
+      await session.cache.getWithFreshness<PersistedJavaScriptFileReferenceBaseData>(
+        stableNodeKey
+      )
+
+    if (!freshness.fresh || freshness.value === undefined) {
+      return undefined
+    }
+
+    const referenceBaseData =
+      deserializeJavaScriptFileReferenceBaseDataFromCache(freshness.value)
+
+    this.#referenceBaseData = referenceBaseData
+    this.#referenceBaseDataSnapshotId = session.snapshot.id
+    this.#referenceBaseDataSession = session
+    this.#referenceBaseDataSessionResetVersion = session.getResetVersion()
+    this.#gitExportMetadataByName = referenceBaseData.gitMetadataByName
+    this.#gitExportMetadataByNameSnapshotId = session.snapshot.id
+    this.#gitExportMetadataByNameSession = session
+    this.#gitExportMetadataByNameSessionResetVersion = session.getResetVersion()
+
+    return referenceBaseData
+  }
+
+  async #buildReferenceResolvedTypesDataValue():
+    Promise<JavaScriptFileResolvedTypesData> {
+    const fileSystem = this.getParent().getFileSystem()
+    const typeResolution = await fileSystem.resolveFileExportsWithDependencies(
+      this.absolutePath
+    )
+
+    return {
+      resolvedTypes: typeResolution.resolvedTypes,
+      typeDependencies: typeResolution.dependencies.length
+        ? typeResolution.dependencies
+        : [this.absolutePath],
+    }
+  }
+
+  async #getCachedReferenceResolvedTypesData():
+    Promise<JavaScriptFileResolvedTypesData> {
+    const finishBuildProfile = startRpcBuildProfile(
+      'entry.getCachedReferenceResolvedTypesData',
+      {
+        filePath: this.absolutePath,
+      }
+    )
+    const session = this.getParent().getSession()
+    const snapshotId = session.snapshot.id
+    const currentReferenceResolvedTypesData =
+      this.#getCurrentReferenceResolvedTypesData()
+
+    if (currentReferenceResolvedTypesData) {
+      finishBuildProfile()
+      return currentReferenceResolvedTypesData
+    }
+
+    const pendingReferenceResolvedTypesData =
+      this.#getPendingReferenceResolvedTypesData()
+
+    if (pendingReferenceResolvedTypesData) {
+      return pendingReferenceResolvedTypesData.finally(() => {
+        finishBuildProfile()
+      })
+    }
+
+    this.#clearReferenceResolvedTypesDataState()
+
+    const nodeKey = this.#getReferenceResolvedTypesCacheNodeKey(session)
+    const persistentContext =
+      await this.#getPersistentReferenceCacheContext()
+    const stableNodeKey = persistentContext
+      ? createReferenceResolvedTypesValueCacheNodeKey({
+          scope: persistentContext.scope,
+          workspaceRootPath: persistentContext.workspaceRootPath,
+          filePath: persistentContext.workspaceRelativeFilePath,
+          analysisMetadata: persistentContext.analysisMetadata,
+        })
+      : undefined
+    const shouldRetainResolvedValue = stableNodeKey !== undefined
+
+    const promise = (async () => {
+      if (stableNodeKey) {
+        const persisted =
+          await session.cache.getOrCompute<PersistedJavaScriptFileResolvedTypesData>(
+            stableNodeKey,
+            {
+              persist: true,
+              constDeps: [REFERENCE_RESOLVED_TYPES_VALUE_CACHE_DEPENDENCY],
+              staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
+            },
+            async (ctx) => {
+              ctx.recordConstDep(
+                REFERENCE_RESOLVED_TYPES_VALUE_CACHE_DEPENDENCY.name,
+                REFERENCE_RESOLVED_TYPES_VALUE_CACHE_DEPENDENCY.version
+              )
+
+              const referenceResolvedTypesData =
+                await this.#buildReferenceResolvedTypesDataValue()
+
+              for (const dependencyPath of referenceResolvedTypesData.typeDependencies) {
+                await ctx.recordFileDep(dependencyPath)
+              }
+
+              return serializeJavaScriptFileResolvedTypesDataForCache(
+                referenceResolvedTypesData
+              )
+            }
+          )
+
+        return deserializeJavaScriptFileResolvedTypesDataFromCache(persisted)
+      }
+
+      const persisted =
+        await session.cache.getOrCompute<PersistedJavaScriptFileResolvedTypesData>(
+          nodeKey,
+          { persist: true },
+          async (ctx) => {
+            const referenceResolvedTypesData =
+              await this.#buildReferenceResolvedTypesDataValue()
+
+            for (const dependencyPath of referenceResolvedTypesData.typeDependencies) {
+              await ctx.recordFileDep(dependencyPath)
+            }
+
+            return serializeJavaScriptFileResolvedTypesDataForCache(
+              referenceResolvedTypesData
+            )
+          }
+        )
+
+      return deserializeJavaScriptFileResolvedTypesDataFromCache(persisted)
+    })()
+
+    this.#referenceResolvedTypesDataSnapshotId = snapshotId
+    this.#referenceResolvedTypesDataPromise = promise
+    this.#referenceResolvedTypesDataSession = session
+    this.#referenceResolvedTypesDataSessionResetVersion =
+      session.getResetVersion()
+
+    try {
+      const referenceResolvedTypesData = await promise
+
+      if (this.#referenceResolvedTypesDataPromise === promise) {
+        this.#referenceResolvedTypesData = shouldRetainResolvedValue
+          ? referenceResolvedTypesData
+          : undefined
+        this.#referenceResolvedTypesDataPromise = undefined
+        this.#referenceResolvedTypesDataSnapshotId = shouldRetainResolvedValue
+          ? snapshotId
+          : undefined
+        this.#referenceResolvedTypesDataSession = shouldRetainResolvedValue
+          ? session
+          : undefined
+        this.#referenceResolvedTypesDataSessionResetVersion =
+          shouldRetainResolvedValue ? session.getResetVersion() : undefined
+      }
+
+      finishBuildProfile()
+      return referenceResolvedTypesData
+    } catch (error) {
+      if (this.#referenceResolvedTypesDataPromise === promise) {
+        this.#clearReferenceResolvedTypesDataState()
+      }
+
+      finishBuildProfile({ error: true })
+      throw error
+    }
+  }
+
+  /** @internal */
+  async getCachedReferenceData(): Promise<JavaScriptFileReferenceData> {
+    const finishBuildProfile = startRpcBuildProfile(
+      'entry.getCachedReferenceData',
+      {
+        filePath: this.absolutePath,
+      }
+    )
+
+    try {
+      const [referenceBaseData, referenceResolvedTypesData] = await Promise.all([
+        this.getCachedReferenceBaseData(),
+        this.#getCachedReferenceResolvedTypesData(),
+      ])
+
+      finishBuildProfile()
+
+      return {
+        ...referenceBaseData,
+        ...referenceResolvedTypesData,
+      }
+    } catch (error) {
+      finishBuildProfile({ error: true })
+      throw error
+    }
+  }
+
+  /** Get all resolved export types from the JavaScript file. */
+  async getExportTypes(filter?: TypeFilter): Promise<Kind[]> {
+    const finishBuildProfile = startRpcBuildProfile('entry.getExportTypes', {
+      filePath: this.absolutePath,
+      filter: filter ? serializeTypeFilterForCache(filter) : 'none',
+    })
+    const fileSystem = this.getParent().getFileSystem()
+    try {
+      const resolvedTypes =
+        filter === undefined
+          ? (await this.getCachedReferenceData()).resolvedTypes
+          : await this.#getRawExportTypes(filter)
+
+      if (!(await fileSystem.shouldStripInternalAsync())) {
+        finishBuildProfile()
+        return resolvedTypes
+      }
+
+      const publicTypes: Kind[] = []
+
+      for (const resolvedType of resolvedTypes) {
+        const tags =
+          'tags' in resolvedType && Array.isArray(resolvedType.tags)
+            ? resolvedType.tags
+            : undefined
+
+        if (!tags || tags.length === 0) {
+          publicTypes.push(resolvedType)
+          continue
+        }
+
+        let isPublic = false
+        for (const tag of tags) {
+          if (!tag || tag.name !== 'internal') {
+            isPublic = true
+            break
+          }
+        }
+
+        if (isPublic) {
+          publicTypes.push(resolvedType)
         }
       }
 
-      if (isPublic) {
-        publicTypes.push(resolvedType)
-      }
-    }
+      finishBuildProfile()
 
-    return publicTypes
+      return publicTypes
+    } catch (error) {
+      finishBuildProfile({ error: true })
+      throw error
+    }
   }
 
   /** Get all exports from the JavaScript file. */
   async getExports() {
-    const filteredExports = await this.#getFilteredExportMetadata()
+    const finishBuildProfile = startRpcBuildProfile('entry.getExports', {
+      filePath: this.absolutePath,
+    })
 
-    return filteredExports.map((exportMetadata) =>
-      this.#getOrCreateStaticExport(exportMetadata as any)
-    )
+    try {
+      const referenceBaseData =
+        this.#getCurrentReferenceBaseData() ??
+        (await this.#readPersistedReferenceBaseDataIfAvailable())
+      const filteredExports =
+        referenceBaseData?.exportMetadata ?? (await this.#getFilteredExportMetadata())
+      const fileExports = filteredExports.map((exportMetadata) =>
+        this.#getOrCreateStaticExport(exportMetadata as any)
+      )
+      finishBuildProfile()
+      return fileExports
+    } catch (error) {
+      finishBuildProfile({ error: true })
+      throw error
+    }
   }
 
   #getExportStructuresCacheNodeKey(
@@ -3250,6 +4368,97 @@ export class JavaScriptFile<
       filePath: normalizePathKey(this.absolutePath),
       rootPath: normalizePathKey(this.getParent().getRootPath()),
     })
+  }
+
+  async #getRawExportTypes(filter?: TypeFilter): Promise<Kind[]> {
+    const directory = this.getParent()
+    const fileSystem = directory.getFileSystem()
+    const session = directory.getSession()
+    const filePath = this.absolutePath
+    const cacheFilePath = normalizePathKey(filePath)
+    const filterSignature = filter
+      ? serializeTypeFilterForCache(filter)
+      : 'none'
+    const nodeKey = createCacheNodeKey('js.export.types', {
+      version: FS_ANALYSIS_CACHE_VERSION,
+      dependencyVersion: 1,
+      snapshot: session.snapshot.id,
+      filePath: cacheFilePath,
+      filter: filterSignature,
+    })
+    const workspaceRootPath = normalizePathKey(
+      fileSystem.getRelativePathToWorkspace('.')
+    )
+    const workspaceRelativeFilePath = normalizePathKey(
+      fileSystem.getRelativePathToWorkspace(filePath)
+    )
+    const stableNodeKey =
+      fileSystem.usesPersistentCacheByDefault()
+        ? createExportTypesValueCacheNodeKey({
+            scope: getPersistentCacheScope(
+              directory,
+              fileSystem,
+              workspaceRootPath
+            ),
+            workspaceRootPath,
+            filePath: workspaceRelativeFilePath,
+            filter: filterSignature,
+            analysisMetadata: fileSystem.getAnalysisCacheMetadata(),
+          })
+        : undefined
+
+    if (stableNodeKey) {
+      return session.cache.getOrCompute(
+        stableNodeKey,
+        {
+          persist: true,
+          constDeps: [EXPORT_TYPES_VALUE_CACHE_DEPENDENCY],
+          staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
+        },
+        async (ctx) => {
+          ctx.recordConstDep(
+            EXPORT_TYPES_VALUE_CACHE_DEPENDENCY.name,
+            EXPORT_TYPES_VALUE_CACHE_DEPENDENCY.version
+          )
+
+          const typeResolution =
+            await fileSystem.resolveFileExportsWithDependencies(
+              this.absolutePath,
+              filter
+            )
+
+          const dependencyPaths = typeResolution.dependencies.length
+            ? typeResolution.dependencies
+            : [filePath]
+
+          for (const dependencyPath of dependencyPaths) {
+            await ctx.recordFileDep(dependencyPath)
+          }
+
+          return typeResolution.resolvedTypes
+        }
+      )
+    }
+
+    return session.cache.getOrCompute(
+      nodeKey,
+      { persist: true },
+      async (ctx) => {
+        const typeResolution = await fileSystem.resolveFileExportsWithDependencies(
+          this.absolutePath,
+          filter
+        )
+        const dependencyPaths = typeResolution.dependencies.length
+          ? typeResolution.dependencies
+          : [filePath]
+
+        for (const dependencyPath of dependencyPaths) {
+          await ctx.recordFileDep(dependencyPath)
+        }
+
+        return typeResolution.resolvedTypes
+      }
+    )
   }
 
   /** @internal */
@@ -3286,6 +4495,116 @@ export class JavaScriptFile<
     )
 
     return moduleMetadata ?? undefined
+  }
+
+  /** Get the first local git commit date of the file. */
+  override async getFirstCommitDate() {
+    const referenceBaseData = await this.getCachedReferenceBaseData()
+    return referenceBaseData.fileGitMetadata.firstCommitDate
+  }
+
+  /** Get the last local git commit date of the file. */
+  override async getLastCommitDate() {
+    const referenceBaseData = await this.getCachedReferenceBaseData()
+    return referenceBaseData.fileGitMetadata.lastCommitDate
+  }
+
+  /** Get the local git authors of the file. */
+  override async getAuthors() {
+    const referenceBaseData = await this.getCachedReferenceBaseData()
+    return referenceBaseData.fileGitMetadata.authors
+  }
+
+  /** @internal */
+  async getCachedGitExportMetadataByName(): Promise<
+    Record<string, GitExportMetadata>
+  > {
+    const finishBuildProfile = startRpcBuildProfile(
+      'entry.getCachedGitExportMetadataByName',
+      {
+        filePath: this.absolutePath,
+      }
+    )
+    const session = this.getParent().getSession()
+    const snapshotId = session.snapshot.id
+
+    if (this.#gitExportMetadataByName) {
+      if (this.#gitExportMetadataByNameSnapshotId === snapshotId) {
+        finishBuildProfile()
+        return this.#gitExportMetadataByName
+      }
+
+      this.#gitExportMetadataByName = undefined
+      this.#gitExportMetadataByNameSession = undefined
+      this.#gitExportMetadataByNameSessionResetVersion = undefined
+    }
+
+    const pendingReferenceBaseData = this.#getPendingReferenceBaseData()
+
+    try {
+      const metadataByName = pendingReferenceBaseData
+        ? (await pendingReferenceBaseData).gitMetadataByName
+        : (await this.getCachedReferenceBaseData()).gitMetadataByName
+      const retainedReferenceBaseData = this.#getCurrentReferenceBaseData()
+
+      this.#gitExportMetadataByName = retainedReferenceBaseData
+        ? metadataByName
+        : undefined
+      this.#gitExportMetadataByNameSnapshotId = retainedReferenceBaseData
+        ? snapshotId
+        : undefined
+      this.#gitExportMetadataByNameSession = retainedReferenceBaseData
+        ? session
+        : undefined
+      this.#gitExportMetadataByNameSessionResetVersion = retainedReferenceBaseData
+        ? session.getResetVersion()
+        : undefined
+
+      finishBuildProfile()
+      return metadataByName
+    } catch (error) {
+      this.#gitExportMetadataByName = undefined
+      this.#gitExportMetadataByNameSnapshotId = undefined
+      this.#gitExportMetadataByNameSession = undefined
+      this.#gitExportMetadataByNameSessionResetVersion = undefined
+      finishBuildProfile({ error: true })
+      throw error
+    }
+  }
+
+  /** @internal */
+  async getCachedGitExportMetadata(
+    name: string
+  ): Promise<GitExportMetadata | undefined> {
+    const currentSession = this.getParent().peekSession()
+
+    if (
+      this.#gitExportMetadataByName &&
+      this.#gitExportMetadataByNameSnapshotId !== undefined &&
+      currentSession === this.#gitExportMetadataByNameSession &&
+      currentSession?.getResetVersion() ===
+        this.#gitExportMetadataByNameSessionResetVersion
+    ) {
+      return this.#gitExportMetadataByName[name]
+    }
+
+    const metadataByName = await this.getCachedGitExportMetadataByName()
+    return metadataByName[name]
+  }
+
+  /** @internal */
+  getPendingGitExportMetadataByName():
+    | Promise<Record<string, GitExportMetadata>>
+    | undefined {
+    const pendingReferenceBaseData = this.#getPendingReferenceBaseData()
+
+    if (!pendingReferenceBaseData) {
+      return undefined
+    }
+
+    return pendingReferenceBaseData.then(
+      (referenceBaseData) => referenceBaseData.gitMetadataByName
+    )
   }
 
   async #getExportStructures(
@@ -3330,17 +4649,15 @@ export class JavaScriptFile<
         )
       }
 
-      const moduleMetadata = await this.getCachedGitModuleMetadata()
+      const gitMetadataByName = await this.getCachedGitExportMetadataByName()
 
-      if (moduleMetadata) {
-        return exportMetadata.map((metadata) =>
-          this.#getStaticExportStructure(
-            metadata,
-            options,
-            moduleMetadata.exports[metadata.name]
-          )
+      return exportMetadata.map((metadata) =>
+        this.#getStaticExportStructure(
+          metadata,
+          options,
+          gitMetadataByName[metadata.name]
         )
-      }
+      )
     }
 
     const fileExports = exportMetadata.map((metadata) =>
@@ -6919,6 +8236,11 @@ export class Directory<
   /** @internal */
   getSession() {
     return this.#getSession()
+  }
+
+  /** @internal */
+  peekSession() {
+    return this.#session
   }
 
   #getFilterSignature(session = this.#getSession()) {

@@ -6,6 +6,7 @@ import {
   extname,
   isAbsolute,
   join,
+  relative,
   resolve,
 } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -37,6 +38,8 @@ const PREWARM_STRUCTURE_CONCURRENCY = Math.max(
   1,
   Math.min(4, Math.ceil(cpus().length / 4))
 )
+const PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT = 96
+const PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT = 16
 const REPOSITORY_MODULE_SPECIFIER_EXTENSION =
   extname(fileURLToPath(import.meta.url)) === '.js' ? '.js' : '.ts'
 
@@ -66,10 +69,18 @@ type WarmFileMethod =
   | 'getSections'
 
 interface WarmFileTask {
+  cacheKey: string
   absolutePath: string
-  extension: string
+  extension?: string
   methods: Set<WarmFileMethod>
   fileGetRequestKeys?: Set<string>
+  repositoryTarget?: {
+    directoryPath: string
+    path: string
+    extensions?: string[]
+    repository: FileRequest['repository']
+    sparsePaths?: string[]
+  }
 }
 
 interface WarmRenounPrewarmTargetsOptions {
@@ -82,7 +93,10 @@ export interface WarmRenounPrewarmTargetsResult {
 }
 
 type RepositoryModule = typeof import('../../file-system/Repository.ts')
-type EntriesModule = Pick<typeof import('../../file-system/entries.ts'), 'Directory'>
+type EntriesModule = Pick<
+  typeof import('../../file-system/entries.ts'),
+  'Directory' | 'isFile'
+>
 type AnalysisClientServerModule = Pick<
   typeof import('../../analysis/client.server.ts'),
   | 'createHighlighter'
@@ -98,6 +112,18 @@ let analysisClientServerModulePromise:
   | Promise<AnalysisClientServerModule>
   | undefined
 let prewarmHighlighterPromise: Promise<Highlighter | null> | undefined
+
+function shouldSkipWorkspaceGitIgnoredWarmPath(
+  filePath: string,
+  isRepositoryBacked: boolean,
+  options: Pick<WarmRenounPrewarmTargetsOptions, 'isFilePathGitIgnored'>
+): boolean {
+  if (isRepositoryBacked) {
+    return false
+  }
+
+  return options.isFilePathGitIgnored(filePath)
+}
 
 function resolveWarmAnalysisOptions(
   analysisOptions: AnalysisOptions | undefined,
@@ -347,6 +373,7 @@ async function collectWarmFilesFromDirectoryTargets(
   }
 ): Promise<Map<string, WarmFileTask>> {
   const warmFilesByPath = new Map<string, WarmFileTask>()
+  const { Directory, isFile } = await loadEntriesModule()
 
   await forEachConcurrent(
     directoryTargets,
@@ -355,22 +382,155 @@ async function collectWarmFilesFromDirectoryTargets(
     },
     async (request) => {
       try {
+        if (request.repository) {
+          const repository = await resolveWarmRepository(
+            request.repository,
+            request.sparsePaths
+          )
+          if (!repository) {
+            return
+          }
+
+          const directory = new Directory({
+            path: request.directoryPath,
+            repository: repository as any,
+          })
+          const entries = request.leafOnly
+            ? collectLeafFilesFromEntries(
+                await directory.getEntries({
+                  recursive: true,
+                  includeDirectoryNamedFiles: true,
+                  includeIndexAndReadmeFiles:
+                    request.includeIndexAndReadmeFiles,
+                }),
+                isFile
+              )
+            : await directory.getEntries({
+                recursive: request.recursive,
+                includeDirectoryNamedFiles: request.includeDirectoryNamedFiles,
+                includeIndexAndReadmeFiles:
+                  request.includeIndexAndReadmeFiles,
+              })
+
+          const eligibleEntries: Array<{
+            entry: Awaited<typeof entries>[number]
+            filePath: string
+            extension: string
+          }> = []
+
+          for (const entry of entries) {
+            if (!isFile(entry)) {
+              continue
+            }
+
+            const filePath = entry.absolutePath
+            if (
+              shouldSkipWorkspaceGitIgnoredWarmPath(filePath, true, options)
+            ) {
+              continue
+            }
+
+            const extension = entry.extension
+            if (
+              request.filterExtensions !== null &&
+              !request.filterExtensions.has(extension)
+            ) {
+              continue
+            }
+
+            eligibleEntries.push({ entry, filePath, extension })
+          }
+
+          const eligibleFileCount = eligibleEntries.length
+          const sampledEntries = selectHighFanoutLeafWarmSample(
+            eligibleEntries,
+            {
+              leafOnly: request.leafOnly === true,
+              fileCount: eligibleFileCount,
+            },
+            ({ entry, filePath }) =>
+              typeof entry.getPathname === 'function'
+                ? entry.getPathname()
+                : filePath
+          )
+
+          for (const { entry, filePath, extension } of sampledEntries) {
+
+            const methods = limitHighFanoutLeafWarmMethods(
+              request.methods && request.methods.length > 0
+                ? new Set<WarmFileMethod>(request.methods)
+                : determineDirectoryWarmMethods(extension),
+              {
+                leafOnly: request.leafOnly === true,
+                fileCount: eligibleFileCount,
+              }
+            )
+            if (methods.size === 0) {
+              continue
+            }
+
+            mergeWarmTask(
+              {
+                cacheKey: JSON.stringify({
+                  directoryPath: request.directoryPath,
+                  path: entry.relativePath,
+                  extension,
+                  repository: normalizePrewarmKeyValue(
+                    request.repository ?? null
+                  ),
+                  sparsePaths: request.sparsePaths?.slice().sort() ?? [],
+                }),
+                absolutePath: filePath,
+                extension,
+                methods,
+                repositoryTarget: {
+                  directoryPath: request.directoryPath,
+                  path: entry.relativePath,
+                  repository: request.repository,
+                  sparsePaths: request.sparsePaths,
+                },
+              },
+              warmFilesByPath
+            )
+          }
+
+          return
+        }
+
         const absoluteDirectoryPath = options.fileSystem.getAbsolutePath(
           request.directoryPath
         )
+        const filePaths = request.leafOnly
+          ? collectLeafFilesFromEntries(
+              await new Directory({
+                path: absoluteDirectoryPath,
+                fileSystem: options.fileSystem,
+              }).getEntries({
+                recursive: true,
+                includeDirectoryNamedFiles: true,
+                includeIndexAndReadmeFiles:
+                  request.includeIndexAndReadmeFiles,
+              }),
+              isFile
+            ).map((entry) => entry.absolutePath)
+          : await collectDirectoryFilePaths(
+              options.fileSystem,
+              absoluteDirectoryPath,
+              {
+                recursive: request.recursive,
+                includeDirectoryNamedFiles:
+                  request.includeDirectoryNamedFiles,
+                includeIndexAndReadmeFiles:
+                  request.includeIndexAndReadmeFiles,
+              }
+            )
 
-        const filePaths = await collectDirectoryFilePaths(
-          options.fileSystem,
-          absoluteDirectoryPath,
-          {
-            recursive: request.recursive,
-            includeDirectoryNamedFiles: request.includeDirectoryNamedFiles,
-            includeIndexAndReadmeFiles: request.includeIndexAndReadmeFiles,
-          }
-        )
+        const eligibleFilePaths: Array<{ filePath: string; extension: string }> = []
 
         for (const filePath of filePaths) {
-          if (options.isFilePathGitIgnored(filePath)) {
+          if (
+            shouldSkipWorkspaceGitIgnoredWarmPath(filePath, false, options)
+          ) {
             continue
           }
 
@@ -386,16 +546,37 @@ async function collectWarmFilesFromDirectoryTargets(
             continue
           }
 
-          const methods =
+          eligibleFilePaths.push({ filePath, extension })
+        }
+
+        const eligibleFileCount = eligibleFilePaths.length
+        const sampledFilePaths = selectHighFanoutLeafWarmSample(
+          eligibleFilePaths,
+          {
+            leafOnly: request.leafOnly === true,
+            fileCount: eligibleFileCount,
+          },
+          ({ filePath }) => relative(absoluteDirectoryPath, filePath)
+        )
+
+        for (const { filePath, extension } of sampledFilePaths) {
+
+          const methods = limitHighFanoutLeafWarmMethods(
             request.methods && request.methods.length > 0
               ? new Set<WarmFileMethod>(request.methods)
-              : determineDirectoryWarmMethods(extension)
+              : determineDirectoryWarmMethods(extension),
+            {
+              leafOnly: request.leafOnly === true,
+              fileCount: eligibleFileCount,
+            }
+          )
           if (methods.size === 0) {
             continue
           }
 
           mergeWarmTask(
             {
+              cacheKey: filePath,
               absolutePath: filePath,
               extension,
               methods,
@@ -430,6 +611,7 @@ async function collectWarmFilesFromGetFileTargets(
 ): Promise<Map<string, WarmFileTask>> {
   const warmFilesByPath = new Map<string, WarmFileTask>()
   const deduplicatedTargets = dedupeGetFileTargets(getFileTargets)
+  const { Directory } = await loadEntriesModule()
 
   await forEachConcurrent(
     Array.from(deduplicatedTargets.values()),
@@ -438,12 +620,64 @@ async function collectWarmFilesFromGetFileTargets(
     },
     async (request) => {
       try {
+        if (request.repository) {
+          const repository = await resolveWarmRepository(
+            request.repository,
+            request.sparsePaths
+          )
+          if (!repository) {
+            return
+          }
+
+          const directory = new Directory({
+            path: request.directoryPath,
+            repository: repository as any,
+          })
+          const file = request.extensions && request.extensions.length > 0
+            ? await directory.getFile(request.path, request.extensions as any)
+            : await directory.getFile(request.path as any)
+          const filePath = file.absolutePath
+
+          if (
+            shouldSkipWorkspaceGitIgnoredWarmPath(filePath, true, options)
+          ) {
+            return
+          }
+
+          const extension = file.extension
+          const methods = resolveGetFileWarmMethods(request, extension)
+          if (methods.size === 0) {
+            return
+          }
+
+          mergeWarmTask(
+            {
+              cacheKey: getFileRequestKey(request),
+              absolutePath: filePath,
+              extension,
+              methods,
+              fileGetRequestKeys: new Set([getFileRequestKey(request)]),
+              repositoryTarget: {
+                directoryPath: request.directoryPath,
+                path: request.path,
+                extensions: request.extensions,
+                repository: request.repository,
+                sparsePaths: request.sparsePaths,
+              },
+            },
+            warmFilesByPath
+          )
+          return
+        }
+
         const filePath = await resolveGetFileRequestPath(
           options.fileSystem,
           request
         )
 
-        if (options.isFilePathGitIgnored(filePath)) {
+        if (
+          shouldSkipWorkspaceGitIgnoredWarmPath(filePath, false, options)
+        ) {
           return
         }
 
@@ -459,6 +693,7 @@ async function collectWarmFilesFromGetFileTargets(
 
         mergeWarmTask(
           {
+            cacheKey: getFileRequestKey(request),
             absolutePath: filePath,
             extension,
             methods,
@@ -482,6 +717,132 @@ async function collectWarmFilesFromGetFileTargets(
   )
 
   return warmFilesByPath
+}
+
+function collectLeafFilesFromEntries<
+  Entry extends {
+    absolutePath: string
+    getPathname?: () => string
+  },
+>(
+  entries: Entry[],
+  isFileEntry: (entry: Entry) => boolean
+): Entry[] {
+  const descendantPathnames = new Set<string>()
+  const pathnamesByEntry = new Map<Entry, string>()
+
+  for (const entry of entries) {
+    if (typeof entry.getPathname !== 'function') {
+      continue
+    }
+
+    const pathname = entry.getPathname()
+    pathnamesByEntry.set(entry, pathname)
+
+    let parentPathname = pathname
+    while (true) {
+      const lastSeparatorIndex = parentPathname.lastIndexOf('/')
+      parentPathname =
+        lastSeparatorIndex > 0 ? parentPathname.slice(0, lastSeparatorIndex) : '/'
+
+      if (!parentPathname) {
+        parentPathname = '/'
+      }
+
+      descendantPathnames.add(parentPathname)
+
+      if (parentPathname === '/') {
+        break
+      }
+    }
+  }
+
+  const leafFiles: Entry[] = []
+  const seenLeafPathnames = new Set<string>()
+
+  for (const entry of entries) {
+    if (!isFileEntry(entry)) {
+      continue
+    }
+
+    const pathname = pathnamesByEntry.get(entry)
+    if (!pathname || descendantPathnames.has(pathname)) {
+      continue
+    }
+
+    if (seenLeafPathnames.has(pathname)) {
+      continue
+    }
+
+    seenLeafPathnames.add(pathname)
+    leafFiles.push(entry)
+  }
+
+  return leafFiles
+}
+
+function limitHighFanoutLeafWarmMethods(
+  methods: Set<WarmFileMethod>,
+  options: { leafOnly: boolean; fileCount: number }
+): Set<WarmFileMethod> {
+  if (
+    !options.leafOnly ||
+    options.fileCount <= PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT
+  ) {
+    return methods
+  }
+
+  const limitedMethods = new Set(methods)
+  limitedMethods.delete('getExportTypes')
+  limitedMethods.delete('getSections')
+  return limitedMethods
+}
+
+function selectHighFanoutLeafWarmSample<Candidate>(
+  candidates: Candidate[],
+  options: { leafOnly: boolean; fileCount: number },
+  getPath: (candidate: Candidate) => string
+): Candidate[] {
+  if (
+    !options.leafOnly ||
+    options.fileCount <= PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT
+  ) {
+    return candidates
+  }
+
+  const selected: Candidate[] = []
+  const seenTopLevelSegments = new Set<string>()
+  const selectedCandidates = new Set<Candidate>()
+
+  for (const candidate of candidates) {
+    const segments = getPath(candidate).split('/').filter(Boolean)
+    const topLevelSegment = segments[0] ?? ''
+
+    if (seenTopLevelSegments.has(topLevelSegment)) {
+      continue
+    }
+
+    seenTopLevelSegments.add(topLevelSegment)
+    selected.push(candidate)
+    selectedCandidates.add(candidate)
+
+    if (selected.length >= PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT) {
+      return selected
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (selectedCandidates.has(candidate)) {
+      continue
+    }
+
+    selected.push(candidate)
+    if (selected.length >= PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT) {
+      break
+    }
+  }
+
+  return selected
 }
 
 function dedupeGetFileTargets(
@@ -525,14 +886,29 @@ function mergeFileRequestMethods(
 }
 
 function getFileRequestKey(request: FileRequest): string {
-  if (!request.extensions || request.extensions.length === 0) {
-    return `${request.directoryPath}\0${request.path}\0`
+  return JSON.stringify({
+    directoryPath: request.directoryPath,
+    path: request.path,
+    extensions: request.extensions?.slice().sort() ?? [],
+    repository: normalizePrewarmKeyValue(request.repository ?? null),
+    sparsePaths: request.sparsePaths?.slice().sort() ?? [],
+  })
+}
+
+function normalizePrewarmKeyValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizePrewarmKeyValue(item))
   }
 
-  return `${request.directoryPath}\0${request.path}\0${request.extensions
-    .slice()
-    .sort()
-    .join('\0')}`
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [key, normalizePrewarmKeyValue(entryValue)])
+    )
+  }
+
+  return value
 }
 
 async function warmDirectoryStructureRequests(
@@ -649,25 +1025,6 @@ function getExportHistoryRequestKey(request: ExportHistoryRequest): string {
   })
 }
 
-function normalizePrewarmKeyValue(value: unknown): unknown {
-  if (Array.isArray(value)) {
-    return value.map((item) => normalizePrewarmKeyValue(item))
-  }
-
-  if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>)
-        .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, entryValue]) => [
-          key,
-          normalizePrewarmKeyValue(entryValue),
-        ])
-    )
-  }
-
-  return value
-}
-
 function formatRepositoryTarget(repository: unknown): string {
   if (typeof repository === 'string') {
     return repository
@@ -693,6 +1050,29 @@ function formatRepositoryTarget(repository: unknown): string {
   }
 
   return 'unknown'
+}
+
+async function resolveWarmRepository(
+  repositoryInput: FileRequest['repository'] | DirectoryEntriesRequest['repository'],
+  sparsePaths?: string[]
+) {
+  if (!repositoryInput) {
+    return undefined
+  }
+
+  const { Repository } = await loadRepositoryModule()
+  const repository = Repository.resolve(
+    repositoryInput as Parameters<typeof Repository.resolve>[0]
+  )
+  if (!repository) {
+    return undefined
+  }
+
+  for (const sparsePath of sparsePaths ?? []) {
+    repository.registerSparsePath(sparsePath)
+  }
+
+  return repository
 }
 
 async function collectDirectoryFilePaths(
@@ -899,10 +1279,10 @@ function mergeWarmTask(
   task: WarmFileTask,
   warmFilesByPath: Map<string, WarmFileTask>
 ): void {
-  const existing = warmFilesByPath.get(task.absolutePath)
+  const existing = warmFilesByPath.get(task.cacheKey)
 
   if (!existing) {
-    warmFilesByPath.set(task.absolutePath, task)
+    warmFilesByPath.set(task.cacheKey, task)
     return
   }
 
@@ -919,6 +1299,30 @@ function mergeWarmTask(
       existing.fileGetRequestKeys.add(requestKey)
     }
   }
+
+  if (task.repositoryTarget && !existing.repositoryTarget) {
+    existing.repositoryTarget = task.repositoryTarget
+  }
+
+  if (!existing.extension && task.extension) {
+    existing.extension = task.extension
+  }
+}
+
+function isJavaScriptWarmTask(warmFile: WarmFileTask): boolean {
+  if (typeof warmFile.extension === 'string') {
+    return isJavaScriptLikeExtension(warmFile.extension)
+  }
+
+  return (
+    warmFile.methods.has('getExports') ||
+    warmFile.methods.has('getExportTypes') ||
+    warmFile.methods.has('getGitMetadata')
+  )
+}
+
+function isMarkdownWarmTask(warmFile: WarmFileTask): boolean {
+  return warmFile.extension === 'md' || warmFile.extension === 'mdx'
 }
 
 async function warmFiles(
@@ -962,7 +1366,8 @@ async function warmFiles(
       if (
         warmFile.fileGetRequestKeys &&
         warmFile.fileGetRequestKeys.size > 0 &&
-        isJavaScriptLikeExtension(warmFile.extension)
+        !warmFile.repositoryTarget &&
+        isJavaScriptWarmTask(warmFile)
       ) {
         try {
           const dependencyPaths = await getTypeScriptDependencyPaths(
@@ -1006,7 +1411,7 @@ async function warmFiles(
       if (
         (warmFile.methods.has('getCodeFenceSourceMetadata') ||
           warmFile.methods.has('getCodeFenceTokens')) &&
-        (warmFile.extension === 'md' || warmFile.extension === 'mdx')
+        isMarkdownWarmTask(warmFile)
       ) {
         try {
           const source = await readSourceText()
@@ -1130,6 +1535,9 @@ async function getTypeScriptDependencyPaths(
 }
 
 type WarmEntryFile = {
+  getCachedReferenceBaseData?: () => Promise<unknown>
+  getCachedReferenceData?: () => Promise<unknown>
+  getCachedGitExportMetadataByName?: () => Promise<unknown>
   getAuthors?: () => Promise<unknown>
   getFirstCommitDate?: () => Promise<unknown>
   getExportTypes?: () => Promise<unknown>
@@ -1167,18 +1575,75 @@ async function warmEntryFileCaches(
   }
 ): Promise<void> {
   const { Directory } = await loadEntriesModule()
-  const fileSystem = getEntryWarmFileSystem(
-    options.fileSystemsByTsConfigPath,
-    options.analysisOptions
-  )
-  const directory = new Directory({
-    path: dirname(warmFile.absolutePath),
-    fileSystem,
-  })
-  const file = (await directory.getFile(
-    removeAllExtensions(basename(warmFile.absolutePath)),
-    warmFile.extension
-  )) as WarmEntryFile
+  const file = await (async () => {
+    if (warmFile.repositoryTarget?.repository) {
+      const repository = await resolveWarmRepository(
+        warmFile.repositoryTarget.repository,
+        warmFile.repositoryTarget.sparsePaths
+      )
+      if (!repository) {
+        throw new Error(
+          `Failed to resolve repository for prewarm target "${warmFile.absolutePath}".`
+        )
+      }
+
+      const directory = new Directory({
+        path: warmFile.repositoryTarget.directoryPath,
+        repository: repository as any,
+      })
+
+      if (
+        warmFile.repositoryTarget.extensions &&
+        warmFile.repositoryTarget.extensions.length > 0
+      ) {
+        return directory.getFile(
+          warmFile.repositoryTarget.path,
+          warmFile.repositoryTarget.extensions as any
+        ) as Promise<WarmEntryFile>
+      }
+
+      return directory.getFile(warmFile.repositoryTarget.path as any) as Promise<WarmEntryFile>
+    }
+
+    const fileSystem = getEntryWarmFileSystem(
+      options.fileSystemsByTsConfigPath,
+      options.analysisOptions
+    )
+    const directory = new Directory({
+      path: dirname(warmFile.absolutePath),
+      fileSystem,
+    })
+
+    return directory.getFile(
+      removeAllExtensions(basename(warmFile.absolutePath)),
+      warmFile.extension
+    ) as Promise<WarmEntryFile>
+  })()
+  const canWarmReferenceBaseData =
+    isJavaScriptWarmTask(warmFile) &&
+    (warmFile.methods.has('getExportTypes') ||
+      warmFile.methods.has('getGitMetadata')) &&
+    (typeof file.getCachedReferenceBaseData === 'function' ||
+      typeof file.getCachedReferenceData === 'function')
+  let fileExports: unknown[] | undefined
+
+  if (canWarmReferenceBaseData) {
+    if (typeof file.getCachedReferenceBaseData === 'function') {
+      await file.getCachedReferenceBaseData()
+    } else {
+      await file.getCachedReferenceData!()
+    }
+  }
+
+  if (
+    warmFile.methods.has('getExports') &&
+    typeof file.getExports === 'function'
+  ) {
+    const exports = await file.getExports()
+    if (Array.isArray(exports)) {
+      fileExports = exports
+    }
+  }
 
   if (
     warmFile.methods.has('getExportTypes') &&
@@ -1188,29 +1653,43 @@ async function warmEntryFileCaches(
   }
 
   if (
-    warmFile.methods.has('getExports') &&
-    typeof file.getExports === 'function'
-  ) {
-    await file.getExports()
-  }
-
-  if (
     warmFile.methods.has('getGitMetadata') &&
     typeof file.getLastCommitDate === 'function'
   ) {
     await file.getLastCommitDate()
+
+    if (warmFile.methods.has('getExports')) {
+      if (typeof file.getCachedGitExportMetadataByName === 'function') {
+        await file.getCachedGitExportMetadataByName()
+      } else if (fileExports && fileExports.length > 0) {
+        await Promise.all(
+          fileExports.map(async (entry) => {
+            if (
+              entry &&
+              typeof entry === 'object' &&
+              typeof (entry as { getFirstCommitDate?: unknown })
+                .getFirstCommitDate === 'function'
+            ) {
+              await (
+                entry as { getFirstCommitDate: () => Promise<unknown> }
+              ).getFirstCommitDate()
+            }
+          })
+        )
+      }
+    }
   }
 
   if (warmFile.methods.has('getSections')) {
     if (
-      isJavaScriptLikeExtension(warmFile.extension) &&
+      isJavaScriptWarmTask(warmFile) &&
       typeof file.getOutlineRanges === 'function'
     ) {
       await file.getOutlineRanges()
     }
 
     if (
-      (warmFile.extension === 'md' || warmFile.extension === 'mdx') &&
+      isMarkdownWarmTask(warmFile) &&
       typeof file.getSections === 'function'
     ) {
       await file.getSections()

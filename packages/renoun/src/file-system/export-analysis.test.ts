@@ -158,6 +158,42 @@ describe('scanModuleExports', () => {
         exports2.get('Widget')!.bodyHash
       )
     })
+
+    it('marks namespace-import re-exports as namespace surfaces', () => {
+      const content = [
+        "import * as Foo from './foo.js'",
+        'export { Foo }',
+      ].join('\n')
+
+      const exports = scanModuleExports('index.js', content)
+      const foo = exports.get('Foo')
+
+      expect(foo).toBeDefined()
+      expect(foo?.id).toBe('__NAMESPACE__./foo.js')
+    })
+
+    it('can skip line and deprecation metadata for fast header scans', () => {
+      const content = [
+        '/** @deprecated use nextValue */',
+        'export const value = 1',
+      ].join('\n')
+
+      const exports = scanModuleExports('mod.ts', content, {
+        includeHashes: false,
+        includeLines: false,
+        includeDeprecation: false,
+      })
+      const value = exports.get('value')
+
+      expect(value).toBeDefined()
+      expect(value?.bodyHash).toBe('')
+      expect(value?.signatureHash).toBe('')
+      expect(value?.startLine).toBeUndefined()
+      expect(value?.endLine).toBeUndefined()
+      expect(value?.deprecated).toBeUndefined()
+      expect(value?.position).toBeTypeOf('number')
+      expect(value?.declarationPosition?.start.line).toBe(2)
+    })
   })
 
   describe('named exports', () => {

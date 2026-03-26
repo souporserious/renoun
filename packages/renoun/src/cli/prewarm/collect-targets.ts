@@ -35,6 +35,7 @@ interface RenounAliases {
 interface RenounDirectoryDeclaration {
   path: string
   sparsePath: string
+  filterExtensions: Set<string> | null
   repository?: RenounRepositoryDeclaration
 }
 
@@ -57,9 +58,12 @@ type RenounCollectionEntryReference =
 export interface DirectoryEntriesRequest {
   directoryPath: string
   recursive: boolean
+  leafOnly?: boolean
   includeDirectoryNamedFiles: boolean
   includeIndexAndReadmeFiles: boolean
   filterExtensions: Set<string> | null
+  repository?: PrewarmRepositoryInput
+  sparsePaths?: string[]
   methods?: FileRequestMethod[]
 }
 
@@ -73,6 +77,8 @@ export interface FileRequest {
   directoryPath: string
   path: string
   extensions?: string[]
+  repository?: PrewarmRepositoryInput
+  sparsePaths?: string[]
   methods?: FileRequestMethod[]
 }
 
@@ -285,6 +291,7 @@ export async function collectRenounPrewarmTargets(
         methodName === 'getTree'
           ? {
               recursive: true,
+              leafOnly: true,
               includeDirectoryNamedFiles: true,
               includeIndexAndReadmeFiles: true,
               filterExtensions: null,
@@ -293,11 +300,16 @@ export async function collectRenounPrewarmTargets(
 
       if (methodTarget.kind === 'directory') {
         addDirectoryEntriesRequest(getEntriesRequests, {
-          directoryPath: methodTarget.declaration.path,
+          directoryPath: getPrewarmDirectoryPath(methodTarget.declaration),
           recursive: options.recursive,
+          ...(options.leafOnly ? { leafOnly: true } : {}),
           includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
           includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
-          filterExtensions: options.filterExtensions,
+          filterExtensions: resolveDirectoryRequestFilterExtensions(
+            options.filterExtensions,
+            methodTarget.declaration.filterExtensions
+          ),
+          ...getPrewarmRepositoryScope(methodTarget.declaration),
         })
         continue
       }
@@ -307,6 +319,7 @@ export async function collectRenounPrewarmTargets(
         methodTarget.symbol,
         {
           recursive: options.recursive,
+          ...(options.leafOnly ? { leafOnly: true } : {}),
           includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
           includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
           filterExtensions: options.filterExtensions,
@@ -321,7 +334,7 @@ export async function collectRenounPrewarmTargets(
       }
 
       addDirectoryStructureRequest(getStructureRequests, {
-        directoryPath: methodTarget.declaration.path,
+        directoryPath: getPrewarmDirectoryPath(methodTarget.declaration),
         repository: methodTarget.declaration.repository?.input,
         options: resolveDirectoryGetStructureOptions(callExpression),
       })
@@ -747,7 +760,8 @@ function resolveGetFileCall(
       : undefined
     : undefined
   const extensions = resolveFileExtensionArgument(extensionExpression)
-  const directoryPath = methodTarget.declaration.path
+  const directoryPath = getPrewarmDirectoryPath(methodTarget.declaration)
+  const repositoryScope = getPrewarmRepositoryScope(methodTarget.declaration)
 
   if (!directoryPath) {
     return undefined
@@ -766,6 +780,7 @@ function resolveGetFileCall(
         directoryPath,
         path: pathArg,
         extensions,
+        ...repositoryScope,
         ...toFileRequestMethodsValue(inferredMethods),
       },
     }
@@ -787,6 +802,7 @@ function resolveGetFileCall(
       includeIndexAndReadmeFiles: true,
       filterExtensions:
         extensions && extensions.length > 0 ? new Set(extensions) : null,
+      ...repositoryScope,
       methods: fallbackMethods,
     },
   }
@@ -1147,6 +1163,7 @@ function resolveFileExtensionArgument(
 
 function resolveDirectoryGetEntriesOptions(callExpression: CallExpression): {
   recursive: boolean
+  leafOnly?: boolean
   includeDirectoryNamedFiles: boolean
   includeIndexAndReadmeFiles: boolean
   filterExtensions: Set<string> | null
@@ -1201,6 +1218,23 @@ function resolveDirectoryGetEntriesOptions(callExpression: CallExpression): {
         : true,
     filterExtensions,
   }
+}
+
+function cloneFilterExtensions(
+  filterExtensions: Set<string> | null
+): Set<string> | null {
+  return filterExtensions === null ? null : new Set(filterExtensions)
+}
+
+function resolveDirectoryRequestFilterExtensions(
+  requestFilterExtensions: Set<string> | null,
+  declarationFilterExtensions: Set<string> | null
+): Set<string> | null {
+  if (requestFilterExtensions !== null) {
+    return cloneFilterExtensions(requestFilterExtensions)
+  }
+
+  return cloneFilterExtensions(declarationFilterExtensions)
 }
 
 function resolveDirectoryGetStructureOptions(
@@ -1311,11 +1345,12 @@ function expandCollectionEntries(
       }
 
       addDirectoryEntriesRequest(getEntriesRequests, {
-        directoryPath: directoryDeclaration.path,
+        directoryPath: getPrewarmDirectoryPath(directoryDeclaration),
         recursive: options.recursive,
         includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
         includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
         filterExtensions: options.filterExtensions,
+        ...getPrewarmRepositoryScope(directoryDeclaration),
       })
       continue
     }
@@ -1347,10 +1382,18 @@ function addDirectoryEntriesRequest(
   getEntriesRequests: Map<string, DirectoryEntriesRequest>,
   request: DirectoryEntriesRequest
 ): void {
-  const existing = getEntriesRequests.get(request.directoryPath)
+  const requestKey = JSON.stringify({
+    directoryPath: request.directoryPath,
+    repository: normalizePrewarmDirectoryStructureValue(request.repository),
+    sparsePaths: request.sparsePaths?.slice().sort() ?? [],
+  })
+  const existing = getEntriesRequests.get(requestKey)
   if (!existing) {
-    getEntriesRequests.set(request.directoryPath, {
+    getEntriesRequests.set(requestKey, {
       ...request,
+      ...(request.sparsePaths
+        ? { sparsePaths: request.sparsePaths.slice().sort() }
+        : {}),
       filterExtensions:
         request.filterExtensions === null
           ? null
@@ -1361,6 +1404,7 @@ function addDirectoryEntriesRequest(
   }
 
   existing.recursive = existing.recursive || request.recursive
+  existing.leafOnly = existing.leafOnly || request.leafOnly
   existing.includeDirectoryNamedFiles =
     existing.includeDirectoryNamedFiles || request.includeDirectoryNamedFiles
   existing.includeIndexAndReadmeFiles =
@@ -1408,6 +1452,7 @@ function mergeCollectionGetEntriesRequest(
   if (!existing) {
     collectionGetEntriesRequests.set(collectionSymbol, {
       recursive: options.recursive,
+      ...(options.leafOnly ? { leafOnly: true } : {}),
       includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
       includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
       filterExtensions:
@@ -1419,6 +1464,7 @@ function mergeCollectionGetEntriesRequest(
   }
 
   existing.recursive = existing.recursive || options.recursive
+  existing.leafOnly = existing.leafOnly || options.leafOnly
   existing.includeDirectoryNamedFiles =
     existing.includeDirectoryNamedFiles || options.includeDirectoryNamedFiles
   existing.includeIndexAndReadmeFiles =
@@ -1451,6 +1497,27 @@ function cloneRepositoryDeclaration(
     declaration.input,
     declaration.sparsePaths
   )
+}
+
+function getPrewarmDirectoryPath(declaration: RenounDirectoryDeclaration): string {
+  return declaration.repository ? declaration.sparsePath : declaration.path
+}
+
+function getPrewarmRepositoryScope(
+  declaration: RenounDirectoryDeclaration
+): Pick<DirectoryEntriesRequest, 'repository' | 'sparsePaths'> &
+  Pick<FileRequest, 'repository' | 'sparsePaths'> {
+  if (!declaration.repository) {
+    return {}
+  }
+
+  const sparsePaths = new Set(declaration.repository.sparsePaths)
+  sparsePaths.add(declaration.sparsePath)
+
+  return {
+    repository: declaration.repository.input,
+    sparsePaths: Array.from(sparsePaths).sort(),
+  }
 }
 
 function resolveRenounRepositoryTarget(
@@ -1637,6 +1704,7 @@ function resolveDirectoryDeclarationFromNewExpression(
   }
 
   let repository: RenounRepositoryDeclaration | undefined
+  let filterExtensions: Set<string> | null = null
   if (Node.isObjectLiteralExpression(firstArgument)) {
     const repositoryProperty = firstArgument.getProperty('repository')
     if (
@@ -1655,11 +1723,31 @@ function resolveDirectoryDeclarationFromNewExpression(
         }
       )
     }
+
+    const filterProperty = firstArgument.getProperty('filter')
+    if (
+      filterProperty &&
+      Node.isPropertyAssignment(filterProperty) &&
+      Node.isExpression(filterProperty.getInitializerOrThrow())
+    ) {
+      const filterValue = resolveLiteralExpression(
+        filterProperty.getInitializerOrThrow()
+      )
+
+      if (typeof filterValue === 'string') {
+        filterExtensions = parseFilterExtensions(filterValue)
+      }
+    }
+  }
+
+  if (repository) {
+    repository.sparsePaths.add(sparsePath)
   }
 
   return {
     path,
     sparsePath,
+    filterExtensions,
     ...(repository ? { repository } : {}),
   }
 }

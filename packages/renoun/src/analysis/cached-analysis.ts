@@ -34,9 +34,12 @@ import {
   type CacheStoreFreshnessMismatch,
   type CacheStoreStaleWhileRevalidateOptions,
 } from '../file-system/Cache.ts'
-import type { ModuleExport } from '../utils/get-file-exports.ts'
+import type {
+  FileExportsWithDependenciesResult,
+  ModuleExport,
+} from '../utils/get-file-exports.ts'
 import {
-  getFileExports as baseGetFileExports,
+  getFileExportsWithDependencies as baseGetFileExportsWithDependencies,
   getFileExportMetadata as baseGetFileExportMetadata,
 } from '../utils/get-file-exports.ts'
 import type {
@@ -651,7 +654,7 @@ function getRuntimeAnalysisSWRReadConfig(
   CacheStoreGetOrComputeOptions,
   'staleWhileRevalidate' | 'onBackgroundRefreshComplete'
 > {
-  if (isTestEnvironment()) {
+  if (isTestEnvironment() || isVitestRuntime()) {
     return {}
   }
 
@@ -3463,25 +3466,21 @@ function createRuntimeFileExportsCacheNodeKey(
   compilerOptionsVersion: string
 ): string {
   return createRuntimeAnalysisCacheNodeKey(RUNTIME_ANALYSIS_CACHE_NAMES.fileExports, {
-    dataVersion: 2,
+    dataVersion: 3,
     compilerOptionsVersion,
     filePath: normalizeCacheFilePath(filePath),
   })
 }
 
-function toFileExportsDependencies(
+function toFileExportsWithDependenciesResultDependencies(
   filePath: string,
-  fileExports: ModuleExport[]
+  fileExportsResult: FileExportsWithDependenciesResult
 ): ProgramCacheDependency[] {
-  const dependencyPaths = new Set<string>([filePath])
-
-  for (const fileExport of fileExports) {
-    if (!fileExport.path) {
-      continue
-    }
-
-    dependencyPaths.add(fileExport.path)
-  }
+  const dependencyPaths = new Set<string>(
+    fileExportsResult.dependencies.length > 0
+      ? fileExportsResult.dependencies
+      : [filePath]
+  )
 
   return Array.from(dependencyPaths.values()).map((path) => ({
     kind: 'file',
@@ -3549,6 +3548,23 @@ function toResolvedFileExportsWithDependenciesCacheName(filter?: TypeFilter): st
   return `${RUNTIME_ANALYSIS_CACHE_NAMES.fileExportTypes}:${filterKey}`
 }
 
+function createResolvedFileExportsWithDependenciesRuntimeNodeKey(options: {
+  filePath: string
+  compilerOptionsVersion: string
+  filter?: TypeFilter
+}): string {
+  return createRuntimeAnalysisCacheNodeKey(
+    RUNTIME_ANALYSIS_CACHE_NAMES.fileExportTypes,
+    {
+      compilerOptionsVersion: options.compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(options.filePath),
+      filter: options.filter
+        ? serializeTypeFilterForCache(options.filter)
+        : 'none',
+    }
+  )
+}
+
 function ensureProjectSourceFileLoaded(
   project: Project,
   filePath: string
@@ -3560,10 +3576,10 @@ function ensureProjectSourceFileLoaded(
   project.addSourceFileAtPath(filePath)
 }
 
-export async function getCachedFileExports(
+async function getCachedFileExportsWithDependencies(
   project: Project,
   filePath: string
-): Promise<ModuleExport[]> {
+): Promise<FileExportsWithDependenciesResult> {
   ensureProjectSourceFileLoaded(project, filePath)
 
   const runtimeScope = getRuntimeAnalysisScopeOptions(project, filePath)
@@ -3595,11 +3611,15 @@ export async function getCachedFileExports(
           filePath
         )
 
-        const fileExports = baseGetFileExports(filePath, project)
-        const fileExportDependencies = toFileExportsDependencies(
+        const fileExportsResult = baseGetFileExportsWithDependencies(
           filePath,
-          fileExports
+          project
         )
+        const fileExportDependencies =
+          toFileExportsWithDependenciesResultDependencies(
+            filePath,
+            fileExportsResult
+          )
         const dependencyFilePaths: string[] = []
         for (const dependency of fileExportDependencies) {
           if (dependency.kind !== 'file') {
@@ -3624,7 +3644,7 @@ export async function getCachedFileExports(
           )
         }
 
-        return fileExports
+        return fileExportsResult
       }
     )
   }
@@ -3633,11 +3653,56 @@ export async function getCachedFileExports(
     project,
     filePath,
     RUNTIME_ANALYSIS_CACHE_NAMES.fileExports,
-    () => baseGetFileExports(filePath, project),
+    () => baseGetFileExportsWithDependencies(filePath, project),
     {
-      deps: (fileExports) => toFileExportsDependencies(filePath, fileExports),
+      deps: (fileExportsResult) =>
+        toFileExportsWithDependenciesResultDependencies(
+          filePath,
+          fileExportsResult
+        ),
     }
   )
+}
+
+async function readFreshRuntimeResolvedFileExportsWithDependencies(
+  runtimeCacheStore: RuntimeAnalysisCacheStore | undefined,
+  options: {
+    filePath: string
+    compilerOptionsVersion: string
+    filter?: TypeFilter
+  }
+): Promise<ResolvedFileExportsResult | undefined> {
+  if (!runtimeCacheStore || !canUseRuntimePathCache(runtimeCacheStore, options.filePath)) {
+    return undefined
+  }
+
+  const nodeKey = createResolvedFileExportsWithDependenciesRuntimeNodeKey({
+    filePath: options.filePath,
+    compilerOptionsVersion: options.compilerOptionsVersion,
+    filter: options.filter,
+  })
+  const freshness =
+    await runtimeCacheStore.store.getWithFreshness<ResolvedFileExportsResult>(
+      nodeKey
+    )
+
+  if (!freshness.fresh || freshness.value === undefined) {
+    return undefined
+  }
+
+  return freshness.value
+}
+
+export async function getCachedFileExports(
+  project: Project,
+  filePath: string
+): Promise<ModuleExport[]> {
+  const fileExportsResult = await getCachedFileExportsWithDependencies(
+    project,
+    filePath
+  )
+
+  return fileExportsResult.exports
 }
 
 export async function getCachedOutlineRanges(
@@ -4128,16 +4193,11 @@ export async function resolveCachedFileExportsWithDependencies(
     canUseRuntimePathCache(runtimeCacheStore, options.filePath)
   ) {
     const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
-    const nodeKey = createRuntimeAnalysisCacheNodeKey(
-      RUNTIME_ANALYSIS_CACHE_NAMES.fileExportTypes,
-      {
-        compilerOptionsVersion,
-        filePath: normalizeCacheFilePath(options.filePath),
-        filter: options.filter
-          ? serializeTypeFilterForCache(options.filter)
-          : 'none',
-      }
-    )
+    const nodeKey = createResolvedFileExportsWithDependenciesRuntimeNodeKey({
+      filePath: options.filePath,
+      compilerOptionsVersion,
+      filter: options.filter,
+    })
 
     return getOrComputeRuntimeAnalysisCacheValue(
       runtimeCacheStore,
@@ -4158,10 +4218,33 @@ export async function resolveCachedFileExportsWithDependencies(
           options.filePath
         )
 
+        const fileExportsResult = await getCachedFileExportsWithDependencies(
+          project,
+          options.filePath
+        )
         const result = await baseResolveFileExportsWithDependencies(
           project,
           options.filePath,
-          options.filter
+          options.filter,
+          {
+            seedFileExportsByFilePath: new Map([
+              [options.filePath, fileExportsResult],
+            ]),
+            readFreshResolvedFileExportsByFilePath: async (filePath) => {
+              if (filePath === options.filePath) {
+                return undefined
+              }
+
+              return readFreshRuntimeResolvedFileExportsWithDependencies(
+                runtimeCacheStore,
+                {
+                  filePath,
+                  compilerOptionsVersion,
+                  filter: options.filter,
+                }
+              )
+            },
+          }
         )
         const dependencyPaths = new Set<string>([
           options.filePath,
@@ -4194,10 +4277,18 @@ export async function resolveCachedFileExportsWithDependencies(
     options.filePath,
     toResolvedFileExportsWithDependenciesCacheName(options.filter),
     () =>
-      baseResolveFileExportsWithDependencies(
-        project,
-        options.filePath,
-        options.filter
+      getCachedFileExportsWithDependencies(project, options.filePath).then(
+        (fileExportsResult) =>
+          baseResolveFileExportsWithDependencies(
+            project,
+            options.filePath,
+            options.filter,
+            {
+              seedFileExportsByFilePath: new Map([
+                [options.filePath, fileExportsResult],
+              ]),
+            }
+          )
       ),
     {
       deps: (result) => {

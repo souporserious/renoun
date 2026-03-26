@@ -328,6 +328,7 @@ export class Session {
     invalidation_fallback_due_to_dependency_index_unavailable: 0,
     invalidation_fallback_targeted_missing_dependency_nodes: 0,
   }
+  #resetVersion = 0
   readonly #persistedStaleReasonCounters: Record<PersistedStaleReason, number> =
     {
       token_changed: 0,
@@ -706,6 +707,11 @@ export class Session {
     return this.#workspaceChangeLookupCache.getWorkspaceChangeToken(rootPath)
   }
 
+  /** @internal */
+  getResetVersion(): number {
+    return this.#resetVersion
+  }
+
   async getWorkspaceChangedPathsSinceToken(
     rootPath: string,
     previousToken: string
@@ -852,6 +858,7 @@ export class Session {
   }
 
   reset(): Promise<void> {
+    this.#resetVersion += 1
     this.#maybeEmitDirectorySnapshotMetrics(true, 'reset')
     this.inflight.clear()
     this.directorySnapshots.clear()

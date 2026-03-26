@@ -167,6 +167,7 @@ export interface CacheStoreFreshnessMismatch {
 
 export interface CacheStoreGetWithFreshnessOptions {
   includeStaleReason?: boolean
+  recordNodeDependency?: boolean
 }
 
 export interface CacheStoreGetWithFreshnessResult<Value> {
@@ -1098,6 +1099,7 @@ export class CacheStore {
   ): Promise<CacheStoreGetWithFreshnessResult<Value>> {
     this.#assertNotDisposed('getWithFreshness')
     const includeStaleReason = options.includeStaleReason === true
+    const recordNodeDependency = options.recordNodeDependency !== false
 
     const staleMismatch: { value?: CacheStoreFreshnessMismatch } = {}
     const captureMismatch = includeStaleReason
@@ -1131,16 +1133,20 @@ export class CacheStore {
         new Set(),
         captureMismatch
       )
-      await this.#recordAutomaticNodeDependency(
-        nodeKey,
-        memoryEntry.fingerprint
-      )
+      if (recordNodeDependency) {
+        await this.#recordAutomaticNodeDependency(
+          nodeKey,
+          memoryEntry.fingerprint
+        )
+      }
       return createResult(memoryEntry.value as Value, fresh)
     }
 
     const persistedEntry = await this.#loadPersistedEntry(nodeKey)
     if (!persistedEntry) {
-      await this.#recordAutomaticNodeDependency(nodeKey, undefined)
+      if (recordNodeDependency) {
+        await this.#recordAutomaticNodeDependency(nodeKey, undefined)
+      }
       return createResult(undefined, false)
     }
 
@@ -1150,10 +1156,12 @@ export class CacheStore {
       new Set(),
       captureMismatch
     )
-    await this.#recordAutomaticNodeDependency(
-      nodeKey,
-      persistedEntry.fingerprint
-    )
+    if (recordNodeDependency) {
+      await this.#recordAutomaticNodeDependency(
+        nodeKey,
+        persistedEntry.fingerprint
+      )
+    }
     return createResult(persistedEntry.value as Value, fresh)
   }
 

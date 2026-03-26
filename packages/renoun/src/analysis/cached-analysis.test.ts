@@ -14,6 +14,8 @@ import {
   isDetectAsyncLeaksEnabled,
   restoreProcessEnv,
 } from '../utils/test.ts'
+import * as fileExportsModule from '../utils/get-file-exports.ts'
+import * as resolveTypeModule from '../utils/resolve-type.ts'
 import { getFileExports } from '../utils/get-file-exports.ts'
 import {
   collectTypeScriptMetadata,
@@ -29,6 +31,7 @@ import {
   getCachedSourceTextMetadata,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
+  resolveCachedFileExportsWithDependencies,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -410,80 +413,72 @@ describe('analysis cached analysis', () => {
   })
 
   test('does not reuse cached tokens across different metadata collectors', async () => {
-    await using workspace = await createTemporaryWorkspace({
-      'package.json': JSON.stringify({
-        name: 'cached-analysis-test',
-        private: true,
-      }),
-      'tsconfig.json': JSON.stringify({
-        compilerOptions: {
-          module: 'ESNext',
-          moduleResolution: 'Bundler',
-          target: 'ESNext',
-          strict: true,
-        },
-        include: ['src/**/*.ts'],
-      }),
-      'src/index.ts': 'export const value = 1\n',
-    })
+    await withNodeEnv('test', async () => {
+      await using workspace = await createTemporaryWorkspace({
+        'package.json': JSON.stringify({
+          name: 'cached-analysis-test',
+          private: true,
+        }),
+        'tsconfig.json': JSON.stringify({
+          compilerOptions: {
+            module: 'ESNext',
+            moduleResolution: 'Bundler',
+            target: 'ESNext',
+            strict: true,
+          },
+          include: ['src/**/*.ts'],
+        }),
+        'src/index.ts': 'export const value = 1\n',
+      })
 
-    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
-    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
-    const entrySource = await readFile(entryFilePath, 'utf8')
-    const project = new Project({
-      tsConfigFilePath,
-    })
-    const highlighter = createHighlighter()
+      const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+      const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+      const entrySource = await readFile(entryFilePath, 'utf8')
+      const project = new Project({
+        tsConfigFilePath,
+      })
+      const highlighter = createHighlighter()
 
-    let firstCollectorCalls = 0
-    const firstCollector: GetTokensOptions['metadataCollector'] = async (
-      ...args
-    ) => {
-      firstCollectorCalls += 1
-      return collectTypeScriptMetadata(...args)
-    }
+      let firstCollectorCalls = 0
+      const firstCollector: GetTokensOptions['metadataCollector'] = async (
+        ...args
+      ) => {
+        firstCollectorCalls += 1
+        return collectTypeScriptMetadata(...args)
+      }
 
-    let secondCollectorCalls = 0
-    const secondCollector: GetTokensOptions['metadataCollector'] = async (
-      ...args
-    ) => {
-      secondCollectorCalls += 1
-      return collectTypeScriptMetadata(...args)
-    }
+      let secondCollectorCalls = 0
+      const secondCollector: GetTokensOptions['metadataCollector'] = async (
+        ...args
+      ) => {
+        secondCollectorCalls += 1
+        return collectTypeScriptMetadata(...args)
+      }
 
-    await getCachedTokens(project, {
-      value: entrySource,
-      language: 'ts',
-      filePath: entryFilePath,
-      theme: 'default',
-      allowErrors: true,
-      highlighter,
-      metadataCollector: firstCollector,
-      waitForWarmResult: true,
-    })
-    await getCachedTokens(project, {
-      value: entrySource,
-      language: 'ts',
-      filePath: entryFilePath,
-      theme: 'default',
-      allowErrors: true,
-      highlighter,
-      metadataCollector: firstCollector,
-      waitForWarmResult: true,
-    })
-    await getCachedTokens(project, {
-      value: entrySource,
-      language: 'ts',
-      filePath: entryFilePath,
-      theme: 'default',
-      allowErrors: true,
-      highlighter,
-      metadataCollector: secondCollector,
-      waitForWarmResult: true,
-    })
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector: firstCollector,
+        waitForWarmResult: true,
+      })
+      await getCachedTokens(project, {
+        value: entrySource,
+        language: 'ts',
+        filePath: entryFilePath,
+        theme: 'default',
+        allowErrors: true,
+        highlighter,
+        metadataCollector: secondCollector,
+        waitForWarmResult: true,
+      })
 
-    expect(firstCollectorCalls).toBe(1)
-    expect(secondCollectorCalls).toBe(1)
+      expect(firstCollectorCalls).toBe(1)
+      expect(secondCollectorCalls).toBe(1)
+    })
   })
 
   test('does not reuse runtime-cached tokens across analysisScopeId changes', async () => {
@@ -1021,6 +1016,117 @@ describe('analysis cached analysis', () => {
     expect(getSourceFileSpy.mock.calls.length).toBeGreaterThan(
       getSourceFileCallsAfterSecondRun
     )
+  })
+
+  test('reuses cached root export discovery between getCachedFileExports and resolveCachedFileExportsWithDependencies', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/foo.ts': 'export const foo = 1\n',
+      'src/bar.ts': 'export const bar = "bar"\n',
+      'src/index.ts': [
+        "export { foo } from './foo'",
+        "export * from './bar'",
+        'export const baz = true',
+      ].join('\n'),
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const project = new Project({
+      tsConfigFilePath,
+    })
+    const fileExportsSpy = vi.spyOn(
+      fileExportsModule,
+      'getFileExportsWithDependencies'
+    )
+
+    const exports = await getCachedFileExports(project, entryFilePath)
+    expect(exports.map((entry) => entry.name).sort()).toEqual([
+      'bar',
+      'baz',
+      'foo',
+    ])
+    expect(fileExportsSpy).toHaveBeenCalledTimes(1)
+
+    const result = await resolveCachedFileExportsWithDependencies(project, {
+      filePath: entryFilePath,
+    })
+
+    expect(result.resolvedTypes).toHaveLength(3)
+    expect(fileExportsSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test('reuses fresh child resolved export artifacts for namespace re-exports', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/foo.ts': [
+        'export const alpha = 1',
+        'export function beta() { return 2 }',
+      ].join('\n'),
+      'src/index.ts': [
+        "import * as Foo from './foo'",
+        'export { Foo }',
+      ].join('\n'),
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const childFilePath = join(workspace.workspacePath, 'src/foo.ts')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const project = new Project({
+      tsConfigFilePath,
+    })
+
+    await resolveCachedFileExportsWithDependencies(project, {
+      filePath: childFilePath,
+    })
+
+    const resolveTypeSpy = vi.spyOn(resolveTypeModule, 'resolveType')
+    const result = await resolveCachedFileExportsWithDependencies(project, {
+      filePath: entryFilePath,
+    })
+
+    const namespace = result.resolvedTypes.find(
+      (type) => type.kind === 'Namespace' && 'name' in type && type.name === 'Foo'
+    )
+
+    expect(namespace).toBeDefined()
+    expect(namespace?.kind).toBe('Namespace')
+
+    if (!namespace || namespace.kind !== 'Namespace') {
+      throw new Error('expected Foo namespace export to resolve')
+    }
+
+    const memberNames = namespace.types
+      .map((type) => ('name' in type ? type.name : undefined))
+      .filter((name): name is string => Boolean(name))
+      .sort()
+
+    expect(memberNames).toEqual(['alpha', 'beta'])
+    expect(resolveTypeSpy).not.toHaveBeenCalled()
   })
 
   test('refreshes inherited tsconfig changes without touching the root tsconfig file', async () => {

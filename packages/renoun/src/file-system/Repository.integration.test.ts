@@ -453,4 +453,271 @@ describe('Repository public remote integration', () => {
     },
     INTEGRATION_TIMEOUT_MS
   )
+
+  test(
+    'reuses cached barrel export git dates across fresh git-backed directory instances',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const cacheRoot = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      let firstDirectory: Directory | undefined
+      let secondDirectory: Directory | undefined
+      let firstFileSystem: GitFileSystem | undefined
+      let secondFileSystem: GitFileSystem | undefined
+
+      initRepo(repoRoot)
+      git(repoRoot, ['branch', '-m', 'dev'])
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/exports/alpha.js',
+              content: `export const alpha = 'alpha'`,
+            },
+            {
+              filename: 'src/exports/beta.js',
+              content: `export const beta = 'beta'`,
+            },
+            {
+              filename: 'src/exports/gamma.js',
+              content: `export const gamma = 'gamma'`,
+            },
+            {
+              filename: 'src/exports/delta.js',
+              content: `export const delta = 'delta'`,
+            },
+            {
+              filename: 'src/index.js',
+              content: [
+                `export * from './exports/alpha.js'`,
+                `export * from './exports/beta.js'`,
+                `export * from './exports/gamma.js'`,
+                `export * from './exports/delta.js'`,
+              ].join('\n'),
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        git(bareRepo, ['symbolic-ref', 'HEAD', 'refs/heads/dev'])
+
+        const fileUrl = pathToFileURL(bareRepo).toString()
+        const firstRemote = createPublicRemoteRepository({
+          fileUrl,
+          cacheRoot,
+          ref: 'dev',
+        })
+        firstFileSystem = firstRemote.fileSystem
+        const firstHistorySpy = vi.spyOn(firstFileSystem, 'getExportHistory')
+
+        firstDirectory = new Directory({
+          path: 'src',
+          filter: '**/*.js',
+          repository: firstRemote.repository,
+        })
+
+        const firstFile = await firstDirectory.getFile('index', 'js')
+        const firstExports = await firstFile.getExports()
+        const firstDates = await Promise.all(
+          firstExports.map((entry) => entry.getFirstCommitDate())
+        )
+
+        expect(firstExports.map((entry) => entry.name).sort()).toEqual([
+          'alpha',
+          'beta',
+          'delta',
+          'gamma',
+        ])
+        expect(firstDates.every((date) => date instanceof Date)).toBe(true)
+        expect(firstHistorySpy).toHaveBeenCalledTimes(1)
+
+        closeGitDirectory(firstDirectory)
+        firstDirectory = undefined
+        firstFileSystem?.close()
+        firstFileSystem = undefined
+
+        const secondRemote = createPublicRemoteRepository({
+          fileUrl,
+          cacheRoot,
+          ref: 'dev',
+        })
+        secondFileSystem = secondRemote.fileSystem
+        const secondHistorySpy = vi.spyOn(secondFileSystem, 'getExportHistory')
+
+        secondDirectory = new Directory({
+          path: 'src',
+          filter: '**/*.js',
+          repository: secondRemote.repository,
+        })
+
+        const secondFile = await secondDirectory.getFile('index', 'js')
+        const secondExports = await secondFile.getExports()
+        const secondDates = await Promise.all(
+          secondExports.map((entry) => entry.getFirstCommitDate())
+        )
+
+        expect(secondExports.map((entry) => entry.name).sort()).toEqual([
+          'alpha',
+          'beta',
+          'delta',
+          'gamma',
+        ])
+        expect(secondDates.every((date) => date instanceof Date)).toBe(true)
+        expect(secondHistorySpy).not.toHaveBeenCalled()
+      } finally {
+        vi.restoreAllMocks()
+        firstFileSystem?.close()
+        secondFileSystem?.close()
+        closeGitDirectory(firstDirectory)
+        closeGitDirectory(secondDirectory)
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+        rmSync(cacheRoot, { recursive: true, force: true })
+      }
+    },
+    INTEGRATION_TIMEOUT_MS
+  )
+
+  test(
+    'reuses cached barrel export types across fresh git-backed directory instances',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const cacheRoot = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      let firstDirectory: Directory | undefined
+      let secondDirectory: Directory | undefined
+      let firstFileSystem: GitFileSystem | undefined
+      let secondFileSystem: GitFileSystem | undefined
+
+      initRepo(repoRoot)
+      git(repoRoot, ['branch', '-m', 'dev'])
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/exports/alpha.js',
+              content: `export const alpha = 'alpha'`,
+            },
+            {
+              filename: 'src/exports/beta.js',
+              content: `export const beta = 'beta'`,
+            },
+            {
+              filename: 'src/exports/gamma.js',
+              content: `export const gamma = 'gamma'`,
+            },
+            {
+              filename: 'src/index.js',
+              content: [
+                `export * from './exports/alpha.js'`,
+                `export * from './exports/beta.js'`,
+                `export * from './exports/gamma.js'`,
+              ].join('\n'),
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        git(bareRepo, ['symbolic-ref', 'HEAD', 'refs/heads/dev'])
+
+        const fileUrl = pathToFileURL(bareRepo).toString()
+        const firstRemote = createPublicRemoteRepository({
+          fileUrl,
+          cacheRoot,
+          ref: 'dev',
+        })
+        firstFileSystem = firstRemote.fileSystem
+        const firstResolveSpy = vi.spyOn(
+          firstFileSystem,
+          'resolveFileExportsWithDependencies'
+        )
+
+        firstDirectory = new Directory({
+          path: 'src',
+          filter: '**/*.js',
+          repository: firstRemote.repository,
+        })
+
+        const firstFile = await firstDirectory.getFile('index', 'js')
+        const firstTypes = await firstFile.getExportTypes()
+
+        expect(firstTypes.map((entry) => entry.name).sort()).toEqual([
+          'alpha',
+          'beta',
+          'gamma',
+        ])
+        expect(firstResolveSpy).toHaveBeenCalledTimes(1)
+
+        closeGitDirectory(firstDirectory)
+        firstDirectory = undefined
+        firstFileSystem?.close()
+        firstFileSystem = undefined
+
+        const secondRemote = createPublicRemoteRepository({
+          fileUrl,
+          cacheRoot,
+          ref: 'dev',
+        })
+        secondFileSystem = secondRemote.fileSystem
+        const secondResolveSpy = vi.spyOn(
+          secondFileSystem,
+          'resolveFileExportsWithDependencies'
+        )
+
+        secondDirectory = new Directory({
+          path: 'src',
+          filter: '**/*.js',
+          repository: secondRemote.repository,
+        })
+
+        const secondFile = await secondDirectory.getFile('index', 'js')
+        const secondTypes = await secondFile.getExportTypes()
+
+        expect(secondTypes.map((entry) => entry.name).sort()).toEqual([
+          'alpha',
+          'beta',
+          'gamma',
+        ])
+        expect(secondResolveSpy).not.toHaveBeenCalled()
+      } finally {
+        vi.restoreAllMocks()
+        firstFileSystem?.close()
+        secondFileSystem?.close()
+        closeGitDirectory(firstDirectory)
+        closeGitDirectory(secondDirectory)
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+        rmSync(cacheRoot, { recursive: true, force: true })
+      }
+    },
+    INTEGRATION_TIMEOUT_MS
+  )
 })

@@ -20,6 +20,21 @@ import * as sourceTextMetadataModule from './query/source-text-metadata.ts'
 const WEBSOCKET_READY_TIMEOUT_MS = 30_000
 const REFRESH_NOTIFICATION_TIMEOUT_MS = 5_000
 
+function createDeferred<Value>() {
+  let resolve!: (value: Value | PromiseLike<Value>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<Value>((innerResolve, innerReject) => {
+    resolve = innerResolve
+    reject = innerReject
+  })
+
+  return {
+    promise,
+    resolve,
+    reject,
+  }
+}
+
 const watcherState = vi.hoisted(() => {
   return {
     callback:
@@ -807,4 +822,97 @@ describe('analysis server refresh invalidations', () => {
     expect(getSharedFileTextPrefixSpy).not.toHaveBeenCalled()
     expect(tokenizeSpy).not.toHaveBeenCalled()
   })
+
+  test('does not serialize git-scoped file export type requests for different files', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['NODE_ENV'] = 'production'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    const firstRequest = createDeferred<Awaited<
+      ReturnType<typeof cachedAnalysis.resolveCachedFileExportsWithDependencies>
+    >>()
+    const secondRequest = createDeferred<Awaited<
+      ReturnType<typeof cachedAnalysis.resolveCachedFileExportsWithDependencies>
+    >>()
+    const startedFilePaths: string[] = []
+
+    vi.spyOn(getProgramModule, 'getProgram').mockReturnValue({} as never)
+    vi.spyOn(
+      cachedAnalysis,
+      'resolveCachedFileExportsWithDependencies'
+    ).mockImplementation(async (_project, options) => {
+      startedFilePaths.push(options.filePath)
+
+      if (options.filePath.endsWith('nodes.ts')) {
+        return firstRequest.promise
+      }
+
+      if (options.filePath.endsWith('arrays.ts')) {
+        return secondRequest.promise
+      }
+
+      throw new Error(`Unexpected filePath: ${options.filePath}`)
+    })
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+    const analysisOptions: AnalysisOptions = {
+      analysisScopeId: 'git:owner/repo',
+    }
+    const firstCall = client.callMethod(
+      'resolveFileExportsWithDependencies',
+      {
+        filePath: '/repo/nodes.ts',
+        analysisOptions,
+      }
+    )
+    const secondCall = client.callMethod(
+      'resolveFileExportsWithDependencies',
+      {
+        filePath: '/repo/arrays.ts',
+        analysisOptions,
+      }
+    )
+
+    await expect(
+      Promise.race([
+        (async () => {
+          while (startedFilePaths.length < 2) {
+            await new Promise((resolve) => setTimeout(resolve, 10))
+          }
+        })(),
+        new Promise((_, reject) =>
+          setTimeout(
+            () =>
+              reject(
+                new Error(
+                  'expected both git-scoped file export requests to start'
+                )
+              ),
+            250
+          )
+        ),
+      ])
+    ).resolves.toBeUndefined()
+
+    firstRequest.resolve({
+      resolvedTypes: [],
+      dependencies: ['/repo/nodes.ts'],
+    })
+    secondRequest.resolve({
+      resolvedTypes: [],
+      dependencies: ['/repo/arrays.ts'],
+    })
+
+    await expect(firstCall).resolves.toEqual({
+      resolvedTypes: [],
+      dependencies: ['/repo/nodes.ts'],
+    })
+    await expect(secondCall).resolves.toEqual({
+      resolvedTypes: [],
+      dependencies: ['/repo/arrays.ts'],
+    })
+  }, 45_000)
 })

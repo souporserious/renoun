@@ -129,7 +129,12 @@ function shouldUseRawExportFastPath(rawExports: Map<string, ExportItem>) {
     }
 
     if (item.id.startsWith('__NAMESPACE__')) {
-      return false
+      const specifier = item.id.slice('__NAMESPACE__'.length)
+      if (!specifier.startsWith('.')) {
+        return false
+      }
+      relativeReexportCount += 1
+      continue
     }
 
     if (item.id.startsWith('__FROM__')) {
@@ -183,6 +188,7 @@ function resolveRawExportsFromProject(
   const results = new Map<string, ExportItem>()
   const localExports: Array<[string, ExportItem]> = []
   const fromExports: Array<[string, ExportItem, string]> = []
+  const namespaceExports: Array<[string, ExportItem, string]> = []
   const starExports: Array<[string, ExportItem, string]> = []
 
   for (const [name, rawItem] of rawExports) {
@@ -193,6 +199,15 @@ function resolveRawExportsFromProject(
 
     if (rawItem.id.startsWith('__FROM__')) {
       fromExports.push([name, rawItem, rawItem.id.slice(8)])
+      continue
+    }
+
+    if (rawItem.id.startsWith('__NAMESPACE__')) {
+      namespaceExports.push([
+        name,
+        rawItem,
+        rawItem.id.slice('__NAMESPACE__'.length),
+      ])
       continue
     }
 
@@ -214,6 +229,9 @@ function resolveRawExportsFromProject(
   const externalSpecifiers = new Set<string>()
 
   for (const [, , specifier] of fromExports) {
+    externalSpecifiers.add(specifier)
+  }
+  for (const [, , specifier] of namespaceExports) {
     externalSpecifiers.add(specifier)
   }
   for (const [, , specifier] of starExports) {
@@ -238,7 +256,11 @@ function resolveRawExportsFromProject(
           return undefined
         }
 
-        const childRawExports = scanModuleExports(resolvedPath, childContent)
+        const childRawExports = scanModuleExports(resolvedPath, childContent, {
+          includeHashes: false,
+          includeLines: false,
+          includeDeprecation: false,
+        })
         childExports = resolveRawExportsFromProject(
           resolvedPath,
           childRawExports,
@@ -273,6 +295,23 @@ function resolveRawExportsFromProject(
     results.set(name, targetExport)
   }
 
+  for (const [name, rawItem, specifier] of namespaceExports) {
+    const resolvedPath = resolveRelativeModulePath(project, filePath, specifier)
+
+    if (
+      !resolvedPath ||
+      rawItem.position === undefined ||
+      rawItem.syntaxKind === undefined
+    ) {
+      return undefined
+    }
+
+    results.set(name, {
+      ...rawItem,
+      id: fileIdentity(name),
+    })
+  }
+
   for (const [, , specifier] of starExports) {
     const resolvedPath = resolveRelativeModulePath(project, filePath, specifier)
     const childExports =
@@ -297,7 +336,11 @@ function tryGetRawFileExportsWithDependencies(
   project: Project
 ): FileExportsWithDependenciesResult | undefined {
   const sourceFile = ensureProjectSourceFile(filePath, project)
-  const rawExports = scanModuleExports(filePath, sourceFile.getFullText())
+  const rawExports = scanModuleExports(filePath, sourceFile.getFullText(), {
+    includeHashes: false,
+    includeLines: false,
+    includeDeprecation: false,
+  })
 
   if (!shouldUseRawExportFastPath(rawExports)) {
     return undefined

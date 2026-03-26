@@ -26,7 +26,11 @@ import {
   type SourceTextHydrationMetadata,
 } from './query/source-text-metadata.ts'
 import { prewarmSourceTextFormatterRuntime } from '../utils/format-source-text.ts'
-import { mapConcurrent } from '../utils/concurrency.ts'
+import {
+  createConcurrentQueue,
+  type ConcurrentQueue,
+  mapConcurrent,
+} from '../utils/concurrency.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getFileExportTextResult } from '../utils/get-file-export-text.ts'
 import { getQuickInfoAtPosition } from '../utils/get-quick-info-at-position.ts'
@@ -118,6 +122,22 @@ const CODE_FENCE_PREWARM_MAX_FILE_COUNT = 200
 const CODE_FENCE_PREWARM_MAX_DIRECTORY_COUNT = 1_000
 const CODE_FENCE_PREWARM_MAX_LANGUAGE_COUNT = 24
 const CODE_FENCE_PREWARM_FILE_READ_MAX_BYTES = 256_000
+const GIT_SCOPED_RENDER_REQUEST_CONCURRENCY = 1
+const GIT_SCOPED_TYPE_RESOLUTION_REQUEST_CONCURRENCY = 1
+const GIT_SCOPED_REQUEST_QUEUE_IDLE_TTL_MS = 5 * 60_000
+const GIT_SCOPED_REQUEST_QUEUE_MAX_KEYS = 2_048
+type GitScopedRequestQueueState = {
+  queue: ConcurrentQueue
+  lastAccessedAt: number
+}
+const gitScopedRenderRequestQueues = new Map<
+  string,
+  GitScopedRequestQueueState
+>()
+const gitScopedTypeResolutionRequestQueues = new Map<
+  string,
+  GitScopedRequestQueueState
+>()
 const CODE_FENCE_PREWARM_FILE_READ_CONCURRENCY = 6
 const CODE_FENCE_PREWARM_TOKENIZE_CONCURRENCY = 4
 const STARTUP_RUNTIME_PREWARM_TOKENIZE_CONCURRENCY = 4
@@ -133,6 +153,69 @@ const STARTUP_RUNTIME_PREWARM_FALLBACK_LANGUAGES = [
   'bash',
   'mdx',
 ] as const
+
+function isGitScopedAnalysisOptions(
+  analysisOptions?: AnalysisOptions
+): boolean {
+  return (
+    typeof analysisOptions?.analysisScopeId === 'string' &&
+    analysisOptions.analysisScopeId.startsWith('git:')
+  )
+}
+
+async function runWithGitScopedRequestBackpressure<Type>(
+  options: {
+    analysisOptions?: AnalysisOptions
+    filePath?: string
+    queueKind: 'render' | 'type-resolution'
+  },
+  task: () => Promise<Type>
+): Promise<Type> {
+  const analysisScopeId = options.analysisOptions?.analysisScopeId
+
+  if (
+    !isProductionEnvironment() ||
+    !isGitScopedAnalysisOptions(options.analysisOptions) ||
+    typeof analysisScopeId !== 'string'
+  ) {
+    return task()
+  }
+
+  const queueKey =
+    typeof options.filePath === 'string' && options.filePath.length > 0
+      ? `${analysisScopeId}:${options.filePath}`
+      : analysisScopeId
+  const queueMap =
+    options.queueKind === 'render'
+      ? gitScopedRenderRequestQueues
+      : gitScopedTypeResolutionRequestQueues
+  const concurrency =
+    options.queueKind === 'render'
+      ? GIT_SCOPED_RENDER_REQUEST_CONCURRENCY
+      : GIT_SCOPED_TYPE_RESOLUTION_REQUEST_CONCURRENCY
+  const now = Date.now()
+  let queueState = queueMap.get(queueKey)
+
+  if (!queueState) {
+    queueState = {
+      queue: createConcurrentQueue(concurrency),
+      lastAccessedAt: now,
+    }
+    queueMap.set(queueKey, queueState)
+  } else {
+    queueState.lastAccessedAt = now
+  }
+
+  if (queueMap.size > GIT_SCOPED_REQUEST_QUEUE_MAX_KEYS) {
+    for (const [key, value] of queueMap.entries()) {
+      if (now - value.lastAccessedAt > GIT_SCOPED_REQUEST_QUEUE_IDLE_TTL_MS) {
+        queueMap.delete(key)
+      }
+    }
+  }
+
+  return queueState.queue.run(task)
+}
 
 type StartupRuntimeMetadataWarmupSample = {
   value: string
@@ -1457,9 +1540,17 @@ export async function createServer(options?: CreateServerOptions) {
     }: GetSourceTextMetadataOptions & {
       analysisOptions?: AnalysisOptions
     }) {
-      const project = getProgram(analysisOptions)
-
-      return getCachedSourceTextMetadata(project, options)
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath: options.filePath,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          return getCachedSourceTextMetadata(project, options)
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -1497,64 +1588,78 @@ export async function createServer(options?: CreateServerOptions) {
         waitForWarmResult?: boolean
         includeClientRpcDependencies?: boolean
       }) {
-      const project = getProgram(analysisOptions)
-      latestCodeFencePrewarmThemeNames = getHighlighterThemeNames(theme)
-      queueHighlighterInitialization({
-        theme,
-        languages,
-      })
-
-      flushDeferredCodeFencePrewarmPaths()
-
-      const metadata = await getCachedSourceTextMetadata(project, {
-        baseDirectory,
-        filePath,
-        isFormattingExplicit,
-        language,
-        shouldFormat,
-        value,
-        virtualizeFilePath,
-      })
-      const tokens = await getCachedTokens(project, {
-        allowErrors,
-        deferQuickInfoUntilHover,
-        filePath: metadata.filePath,
-        highlighter: resolvedHighlighter,
-        highlighterLoader: async () => {
-          return ensureHighlighter({
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath:
+            typeof filePath === 'string'
+              ? filePath
+              : typeof sourcePath === 'string'
+                ? sourcePath
+                : undefined,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          latestCodeFencePrewarmThemeNames = getHighlighterThemeNames(theme)
+          queueHighlighterInitialization({
             theme,
             languages,
           })
-        },
-        language: metadata.language,
-        metadataCollector,
-        showErrors,
-        sourcePath,
-        theme,
-        value: metadata.value,
-        waitForWarmResult,
-      })
-      const result: CodeBlockTokensResult = {
-        metadata,
-        tokens,
-      }
+          flushDeferredCodeFencePrewarmPaths()
 
-      if (includeClientRpcDependencies) {
-        return toRpcValueWithDependenciesResponse(
-          result,
-          [
+          const metadata = await getCachedSourceTextMetadata(project, {
+            baseDirectory,
             filePath,
-            metadata.filePath,
-            sourcePath,
-          ].filter((dependencyPath): dependencyPath is string => {
-            return (
-              typeof dependencyPath === 'string' && dependencyPath.length > 0
-            )
+            isFormattingExplicit,
+            language,
+            shouldFormat,
+            value,
+            virtualizeFilePath,
           })
-        )
-      }
+          const tokens = await getCachedTokens(project, {
+            allowErrors,
+            deferQuickInfoUntilHover,
+            filePath: metadata.filePath,
+            highlighter: resolvedHighlighter,
+            highlighterLoader: async () => {
+              return ensureHighlighter({
+                theme,
+                languages,
+              })
+            },
+            language: metadata.language,
+            metadataCollector,
+            showErrors,
+            sourcePath,
+            theme,
+            value: metadata.value,
+            waitForWarmResult,
+          })
+          const result: CodeBlockTokensResult = {
+            metadata,
+            tokens,
+          }
 
-      return result
+          if (includeClientRpcDependencies) {
+            return toRpcValueWithDependenciesResponse(
+              result,
+              [
+                filePath,
+                metadata.filePath,
+                sourcePath,
+              ].filter((dependencyPath): dependencyPath is string => {
+                return (
+                  typeof dependencyPath === 'string' &&
+                  dependencyPath.length > 0
+                )
+              })
+            )
+          }
+
+          return result
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -1572,25 +1677,36 @@ export async function createServer(options?: CreateServerOptions) {
       languages?: HighlighterInitializationOptions['languages']
       waitForWarmResult?: boolean
     }) {
-      const project = getProgram(analysisOptions)
-      latestCodeFencePrewarmThemeNames = getHighlighterThemeNames(options.theme)
-      queueHighlighterInitialization({
-        theme: options.theme,
-        languages: options.languages,
-      })
-
-      flushDeferredCodeFencePrewarmPaths()
-
-      return getCachedTokens(project, {
-        ...options,
-        highlighter: resolvedHighlighter,
-        highlighterLoader: async () => {
-          return ensureHighlighter({
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath: options.filePath,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          latestCodeFencePrewarmThemeNames = getHighlighterThemeNames(
+            options.theme
+          )
+          queueHighlighterInitialization({
             theme: options.theme,
             languages: options.languages,
           })
-        },
-      })
+
+          flushDeferredCodeFencePrewarmPaths()
+
+          return getCachedTokens(project, {
+            ...options,
+            highlighter: resolvedHighlighter,
+            highlighterLoader: async () => {
+              return ensureHighlighter({
+                theme: options.theme,
+                languages: options.languages,
+              })
+            },
+          })
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -1605,16 +1721,28 @@ export async function createServer(options?: CreateServerOptions) {
       filter,
       ...options
     }: ResolveTypeAtLocationRpcRequest) {
-      const project = getProgram(analysisOptions)
-      const result = await resolveCachedTypeAtLocationWithDependencies(project, {
-        filePath: options.filePath,
-        position: options.position,
-        kind: options.kind,
-        filter: parseTypeFilter(filter),
-        isInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
-      })
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath: options.filePath,
+          queueKind: 'type-resolution',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const result = await resolveCachedTypeAtLocationWithDependencies(
+            project,
+            {
+              filePath: options.filePath,
+              position: options.position,
+              kind: options.kind,
+              filter: parseTypeFilter(filter),
+              isInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
+            }
+          )
 
-      return result.resolvedType
+          return result.resolvedType
+        }
+      )
     },
     {
       memoize: false,
@@ -1629,35 +1757,43 @@ export async function createServer(options?: CreateServerOptions) {
       filter,
       ...options
     }: ResolveTypeAtLocationRpcRequest) {
-      return getDebugLogger().trackOperation(
-        'server.resolveTypeAtLocationWithDependencies',
-        async () => {
-          const project = getProgram(analysisOptions)
-
-          getDebugLogger().info('Processing type resolution request', () => ({
-            data: {
-              filePath: options.filePath,
-              position: options.position,
-              kind: SyntaxKind[options.kind],
-              useInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
-            },
-          }))
-
-          return resolveCachedTypeAtLocationWithDependencies(project, {
-            filePath: options.filePath,
-            position: options.position,
-            kind: options.kind,
-            filter: parseTypeFilter(filter),
-            isInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
-          })
-        },
+      return runWithGitScopedRequestBackpressure(
         {
-          data: {
-            filePath: options.filePath,
-            position: options.position,
-            kind: SyntaxKind[options.kind],
-          },
-        }
+          analysisOptions,
+          filePath: options.filePath,
+          queueKind: 'type-resolution',
+        },
+        async () =>
+          await getDebugLogger().trackOperation(
+            'server.resolveTypeAtLocationWithDependencies',
+            async () => {
+              const project = getProgram(analysisOptions)
+
+              getDebugLogger().info('Processing type resolution request', () => ({
+                data: {
+                  filePath: options.filePath,
+                  position: options.position,
+                  kind: SyntaxKind[options.kind],
+                  useInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
+                },
+              }))
+
+              return resolveCachedTypeAtLocationWithDependencies(project, {
+                filePath: options.filePath,
+                position: options.position,
+                kind: options.kind,
+                filter: parseTypeFilter(filter),
+                isInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
+              })
+            },
+            {
+              data: {
+                filePath: options.filePath,
+                position: options.position,
+                kind: SyntaxKind[options.kind],
+              },
+            }
+          )
       )
     },
     {
@@ -1677,17 +1813,26 @@ export async function createServer(options?: CreateServerOptions) {
       analysisOptions?: AnalysisOptions
       includeClientRpcDependencies?: boolean
     }) {
-      const project = getProgram(analysisOptions)
-      const fileExports = await getCachedFileExports(project, filePath)
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const fileExports = await getCachedFileExports(project, filePath)
 
-      if (includeClientRpcDependencies) {
-        return toRpcValueWithDependenciesResponse(
-          fileExports,
-          toFileExportDependencyPaths(filePath, fileExports)
-        )
-      }
+          if (includeClientRpcDependencies) {
+            return toRpcValueWithDependenciesResponse(
+              fileExports,
+              toFileExportDependencyPaths(filePath, fileExports)
+            )
+          }
 
-      return fileExports
+          return fileExports
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -1708,20 +1853,32 @@ export async function createServer(options?: CreateServerOptions) {
       filter?: TypeFilter
       includeClientRpcDependencies?: boolean
     }) {
-      const project = getProgram(analysisOptions)
-      const result = await resolveCachedFileExportsWithDependencies(project, {
-        filePath,
-        filter,
-      })
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'type-resolution',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const result = await resolveCachedFileExportsWithDependencies(
+            project,
+            {
+              filePath,
+              filter,
+            }
+          )
 
-      if (includeClientRpcDependencies) {
-        return toRpcValueWithDependenciesResponse(
-          result,
-          result.dependencies ?? []
-        )
-      }
+          if (includeClientRpcDependencies) {
+            return toRpcValueWithDependenciesResponse(
+              result,
+              result.dependencies ?? []
+            )
+          }
 
-      return result
+          return result
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -1764,23 +1921,32 @@ export async function createServer(options?: CreateServerOptions) {
       analysisOptions?: AnalysisOptions
       includeClientRpcDependencies?: boolean
     }) {
-      const project = getProgram(analysisOptions)
-      const metadata = await getCachedFileExportMetadata(project, {
-        name,
-        filePath,
-        position,
-        kind,
-      })
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const metadata = await getCachedFileExportMetadata(project, {
+            name,
+            filePath,
+            position,
+            kind,
+          })
 
-      if (includeClientRpcDependencies) {
-        const fileExports = await getCachedFileExports(project, filePath)
-        return toRpcValueWithDependenciesResponse(
-          metadata,
-          toFileExportDependencyPaths(filePath, fileExports)
-        )
-      }
+          if (includeClientRpcDependencies) {
+            const fileExports = await getCachedFileExports(project, filePath)
+            return toRpcValueWithDependenciesResponse(
+              metadata,
+              toFileExportDependencyPaths(filePath, fileExports)
+            )
+          }
 
-      return metadata
+          return metadata
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -1803,23 +1969,32 @@ export async function createServer(options?: CreateServerOptions) {
       includeDependencies?: boolean
       analysisOptions?: AnalysisOptions
     }) {
-      const project = getProgram(analysisOptions)
-      if (includeDependencies) {
-        return getFileExportTextResult({
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
           filePath,
-          position,
-          kind,
-          includeDependencies: true,
-          project,
-        })
-      }
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          if (includeDependencies) {
+            return getFileExportTextResult({
+              filePath,
+              position,
+              kind,
+              includeDependencies: true,
+              project,
+            })
+          }
 
-      return getCachedFileExportText(project, {
-        filePath,
-        position,
-        kind,
-        includeDependencies: false,
-      })
+          return getCachedFileExportText(project, {
+            filePath,
+            position,
+            kind,
+            includeDependencies: false,
+          })
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),
@@ -1842,25 +2017,34 @@ export async function createServer(options?: CreateServerOptions) {
       analysisOptions?: AnalysisOptions
       includeClientRpcDependencies?: boolean
     }) {
-      const project = getProgram(analysisOptions)
-      const staticValue = await getCachedFileExportStaticValue(project, {
-        filePath,
-        position,
-        kind,
-      })
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const staticValue = await getCachedFileExportStaticValue(project, {
+            filePath,
+            position,
+            kind,
+          })
 
-      if (includeClientRpcDependencies) {
-        const dependencyPaths = await getCachedTypeScriptDependencyPaths(
-          project,
-          filePath
-        )
-        return toRpcValueWithDependenciesResponse(
-          staticValue,
-          dependencyPaths
-        )
-      }
+          if (includeClientRpcDependencies) {
+            const dependencyPaths = await getCachedTypeScriptDependencyPaths(
+              project,
+              filePath
+            )
+            return toRpcValueWithDependenciesResponse(
+              staticValue,
+              dependencyPaths
+            )
+          }
 
-      return staticValue
+          return staticValue
+        }
+      )
     },
     {
       memoize: getProductionRpcMemoizeOptions(),

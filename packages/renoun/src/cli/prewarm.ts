@@ -241,9 +241,12 @@ function toNormalizedPrewarmTargets(
       .map((request) => ({
         directoryPath: normalizePathKey(request.directoryPath),
         recursive: request.recursive,
+        leafOnly: request.leafOnly === true,
         includeDirectoryNamedFiles: request.includeDirectoryNamedFiles,
         includeIndexAndReadmeFiles: request.includeIndexAndReadmeFiles,
         filterExtensions: normalizeFilterExtensions(request.filterExtensions),
+        repository: normalizePrewarmTargetValue(request.repository ?? null),
+        sparsePaths: request.sparsePaths?.slice().sort() ?? null,
         methods:
           request.methods?.slice().sort((left, right) =>
             left.localeCompare(right)
@@ -269,6 +272,8 @@ function toNormalizedPrewarmTargets(
           request.extensions?.slice().sort((left, right) =>
             left.localeCompare(right)
           ) ?? null,
+        repository: normalizePrewarmTargetValue(request.repository ?? null),
+        sparsePaths: request.sparsePaths?.slice().sort() ?? null,
         methods:
           request.methods?.slice().sort((left, right) =>
             left.localeCompare(right)
@@ -289,6 +294,22 @@ function toNormalizedPrewarmTargets(
   }
 }
 
+function normalizePrewarmTargetValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizePrewarmTargetValue(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [key, normalizePrewarmTargetValue(entryValue)])
+    )
+  }
+
+  return value
+}
+
 function arePrewarmTargetsEquivalent(
   left: RenounPrewarmTargets,
   right: RenounPrewarmTargets
@@ -300,14 +321,13 @@ function arePrewarmTargetsEquivalent(
 }
 
 function getFileRequestKey(request: FileRequest): string {
-  if (!request.extensions || request.extensions.length === 0) {
-    return `${request.directoryPath}\0${request.path}\0`
-  }
-
-  return `${request.directoryPath}\0${request.path}\0${request.extensions
-    .slice()
-    .sort()
-    .join('\0')}`
+  return JSON.stringify({
+    directoryPath: normalizePathKey(request.directoryPath),
+    path: request.path,
+    extensions: request.extensions?.slice().sort() ?? [],
+    repository: normalizePrewarmTargetValue(request.repository ?? null),
+    sparsePaths: request.sparsePaths?.slice().sort() ?? [],
+  })
 }
 
 function isPathWithinScope(path: string, scopePath: string): boolean {

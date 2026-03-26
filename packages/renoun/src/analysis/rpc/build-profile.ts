@@ -49,6 +49,16 @@ type CacheReuseStaleReasonFlushEntry = {
   staleCount: number
 }
 
+type BuildProfileSummary = {
+  topSlowMethods: FlushEntry[]
+  topSlowTargets: FlushEntry[]
+  topSlowFiles: FlushEntry[]
+  topCacheMissMethods: CacheReuseFlushEntry[]
+  topCacheMissTargets: CacheReuseFlushEntry[]
+  topCacheMissFiles: CacheReuseFlushEntry[]
+  topCacheStaleReasons: CacheReuseStaleReasonFlushEntry[]
+}
+
 export type RpcCacheReuseOutcome =
   | 'hit'
   | 'stale'
@@ -57,6 +67,7 @@ export type RpcCacheReuseOutcome =
   | 'error'
 
 const MAX_METHOD_TARGET_ENTRIES = 20_000
+const PROFILE_SUMMARY_LIMIT = 10
 const methodStats = new Map<string, ProfileStats>()
 const methodTargetStats = new Map<string, ProfileStats>()
 const cacheReuseMethodStats = new Map<string, CacheReuseStats>()
@@ -254,6 +265,125 @@ function toStaleReasonFlushEntries(
     .sort((a, b) => b.staleCount - a.staleCount)
 }
 
+function getProfileTargetKey(key: string): string | undefined {
+  const firstSpaceIndex = key.indexOf(' ')
+
+  if (firstSpaceIndex === -1 || firstSpaceIndex + 1 >= key.length) {
+    return undefined
+  }
+
+  return key.slice(firstSpaceIndex + 1)
+}
+
+function getProfileFileKey(target: string): string {
+  let endIndex = target.length
+
+  for (const delimiter of ['#', '@', ':']) {
+    const delimiterIndex = target.indexOf(delimiter)
+
+    if (delimiterIndex !== -1 && delimiterIndex < endIndex) {
+      endIndex = delimiterIndex
+    }
+  }
+
+  return target.slice(0, endIndex)
+}
+
+function aggregateProfileStatsByFile(
+  stats: Map<string, ProfileStats>
+): FlushEntry[] {
+  const aggregateStats = new Map<string, ProfileStats>()
+
+  for (const [key, value] of stats.entries()) {
+    const target = getProfileTargetKey(key)
+
+    if (!target) {
+      continue
+    }
+
+    const fileKey = getProfileFileKey(target)
+    const existing = aggregateStats.get(fileKey)
+
+    if (existing) {
+      existing.count += value.count
+      existing.totalMs += value.totalMs
+      if (value.maxMs > existing.maxMs) {
+        existing.maxMs = value.maxMs
+      }
+      existing.errorCount += value.errorCount
+      continue
+    }
+
+    aggregateStats.set(fileKey, {
+      count: value.count,
+      totalMs: value.totalMs,
+      maxMs: value.maxMs,
+      errorCount: value.errorCount,
+    })
+  }
+
+  return toFlushEntries(aggregateStats)
+}
+
+function aggregateCacheReuseStatsByFile(
+  stats: Map<string, CacheReuseStats>
+): CacheReuseFlushEntry[] {
+  const aggregateStats = new Map<string, CacheReuseStats>()
+
+  for (const [key, value] of stats.entries()) {
+    const target = getProfileTargetKey(key)
+
+    if (!target) {
+      continue
+    }
+
+    const fileKey = getProfileFileKey(target)
+    const existing = aggregateStats.get(fileKey)
+
+    if (existing) {
+      existing.samples += value.samples
+      existing.hitCount += value.hitCount
+      existing.staleCount += value.staleCount
+      existing.missCount += value.missCount
+      existing.unavailableCount += value.unavailableCount
+      existing.errorCount += value.errorCount
+      continue
+    }
+
+    aggregateStats.set(fileKey, { ...value })
+  }
+
+  return toCacheReuseFlushEntries(aggregateStats)
+}
+
+function createBuildProfileSummary(): BuildProfileSummary {
+  const slowMethods = toFlushEntries(methodStats)
+  const slowTargets = toFlushEntries(methodTargetStats)
+  const slowFiles = aggregateProfileStatsByFile(methodTargetStats)
+  const cacheReuseMethods = toCacheReuseFlushEntries(cacheReuseMethodStats)
+  const cacheReuseTargets = toCacheReuseFlushEntries(cacheReuseTargetStats)
+  const cacheReuseFiles = aggregateCacheReuseStatsByFile(cacheReuseTargetStats)
+  const staleReasons = toStaleReasonFlushEntries(
+    cacheReuseStaleReasonMethodStats
+  )
+
+  return {
+    topSlowMethods: slowMethods.slice(0, PROFILE_SUMMARY_LIMIT),
+    topSlowTargets: slowTargets.slice(0, PROFILE_SUMMARY_LIMIT),
+    topSlowFiles: slowFiles.slice(0, PROFILE_SUMMARY_LIMIT),
+    topCacheMissMethods: cacheReuseMethods
+      .filter((entry) => entry.missCount > 0)
+      .slice(0, PROFILE_SUMMARY_LIMIT),
+    topCacheMissTargets: cacheReuseTargets
+      .filter((entry) => entry.missCount > 0)
+      .slice(0, PROFILE_SUMMARY_LIMIT),
+    topCacheMissFiles: cacheReuseFiles
+      .filter((entry) => entry.missCount > 0)
+      .slice(0, PROFILE_SUMMARY_LIMIT),
+    topCacheStaleReasons: staleReasons.slice(0, PROFILE_SUMMARY_LIMIT),
+  }
+}
+
 function recordSample(
   stats: Map<string, ProfileStats>,
   key: string,
@@ -347,6 +477,7 @@ function flushProfile() {
     pid: process.pid,
     createdAt: new Date().toISOString(),
     cwd: workspaceRoot,
+    summary: createBuildProfileSummary(),
     methods: toFlushEntries(methodStats),
     methodTargets: toFlushEntries(methodTargetStats),
     cacheReuse: toCacheReuseFlushEntries(cacheReuseMethodStats),

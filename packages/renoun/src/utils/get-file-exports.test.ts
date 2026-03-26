@@ -78,6 +78,41 @@ describe('getFileExports', () => {
     exportSymbolsSpy.mockRestore()
   })
 
+  test('uses the raw re-export fast path for namespace-import barrel exports', () => {
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: {
+        allowJs: true,
+        checkJs: true,
+      },
+    })
+
+    project.createSourceFile('/project/core.js', 'export const foo = 1', {
+      overwrite: true,
+    })
+    const sourceFile = project.createSourceFile(
+      '/project/index.js',
+      ["import * as Core from './core.js'", 'export { Core }'].join('\n'),
+      {
+        overwrite: true,
+      }
+    )
+
+    const exportSymbolsSpy = vi.spyOn(sourceFile, 'getExportSymbols')
+
+    const fileExports = getFileExports('/project/index.js', project)
+
+    expect(exportSymbolsSpy).not.toHaveBeenCalled()
+    expect(fileExports).toMatchObject([
+      {
+        name: 'Core',
+        path: '/project/index.js',
+      },
+    ])
+
+    exportSymbolsSpy.mockRestore()
+  })
+
   test('falls back to export symbols for local-only files', () => {
     const project = new Project({
       useInMemoryFileSystem: true,
