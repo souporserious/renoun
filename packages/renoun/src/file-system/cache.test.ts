@@ -46,6 +46,10 @@ import {
 } from './CacheSqlite.ts'
 import { InMemoryFileSystem } from './InMemoryFileSystem.ts'
 import { NodeFileSystem } from './NodeFileSystem.ts'
+import type {
+  JavaScriptFileReferenceBaseData,
+  JavaScriptFileResolvedTypesData,
+} from './reference-artifacts.ts'
 import { Session } from './Session.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
 import { Collection, Directory, File, Package, Workspace } from './index.tsx'
@@ -742,6 +746,73 @@ describe('file-system cache integration', () => {
 
     expect(result.value).toEqual({ node: 'parent' })
     expect(result.fresh).toBe(true)
+  })
+
+  test('keeps restored child entries fresh after a parent hydrates matching node dependencies', async () => {
+    const childSourceNodeKey = 'child:source'
+    const childSourceDeps: Array<{ depKey: string; depVersion: string }> = []
+    const childSourceEntry: CacheEntry<{ node: 'child:source' }> = {
+      value: { node: 'child:source' },
+      deps: childSourceDeps,
+      fingerprint: createFingerprint(childSourceDeps),
+      persist: true,
+      updatedAt: Date.now(),
+    }
+    const childNodeKey = 'child'
+    const childDeps = [
+      {
+        depKey: `node:${childSourceNodeKey}`,
+        depVersion: childSourceEntry.fingerprint,
+      },
+    ]
+    const childEntry: CacheEntry<{ node: 'child' }> = {
+      value: { node: 'child' },
+      deps: childDeps,
+      fingerprint: createFingerprint(childDeps),
+      persist: true,
+      updatedAt: Date.now(),
+    }
+    const parentDeps = [
+      {
+        depKey: `node:${childNodeKey}`,
+        depVersion: childEntry.fingerprint,
+      },
+    ]
+    const parentEntry: CacheEntry<{ node: 'parent' }> = {
+      value: { node: 'parent' },
+      deps: parentDeps,
+      fingerprint: createFingerprint(parentDeps),
+      persist: true,
+      updatedAt: Date.now(),
+    }
+    const persistedEntries = new Map<string, CacheEntry>([
+      [childSourceNodeKey, childSourceEntry],
+      [childNodeKey, childEntry],
+      ['parent', parentEntry],
+    ])
+    const persistence: CacheStorePersistence = {
+      async load(nodeKey) {
+        return persistedEntries.get(nodeKey)
+      },
+      async save(nodeKey, entry) {
+        persistedEntries.set(nodeKey, entry)
+      },
+      async delete(nodeKey) {
+        persistedEntries.delete(nodeKey)
+      },
+    }
+    const store = new CacheStore({
+      snapshot: new FileSystemSnapshot(new InMemoryFileSystem({})),
+      persistence,
+    })
+
+    const parent = await store.getWithFreshness<{ node: 'parent' }>('parent')
+    const child = await store.getWithFreshness<{ node: 'child' }>('child')
+
+    expect(parent.value).toEqual({ node: 'parent' })
+    expect(parent.fresh).toBe(true)
+    expect(child.value).toEqual({ node: 'child' })
+    expect(child.fresh).toBe(true)
   })
 
   test('does not share caches between different custom cache providers', async () => {
@@ -1687,6 +1758,99 @@ export type Metadata = Value`,
 
     fileSystem.releaseGitMetadata.resolve()
     await referenceDataPromise
+  })
+
+  test('routes reference-heavy entry methods through server-managed artifacts when supported', async () => {
+    class ServerManagedArtifactInMemoryFileSystem extends InMemoryFileSystem {
+      freshReferenceBaseReads = 0
+      cachedReferenceBaseReads = 0
+      cachedReferenceResolvedTypesReads = 0
+      cachedReferenceSectionsReads = 0
+      readonly referenceBaseData: JavaScriptFileReferenceBaseData = {
+        exportMetadata: [
+          {
+            name: 'publicValue',
+            path: '/index.ts',
+            position: 0,
+            kind: 0 as any,
+          },
+        ],
+        gitMetadataByName: {
+          publicValue: {
+            firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+            lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+            firstCommitHash: 'a1',
+            lastCommitHash: 'b1',
+          },
+        },
+        fileGitMetadata: {
+          authors: [],
+          firstCommitDate: new Date('2024-01-01T00:00:00.000Z'),
+          lastCommitDate: new Date('2024-02-01T00:00:00.000Z'),
+        },
+      }
+
+      override supportsServerManagedReferenceArtifacts(): boolean {
+        return true
+      }
+
+      override async readFreshReferenceBaseArtifact(
+        _filePath: string,
+        _stripInternal: boolean
+      ): Promise<JavaScriptFileReferenceBaseData | undefined> {
+        this.freshReferenceBaseReads += 1
+        return this.referenceBaseData
+      }
+
+      override async getCachedReferenceBaseArtifact(
+        _filePath: string,
+        _stripInternal: boolean
+      ): Promise<JavaScriptFileReferenceBaseData> {
+        this.cachedReferenceBaseReads += 1
+        return this.referenceBaseData
+      }
+
+      override async getCachedReferenceResolvedTypesArtifact(
+        _filePath: string
+      ): Promise<JavaScriptFileResolvedTypesData> {
+        this.cachedReferenceResolvedTypesReads += 1
+        return {
+          resolvedTypes: [{ kind: 'object', name: 'publicValue' } as any],
+          typeDependencies: ['/index.ts'],
+        }
+      }
+
+      override async getCachedReferenceSectionsArtifact(
+        _filePath: string,
+        _options: { stripInternal: boolean; slugCasing: any }
+      ): Promise<Array<{ id: string; title: string }>> {
+        this.cachedReferenceSectionsReads += 1
+        return [{ id: 'publicValue', title: 'publicValue' }]
+      }
+    }
+
+    const fileSystem = new ServerManagedArtifactInMemoryFileSystem({
+      'index.ts': [
+        '/** @internal */ export const internalValue = 1',
+        'export const publicValue = 2',
+      ].join('\n'),
+    })
+    const directory = new Directory({ fileSystem })
+    const file = await directory.getFile('index', 'ts')
+
+    const exports = await file.getExports()
+    const lastCommitDate = await file.getLastCommitDate()
+    const exportTypes = await file.getExportTypes()
+    const sections = await file.getSections()
+
+    expect(exports.map((entry) => entry.name)).toEqual(['publicValue'])
+    expect(lastCommitDate?.toISOString()).toBe('2024-02-01T00:00:00.000Z')
+    expect(exportTypes).toHaveLength(1)
+    expect(sections).toEqual([{ id: 'publicValue', title: 'publicValue' }])
+    expect(fileSystem.freshReferenceBaseReads).toBe(1)
+    expect(fileSystem.cachedReferenceBaseReads).toBe(0)
+    expect(fileSystem.cachedReferenceResolvedTypesReads).toBe(1)
+    expect(fileSystem.cachedReferenceSectionsReads).toBe(1)
   })
 
   test('omits authors by default and supports first-date-only structures', async () => {

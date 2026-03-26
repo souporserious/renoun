@@ -38,6 +38,7 @@ import {
   getHighlighterThemeNames,
   type HighlighterInitializationOptions,
 } from '../utils/highlighter-options.ts'
+import type { SlugCasing } from '@renoun/mdx'
 import { readCodeFromPath } from '../utils/read-code-from-path.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import { WebSocketServer } from './rpc/server.ts'
@@ -46,6 +47,9 @@ import {
   getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExports,
+  getCachedReferenceBaseArtifact,
+  getCachedReferenceResolvedTypesArtifact,
+  getCachedReferenceSectionsArtifact,
   resolveCachedFileExportsWithDependencies,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
@@ -54,6 +58,7 @@ import {
   invalidateRuntimeAnalysisCachePath,
   onRuntimeAnalysisBackgroundRefresh,
   prewarmRuntimeAnalysisSession,
+  readFreshCachedReferenceBaseArtifact,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
@@ -1837,6 +1842,176 @@ export async function createServer(options?: CreateServerOptions) {
     {
       memoize: getProductionRpcMemoizeOptions(),
       concurrency: 25,
+    }
+  )
+
+  server.registerMethod(
+    'readFreshReferenceBaseArtifact',
+    async function readFreshReferenceBaseArtifact({
+      filePath,
+      stripInternal,
+      analysisOptions,
+    }: {
+      filePath: string
+      stripInternal: boolean
+      analysisOptions?: AnalysisOptions
+    }) {
+      const project = getProgram(analysisOptions)
+      return readFreshCachedReferenceBaseArtifact(project, {
+        filePath,
+        stripInternal,
+      })
+    },
+    {
+      memoize: false,
+      concurrency: 24,
+    }
+  )
+
+  server.registerMethod(
+    'getReferenceBaseArtifact',
+    async function getReferenceBaseArtifact({
+      filePath,
+      stripInternal,
+      analysisOptions,
+      includeClientRpcDependencies,
+    }: {
+      filePath: string
+      stripInternal: boolean
+      analysisOptions?: AnalysisOptions
+      includeClientRpcDependencies?: boolean
+    }) {
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const result = await getCachedReferenceBaseArtifact(project, {
+            filePath,
+            stripInternal,
+          })
+
+          if (includeClientRpcDependencies) {
+            return toRpcValueWithDependenciesResponse(result, [
+              filePath,
+              ...result.exportMetadata
+                .map((metadata) => metadata.path)
+                .filter(
+                  (path): path is string =>
+                    typeof path === 'string' && path.length > 0
+                ),
+            ])
+          }
+
+          return result
+        }
+      )
+    },
+    {
+      memoize: getProductionRpcMemoizeOptions(),
+      concurrency: 12,
+    }
+  )
+
+  server.registerMethod(
+    'getReferenceResolvedTypesArtifact',
+    async function getReferenceResolvedTypesArtifact({
+      filePath,
+      analysisOptions,
+      includeClientRpcDependencies,
+    }: {
+      filePath: string
+      analysisOptions?: AnalysisOptions
+      includeClientRpcDependencies?: boolean
+    }) {
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'type-resolution',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const result = await getCachedReferenceResolvedTypesArtifact(project, {
+            filePath,
+          })
+
+          if (includeClientRpcDependencies) {
+            return toRpcValueWithDependenciesResponse(
+              result,
+              result.typeDependencies
+            )
+          }
+
+          return result
+        }
+      )
+    },
+    {
+      memoize: getProductionRpcMemoizeOptions(),
+      concurrency: 8,
+    }
+  )
+
+  server.registerMethod(
+    'getReferenceSectionsArtifact',
+    async function getReferenceSectionsArtifact({
+      filePath,
+      stripInternal,
+      slugCasing,
+      analysisOptions,
+      includeClientRpcDependencies,
+    }: {
+      filePath: string
+      stripInternal: boolean
+      slugCasing: SlugCasing
+      analysisOptions?: AnalysisOptions
+      includeClientRpcDependencies?: boolean
+    }) {
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'render',
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          const sections = await getCachedReferenceSectionsArtifact(project, {
+            filePath,
+            stripInternal,
+            slugCasing,
+          })
+
+          if (includeClientRpcDependencies) {
+            const referenceBaseData = await getCachedReferenceBaseArtifact(
+              project,
+              {
+                filePath,
+                stripInternal,
+              }
+            )
+
+            return toRpcValueWithDependenciesResponse(sections, [
+              filePath,
+              ...referenceBaseData.exportMetadata
+                .map((metadata) => metadata.path)
+                .filter(
+                  (path): path is string =>
+                    typeof path === 'string' && path.length > 0
+                ),
+            ])
+          }
+
+          return sections
+        }
+      )
+    },
+    {
+      memoize: getProductionRpcMemoizeOptions(),
+      concurrency: 12,
     }
   )
 

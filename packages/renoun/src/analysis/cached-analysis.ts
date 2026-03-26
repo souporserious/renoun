@@ -1,4 +1,5 @@
 import { dirname, join, resolve } from 'node:path'
+import type { SlugCasing } from '@renoun/mdx'
 import type {
   SourceFile,
   SyntaxKind,
@@ -27,6 +28,7 @@ import {
   createPersistentCacheNodeKey,
   serializeTypeFilterForCache,
 } from '../file-system/cache-key.ts'
+import { spawnWithStdout } from '../file-system/spawn.ts'
 import {
   type CacheStoreGetOrComputeOptions,
   type CacheStoreComputeContext,
@@ -34,6 +36,29 @@ import {
   type CacheStoreFreshnessMismatch,
   type CacheStoreStaleWhileRevalidateOptions,
 } from '../file-system/Cache.ts'
+import type {
+  ExportHistoryOptions,
+  ExportHistoryGenerator,
+  GitExportMetadata,
+  GitMetadata,
+  GitModuleMetadata,
+  Section,
+} from '../file-system/types.ts'
+import {
+  buildJavaScriptFileSections,
+  createEmptyGitMetadata,
+  createGitExportMetadataRecordFromHistoryReport,
+  createGitMetadataFromModuleMetadata,
+  deserializeJavaScriptFileReferenceBaseDataFromCache,
+  deserializeJavaScriptFileResolvedTypesDataFromCache,
+  drainExportHistoryGenerator,
+  filterReferenceExportMetadata,
+  serializeJavaScriptFileReferenceBaseDataForCache,
+  serializeJavaScriptFileResolvedTypesDataForCache,
+  type JavaScriptFileReferenceBaseData,
+  type JavaScriptFileResolvedTypesData,
+  type PersistedJavaScriptFileReferenceBaseData,
+} from '../file-system/reference-artifacts.ts'
 import type {
   FileExportsWithDependenciesResult,
   ModuleExport,
@@ -100,6 +125,9 @@ import { getTypeScriptConfigDependencyPaths } from './tsconfig-dependencies.ts'
 
 const RUNTIME_ANALYSIS_CACHE_NAMES = {
   fileExports: 'fileExports',
+  referenceBaseArtifact: 'referenceBaseArtifact',
+  referenceResolvedTypesArtifact: 'referenceResolvedTypesArtifact',
+  referenceSectionsArtifact: 'referenceSectionsArtifact',
   fileExportTypes: 'fileExportTypes',
   outlineRanges: 'outlineRanges',
   fileExportMetadata: 'fileExportMetadata',
@@ -201,6 +229,10 @@ const runtimeTypeScriptDependencyFingerprintInFlightByKey = new Map<
 const runtimeTypeScriptDependencySidecarHydrationInFlightByKey = new Map<
   string,
   Promise<RuntimeTypeScriptDependencyAnalysisResult | undefined>
+>()
+const runtimeReferenceGitMetadataProviderByKey = new Map<
+  string,
+  Promise<RuntimeReferenceGitMetadataProvider | undefined>
 >()
 const runtimeTypeScriptDependencySidecarHydrationQueue: Array<{
   dedupeKey: string
@@ -1011,6 +1043,152 @@ function getResolvedProjectAnalysisScopeId(project: Project): string | undefined
   return getProjectAnalysisScopeId(project) ?? getOrCreateFallbackAnalysisProjectId(project)
 }
 
+function looksLikeLocalFilesystemPath(value: string): boolean {
+  return value.startsWith('/') || /^[A-Za-z]:[\\/]/.test(value)
+}
+
+function parseLocalGitAnalysisScopeId(
+  analysisScopeId: string | undefined
+): { repository: string; ref: string } | undefined {
+  if (!analysisScopeId?.startsWith('git:')) {
+    return undefined
+  }
+
+  const separatorIndex = analysisScopeId.lastIndexOf(':')
+
+  if (separatorIndex <= 'git:'.length) {
+    return undefined
+  }
+
+  const repository = analysisScopeId.slice('git:'.length, separatorIndex)
+  const ref = analysisScopeId.slice(separatorIndex + 1)
+
+  if (!repository || !ref || !looksLikeLocalFilesystemPath(repository)) {
+    return undefined
+  }
+
+  return {
+    repository: resolve(repository),
+    ref,
+  }
+}
+
+async function resolveLocalGitRepositoryRoot(
+  filePath: string
+): Promise<string | undefined> {
+  try {
+    const repoRoot = (await spawnWithStdout(
+      'git',
+      ['rev-parse', '--show-toplevel'],
+      {
+        cwd: dirname(filePath),
+      }
+    )).trim()
+
+    return repoRoot.length > 0 ? resolve(repoRoot) : undefined
+  } catch {
+    return undefined
+  }
+}
+
+async function resolveLocalGitHeadVersion(
+  repository: string
+): Promise<string | undefined> {
+  try {
+    const head = (await spawnWithStdout(
+      'git',
+      ['rev-parse', '--verify', 'HEAD^{commit}'],
+      {
+        cwd: repository,
+      }
+    )).trim()
+
+    return head.length > 0 ? head : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function createRuntimeReferenceGitMetadataProviderKey(options: {
+  repository: string
+  ref?: string
+}): string {
+  return `${normalizePathKey(resolve(options.repository))}#${options.ref ?? 'HEAD'}`
+}
+
+async function createRuntimeReferenceGitMetadataProvider(options: {
+  repository: string
+  ref?: string
+}): Promise<RuntimeReferenceGitMetadataProvider | undefined> {
+  try {
+    const { GitFileSystem } = await import('../file-system/GitFileSystem.ts')
+    const fileSystem = new GitFileSystem({
+      repository: options.repository,
+      ...(options.ref ? { ref: options.ref } : {}),
+    })
+
+    const historyVersion =
+      options.ref ?? (await resolveLocalGitHeadVersion(options.repository))
+
+    return {
+      scopeKey: createRuntimeReferenceGitMetadataProviderKey(options),
+      historyVersion,
+      getGitFileMetadata(filePath) {
+        return fileSystem.getGitFileMetadata(filePath)
+      },
+      getGitExportMetadata(filePath, startLine, endLine) {
+        return fileSystem.getGitExportMetadata(filePath, startLine, endLine)
+      },
+      getModuleMetadata(filePath) {
+        return fileSystem.getModuleMetadata(filePath)
+      },
+      getWorkspacePath(filePath) {
+        return fileSystem.getRelativePathToWorkspace(filePath)
+      },
+      getExportHistory(options) {
+        return fileSystem.getExportHistory(options)
+      },
+    }
+  } catch {
+    return undefined
+  }
+}
+
+async function getRuntimeReferenceGitMetadataProvider(
+  project: Project,
+  filePath: string
+): Promise<RuntimeReferenceGitMetadataProvider | undefined> {
+  const parsedGitScope = parseLocalGitAnalysisScopeId(
+    getResolvedProjectAnalysisScopeId(project)
+  )
+  const repository =
+    parsedGitScope?.repository ?? (await resolveLocalGitRepositoryRoot(filePath))
+
+  if (!repository) {
+    return undefined
+  }
+
+  const providerKey = createRuntimeReferenceGitMetadataProviderKey({
+    repository,
+    ref: parsedGitScope?.ref,
+  })
+  let inFlightProvider =
+    runtimeReferenceGitMetadataProviderByKey.get(providerKey)
+
+  if (!inFlightProvider) {
+    inFlightProvider = createRuntimeReferenceGitMetadataProvider({
+      repository,
+      ref: parsedGitScope?.ref,
+    }).catch((error) => {
+      runtimeReferenceGitMetadataProviderByKey.delete(providerKey)
+      throw error
+    })
+    runtimeReferenceGitMetadataProviderByKey.set(providerKey, inFlightProvider)
+  }
+
+  return inFlightProvider
+}
+
 function createFallbackProgramFileCache<Type>(
   project: Project,
   fileName: string,
@@ -1222,6 +1400,20 @@ interface ModuleSpecifierResolutionResult {
 interface RuntimeTypeScriptDependencyAnalysisResult {
   nodeKey: string
   dependencyFilePaths: string[]
+}
+
+interface RuntimeReferenceGitMetadataProvider {
+  scopeKey: string
+  historyVersion?: string
+  getGitFileMetadata(filePath: string): Promise<GitMetadata>
+  getGitExportMetadata(
+    filePath: string,
+    startLine: number,
+    endLine: number
+  ): Promise<GitExportMetadata>
+  getModuleMetadata(filePath: string): Promise<GitModuleMetadata | undefined>
+  getWorkspacePath(filePath: string): string
+  getExportHistory?(options?: ExportHistoryOptions): ExportHistoryGenerator
 }
 
 interface RuntimeTypeScriptDependencyAnalysisCacheValue {
@@ -3418,7 +3610,10 @@ async function recordRuntimeTypeScriptDependencySidecar(
   project: Project,
   runtimeCacheStore: RuntimeAnalysisCacheStore,
   filePath: string | undefined,
-  compilerOptionsVersion: string
+  compilerOptionsVersion: string,
+  options?: {
+    disablePersistUntilReady?: boolean
+  }
 ): Promise<void> {
   if (!filePath) {
     return
@@ -3438,7 +3633,9 @@ async function recordRuntimeTypeScriptDependencySidecar(
   }
 
   if (!isTestEnvironment()) {
-    context.disablePersist()
+    if (options?.disablePersistUntilReady !== false) {
+      context.disablePersist()
+    }
     void queueRuntimeTypeScriptDependencySidecarHydration({
       project,
       runtimeCacheStore,
@@ -3470,6 +3667,54 @@ function createRuntimeFileExportsCacheNodeKey(
     compilerOptionsVersion,
     filePath: normalizeCacheFilePath(filePath),
   })
+}
+
+function createRuntimeReferenceBaseArtifactNodeKey(options: {
+  filePath: string
+  compilerOptionsVersion: string
+  stripInternal: boolean
+}): string {
+  return createRuntimeAnalysisCacheNodeKey(
+    RUNTIME_ANALYSIS_CACHE_NAMES.referenceBaseArtifact,
+    {
+      dataVersion: 1,
+      compilerOptionsVersion: options.compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(options.filePath),
+      stripInternal: options.stripInternal,
+    }
+  )
+}
+
+function createRuntimeReferenceResolvedTypesArtifactNodeKey(options: {
+  filePath: string
+  compilerOptionsVersion: string
+}): string {
+  return createRuntimeAnalysisCacheNodeKey(
+    RUNTIME_ANALYSIS_CACHE_NAMES.referenceResolvedTypesArtifact,
+    {
+      dataVersion: 1,
+      compilerOptionsVersion: options.compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(options.filePath),
+    }
+  )
+}
+
+function createRuntimeReferenceSectionsArtifactNodeKey(options: {
+  filePath: string
+  compilerOptionsVersion: string
+  stripInternal: boolean
+  slugCasing: SlugCasing
+}): string {
+  return createRuntimeAnalysisCacheNodeKey(
+    RUNTIME_ANALYSIS_CACHE_NAMES.referenceSectionsArtifact,
+    {
+      dataVersion: 1,
+      compilerOptionsVersion: options.compilerOptionsVersion,
+      filePath: normalizeCacheFilePath(options.filePath),
+      stripInternal: options.stripInternal,
+      slugCasing: options.slugCasing,
+    }
+  )
 }
 
 function toFileExportsWithDependenciesResultDependencies(
@@ -3640,7 +3885,10 @@ async function getCachedFileExportsWithDependencies(
             project,
             runtimeCacheStore,
             filePath,
-            compilerOptionsVersion
+            compilerOptionsVersion,
+            {
+              disablePersistUntilReady: false,
+            }
           )
         }
 
@@ -3693,6 +3941,162 @@ async function readFreshRuntimeResolvedFileExportsWithDependencies(
   return freshness.value
 }
 
+async function buildReferenceBaseArtifactValue(options: {
+  project: Project
+  filePath: string
+  stripInternal: boolean
+}): Promise<{
+  persisted: PersistedJavaScriptFileReferenceBaseData
+  dependencyPaths: string[]
+  gitHistoryDependency?: {
+    name: string
+    version: string
+  }
+}> {
+  const fileExportsResult = await getCachedFileExportsWithDependencies(
+    options.project,
+    options.filePath
+  )
+  const exportMetadata = filterReferenceExportMetadata(
+    fileExportsResult.exports,
+    options.stripInternal
+  )
+  const dependencyPaths = new Set<string>(
+    fileExportsResult.dependencies.length > 0
+      ? fileExportsResult.dependencies
+      : [options.filePath]
+  )
+  const gitMetadataByName: Record<string, GitExportMetadata> = Object.create(null)
+  let fileGitMetadata = createEmptyGitMetadata()
+  const gitMetadataProvider = await getRuntimeReferenceGitMetadataProvider(
+    options.project,
+    options.filePath
+  )
+
+  if (gitMetadataProvider) {
+    try {
+      const moduleMetadata = await gitMetadataProvider.getModuleMetadata(
+        options.filePath
+      )
+
+      if (moduleMetadata) {
+        fileGitMetadata = createGitMetadataFromModuleMetadata(moduleMetadata)
+
+        for (const metadata of exportMetadata) {
+          const gitMetadata = moduleMetadata.exports[metadata.name]
+
+          if (gitMetadata) {
+            gitMetadataByName[metadata.name] = gitMetadata
+          }
+        }
+      } else {
+        fileGitMetadata = await gitMetadataProvider.getGitFileMetadata(
+          options.filePath
+        )
+      }
+    } catch {
+      fileGitMetadata = createEmptyGitMetadata()
+    }
+
+    const missingNames = exportMetadata
+      .map((metadata) => metadata.name)
+      .filter((name) => gitMetadataByName[name] === undefined)
+
+    if (
+      missingNames.length > 0 &&
+      typeof gitMetadataProvider.getExportHistory === 'function'
+    ) {
+      try {
+        const report = await drainExportHistoryGenerator(
+          gitMetadataProvider.getExportHistory({
+            entry: gitMetadataProvider.getWorkspacePath(options.filePath),
+          })
+        )
+        const historyMetadataByName =
+          createGitExportMetadataRecordFromHistoryReport(report)
+
+        for (const name of missingNames) {
+          const gitMetadata = historyMetadataByName[name]
+
+          if (gitMetadata) {
+            gitMetadataByName[name] = gitMetadata
+          }
+        }
+      } catch {}
+    }
+
+    const fallbackExportMetadata = exportMetadata.filter(
+      (metadata) => gitMetadataByName[metadata.name] === undefined
+    )
+
+    for (const metadata of fallbackExportMetadata) {
+      const declarationLocation = metadata.metadata?.location
+
+      if (!declarationLocation) {
+        continue
+      }
+
+      const startLine = declarationLocation.position.start.line
+      const endLine = Math.max(startLine, declarationLocation.position.end.line)
+
+      try {
+        const gitMetadata = await gitMetadataProvider.getGitExportMetadata(
+          metadata.path,
+          startLine,
+          endLine
+        )
+        gitMetadataByName[metadata.name] = gitMetadata
+      } catch {}
+    }
+  }
+
+  for (const metadata of exportMetadata) {
+    if (metadata.path) {
+      dependencyPaths.add(metadata.path)
+    }
+  }
+
+  return {
+    persisted: serializeJavaScriptFileReferenceBaseDataForCache({
+      exportMetadata,
+      gitMetadataByName,
+      fileGitMetadata,
+    }),
+    dependencyPaths: Array.from(dependencyPaths.values()),
+    gitHistoryDependency:
+      gitMetadataProvider?.historyVersion !== undefined
+        ? {
+            name: `git-history:${gitMetadataProvider.scopeKey}`,
+            version: gitMetadataProvider.historyVersion,
+          }
+        : undefined,
+  }
+}
+
+async function readFreshRuntimeReferenceBaseArtifact(
+  runtimeCacheStore: RuntimeAnalysisCacheStore | undefined,
+  options: {
+    filePath: string
+    compilerOptionsVersion: string
+    stripInternal: boolean
+  }
+): Promise<JavaScriptFileReferenceBaseData | undefined> {
+  if (!runtimeCacheStore || !canUseRuntimePathCache(runtimeCacheStore, options.filePath)) {
+    return undefined
+  }
+
+  const freshness =
+    await runtimeCacheStore.store.getWithFreshness<PersistedJavaScriptFileReferenceBaseData>(
+      createRuntimeReferenceBaseArtifactNodeKey(options)
+    )
+
+  if (!freshness.fresh || freshness.value === undefined) {
+    return undefined
+  }
+
+  return deserializeJavaScriptFileReferenceBaseDataFromCache(freshness.value)
+}
+
 export async function getCachedFileExports(
   project: Project,
   filePath: string
@@ -3703,6 +4107,325 @@ export async function getCachedFileExports(
   )
 
   return fileExportsResult.exports
+}
+
+export async function readFreshCachedReferenceBaseArtifact(
+  project: Project,
+  options: {
+    filePath: string
+    stripInternal: boolean
+  }
+): Promise<JavaScriptFileReferenceBaseData | undefined> {
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  return readFreshRuntimeReferenceBaseArtifact(runtimeCacheStore, {
+    filePath: options.filePath,
+    compilerOptionsVersion,
+    stripInternal: options.stripInternal,
+  })
+}
+
+export async function getCachedReferenceBaseArtifact(
+  project: Project,
+  options: {
+    filePath: string
+    stripInternal: boolean
+  }
+): Promise<JavaScriptFileReferenceBaseData> {
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+  ) {
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
+    const nodeKey = createRuntimeReferenceBaseArtifactNodeKey({
+      filePath: options.filePath,
+      compilerOptionsVersion,
+      stripInternal: options.stripInternal,
+    })
+
+    const persisted = await getOrComputeRuntimeAnalysisCacheValue(
+      runtimeCacheStore,
+      nodeKey,
+      {
+        persist: true,
+        ...swrReadConfig,
+      },
+      async (context) => {
+        await recordProgramCompilerOptionsDependency(
+          context,
+          runtimeCacheStore,
+          project
+        )
+
+        const computed = await buildReferenceBaseArtifactValue({
+          project,
+          filePath: options.filePath,
+          stripInternal: options.stripInternal,
+        })
+
+        for (const dependencyPath of computed.dependencyPaths) {
+          await recordFileDependencyIfPossible(
+            context,
+            runtimeCacheStore,
+            dependencyPath
+          )
+        }
+
+        if (computed.gitHistoryDependency) {
+          context.recordConstDep(
+            computed.gitHistoryDependency.name,
+            computed.gitHistoryDependency.version
+          )
+        }
+
+        return computed.persisted
+      }
+    )
+
+    return deserializeJavaScriptFileReferenceBaseDataFromCache(persisted)
+  }
+
+  return createFallbackProgramFileCache(
+    project,
+    options.filePath,
+    `${RUNTIME_ANALYSIS_CACHE_NAMES.referenceBaseArtifact}:${options.stripInternal ? 'public' : 'all'}`,
+    async () =>
+      deserializeJavaScriptFileReferenceBaseDataFromCache(
+        (await buildReferenceBaseArtifactValue({
+          project,
+          filePath: options.filePath,
+          stripInternal: options.stripInternal,
+        })).persisted
+      ),
+    {
+      deps: (value) => {
+        const dependencyPaths = new Set<string>([
+          options.filePath,
+          ...value.exportMetadata
+            .map((metadata) => metadata.path)
+            .filter((path): path is string => typeof path === 'string' && path.length > 0),
+        ])
+        const deps: ProgramCacheDependency[] = Array.from(
+          dependencyPaths.values()
+        ).map((path) => ({
+          kind: 'file' as const,
+          path,
+        }))
+
+        deps.push({
+          kind: 'const' as const,
+          name: 'program:compiler-options',
+          version: compilerOptionsVersion,
+        })
+
+        return deps
+      },
+    }
+  )
+}
+
+export async function getCachedReferenceResolvedTypesArtifact(
+  project: Project,
+  options: {
+    filePath: string
+  }
+): Promise<JavaScriptFileResolvedTypesData> {
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+  ) {
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
+    const nodeKey = createRuntimeReferenceResolvedTypesArtifactNodeKey({
+      filePath: options.filePath,
+      compilerOptionsVersion,
+    })
+
+    const persisted = await getOrComputeRuntimeAnalysisCacheValue(
+      runtimeCacheStore,
+      nodeKey,
+      {
+        persist: true,
+        ...swrReadConfig,
+      },
+      async (context) => {
+        await recordProgramCompilerOptionsDependency(
+          context,
+          runtimeCacheStore,
+          project
+        )
+
+        const typeResolution = await resolveCachedFileExportsWithDependencies(
+          project,
+          {
+            filePath: options.filePath,
+          }
+        )
+        const dependencyPaths = typeResolution.dependencies.length
+          ? typeResolution.dependencies
+          : [options.filePath]
+
+        await recordFileDependenciesIfPossible(
+          context,
+          runtimeCacheStore,
+          dependencyPaths
+        )
+
+        return serializeJavaScriptFileResolvedTypesDataForCache({
+          resolvedTypes: typeResolution.resolvedTypes,
+          typeDependencies: dependencyPaths,
+        })
+      }
+    )
+
+    return deserializeJavaScriptFileResolvedTypesDataFromCache(persisted)
+  }
+
+  return createFallbackProgramFileCache(
+    project,
+    options.filePath,
+    RUNTIME_ANALYSIS_CACHE_NAMES.referenceResolvedTypesArtifact,
+    async () => {
+      const typeResolution = await resolveCachedFileExportsWithDependencies(
+        project,
+        {
+          filePath: options.filePath,
+        }
+      )
+      return {
+        resolvedTypes: typeResolution.resolvedTypes,
+        typeDependencies: typeResolution.dependencies.length
+          ? typeResolution.dependencies
+          : [options.filePath],
+      }
+    },
+    {
+      deps: (value) => [
+        ...value.typeDependencies.map((path) => ({
+          kind: 'file' as const,
+          path,
+        })),
+        {
+          kind: 'const' as const,
+          name: 'program:compiler-options',
+          version: compilerOptionsVersion,
+        },
+      ],
+    }
+  )
+}
+
+export async function getCachedReferenceSectionsArtifact(
+  project: Project,
+  options: {
+    filePath: string
+    stripInternal: boolean
+    slugCasing: SlugCasing
+  }
+): Promise<Section[]> {
+  const compilerOptionsVersion = getCompilerOptionsVersion(project)
+  const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
+  const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
+
+  if (
+    runtimeCacheStore &&
+    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+  ) {
+    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
+    const nodeKey = createRuntimeReferenceSectionsArtifactNodeKey({
+      filePath: options.filePath,
+      compilerOptionsVersion,
+      stripInternal: options.stripInternal,
+      slugCasing: options.slugCasing,
+    })
+
+    return getOrComputeRuntimeAnalysisCacheValue(
+      runtimeCacheStore,
+      nodeKey,
+      {
+        persist: true,
+        ...swrReadConfig,
+      },
+      async (context) => {
+        await recordProgramCompilerOptionsDependency(
+          context,
+          runtimeCacheStore,
+          project
+        )
+
+        const [outlineRanges, referenceBaseData] = await Promise.all([
+          getCachedOutlineRanges(project, options.filePath),
+          getCachedReferenceBaseArtifact(project, {
+            filePath: options.filePath,
+            stripInternal: options.stripInternal,
+          }),
+        ])
+
+        await recordFileDependenciesIfPossible(
+          context,
+          runtimeCacheStore,
+          [
+            options.filePath,
+            ...referenceBaseData.exportMetadata
+              .map((metadata) => metadata.path)
+              .filter(
+                (path): path is string =>
+                  typeof path === 'string' && path.length > 0
+              ),
+          ]
+        )
+
+        return buildJavaScriptFileSections({
+          outlineRanges,
+          exportMetadata: referenceBaseData.exportMetadata,
+          slugCasing: options.slugCasing,
+        })
+      }
+    )
+  }
+
+  return createFallbackProgramFileCache(
+    project,
+    options.filePath,
+    `${RUNTIME_ANALYSIS_CACHE_NAMES.referenceSectionsArtifact}:${options.slugCasing}:${options.stripInternal ? 'public' : 'all'}`,
+    async () => {
+      const [outlineRanges, referenceBaseData] = await Promise.all([
+        getCachedOutlineRanges(project, options.filePath),
+        getCachedReferenceBaseArtifact(project, {
+          filePath: options.filePath,
+          stripInternal: options.stripInternal,
+        }),
+      ])
+
+      return buildJavaScriptFileSections({
+        outlineRanges,
+        exportMetadata: referenceBaseData.exportMetadata,
+        slugCasing: options.slugCasing,
+      })
+    },
+    {
+      deps: [
+        {
+          kind: 'file' as const,
+          path: options.filePath,
+        },
+        {
+          kind: 'const' as const,
+          name: 'program:compiler-options',
+          version: compilerOptionsVersion,
+        },
+      ],
+    }
+  )
 }
 
 export async function getCachedOutlineRanges(
@@ -4182,6 +4905,7 @@ export async function resolveCachedFileExportsWithDependencies(
   options: {
     filePath: string
     filter?: TypeFilter
+    blockedPersistentResolvedFilePaths?: ReadonlySet<string>
   }
 ): Promise<ResolvedFileExportsResult> {
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
@@ -4230,6 +4954,8 @@ export async function resolveCachedFileExportsWithDependencies(
             seedFileExportsByFilePath: new Map([
               [options.filePath, fileExportsResult],
             ]),
+            blockedPersistentResolvedFilePaths:
+              options.blockedPersistentResolvedFilePaths,
             readFreshResolvedFileExportsByFilePath: async (filePath) => {
               if (filePath === options.filePath) {
                 return undefined
@@ -4243,6 +4969,20 @@ export async function resolveCachedFileExportsWithDependencies(
                   filter: options.filter,
                 }
               )
+            },
+            resolveFileExportsByFilePath: async (
+              filePath,
+              blockedPersistentResolvedFilePaths
+            ) => {
+              if (filePath === options.filePath) {
+                return undefined
+              }
+
+              return resolveCachedFileExportsWithDependencies(project, {
+                filePath,
+                filter: options.filter,
+                blockedPersistentResolvedFilePaths,
+              })
             },
           }
         )
@@ -4263,7 +5003,10 @@ export async function resolveCachedFileExportsWithDependencies(
             project,
             runtimeCacheStore,
             options.filePath,
-            compilerOptionsVersion
+            compilerOptionsVersion,
+            {
+              disablePersistUntilReady: false,
+            }
           )
         }
 
@@ -4287,6 +5030,8 @@ export async function resolveCachedFileExportsWithDependencies(
               seedFileExportsByFilePath: new Map([
                 [options.filePath, fileExportsResult],
               ]),
+              blockedPersistentResolvedFilePaths:
+                options.blockedPersistentResolvedFilePaths,
             }
           )
       ),

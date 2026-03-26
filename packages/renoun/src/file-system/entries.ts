@@ -3920,29 +3920,40 @@ export class JavaScriptFile<
     this.#clearReferenceBaseDataState()
 
     const fileSystem = directory.getFileSystem()
+    const shouldUseServerManagedReferenceArtifacts =
+      fileSystem.supportsServerManagedReferenceArtifacts()
     const stripInternal = await fileSystem.shouldStripInternalAsync()
-    const nodeKey = this.#getReferenceBaseDataCacheNodeKey(
-      session,
-      stripInternal
-    )
+    const nodeKey = shouldUseServerManagedReferenceArtifacts
+      ? undefined
+      : this.#getReferenceBaseDataCacheNodeKey(session, stripInternal)
     const persistentContext =
-      await this.#getPersistentReferenceCacheContext()
-    const stableNodeKey = persistentContext
-      ? createReferenceBaseValueCacheNodeKey({
-          scope: persistentContext.scope,
-          workspaceRootPath: persistentContext.workspaceRootPath,
-          filePath: persistentContext.workspaceRelativeFilePath,
-          stripInternal,
-          analysisMetadata: persistentContext.analysisMetadata,
-        })
-      : undefined
-    const shouldRetainResolvedValue = stableNodeKey !== undefined
-    const gitHistoryDependency = await resolveGitHistoryDependency(
-      session,
-      directory.getRootPath()
-    )
+      shouldUseServerManagedReferenceArtifacts
+        ? undefined
+        : await this.#getPersistentReferenceCacheContext()
+    const stableNodeKey =
+      shouldUseServerManagedReferenceArtifacts || !persistentContext
+        ? undefined
+        : createReferenceBaseValueCacheNodeKey({
+            scope: persistentContext.scope,
+            workspaceRootPath: persistentContext.workspaceRootPath,
+            filePath: persistentContext.workspaceRelativeFilePath,
+            stripInternal,
+            analysisMetadata: persistentContext.analysisMetadata,
+          })
+    const shouldRetainResolvedValue =
+      shouldUseServerManagedReferenceArtifacts || stableNodeKey !== undefined
+    const gitHistoryDependency = shouldUseServerManagedReferenceArtifacts
+      ? undefined
+      : await resolveGitHistoryDependency(session, directory.getRootPath())
 
     const promise = (async () => {
+      if (shouldUseServerManagedReferenceArtifacts) {
+        return fileSystem.getCachedReferenceBaseArtifact(
+          this.absolutePath,
+          stripInternal
+        )
+      }
+
       if (stableNodeKey) {
         const persisted =
           await session.cache.getOrCompute<PersistedJavaScriptFileReferenceBaseData>(
@@ -3978,7 +3989,7 @@ export class JavaScriptFile<
 
       const persisted =
         await session.cache.getOrCompute<PersistedJavaScriptFileReferenceBaseData>(
-          nodeKey,
+          nodeKey!,
           {
             persist: true,
             constDeps: gitHistoryDependency ? [gitHistoryDependency] : undefined,
@@ -4057,6 +4068,31 @@ export class JavaScriptFile<
     }
 
     const session = this.getParent().getSession()
+    const fileSystem = this.getParent().getFileSystem()
+
+    if (fileSystem.supportsServerManagedReferenceArtifacts()) {
+      const stripInternal = await fileSystem.shouldStripInternalAsync()
+      const referenceBaseData = await fileSystem.readFreshReferenceBaseArtifact(
+        this.absolutePath,
+        stripInternal
+      )
+
+      if (!referenceBaseData) {
+        return undefined
+      }
+
+      this.#referenceBaseData = referenceBaseData
+      this.#referenceBaseDataSnapshotId = session.snapshot.id
+      this.#referenceBaseDataSession = session
+      this.#referenceBaseDataSessionResetVersion = session.getResetVersion()
+      this.#gitExportMetadataByName = referenceBaseData.gitMetadataByName
+      this.#gitExportMetadataByNameSnapshotId = session.snapshot.id
+      this.#gitExportMetadataByNameSession = session
+      this.#gitExportMetadataByNameSessionResetVersion = session.getResetVersion()
+
+      return referenceBaseData
+    }
+
     const persistentContext =
       await this.#getPersistentReferenceCacheContext()
 
@@ -4141,20 +4177,35 @@ export class JavaScriptFile<
 
     this.#clearReferenceResolvedTypesDataState()
 
-    const nodeKey = this.#getReferenceResolvedTypesCacheNodeKey(session)
+    const fileSystem = this.getParent().getFileSystem()
+    const shouldUseServerManagedReferenceArtifacts =
+      fileSystem.supportsServerManagedReferenceArtifacts()
+    const nodeKey = shouldUseServerManagedReferenceArtifacts
+      ? undefined
+      : this.#getReferenceResolvedTypesCacheNodeKey(session)
     const persistentContext =
-      await this.#getPersistentReferenceCacheContext()
-    const stableNodeKey = persistentContext
-      ? createReferenceResolvedTypesValueCacheNodeKey({
-          scope: persistentContext.scope,
-          workspaceRootPath: persistentContext.workspaceRootPath,
-          filePath: persistentContext.workspaceRelativeFilePath,
-          analysisMetadata: persistentContext.analysisMetadata,
-        })
-      : undefined
-    const shouldRetainResolvedValue = stableNodeKey !== undefined
+      shouldUseServerManagedReferenceArtifacts
+        ? undefined
+        : await this.#getPersistentReferenceCacheContext()
+    const stableNodeKey =
+      shouldUseServerManagedReferenceArtifacts || !persistentContext
+        ? undefined
+        : createReferenceResolvedTypesValueCacheNodeKey({
+            scope: persistentContext.scope,
+            workspaceRootPath: persistentContext.workspaceRootPath,
+            filePath: persistentContext.workspaceRelativeFilePath,
+            analysisMetadata: persistentContext.analysisMetadata,
+          })
+    const shouldRetainResolvedValue =
+      shouldUseServerManagedReferenceArtifacts || stableNodeKey !== undefined
 
     const promise = (async () => {
+      if (shouldUseServerManagedReferenceArtifacts) {
+        return fileSystem.getCachedReferenceResolvedTypesArtifact(
+          this.absolutePath
+        )
+      }
+
       if (stableNodeKey) {
         const persisted =
           await session.cache.getOrCompute<PersistedJavaScriptFileResolvedTypesData>(
@@ -4188,7 +4239,7 @@ export class JavaScriptFile<
 
       const persisted =
         await session.cache.getOrCompute<PersistedJavaScriptFileResolvedTypesData>(
-          nodeKey,
+          nodeKey!,
           { persist: true },
           async (ctx) => {
             const referenceResolvedTypesData =
@@ -4773,6 +4824,20 @@ export class JavaScriptFile<
   /** Get an outline derived from regions and exports in the JavaScript file. */
   async getSections(): Promise<Section[]> {
     if (!this.#sections) {
+      const fileSystem = this.getParent().getFileSystem()
+
+      if (fileSystem.supportsServerManagedReferenceArtifacts()) {
+        const stripInternal = await fileSystem.shouldStripInternalAsync()
+        this.#sections = await fileSystem.getCachedReferenceSectionsArtifact(
+          this.absolutePath,
+          {
+            stripInternal,
+            slugCasing: this.#slugCasing ?? 'none',
+          }
+        )
+        return this.#sections
+      }
+
       const [outlineRanges, fileExports] = await Promise.all([
         this.getOutlineRanges(),
         this.getExports(),

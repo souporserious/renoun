@@ -34,6 +34,21 @@ const browserAnalysisClientServerModules = {
   getCachedFileExports() {
     return throwBrowserAnalysisClientServerError('getCachedFileExports')
   },
+  getCachedReferenceBaseArtifact() {
+    return throwBrowserAnalysisClientServerError(
+      'getCachedReferenceBaseArtifact'
+    )
+  },
+  getCachedReferenceResolvedTypesArtifact() {
+    return throwBrowserAnalysisClientServerError(
+      'getCachedReferenceResolvedTypesArtifact'
+    )
+  },
+  getCachedReferenceSectionsArtifact() {
+    return throwBrowserAnalysisClientServerError(
+      'getCachedReferenceSectionsArtifact'
+    )
+  },
   resolveCachedFileExportsWithDependencies() {
     return throwBrowserAnalysisClientServerError(
       'resolveCachedFileExportsWithDependencies'
@@ -52,6 +67,11 @@ const browserAnalysisClientServerModules = {
   },
   getCachedTokens() {
     return throwBrowserAnalysisClientServerError('getCachedTokens')
+  },
+  readFreshCachedReferenceBaseArtifact() {
+    return throwBrowserAnalysisClientServerError(
+      'readFreshCachedReferenceBaseArtifact'
+    )
   },
   invalidateRuntimeAnalysisCachePath() {},
   invalidateRuntimeAnalysisCachePaths() {},
@@ -83,11 +103,15 @@ export const {
   getCachedFileExportMetadata,
   getCachedFileExportStaticValue,
   getCachedFileExports,
+  getCachedReferenceBaseArtifact,
+  getCachedReferenceResolvedTypesArtifact,
+  getCachedReferenceSectionsArtifact,
   resolveCachedFileExportsWithDependencies,
   getCachedOutlineRanges,
   getCachedSourceTextMetadata,
   getCachedTypeScriptDependencyPaths,
   getCachedTokens,
+  readFreshCachedReferenceBaseArtifact,
   invalidateRuntimeAnalysisCachePath,
   invalidateRuntimeAnalysisCachePaths,
   resolveCachedTypeAtLocationWithDependencies,

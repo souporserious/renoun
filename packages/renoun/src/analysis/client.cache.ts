@@ -19,6 +19,9 @@ export type ClientCachedRpcMethod =
   | 'resolveFileExportsWithDependencies'
   | 'getTokens'
   | 'getFileExports'
+  | 'getReferenceBaseArtifact'
+  | 'getReferenceResolvedTypesArtifact'
+  | 'getReferenceSectionsArtifact'
   | 'getOutlineRanges'
   | 'getFileExportMetadata'
   | 'getFileExportStaticValue'
@@ -63,6 +66,9 @@ export const CLIENT_CACHED_RPC_METHODS = new Set<ClientCachedRpcMethod>([
   'resolveFileExportsWithDependencies',
   'getTokens',
   'getFileExports',
+  'getReferenceBaseArtifact',
+  'getReferenceResolvedTypesArtifact',
+  'getReferenceSectionsArtifact',
   'getOutlineRanges',
   'getFileExportMetadata',
   'getFileExportStaticValue',

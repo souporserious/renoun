@@ -36,6 +36,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 import { createInterface } from 'node:readline'
 import { Writable } from 'node:stream'
 
+import { hasServerRuntimeInProcessEnv } from '../analysis/runtime-env.ts'
 import {
   getFileExportMetadata as getAnalysisFileExportMetadata,
   getFileExportStaticValue as getAnalysisFileExportStaticValue,
@@ -287,6 +288,9 @@ interface PrepareRepoOptions {
 }
 
 let isCachedBackfillSupport: boolean | null = null
+const SPARSE_CHECKOUT_LOCK_DIRECTORY_NAME = '.renoun-sparse-checkout.lock'
+const SPARSE_CHECKOUT_LOCK_TTL_MS = 30_000
+const SPARSE_CHECKOUT_LOCK_POLL_MS = 25
 
 /** Detects if git backfill is supported. */
 async function supportsGitBackfill(): Promise<boolean> {
@@ -321,6 +325,155 @@ function supportsGitBackfillSync(): boolean {
   const isSupported = !output.includes('is not a git command')
   isCachedBackfillSupport = isSupported
   return isSupported
+}
+
+async function readSparseCheckoutPaths(repoRoot: string): Promise<string[]> {
+  const result = await spawnWithResult('git', ['sparse-checkout', 'list'], {
+    cwd: repoRoot,
+    verbose: false,
+  })
+
+  if (result.status !== 0) {
+    return []
+  }
+
+  return normalizeScopeDirectories(
+    String(result.stdout)
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  )
+}
+
+function readSparseCheckoutPathsSync(repoRoot: string): string[] {
+  const result = spawnSync('git', ['sparse-checkout', 'list'], {
+    cwd: repoRoot,
+    stdio: 'pipe',
+    encoding: 'utf8',
+    shell: false,
+  })
+
+  if (result.status !== 0) {
+    return []
+  }
+
+  return normalizeScopeDirectories(
+    String(result.stdout)
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter(Boolean)
+  )
+}
+
+async function isSparseCheckoutInitialized(repoRoot: string): Promise<boolean> {
+  const result = await spawnWithResult('git', ['sparse-checkout', 'list'], {
+    cwd: repoRoot,
+    verbose: false,
+  })
+
+  return result.status === 0
+}
+
+function isSparseCheckoutInitializedSync(repoRoot: string): boolean {
+  const result = spawnSync('git', ['sparse-checkout', 'list'], {
+    cwd: repoRoot,
+    stdio: 'pipe',
+    encoding: 'utf8',
+    shell: false,
+  })
+
+  return result.status === 0
+}
+
+function sleepSync(durationMs: number): void {
+  const delayMs = Math.max(1, Math.floor(durationMs))
+  const shared = new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT)
+  const view = new Int32Array(shared)
+  Atomics.wait(view, 0, 0, delayMs)
+}
+
+async function isSparseCheckoutLockStale(lockPath: string): Promise<boolean> {
+  try {
+    const lockStats = await stat(lockPath)
+    return Date.now() - lockStats.mtimeMs > SPARSE_CHECKOUT_LOCK_TTL_MS
+  } catch {
+    return false
+  }
+}
+
+function isSparseCheckoutLockStaleSync(lockPath: string): boolean {
+  try {
+    const lockStats = statSync(lockPath)
+    return Date.now() - lockStats.mtimeMs > SPARSE_CHECKOUT_LOCK_TTL_MS
+  } catch {
+    return false
+  }
+}
+
+async function withSparseCheckoutLock<Type>(
+  repoRoot: string,
+  task: () => Promise<Type>
+): Promise<Type> {
+  const lockPath = join(repoRoot, SPARSE_CHECKOUT_LOCK_DIRECTORY_NAME)
+
+  while (true) {
+    try {
+      await mkdir(lockPath)
+      break
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+
+      if (code !== 'EEXIST') {
+        throw error
+      }
+
+      if (await isSparseCheckoutLockStale(lockPath)) {
+        await rm(lockPath, { recursive: true, force: true })
+        continue
+      }
+
+      await delay(SPARSE_CHECKOUT_LOCK_POLL_MS)
+    }
+  }
+
+  try {
+    return await task()
+  } finally {
+    await rm(lockPath, { recursive: true, force: true })
+  }
+}
+
+function withSparseCheckoutLockSync<Type>(
+  repoRoot: string,
+  task: () => Type
+): Type {
+  const lockPath = join(repoRoot, SPARSE_CHECKOUT_LOCK_DIRECTORY_NAME)
+
+  while (true) {
+    try {
+      mkdirSync(lockPath)
+      break
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+
+      if (code !== 'EEXIST') {
+        throw error
+      }
+
+      if (isSparseCheckoutLockStaleSync(lockPath)) {
+        rmSync(lockPath, { recursive: true, force: true })
+        continue
+      }
+
+      sleepSync(SPARSE_CHECKOUT_LOCK_POLL_MS)
+    }
+  }
+
+  try {
+    return task()
+  } finally {
+    rmSync(lockPath, { recursive: true, force: true })
+  }
 }
 
 function resolveDefaultGitCacheDirectory(startDirectory?: string): string {
@@ -540,6 +693,18 @@ async function setSparseCheckout(
   })
 }
 
+async function addSparseCheckout(
+  repoRoot: string,
+  scopeDirectories: string[],
+  verbose: boolean
+) {
+  const paths = scopeDirectories.length ? scopeDirectories : ['.']
+  return spawnWithResult('git', ['sparse-checkout', 'add', '--', ...paths], {
+    cwd: repoRoot,
+    verbose,
+  })
+}
+
 function setSparseCheckoutSync(
   repoRoot: string,
   scopeDirectories: string[],
@@ -549,6 +714,20 @@ function setSparseCheckoutSync(
   spawnSync('git', ['sparse-checkout', 'set', '--', ...paths], {
     cwd: repoRoot,
     stdio: verbose ? 'inherit' : 'ignore',
+    shell: false,
+  })
+}
+
+function addSparseCheckoutSync(
+  repoRoot: string,
+  scopeDirectories: string[],
+  verbose: boolean
+) {
+  const paths = scopeDirectories.length ? scopeDirectories : ['.']
+  return spawnSync('git', ['sparse-checkout', 'add', '--', ...paths], {
+    cwd: repoRoot,
+    stdio: verbose ? 'inherit' : 'pipe',
+    encoding: 'utf8',
     shell: false,
   })
 }
@@ -665,15 +844,34 @@ async function ensureCachedScope(
   verbose: boolean
 ) {
   const normalized = normalizeScopeDirectories(scopeDirectories)
-  await spawnWithResult('git', ['sparse-checkout', 'init', '--cone'], {
-    cwd: repoRoot,
-    verbose,
-  })
-  await setSparseCheckout(repoRoot, normalized, verbose)
 
-  if (await supportsGitBackfill()) {
-    await runGitBackfill(repoRoot, verbose)
-  }
+  await withSparseCheckoutLock(repoRoot, async () => {
+    if (!(await isSparseCheckoutInitialized(repoRoot))) {
+      await spawnWithResult('git', ['sparse-checkout', 'init', '--cone'], {
+        cwd: repoRoot,
+        verbose,
+      })
+    }
+
+    if (normalized.includes('.')) {
+      await setSparseCheckout(repoRoot, ['.'], verbose)
+    } else {
+      const addResult = await addSparseCheckout(repoRoot, normalized, verbose)
+
+      if (addResult.status !== 0) {
+        const merged = normalizeScopeDirectories([
+          ...(await readSparseCheckoutPaths(repoRoot)),
+          ...normalized,
+        ])
+
+        await setSparseCheckout(repoRoot, merged, verbose)
+      }
+    }
+
+    if (await supportsGitBackfill()) {
+      await runGitBackfill(repoRoot, verbose)
+    }
+  })
 }
 
 function ensureCachedScopeSync(
@@ -682,16 +880,35 @@ function ensureCachedScopeSync(
   verbose: boolean
 ) {
   const normalized = normalizeScopeDirectories(scopeDirectories)
-  spawnSync('git', ['sparse-checkout', 'init', '--cone'], {
-    cwd: repoRoot,
-    stdio: verbose ? 'inherit' : 'ignore',
-    shell: false,
-  })
-  setSparseCheckoutSync(repoRoot, normalized, verbose)
 
-  if (supportsGitBackfillSync()) {
-    runGitBackfillSync(repoRoot, verbose)
-  }
+  withSparseCheckoutLockSync(repoRoot, () => {
+    if (!isSparseCheckoutInitializedSync(repoRoot)) {
+      spawnSync('git', ['sparse-checkout', 'init', '--cone'], {
+        cwd: repoRoot,
+        stdio: verbose ? 'inherit' : 'ignore',
+        shell: false,
+      })
+    }
+
+    if (normalized.includes('.')) {
+      setSparseCheckoutSync(repoRoot, ['.'], verbose)
+    } else {
+      const addResult = addSparseCheckoutSync(repoRoot, normalized, verbose)
+
+      if (addResult.status !== 0) {
+        const merged = normalizeScopeDirectories([
+          ...readSparseCheckoutPathsSync(repoRoot),
+          ...normalized,
+        ])
+
+        setSparseCheckoutSync(repoRoot, merged, verbose)
+      }
+    }
+
+    if (supportsGitBackfillSync()) {
+      runGitBackfillSync(repoRoot, verbose)
+    }
+  })
 }
 
 export class GitFileSystem
@@ -800,6 +1017,10 @@ export class GitFileSystem
 
   override usesPersistentCacheByDefault(): boolean {
     return true
+  }
+
+  override supportsServerManagedReferenceArtifacts(): boolean {
+    return hasServerRuntimeInProcessEnv()
   }
 
   override usesDirectoryMtimeSnapshotDependencies(): boolean {

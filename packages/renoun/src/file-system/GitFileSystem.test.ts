@@ -3094,21 +3094,21 @@ describe('GitFileSystem', () => {
           commandArguments[1] === '--hard' &&
           commandArguments[2] === 'HEAD'
       )
-      const analysisSparseSetCall = [...spawnSpy.mock.calls]
+      const analysisSparseScopeCall = [...spawnSpy.mock.calls]
         .reverse()
         .find(
           ([command, commandArguments, options]) =>
             command === 'git' &&
             commandArguments[0] === 'sparse-checkout' &&
-            commandArguments[1] === 'set' &&
+            (commandArguments[1] === 'set' || commandArguments[1] === 'add') &&
             typeof options?.cwd === 'string' &&
             options.cwd.startsWith(join(cacheDirectory, '_analysis'))
         )
 
       expect(sparseDisableCalls).toHaveLength(0)
       expect(resetHardCalls).toHaveLength(0)
-      expect(analysisSparseSetCall?.[1]).toContain('src')
-      expect(analysisSparseSetCall?.[1]).not.toContain('.')
+      expect(analysisSparseScopeCall?.[1]).toContain('src')
+      expect(analysisSparseScopeCall?.[1]).not.toContain('.')
     } finally {
       vi.restoreAllMocks()
       rmSync(bareRoot, { recursive: true, force: true })
@@ -3214,6 +3214,83 @@ describe('GitFileSystem', () => {
         )
       } finally {
         vi.restoreAllMocks()
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.sequential(
+    'merges explicit-ref analysis sparse scopes across GitFileSystem instances',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/nodes/Nodes.js',
+              content: `export const NodeValue = 1`,
+            },
+            {
+              filename: 'src/nodes/accessors/Arrays.js',
+              content: `export const ArrayValue = 2`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        using firstStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+        using secondStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+
+        const firstPrepared = await firstStore.prepareAnalysis('src/nodes/Nodes.js')
+        const firstExports = await firstStore.getFileExports('src/nodes/Nodes.js')
+        expect(firstExports.map((entry) => entry.name)).toContain('NodeValue')
+        expect(existsSync(firstPrepared.filePath)).toBe(true)
+
+        const secondExports = await secondStore.getFileExports(
+          'src/nodes/accessors/Arrays.js'
+        )
+        expect(secondExports.map((entry) => entry.name)).toContain('ArrayValue')
+        expect(existsSync(firstPrepared.filePath)).toBe(true)
+
+        const refreshedFirstExports = await firstStore.getFileExports(
+          'src/nodes/Nodes.js'
+        )
+
+        expect(refreshedFirstExports.map((entry) => entry.name)).toContain(
+          'NodeValue'
+        )
+      } finally {
         rmSync(repoRoot, { recursive: true, force: true })
         rmSync(cacheDirectory, { recursive: true, force: true })
         rmSync(bareRoot, { recursive: true, force: true })

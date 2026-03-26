@@ -1439,7 +1439,7 @@ const schema = { answer: 42 }
     ])
   })
 
-  test('limits high-fanout leaf-only route prewarm to a bounded representative sample', async () => {
+  test('limits server-backed high-fanout leaf-only route prewarm to a bounded representative sample', async () => {
     project.createSourceFile(
       '/repo/src/high-fanout-reference-route.tsx',
       `
@@ -1487,12 +1487,102 @@ const schema = { answer: 42 }
 
     await prewarmRenounRpcServerCache!({ analysisOptions })
 
-    expect(entryGetExportsMock).toHaveBeenCalledTimes(16)
-    expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledTimes(16)
-    expect(entryGetLastCommitDateMock).toHaveBeenCalledTimes(16)
-    expect(entryGetCachedGitExportMetadataByNameMock).toHaveBeenCalledTimes(16)
-    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
-    expect(entryGetOutlineRangesMock).not.toHaveBeenCalled()
+    expect(entryGetExportsMock).toHaveBeenCalledTimes(32)
+    expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledTimes(32)
+    expect(entryGetLastCommitDateMock).toHaveBeenCalledTimes(32)
+    expect(entryGetCachedGitExportMetadataByNameMock).toHaveBeenCalledTimes(32)
+    expect(entryGetExportTypesMock).toHaveBeenCalledTimes(32)
+    expect(entryGetOutlineRangesMock).toHaveBeenCalledTimes(32)
+  })
+
+  test('does not block production server-backed high-fanout leaf-only route prewarm on sampled leaf warming', async () => {
+    process.env.NODE_ENV = 'production'
+
+    project.createSourceFile(
+      '/repo/src/high-fanout-background-reference-route.tsx',
+      `
+        import { Directory, Reference, Repository, Section } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          filter: '**/*.js',
+          repository: docsRepository,
+        })
+
+        docs.getTree()
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+
+          return (
+            <>
+              <Reference source={file} />
+              <Section source={file} />
+            </>
+          )
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return Array.from({ length: 100 }, (_, index) =>
+          createMockFileEntry(`/repo/src/nodes/Leaf${index}.js`)
+        )
+      }
+
+      return []
+    })
+
+    let releaseExportsWarm: (() => void) | undefined
+    const exportsWarmBlocked = new Promise<void>((resolve) => {
+      releaseExportsWarm = resolve
+    })
+    let markExportsWarmStarted: (() => void) | undefined
+    const exportsWarmStarted = new Promise<void>((resolve) => {
+      markExportsWarmStarted = resolve
+    })
+
+    entryGetExportsMock.mockImplementation(async () => {
+      markExportsWarmStarted?.()
+      await exportsWarmBlocked
+      return []
+    })
+
+    try {
+      const prewarmPromise = prewarmRenounRpcServerCache!({ analysisOptions })
+      const prewarmStatus = await Promise.race([
+        prewarmPromise.then(() => 'resolved'),
+        new Promise<'timeout'>((resolve) => {
+          setTimeout(() => resolve('timeout'), 250)
+        }),
+      ])
+
+      expect(prewarmStatus).toBe('resolved')
+
+      const backgroundStatus = await Promise.race([
+        exportsWarmStarted.then(() => 'started'),
+        new Promise<'timeout'>((resolve) => {
+          setTimeout(() => resolve('timeout'), 250)
+        }),
+      ])
+
+      expect(backgroundStatus).toBe('started')
+    } finally {
+      releaseExportsWarm?.()
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+    }
   })
 
   test('preserves directory constructor filters when prewarming repository-backed dynamic reference routes', async () => {

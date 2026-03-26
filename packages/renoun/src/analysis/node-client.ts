@@ -2,6 +2,7 @@ import type {
   Project as TsMorphProject,
   SyntaxKind,
 } from '../utils/ts-morph.ts'
+import type { SlugCasing } from '@renoun/mdx'
 
 import type { Languages as GrammarLanguage } from '../grammars/index.ts'
 import type { Highlighter } from '../utils/create-highlighter.ts'
@@ -23,6 +24,11 @@ import type { ResolvedTypeAtLocationResult } from '../utils/resolve-type-at-loca
 import type { ResolvedFileExportsResult } from '../utils/resolve-file-exports.ts'
 import type { HighlighterInitializationOptions } from '../utils/highlighter-options.ts'
 import type { DistributiveOmit } from '../types.ts'
+import type {
+  JavaScriptFileReferenceBaseData,
+  JavaScriptFileResolvedTypesData,
+} from '../file-system/reference-artifacts.ts'
+import type { Section } from '../file-system/types.ts'
 import {
   getAnalysisClientBrowserRuntime as getSharedAnalysisClientBrowserRuntime,
   getAnalysisServerRuntimeKey,
@@ -1853,6 +1859,138 @@ export async function getFileExports(
   const serverModules = await loadAnalysisClientServerModules()
   const project = serverModules.getProgram(analysisOptions)
   return serverModules.getCachedFileExports(project, filePath)
+}
+
+export async function readFreshReferenceBaseArtifact(
+  filePath: string,
+  stripInternal: boolean,
+  analysisOptions?: AnalysisOptions
+): Promise<JavaScriptFileReferenceBaseData | undefined> {
+  const client = await getReadyClient()
+  if (client) {
+    return callClientMethod<
+      {
+        filePath: string
+        stripInternal: boolean
+        analysisOptions?: AnalysisOptions
+      },
+      JavaScriptFileReferenceBaseData | undefined
+    >(client, 'readFreshReferenceBaseArtifact', {
+      filePath,
+      stripInternal,
+      analysisOptions,
+    })
+  }
+
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
+  return serverModules.readFreshCachedReferenceBaseArtifact(project, {
+    filePath,
+    stripInternal,
+  })
+}
+
+export async function getReferenceBaseArtifact(
+  filePath: string,
+  stripInternal: boolean,
+  analysisOptions?: AnalysisOptions
+): Promise<JavaScriptFileReferenceBaseData> {
+  const client = await getReadyClient()
+  if (client) {
+    const response = await callClientMethod<
+      {
+        filePath: string
+        stripInternal: boolean
+        analysisOptions?: AnalysisOptions
+        includeClientRpcDependencies?: boolean
+      },
+      | JavaScriptFileReferenceBaseData
+      | ClientRpcValueWithDependenciesResponse<JavaScriptFileReferenceBaseData>
+    >(client, 'getReferenceBaseArtifact', {
+      filePath,
+      stripInternal,
+      analysisOptions,
+      includeClientRpcDependencies: true,
+    })
+
+    return toClientRpcResponseValue(response)
+  }
+
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
+  return serverModules.getCachedReferenceBaseArtifact(project, {
+    filePath,
+    stripInternal,
+  })
+}
+
+export async function getReferenceResolvedTypesArtifact(
+  filePath: string,
+  analysisOptions?: AnalysisOptions
+): Promise<JavaScriptFileResolvedTypesData> {
+  const client = await getReadyClient()
+  if (client) {
+    const response = await callClientMethod<
+      {
+        filePath: string
+        analysisOptions?: AnalysisOptions
+        includeClientRpcDependencies?: boolean
+      },
+      | JavaScriptFileResolvedTypesData
+      | ClientRpcValueWithDependenciesResponse<JavaScriptFileResolvedTypesData>
+    >(client, 'getReferenceResolvedTypesArtifact', {
+      filePath,
+      analysisOptions,
+      includeClientRpcDependencies: true,
+    })
+
+    return toClientRpcResponseValue(response)
+  }
+
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
+  return serverModules.getCachedReferenceResolvedTypesArtifact(project, {
+    filePath,
+  })
+}
+
+export async function getReferenceSectionsArtifact(
+  filePath: string,
+  options: {
+    stripInternal: boolean
+    slugCasing: SlugCasing
+  },
+  analysisOptions?: AnalysisOptions
+): Promise<Section[]> {
+  const client = await getReadyClient()
+  if (client) {
+    const response = await callClientMethod<
+      {
+        filePath: string
+        stripInternal: boolean
+        slugCasing: SlugCasing
+        analysisOptions?: AnalysisOptions
+        includeClientRpcDependencies?: boolean
+      },
+      Section[] | ClientRpcValueWithDependenciesResponse<Section[]>
+    >(client, 'getReferenceSectionsArtifact', {
+      filePath,
+      stripInternal: options.stripInternal,
+      slugCasing: options.slugCasing,
+      analysisOptions,
+      includeClientRpcDependencies: true,
+    })
+
+    return toClientRpcResponseValue(response)
+  }
+
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
+  return serverModules.getCachedReferenceSectionsArtifact(project, {
+    filePath,
+    stripInternal: options.stripInternal,
+    slugCasing: options.slugCasing,
+  })
 }
 
 /**

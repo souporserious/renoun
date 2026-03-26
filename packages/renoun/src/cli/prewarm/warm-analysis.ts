@@ -13,9 +13,11 @@ import { fileURLToPath } from 'node:url'
 import { NodeFileSystem } from '../../file-system/NodeFileSystem.ts'
 import type { ExportHistoryGenerator } from '../../file-system/types.ts'
 import { extractCodeFenceSnippetsFromMarkdown } from '../../analysis/markdown-code-fence-languages.ts'
+import { hasServerRuntimeInProcessEnv } from '../../analysis/runtime-env.ts'
 import type { AnalysisOptions } from '../../analysis/types.ts'
 import { forEachConcurrent } from '../../utils/concurrency.ts'
 import { getDebugLogger } from '../../utils/debug.ts'
+import { isProductionEnvironment } from '../../utils/env.ts'
 import { isJavaScriptLikeExtension } from '../../utils/is-javascript-like-extension.ts'
 import type { Highlighter } from '../../utils/create-highlighter.ts'
 import type {
@@ -40,6 +42,7 @@ const PREWARM_STRUCTURE_CONCURRENCY = Math.max(
 )
 const PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT = 96
 const PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT = 16
+const PREWARM_SERVER_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT = 32
 const REPOSITORY_MODULE_SPECIFIER_EXTENSION =
   extname(fileURLToPath(import.meta.url)) === '.js' ? '.js' : '.ts'
 
@@ -73,6 +76,7 @@ interface WarmFileTask {
   absolutePath: string
   extension?: string
   methods: Set<WarmFileMethod>
+  background?: boolean
   fileGetRequestKeys?: Set<string>
   repositoryTarget?: {
     directoryPath: string
@@ -281,9 +285,36 @@ export async function warmRenounPrewarmTargets(
     },
   }))
 
+  const blockingWarmFiles = Array.from(warmFilesByPath.values()).filter(
+    (warmFile) => warmFile.background !== true
+  )
+  const backgroundWarmFiles = Array.from(warmFilesByPath.values()).filter(
+    (warmFile) => warmFile.background === true
+  )
+
+  if (backgroundWarmFiles.length > 0) {
+    logger.debug('Scheduling background renoun file prewarm tasks', () => ({
+      data: {
+        files: backgroundWarmFiles.length,
+      },
+    }))
+
+    void warmFiles(backgroundWarmFiles, {
+      analysisOptions: options.analysisOptions,
+      fileSystem,
+      logger,
+    }).catch((error) => {
+      logger.warn('Background renoun file prewarm target failed', () => ({
+        data: {
+          error: formatPrewarmError(error),
+        },
+      }))
+    })
+  }
+
   const [warmResult] = await Promise.all([
-    warmFilesByPath.size > 0
-      ? warmFiles(Array.from(warmFilesByPath.values()), {
+    blockingWarmFiles.length > 0
+      ? warmFiles(blockingWarmFiles, {
           analysisOptions: options.analysisOptions,
           fileSystem,
           logger,
@@ -442,6 +473,10 @@ async function collectWarmFilesFromDirectoryTargets(
           }
 
           const eligibleFileCount = eligibleEntries.length
+          const background = shouldBackgroundHighFanoutLeafWarm({
+            leafOnly: request.leafOnly === true,
+            fileCount: eligibleFileCount,
+          })
           const sampledEntries = selectHighFanoutLeafWarmSample(
             eligibleEntries,
             {
@@ -483,6 +518,7 @@ async function collectWarmFilesFromDirectoryTargets(
                 absolutePath: filePath,
                 extension,
                 methods,
+                background,
                 repositoryTarget: {
                   directoryPath: request.directoryPath,
                   path: entry.relativePath,
@@ -550,6 +586,10 @@ async function collectWarmFilesFromDirectoryTargets(
         }
 
         const eligibleFileCount = eligibleFilePaths.length
+        const background = shouldBackgroundHighFanoutLeafWarm({
+          leafOnly: request.leafOnly === true,
+          fileCount: eligibleFileCount,
+        })
         const sampledFilePaths = selectHighFanoutLeafWarmSample(
           eligibleFilePaths,
           {
@@ -580,6 +620,7 @@ async function collectWarmFilesFromDirectoryTargets(
               absolutePath: filePath,
               extension,
               methods,
+              background,
             },
             warmFilesByPath
           )
@@ -792,10 +833,34 @@ function limitHighFanoutLeafWarmMethods(
     return methods
   }
 
+  if (hasServerRuntimeInProcessEnv()) {
+    return methods
+  }
+
   const limitedMethods = new Set(methods)
   limitedMethods.delete('getExportTypes')
   limitedMethods.delete('getSections')
   return limitedMethods
+}
+
+function getHighFanoutLeafWarmSampleLimit(): number {
+  if (hasServerRuntimeInProcessEnv()) {
+    return PREWARM_SERVER_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT
+  }
+
+  return PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT
+}
+
+function shouldBackgroundHighFanoutLeafWarm(options: {
+  leafOnly: boolean
+  fileCount: number
+}): boolean {
+  return (
+    hasServerRuntimeInProcessEnv() &&
+    isProductionEnvironment() &&
+    options.leafOnly &&
+    options.fileCount > PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT
+  )
 }
 
 function selectHighFanoutLeafWarmSample<Candidate>(
@@ -810,6 +875,7 @@ function selectHighFanoutLeafWarmSample<Candidate>(
     return candidates
   }
 
+  const sampleLimit = getHighFanoutLeafWarmSampleLimit()
   const selected: Candidate[] = []
   const seenTopLevelSegments = new Set<string>()
   const selectedCandidates = new Set<Candidate>()
@@ -826,7 +892,7 @@ function selectHighFanoutLeafWarmSample<Candidate>(
     selected.push(candidate)
     selectedCandidates.add(candidate)
 
-    if (selected.length >= PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT) {
+    if (selected.length >= sampleLimit) {
       return selected
     }
   }
@@ -837,7 +903,7 @@ function selectHighFanoutLeafWarmSample<Candidate>(
     }
 
     selected.push(candidate)
-    if (selected.length >= PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT) {
+    if (selected.length >= sampleLimit) {
       break
     }
   }
@@ -1306,6 +1372,12 @@ function mergeWarmTask(
 
   if (!existing.extension && task.extension) {
     existing.extension = task.extension
+  }
+
+  if (task.background !== true) {
+    existing.background = false
+  } else if (existing.background === undefined) {
+    existing.background = true
   }
 }
 

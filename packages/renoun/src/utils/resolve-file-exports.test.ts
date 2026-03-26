@@ -274,4 +274,85 @@ describe('resolveFileExportsWithDependencies', () => {
 
     fileExportsSpy.mockRestore()
   })
+
+  test('resolves child namespace re-exports through the persistent child callback before inline traversal', async () => {
+    const project = createJavaScriptProject()
+
+    project.createSourceFile(
+      '/project/foo.js',
+      ['export const alpha = 1', 'export function beta() { return 2 }'].join(
+        '\n'
+      ),
+      {
+        overwrite: true,
+        scriptKind: ts.ScriptKind.JS,
+      }
+    )
+    project.createSourceFile(
+      '/project/index.js',
+      ["import * as Foo from './foo.js'", 'export { Foo }'].join('\n'),
+      {
+        overwrite: true,
+        scriptKind: ts.ScriptKind.JS,
+      }
+    )
+
+    const childResult = await resolveFileExportsWithDependencies(
+      project,
+      '/project/foo.js'
+    )
+    const fileExportsSpy = vi.spyOn(
+      getFileExportsModule,
+      'getFileExportsWithDependencies'
+    )
+    const resolveFileExportsByFilePath = vi.fn(
+      async (
+        filePath: string,
+        blockedPersistentResolvedFilePaths: ReadonlySet<string>
+      ) => {
+        if (filePath !== '/project/foo.js') {
+          return undefined
+        }
+
+        expect(Array.from(blockedPersistentResolvedFilePaths).sort()).toEqual([
+          '/project/foo.js',
+          '/project/index.js',
+        ])
+
+        return childResult
+      }
+    )
+
+    const result = await resolveFileExportsWithDependencies(
+      project,
+      '/project/index.js',
+      undefined,
+      {
+        resolveFileExportsByFilePath,
+      }
+    )
+
+    const namespace = result.resolvedTypes.find(
+      (type) => type.kind === 'Namespace' && 'name' in type && type.name === 'Foo'
+    )
+
+    expect(namespace).toBeDefined()
+    expect(namespace?.kind).toBe('Namespace')
+
+    if (!namespace || namespace.kind !== 'Namespace') {
+      throw new Error('expected Foo namespace export to resolve')
+    }
+
+    const memberNames = namespace.types
+      .map((type) => ('name' in type ? type.name : undefined))
+      .filter((name): name is string => Boolean(name))
+      .sort()
+
+    expect(memberNames).toEqual(['alpha', 'beta'])
+    expect(resolveFileExportsByFilePath).toHaveBeenCalledTimes(1)
+    expect(fileExportsSpy).toHaveBeenCalledTimes(1)
+    expect(fileExportsSpy).toHaveBeenCalledWith('/project/index.js', project)
+
+    fileExportsSpy.mockRestore()
+  })
 })

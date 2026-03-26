@@ -8,11 +8,16 @@ import {
   getFileExportText,
   getFileExportStaticValue,
   getOutlineRanges,
+  getReferenceBaseArtifact,
+  getReferenceResolvedTypesArtifact,
+  getReferenceSectionsArtifact,
+  readFreshReferenceBaseArtifact,
   resolveFileExportsWithDependencies,
   resolveTypeAtLocation,
   resolveTypeAtLocationWithDependencies,
 } from '../analysis/node-client.ts'
 import type { AnalysisOptions } from '../analysis/types.ts'
+import type { SlugCasing } from '@renoun/mdx'
 import {
   directoryName,
   joinPaths,
@@ -27,6 +32,11 @@ import {
 import { parseJsonWithComments } from '../utils/parse-json-with-comments.ts'
 import type { TypeFilter } from '../utils/resolve-type.ts'
 import type { ResolvedFileExportsResult } from '../utils/resolve-file-exports.ts'
+import type {
+  JavaScriptFileReferenceBaseData,
+  JavaScriptFileResolvedTypesData,
+} from './reference-artifacts.ts'
+import type { Section } from './types.ts'
 import type { DirectoryEntry } from './types.ts'
 
 export type FileSystemWriteFileContent =
@@ -171,6 +181,10 @@ export abstract class BaseFileSystem {
    * should return `false`.
    */
   usesPersistentCacheByDefault(): boolean {
+    return false
+  }
+
+  supportsServerManagedReferenceArtifacts(): boolean {
     return false
   }
 
@@ -432,6 +446,52 @@ export abstract class BaseFileSystem {
       ({ filePath: preparedFilePath, analysisOptions }) =>
         getFileExports(preparedFilePath, analysisOptions)
     )
+  }
+
+  readFreshReferenceBaseArtifact(filePath: string, stripInternal: boolean) {
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        readFreshReferenceBaseArtifact(
+          preparedFilePath,
+          stripInternal,
+          analysisOptions
+        )
+    )
+  }
+
+  getCachedReferenceBaseArtifact(filePath: string, stripInternal: boolean) {
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getReferenceBaseArtifact(
+          preparedFilePath,
+          stripInternal,
+          analysisOptions
+        )
+    ) as Promise<JavaScriptFileReferenceBaseData>
+  }
+
+  getCachedReferenceResolvedTypesArtifact(filePath: string) {
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getReferenceResolvedTypesArtifact(preparedFilePath, analysisOptions)
+    ) as Promise<JavaScriptFileResolvedTypesData>
+  }
+
+  getCachedReferenceSectionsArtifact(
+    filePath: string,
+    options: {
+      stripInternal: boolean
+      slugCasing: SlugCasing
+    }
+  ) {
+    return this.prepareAnalysis(filePath).then(
+      ({ filePath: preparedFilePath, analysisOptions }) =>
+        getReferenceSectionsArtifact(
+          preparedFilePath,
+          options,
+          analysisOptions
+        )
+    ) as Promise<Section[]>
   }
 
   resolveFileExportsWithDependencies(

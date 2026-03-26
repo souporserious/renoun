@@ -28,16 +28,24 @@ import {
   getCachedFileExportStaticValue,
   getCachedFileExportText,
   getCachedOutlineRanges,
+  getCachedReferenceBaseArtifact,
+  getCachedReferenceResolvedTypesArtifact,
+  getCachedReferenceSectionsArtifact,
   getCachedSourceTextMetadata,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
+  prewarmRuntimeAnalysisSession,
+  readFreshCachedReferenceBaseArtifact,
   resolveCachedFileExportsWithDependencies,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
 } from './cached-analysis.ts'
 import { getProgram, invalidateProgramCachesByPath } from './get-program.ts'
 import { setProjectAnalysisScopeId } from './project-scope.ts'
-import { resetRuntimeAnalysisSessionsForTests } from './runtime-analysis-session.ts'
+import {
+  getRuntimeAnalysisSession,
+  resetRuntimeAnalysisSessionsForTests,
+} from './runtime-analysis-session.ts'
 
 const { Project, ModuleKind, ModuleResolutionKind, ScriptTarget, SyntaxKind } =
   getTsMorph()
@@ -183,6 +191,22 @@ async function createTemporaryWorkspace(
       rmSync(workspacePath, { recursive: true, force: true })
     },
   }
+}
+
+async function listRuntimeAnalysisNodeKeysByPrefix(
+  scopePath: string,
+  analysisScopeId: string,
+  prefix: string
+): Promise<Set<string>> {
+  const runtimeSession = await getRuntimeAnalysisSession(
+    undefined,
+    scopePath,
+    analysisScopeId
+  )
+  const nodeKeys = await runtimeSession?.session.cache.listNodeKeysByPrefix(
+    prefix
+  )
+  return new Set(nodeKeys ?? [])
 }
 
 describe('analysis cached analysis', () => {
@@ -1068,6 +1092,176 @@ describe('analysis cached analysis', () => {
     expect(fileExportsSpy).toHaveBeenCalledTimes(1)
   })
 
+  test(
+    'persists cached file export discovery across runtime session restarts',
+    async () => {
+      await withNodeEnv('production', async () => {
+        await using workspace = await createTemporaryWorkspace({
+          'package.json': JSON.stringify({
+            name: 'cached-analysis-test',
+            private: true,
+          }),
+          'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+              module: 'ESNext',
+              moduleResolution: 'Bundler',
+              target: 'ESNext',
+              strict: true,
+            },
+            include: ['src/**/*.ts'],
+          }),
+          'src/foo.ts': 'export const foo = 1\n',
+          'src/bar.ts': 'export const bar = "bar"\n',
+          'src/index.ts': [
+            "export { foo } from './foo'",
+            "export * from './bar'",
+            'export const baz = true',
+          ].join('\n'),
+        })
+
+        const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+        const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+        const analysisScopeId = `file-exports-runtime-${Date.now()}`
+        const createScopedProject = () => {
+          const project = new Project({
+            tsConfigFilePath,
+          })
+          setProjectAnalysisScopeId(project, analysisScopeId)
+          return project
+        }
+        const fileExportsNodePrefix = 'program-analysis-runtime:4:fileExports:'
+        const fileExportNodeKeysBefore =
+          await listRuntimeAnalysisNodeKeysByPrefix(
+            workspace.workspacePath,
+            analysisScopeId,
+            fileExportsNodePrefix
+          )
+
+        const firstExports = await getCachedFileExports(
+          createScopedProject(),
+          entryFilePath
+        )
+
+        expect(firstExports.map((entry) => entry.name).sort()).toEqual([
+          'bar',
+          'baz',
+          'foo',
+        ])
+        const fileExportNodeKeysAfter =
+          await listRuntimeAnalysisNodeKeysByPrefix(
+            workspace.workspacePath,
+            analysisScopeId,
+            fileExportsNodePrefix
+          )
+        const newFileExportNodeKeys = Array.from(fileExportNodeKeysAfter).filter(
+          (nodeKey) => !fileExportNodeKeysBefore.has(nodeKey)
+        )
+
+        expect(newFileExportNodeKeys).toHaveLength(1)
+
+        resetRuntimeAnalysisSessionsForTests()
+        const restartedRuntimeSession = await getRuntimeAnalysisSession(
+          undefined,
+          workspace.workspacePath,
+          analysisScopeId
+        )
+
+        expect(
+          await restartedRuntimeSession?.session.cache.getWithFreshness(
+            newFileExportNodeKeys[0]!,
+            {
+              includeStaleReason: true,
+            }
+          )
+        ).toMatchObject({
+          fresh: true,
+        })
+
+        const secondExports = await getCachedFileExports(
+          createScopedProject(),
+          entryFilePath
+        )
+
+        expect(secondExports.map((entry) => entry.name).sort()).toEqual([
+          'bar',
+          'baz',
+          'foo',
+        ])
+      })
+    },
+    30_000
+  )
+
+  test('reuses shared reference artifacts across fresh reads', async () => {
+    await using workspace = await createTemporaryWorkspace({
+      'package.json': JSON.stringify({
+        name: 'cached-analysis-test',
+        private: true,
+      }),
+      'tsconfig.json': JSON.stringify({
+        compilerOptions: {
+          module: 'ESNext',
+          moduleResolution: 'Bundler',
+          target: 'ESNext',
+          strict: true,
+        },
+        include: ['src/**/*.ts'],
+      }),
+      'src/value.ts': 'export const sharedValue = { count: 1 as number }\n',
+      'src/index.ts': [
+        "export { sharedValue } from './value'",
+        'export const publicValue = sharedValue.count',
+      ].join('\n'),
+    })
+
+    const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+    const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+    const dependencyFilePath = join(workspace.workspacePath, 'src/value.ts')
+    const project = getProgram({ tsConfigFilePath })
+
+    await prewarmRuntimeAnalysisSession({
+      project,
+      filePath: entryFilePath,
+    })
+
+    const referenceBaseData = await getCachedReferenceBaseArtifact(project, {
+      filePath: entryFilePath,
+      stripInternal: true,
+    })
+    const freshReferenceBaseData = await readFreshCachedReferenceBaseArtifact(
+      project,
+      {
+        filePath: entryFilePath,
+        stripInternal: true,
+      }
+    )
+    const referenceTypesData =
+      await getCachedReferenceResolvedTypesArtifact(project, {
+        filePath: entryFilePath,
+      })
+    const referenceSections = await getCachedReferenceSectionsArtifact(project, {
+      filePath: entryFilePath,
+      stripInternal: true,
+      slugCasing: 'kebab',
+    })
+
+    expect(referenceBaseData.exportMetadata.map(({ name }) => name)).toEqual([
+      'publicValue',
+      'sharedValue',
+    ])
+    expect(freshReferenceBaseData ?? referenceBaseData).toEqual(
+      referenceBaseData
+    )
+    expect(referenceTypesData.typeDependencies).toEqual(
+      expect.arrayContaining([entryFilePath, dependencyFilePath])
+    )
+    expect(referenceTypesData.resolvedTypes.length).toBeGreaterThan(0)
+    expect(referenceSections.map(({ id }) => id)).toEqual([
+      'sharedValue',
+      'publicValue',
+    ])
+  })
+
   test('reuses fresh child resolved export artifacts for namespace re-exports', async () => {
     await using workspace = await createTemporaryWorkspace({
       'package.json': JSON.stringify({
@@ -1128,6 +1322,124 @@ describe('analysis cached analysis', () => {
     expect(memberNames).toEqual(['alpha', 'beta'])
     expect(resolveTypeSpy).not.toHaveBeenCalled()
   })
+
+  test(
+    'persists child resolved export artifacts when parent namespace resolution computes them cold',
+    async () => {
+      await withNodeEnv('production', async () => {
+        await using workspace = await createTemporaryWorkspace({
+          'package.json': JSON.stringify({
+            name: 'cached-analysis-test',
+            private: true,
+          }),
+          'tsconfig.json': JSON.stringify({
+            compilerOptions: {
+              module: 'ESNext',
+              moduleResolution: 'Bundler',
+              target: 'ESNext',
+              strict: true,
+            },
+            include: ['src/**/*.ts'],
+          }),
+          'src/foo.ts': [
+            'export const alpha = 1',
+            'export function beta() { return 2 }',
+          ].join('\n'),
+          'src/index.ts': [
+            "import * as Foo from './foo'",
+            'export { Foo }',
+          ].join('\n'),
+        })
+
+        const tsConfigFilePath = join(workspace.workspacePath, 'tsconfig.json')
+        const childFilePath = join(workspace.workspacePath, 'src/foo.ts')
+        const entryFilePath = join(workspace.workspacePath, 'src/index.ts')
+        const analysisScopeId = `resolved-export-child-${Date.now()}`
+        const createScopedProject = () => {
+          const project = new Project({
+            tsConfigFilePath,
+          })
+          setProjectAnalysisScopeId(project, analysisScopeId)
+          return project
+        }
+        const resolvedExportsNodePrefix =
+          'program-analysis-runtime:4:fileExportTypes:'
+        const resolvedExportNodeKeysBefore =
+          await listRuntimeAnalysisNodeKeysByPrefix(
+            workspace.workspacePath,
+            analysisScopeId,
+            resolvedExportsNodePrefix
+          )
+
+        await resolveCachedFileExportsWithDependencies(createScopedProject(), {
+          filePath: entryFilePath,
+        })
+        const resolvedExportNodeKeysAfterParent =
+          await listRuntimeAnalysisNodeKeysByPrefix(
+            workspace.workspacePath,
+            analysisScopeId,
+            resolvedExportsNodePrefix
+          )
+        const newResolvedExportNodeKeys = Array.from(
+          resolvedExportNodeKeysAfterParent
+        ).filter((nodeKey) => !resolvedExportNodeKeysBefore.has(nodeKey))
+
+        expect(newResolvedExportNodeKeys).toHaveLength(2)
+
+        resetRuntimeAnalysisSessionsForTests()
+        const restartedRuntimeSession = await getRuntimeAnalysisSession(
+          undefined,
+          workspace.workspacePath,
+          analysisScopeId
+        )
+
+        for (const nodeKey of newResolvedExportNodeKeys) {
+          expect(
+            await restartedRuntimeSession?.session.cache.getWithFreshness(
+              nodeKey,
+              {
+                includeStaleReason: true,
+              }
+            )
+          ).toMatchObject({
+            fresh: true,
+          })
+        }
+
+        const resolvedExportNodeKeysBeforeChild =
+          await listRuntimeAnalysisNodeKeysByPrefix(
+            workspace.workspacePath,
+            analysisScopeId,
+            resolvedExportsNodePrefix
+          )
+        const childResult = await resolveCachedFileExportsWithDependencies(
+          createScopedProject(),
+          {
+            filePath: childFilePath,
+          }
+        )
+        const resolvedExportNodeKeysAfterChild =
+          await listRuntimeAnalysisNodeKeysByPrefix(
+            workspace.workspacePath,
+            analysisScopeId,
+            resolvedExportsNodePrefix
+          )
+
+        const memberNames = childResult.resolvedTypes
+          .map((type) => ('name' in type ? type.name : undefined))
+          .filter((name): name is string => Boolean(name))
+          .sort()
+
+        expect(memberNames).toEqual(['alpha', 'beta'])
+        expect(
+          Array.from(resolvedExportNodeKeysAfterChild).filter(
+            (nodeKey) => !resolvedExportNodeKeysBeforeChild.has(nodeKey)
+          )
+        ).toEqual([])
+      })
+    },
+    30_000
+  )
 
   test('refreshes inherited tsconfig changes without touching the root tsconfig file', async () => {
     await using workspace = await createTemporaryWorkspace({

@@ -29,8 +29,13 @@ export interface ResolveFileExportsWithDependenciesOptions {
     string,
     FileExportsWithDependenciesResult
   >
+  blockedPersistentResolvedFilePaths?: ReadonlySet<string>
   readFreshResolvedFileExportsByFilePath?: (
     filePath: string
+  ) => Promise<ResolvedFileExportsResult | undefined>
+  resolveFileExportsByFilePath?: (
+    filePath: string,
+    blockedPersistentResolvedFilePaths: ReadonlySet<string>
   ) => Promise<ResolvedFileExportsResult | undefined>
 }
 
@@ -48,8 +53,13 @@ interface ResolveFileExportContext {
   resolvedTypesByExportKey: Map<string, Kind | undefined>
   resolvingFilePaths: Set<string>
   resolvingExportKeys: Set<string>
+  blockedPersistentResolvedFilePaths: ReadonlySet<string>
   readFreshResolvedFileExportsByFilePath?: (
     filePath: string
+  ) => Promise<ResolvedFileExportsResult | undefined>
+  resolveFileExportsByFilePath?: (
+    filePath: string,
+    blockedPersistentResolvedFilePaths: ReadonlySet<string>
   ) => Promise<ResolvedFileExportsResult | undefined>
 }
 
@@ -87,8 +97,11 @@ export async function resolveFileExportsWithDependencies(
         resolvedTypesByExportKey: new Map<string, Kind | undefined>(),
         resolvingFilePaths: new Set<string>(),
         resolvingExportKeys: new Set<string>(),
+        blockedPersistentResolvedFilePaths:
+          options?.blockedPersistentResolvedFilePaths ?? new Set([filePath]),
         readFreshResolvedFileExportsByFilePath:
           options?.readFreshResolvedFileExportsByFilePath,
+        resolveFileExportsByFilePath: options?.resolveFileExportsByFilePath,
       }
 
       return withTypeResolutionMemoization(() =>
@@ -138,6 +151,24 @@ async function resolveResolvedFileExports(
 
   const parentDependencies = context.dependencies
   const promise = (async () => {
+    if (!context.blockedPersistentResolvedFilePaths.has(filePath)) {
+      const blockedPersistentResolvedFilePaths = new Set(
+        context.blockedPersistentResolvedFilePaths
+      )
+      blockedPersistentResolvedFilePaths.add(filePath)
+
+      const persistedChildResolution =
+        await context.resolveFileExportsByFilePath?.(
+          filePath,
+          blockedPersistentResolvedFilePaths
+        )
+
+      if (persistedChildResolution) {
+        context.resolvedFileExportsByFilePath.set(filePath, persistedChildResolution)
+        return persistedChildResolution
+      }
+    }
+
     const restored =
       await context.readFreshResolvedFileExportsByFilePath?.(filePath)
 

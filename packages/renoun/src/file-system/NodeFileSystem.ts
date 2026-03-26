@@ -24,6 +24,7 @@ import {
 } from 'node:fs/promises'
 import { basename, dirname, join, relative, resolve } from 'node:path'
 import { Readable, Writable } from 'node:stream'
+import { hasServerRuntimeInProcessEnv } from '../analysis/runtime-env.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { parseBooleanProcessEnv } from '../utils/env.ts'
 import {
@@ -90,6 +91,10 @@ export class NodeFileSystem
 
   override usesPersistentCacheByDefault(): boolean {
     return true
+  }
+
+  override supportsServerManagedReferenceArtifacts(): boolean {
+    return hasServerRuntimeInProcessEnv()
   }
 
   override usesDirectoryMtimeSnapshotDependencies(): boolean {

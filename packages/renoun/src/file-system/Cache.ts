@@ -2817,10 +2817,6 @@ export class CacheStore {
   #registerEntryInGraph(nodeKey: string, entry: CacheEntry): void {
     this.#dependencyGraph.batch(() => {
       for (const dependency of entry.deps) {
-        if (dependency.depKey.startsWith('node:')) {
-          continue
-        }
-
         this.#dependencyGraph.setDependencyVersion(
           dependency.depKey,
           dependency.depVersion

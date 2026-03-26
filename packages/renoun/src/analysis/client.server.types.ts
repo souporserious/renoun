@@ -12,11 +12,15 @@ import type {
   getCachedFileExportText,
   getCachedFileExports,
   getCachedOutlineRanges,
+  getCachedReferenceBaseArtifact,
+  getCachedReferenceResolvedTypesArtifact,
+  getCachedReferenceSectionsArtifact,
   getCachedSourceTextMetadata,
   getCachedTypeScriptDependencyPaths,
   getCachedTokens,
   invalidateRuntimeAnalysisCachePath,
   invalidateRuntimeAnalysisCachePaths,
+  readFreshCachedReferenceBaseArtifact,
   resolveCachedFileExportsWithDependencies,
   resolveCachedTypeAtLocationWithDependencies,
   transpileCachedSourceFile,
@@ -36,11 +40,18 @@ export interface AnalysisClientServerModules {
   getCachedFileExportStaticValue: typeof getCachedFileExportStaticValue
   getCachedFileExports: typeof getCachedFileExports
   getCachedOutlineRanges: typeof getCachedOutlineRanges
+  getCachedReferenceBaseArtifact: typeof getCachedReferenceBaseArtifact
+  getCachedReferenceResolvedTypesArtifact:
+    typeof getCachedReferenceResolvedTypesArtifact
+  getCachedReferenceSectionsArtifact:
+    typeof getCachedReferenceSectionsArtifact
   getCachedSourceTextMetadata: typeof getCachedSourceTextMetadata
   getCachedTypeScriptDependencyPaths: typeof getCachedTypeScriptDependencyPaths
   getCachedTokens: typeof getCachedTokens
   invalidateRuntimeAnalysisCachePath: typeof invalidateRuntimeAnalysisCachePath
   invalidateRuntimeAnalysisCachePaths: typeof invalidateRuntimeAnalysisCachePaths
+  readFreshCachedReferenceBaseArtifact:
+    typeof readFreshCachedReferenceBaseArtifact
   resolveCachedFileExportsWithDependencies:
     typeof resolveCachedFileExportsWithDependencies
   resolveCachedTypeAtLocationWithDependencies:
