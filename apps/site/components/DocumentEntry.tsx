@@ -1,6 +1,7 @@
 import type { Collection, MDXFile } from 'renoun'
 
 import { TableOfContents } from '@/components/TableOfContents'
+import { coerceDate } from '@/utils/date'
 import { SiblingLink } from './SiblingLink'
 
 export async function DocumentEntry({
@@ -35,6 +36,7 @@ export async function DocumentEntry({
       siblingsPromise,
       updatedAtPromise,
     ])
+  const normalizedUpdatedAt = coerceDate(updatedAt)
   let [previousEntry, nextEntry] = siblingEntries
 
   if (previousEntry?.baseName === 'docs') {
@@ -57,7 +59,7 @@ export async function DocumentEntry({
         </div>
 
         <div css={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-          {updatedAt ? (
+          {normalizedUpdatedAt ? (
             <div
               css={{
                 fontSize: 'var(--font-size-body-3)',
@@ -66,11 +68,11 @@ export async function DocumentEntry({
             >
               Last updated{' '}
               <time
-                dateTime={updatedAt.toString()}
+                dateTime={normalizedUpdatedAt.toISOString()}
                 itemProp="dateModified"
                 css={{ fontWeight: 'var(--font-weight-strong)' }}
               >
-                {updatedAt.toLocaleString('en', {
+                {normalizedUpdatedAt.toLocaleString('en', {
                   year: '2-digit',
                   month: '2-digit',
                   day: '2-digit',

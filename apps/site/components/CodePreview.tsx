@@ -127,7 +127,9 @@ function HeroExample({
                 }}
                 className={GeistMono.className}
               >
-                <Tokens language="tsx">{code}</Tokens>
+                <Tokens language="tsx" allowErrors>
+                  {code}
+                </Tokens>
               </pre>
             </Collapse.Content>
 
@@ -263,7 +265,9 @@ function HeroExample({
             }}
             className={GeistMono.className}
           >
-            <Tokens language="tsx">{code}</Tokens>
+            <Tokens language="tsx" allowErrors>
+              {code}
+            </Tokens>
           </pre>
         )}
       </div>

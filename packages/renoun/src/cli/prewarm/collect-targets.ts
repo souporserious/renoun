@@ -15,6 +15,8 @@ import type { AnalysisOptions } from '../../analysis/types.ts'
 import type {
   Expression,
   CallExpression,
+  JsxOpeningElement,
+  JsxSelfClosingElement,
   Project,
   SourceFile,
   Symbol as TsMorphSymbol,
@@ -29,6 +31,7 @@ interface RenounAliases {
   directoryConstructors: Set<string>
   collectionConstructors: Set<string>
   repositoryConstructors: Set<string>
+  historyComponents: Set<string>
   namespaceImports: Set<string>
 }
 
@@ -126,6 +129,7 @@ const EMPTY_RENOUN_ALIASES: RenounAliases = {
   directoryConstructors: new Set(),
   collectionConstructors: new Set(),
   repositoryConstructors: new Set(),
+  historyComponents: new Set(),
   namespaceImports: new Set(),
 }
 
@@ -355,6 +359,35 @@ export async function collectRenounPrewarmTargets(
     addDirectoryEntriesRequest(getEntriesRequests, fileRequestTarget.request)
   }
 
+  for (const sourceFile of sourceFiles) {
+    const sourceFilePath = sourceFile.getFilePath()
+    if (!hasJavaScriptLikeExtension(sourceFilePath)) {
+      continue
+    }
+
+    if (shouldSkipSourceFile(sourceFilePath)) {
+      continue
+    }
+
+    if (!isLikelyRenounSourceFile(sourceFile)) {
+      continue
+    }
+
+    const aliases = getRenounAliases(sourceFile)
+
+    collectHistoryComponentTargets(
+      sourceFile,
+      aliases,
+      {
+        directories: directoryDeclarations,
+        collections: collectionDeclarations,
+        repositories: repositoryDeclarations,
+        workspaceDirectory,
+      },
+      exportHistoryRequests
+    )
+  }
+
   for (const [
     collectionSymbol,
     options,
@@ -384,6 +417,7 @@ function getRenounAliases(sourceFile: SourceFile): RenounAliases {
     directoryConstructors: new Set<string>(),
     collectionConstructors: new Set<string>(),
     repositoryConstructors: new Set<string>(),
+    historyComponents: new Set<string>(),
     namespaceImports: new Set<string>(),
   }
 
@@ -412,6 +446,12 @@ function getRenounAliases(sourceFile: SourceFile): RenounAliases {
 
       if (name === 'Repository') {
         aliases.repositoryConstructors.add(
+          namedImport.getAliasNode()?.getText() ?? name
+        )
+      }
+
+      if (name === 'History') {
+        aliases.historyComponents.add(
           namedImport.getAliasNode()?.getText() ?? name
         )
       }
@@ -531,6 +571,60 @@ function collectRenounDeclarations(
       callExpression: node,
       methodName,
       aliases,
+    })
+  })
+}
+
+function collectHistoryComponentTargets(
+  sourceFile: SourceFile,
+  aliases: RenounAliases,
+  references: {
+    directories: Map<TsMorphSymbol, RenounDirectoryDeclaration>
+    collections: Map<TsMorphSymbol, RenounCollectionDeclaration>
+    repositories: Map<TsMorphSymbol, RenounRepositoryDeclaration>
+    workspaceDirectory: string
+  },
+  exportHistoryRequests: ExportHistoryRequest[]
+): void {
+  sourceFile.forEachDescendant((node) => {
+    if (
+      !Node.isJsxSelfClosingElement(node) &&
+      !Node.isJsxOpeningElement(node)
+    ) {
+      return
+    }
+
+    if (!isHistoryComponentTag(node.getTagNameNode(), aliases)) {
+      return
+    }
+
+    const sourceExpression = getJsxAttributeExpression(node, 'source')
+    if (!sourceExpression) {
+      return
+    }
+
+    const repositoryTarget = resolveRenounRepositoryTarget(
+      sourceExpression,
+      aliases,
+      references
+    )
+
+    if (!repositoryTarget) {
+      return
+    }
+
+    const sourceOptionsExpression = getJsxAttributeExpression(
+      node,
+      'sourceOptions'
+    )
+    const options = sourceOptionsExpression
+      ? resolveExportHistoryOptionsExpression(sourceOptionsExpression)
+      : undefined
+
+    exportHistoryRequests.push({
+      repository: repositoryTarget.input,
+      sparsePaths: Array.from(repositoryTarget.sparsePaths).sort(),
+      ...(options ? { options } : {}),
     })
   })
 }
@@ -1052,6 +1146,52 @@ function applyGetFileConsumerWarmMethods(
   }
 
   return false
+}
+
+function isHistoryComponentTag(
+  tagNameNode: ReturnType<JsxSelfClosingElement['getTagNameNode']>,
+  aliases: RenounAliases
+): boolean {
+  if (Node.isIdentifier(tagNameNode)) {
+    return aliases.historyComponents.has(tagNameNode.getText())
+  }
+
+  if (!Node.isPropertyAccessExpression(tagNameNode)) {
+    return false
+  }
+
+  return (
+    tagNameNode.getName() === 'History' &&
+    Node.isIdentifier(tagNameNode.getExpression()) &&
+    aliases.namespaceImports.has(tagNameNode.getExpression().getText())
+  )
+}
+
+function getJsxAttributeExpression(
+  node: JsxSelfClosingElement | JsxOpeningElement,
+  attributeName: string
+): Expression | undefined {
+  const attribute = node
+    .getAttributes()
+    .find(
+      (entry) =>
+        Node.isJsxAttribute(entry) &&
+        entry.getNameNode().getText() === attributeName
+    )
+
+  if (!attribute || !Node.isJsxAttribute(attribute)) {
+    return undefined
+  }
+
+  const initializer = attribute.getInitializer()
+
+  if (!initializer || !Node.isJsxExpression(initializer)) {
+    return undefined
+  }
+
+  const expression = initializer.getExpression()
+
+  return expression && Node.isExpression(expression) ? expression : undefined
 }
 
 function isReferenceSourceJsxExpression(expression: Expression): boolean {
@@ -1913,7 +2053,13 @@ function resolveExportHistoryOptions(
     return undefined
   }
 
-  const value = resolveLiteralExpression(firstArgument)
+  return resolveExportHistoryOptionsExpression(firstArgument)
+}
+
+function resolveExportHistoryOptionsExpression(
+  expression: Expression
+): Record<string, unknown> | undefined {
+  const value = resolveLiteralExpression(expression)
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return undefined
   }

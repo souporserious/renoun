@@ -90,9 +90,13 @@ export function toGitMetadataDateValue(value?: Date): string | undefined {
     : undefined
 }
 
-export function toGitMetadataDate(value?: string): Date | undefined {
+export function toGitMetadataDate(value?: string | Date): Date | undefined {
   if (!value) {
     return undefined
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? undefined : new Date(value)
   }
 
   const date = new Date(value)

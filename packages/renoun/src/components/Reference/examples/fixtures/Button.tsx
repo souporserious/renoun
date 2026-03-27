@@ -34,7 +34,7 @@ export function getButtonVariantClassNames(
 /**
  * A minimal, accessible button that follows design‑system color tokens.
  *
- * ```tsx
+ * ```tsx allowErrors="2307" showErrors={false}
  * import { Button } from './Button'
  *
  * export default function Example() {

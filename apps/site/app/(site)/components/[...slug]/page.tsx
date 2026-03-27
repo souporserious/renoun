@@ -15,6 +15,7 @@ import { MDX } from '@/components/MDX'
 import { References } from '@/components/Reference'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
+import { coerceDate } from '@/utils/date'
 
 export async function generateStaticParams() {
   const entries = await ComponentsDirectory.getEntries({ recursive: true })
@@ -114,7 +115,7 @@ export default async function Component(
   const componentSections = isExamplesPage
     ? []
     : await componentEntry.getSections()
-  const updatedAt = await componentEntry.getLastCommitDate()
+  const updatedAt = coerceDate(await componentEntry.getLastCommitDate())
   const [previousEntry, nextEntry] = await componentEntry.getSiblings({
     collection: RootCollection,
   })

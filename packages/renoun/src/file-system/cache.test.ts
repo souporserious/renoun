@@ -52,7 +52,13 @@ import type {
 } from './reference-artifacts.ts'
 import { Session } from './Session.ts'
 import { FileSystemSnapshot, type Snapshot } from './Snapshot.ts'
-import { Collection, Directory, File, Package, Workspace } from './index.tsx'
+import {
+  Collection,
+  Directory,
+  File,
+  Package,
+  Workspace,
+} from './index.tsx'
 import { FS_ANALYSIS_CACHE_VERSION, createCacheNodeKey } from './cache-key.ts'
 import type {
   ExportHistoryGenerator,
@@ -4868,7 +4874,7 @@ describe('sqlite cache persistence', () => {
             entry.relativePath.endsWith('/docs/index.ts')
         )
       ).toBe(true)
-      expect(firstFileSystem.fileMetadataCalls).toBeGreaterThan(0)
+      expect(firstFileSystem.fileMetadataCalls).toBe(0)
       expect(firstFileSystem.moduleMetadataCalls).toBeGreaterThan(0)
       expect(firstExportsSpy).toHaveBeenCalled()
 

@@ -1139,8 +1139,8 @@ async function createRuntimeReferenceGitMetadataProvider(options: {
       getGitExportMetadata(filePath, startLine, endLine) {
         return fileSystem.getGitExportMetadata(filePath, startLine, endLine)
       },
-      getModuleMetadata(filePath) {
-        return fileSystem.getModuleMetadata(filePath)
+      getModuleMetadata(filePath, metadataOptions) {
+        return fileSystem.getModuleMetadata(filePath, metadataOptions)
       },
       getWorkspacePath(filePath) {
         return fileSystem.getRelativePathToWorkspace(filePath)
@@ -1411,7 +1411,12 @@ interface RuntimeReferenceGitMetadataProvider {
     startLine: number,
     endLine: number
   ): Promise<GitExportMetadata>
-  getModuleMetadata(filePath: string): Promise<GitModuleMetadata | undefined>
+  getModuleMetadata(
+    filePath: string,
+    options?: {
+      includeAuthors?: boolean
+    }
+  ): Promise<GitModuleMetadata | undefined>
   getWorkspacePath(filePath: string): string
   getExportHistory?(options?: ExportHistoryOptions): ExportHistoryGenerator
 }
@@ -3976,7 +3981,8 @@ async function buildReferenceBaseArtifactValue(options: {
   if (gitMetadataProvider) {
     try {
       const moduleMetadata = await gitMetadataProvider.getModuleMetadata(
-        options.filePath
+        options.filePath,
+        { includeAuthors: false }
       )
 
       if (moduleMetadata) {

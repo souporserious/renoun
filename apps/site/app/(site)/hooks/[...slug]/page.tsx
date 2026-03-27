@@ -15,6 +15,7 @@ import { MDX } from '@/components/MDX'
 import { References } from '@/components/Reference'
 import { SiblingLink } from '@/components/SiblingLink'
 import { TableOfContents } from '@/components/TableOfContents'
+import { coerceDate } from '@/utils/date'
 
 export async function generateStaticParams() {
   const entries = await HooksDirectory.getEntries({ recursive: true })
@@ -73,8 +74,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
     : []
   const isExamplesPage = slug.at(-1) === 'examples'
   const hookExports = isExamplesPage ? undefined : await hookEntry.getExports()
-  const hookSections = isExamplesPage ? [] : await hookEntry.getSections()
-  const updatedAt = await hookEntry.getLastCommitDate()
+  const updatedAt = coerceDate(await hookEntry.getLastCommitDate())
   const [previousEntry, nextEntry] = await hookEntry.getSiblings({
     collection: RootCollection,
   })
@@ -100,11 +100,14 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
     })
   }
 
-  if (hookSections.length) {
+  if (hookExports?.length) {
     sections.push({
       id: 'api-reference',
       title: 'API Reference',
-      children: hookSections,
+      children: hookExports.map((fileExport) => ({
+        id: fileExport.slug,
+        title: fileExport.title,
+      })),
     })
   }
 
@@ -162,7 +165,7 @@ export default async function Hook(props: PageProps<'/hooks/[...slug]'>) {
             <h2 id="api-reference" css={{ margin: '0 0 2rem' }}>
               API Reference
             </h2>
-            <References source={hookEntry} />
+            <References fileExports={hookExports} variant="summary" />
           </div>
         ) : null}
 

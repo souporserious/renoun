@@ -2080,6 +2080,78 @@ describe('analysis node client transport guards', () => {
     ).toHaveLength(2)
   })
 
+  test('revives git metadata dates for reference base artifacts returned over RPC', async () => {
+    process.env['RENOUN_SERVER_PORT'] = '4545'
+    process.env['RENOUN_SERVER_ID'] = 'server-id'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS_EFFECTIVE'] = '0'
+
+    const callMethod = vi.fn(async (method: string) => {
+      if (
+        method === 'readFreshReferenceBaseArtifact' ||
+        method === 'getReferenceBaseArtifact'
+      ) {
+        return {
+          exportMetadata: [],
+          gitMetadataByName: {
+            exportedValue: {
+              firstCommitDate: '2024-01-01T00:00:00.000Z',
+              lastCommitDate: '2024-01-02T00:00:00.000Z',
+              firstCommitHash: 'a1',
+              lastCommitHash: 'b1',
+            },
+          },
+          fileGitMetadata: {
+            authors: [
+              {
+                name: 'Ada',
+                commitCount: 1,
+                firstCommitDate: '2024-01-01T00:00:00.000Z',
+                lastCommitDate: '2024-01-02T00:00:00.000Z',
+              },
+            ],
+            firstCommitDate: '2024-01-01T00:00:00.000Z',
+            lastCommitDate: '2024-01-02T00:00:00.000Z',
+          },
+        }
+      }
+
+      throw new Error(`Unexpected method: ${method}`)
+    })
+
+    mocks.WebSocketClient.mockImplementation(function MockWebSocketClient() {
+      return {
+        callMethod,
+        ready: vi.fn(async () => undefined),
+      }
+    })
+
+    const module = await import('./node-client.ts')
+    const fresh = await module.readFreshReferenceBaseArtifact(
+      '/project/src/a.ts',
+      false
+    )
+    const cached = await module.getReferenceBaseArtifact(
+      '/project/src/a.ts',
+      false
+    )
+
+    expect(fresh?.fileGitMetadata.lastCommitDate).toBeInstanceOf(Date)
+    expect(fresh?.gitMetadataByName.exportedValue?.firstCommitDate).toBeInstanceOf(
+      Date
+    )
+    expect(cached.fileGitMetadata.firstCommitDate).toBeInstanceOf(Date)
+    expect(cached.fileGitMetadata.lastCommitDate?.toISOString()).toBe(
+      '2024-01-02T00:00:00.000Z'
+    )
+    expect(cached.fileGitMetadata.authors[0]?.lastCommitDate).toBeInstanceOf(
+      Date
+    )
+    expect(
+      cached.gitMetadataByName.exportedValue?.lastCommitDate?.toISOString()
+    ).toBe('2024-01-02T00:00:00.000Z')
+  })
+
   test('refresh notifications prevent stale in-flight dependency-aware RPC results from being cached', async () => {
     process.env['RENOUN_SERVER_PORT'] = '4545'
     process.env['RENOUN_SERVER_ID'] = 'server-id'

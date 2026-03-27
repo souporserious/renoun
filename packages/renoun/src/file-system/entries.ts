@@ -709,6 +709,12 @@ const REFERENCE_RESOLVED_TYPES_VALUE_CACHE_DEPENDENCY = {
   name: 'reference-resolved-types-value-cache',
   version: REFERENCE_RESOLVED_TYPES_VALUE_CACHE_VERSION,
 } as const
+const DIRECTORY_STRUCTURE_VALUE_CACHE_VERSION =
+  `${FS_STRUCTURE_CACHE_VERSION}:1`
+const DIRECTORY_STRUCTURE_VALUE_CACHE_DEPENDENCY = {
+  name: 'directory-structure-value-cache',
+  version: DIRECTORY_STRUCTURE_VALUE_CACHE_VERSION,
+} as const
 
 function normalizeModuleExportTags(
   tags:
@@ -872,6 +878,33 @@ function createReferenceResolvedTypesValueCacheNodeKey(options: {
       scope: options.scope,
       workspaceRootPath: normalizePathKey(options.workspaceRootPath),
       filePath: normalizePathKey(options.filePath),
+      analysisMetadata: options.analysisMetadata,
+    },
+  })
+}
+
+function createDirectoryStructureValueCacheNodeKey(options: {
+  scope: string
+  workspaceRootPath: string
+  directoryPath: string
+  filterSignature: string
+  sortSignature: string
+  basePathname: string | null
+  optionsSignature: string
+  analysisMetadata: unknown
+}): string {
+  return createPersistentCacheNodeKey({
+    domain: 'directory-structure',
+    domainVersion: DIRECTORY_STRUCTURE_VALUE_CACHE_VERSION,
+    namespace: 'directory',
+    payload: {
+      scope: options.scope,
+      workspaceRootPath: normalizePathKey(options.workspaceRootPath),
+      directoryPath: normalizePathKey(options.directoryPath),
+      filterSignature: options.filterSignature,
+      sortSignature: options.sortSignature,
+      basePathname: options.basePathname,
+      optionsSignature: options.optionsSignature,
       analysisMetadata: options.analysisMetadata,
     },
   })
@@ -1780,6 +1813,13 @@ export class File<
     }
   }
 
+  protected async resolveSharedStructureGitMetadata(
+    _structureOptions: NormalizedStructureOptions,
+    _environment: 'production' | 'development'
+  ): Promise<GitMetadata | undefined> {
+    return undefined
+  }
+
   async #getCurrentWorkspaceChangeToken(): Promise<string | undefined> {
     const session = this.#directory.getSession()
     const token = await session.getWorkspaceChangeToken(
@@ -1854,9 +1894,14 @@ export class File<
       }
     }
 
-    const gitMetadata = isProduction
-      ? await this.#getCachedGitMetadata()
-      : await this.#loadGitMetadataForStructure()
+    const gitMetadata =
+      (await this.resolveSharedStructureGitMetadata(
+        structureOptions,
+        isProduction ? 'production' : 'development'
+      )) ??
+      (isProduction
+        ? await this.#getCachedGitMetadata()
+        : await this.#loadGitMetadataForStructure())
     this.#structureGitMetadata = gitMetadata
     this.#structureGitMetadataSignature =
       createGitMetadataCacheSignature(gitMetadata)
@@ -3523,6 +3568,43 @@ export class JavaScriptFile<
     })
   }
 
+  async #getAvailableReferenceBaseDataForStructureReuse():
+    Promise<JavaScriptFileReferenceBaseData | undefined> {
+    const currentReferenceBaseData = this.#getCurrentReferenceBaseData()
+
+    if (currentReferenceBaseData) {
+      return currentReferenceBaseData
+    }
+
+    const pendingReferenceBaseData = this.#getPendingReferenceBaseData()
+
+    if (pendingReferenceBaseData) {
+      return pendingReferenceBaseData
+    }
+
+    return this.#readPersistedReferenceBaseDataIfAvailable()
+  }
+
+  protected override async resolveSharedStructureGitMetadata(
+    structureOptions: NormalizedStructureOptions,
+    environment: 'production' | 'development'
+  ): Promise<GitMetadata | undefined> {
+    if (
+      !structureOptions.includeExports ||
+      (structureOptions.includeGitDates === false && !structureOptions.includeAuthors)
+    ) {
+      return undefined
+    }
+
+    const referenceBaseData =
+      (await this.#getAvailableReferenceBaseDataForStructureReuse()) ??
+      (environment === 'production'
+        ? await this.getCachedReferenceBaseData()
+        : undefined)
+
+    return referenceBaseData?.fileGitMetadata
+  }
+
   #getStaticExportStructure(
     exportMetadata: JavaScriptFileExportMetadata,
     options: NormalizedStructureOptions,
@@ -4687,7 +4769,13 @@ export class JavaScriptFile<
   async #buildExportStructuresValue(
     options: NormalizedStructureOptions
   ): Promise<ModuleExportStructure[] | undefined> {
-    const exportMetadata = await this.#getFilteredExportMetadata()
+    const referenceBaseData =
+      !options.includeResolvedTypes && options.includeGitDates !== false
+        ? await this.getCachedReferenceBaseData()
+        : await this.#getAvailableReferenceBaseDataForStructureReuse()
+    const exportMetadata =
+      referenceBaseData?.exportMetadata ??
+      (await this.#getFilteredExportMetadata())
 
     if (exportMetadata.length === 0) {
       return undefined
@@ -4700,7 +4788,9 @@ export class JavaScriptFile<
         )
       }
 
-      const gitMetadataByName = await this.getCachedGitExportMetadataByName()
+      const gitMetadataByName =
+        referenceBaseData?.gitMetadataByName ??
+        (await this.getCachedGitExportMetadataByName())
 
       return exportMetadata.map((metadata) =>
         this.#getStaticExportStructure(
@@ -9160,6 +9250,7 @@ export class Directory<
   ): Promise<Array<DirectoryStructure | FileStructure>> {
     const session = this.#getSession()
     const directoryPath = this.absolutePath
+    const fileSystem = this.getFileSystem()
     const normalizedOptions = normalizeStructureOptions(options)
     const gitHistoryDependency =
       normalizedOptions.includeGitDates !== false || normalizedOptions.includeAuthors
@@ -9269,7 +9360,50 @@ export class Directory<
     }
 
     const nodeKey = this.getStructureCacheKey(normalizedOptions)
+    const stableNodeKey =
+      shouldBuildFileStructuresInline && fileSystem.usesPersistentCacheByDefault()
+        ? (() => {
+            const workspaceRootPath = normalizePathKey(
+              fileSystem.getRelativePathToWorkspace('.')
+            )
+            const workspaceRelativeDirectoryPath = normalizePathKey(
+              fileSystem.getRelativePathToWorkspace(directoryPath)
+            )
+
+            return createDirectoryStructureValueCacheNodeKey({
+              scope: getPersistentCacheScope(this, fileSystem, workspaceRootPath),
+              workspaceRootPath,
+              directoryPath: workspaceRelativeDirectoryPath,
+              filterSignature: this.#getFilterSignature(),
+              sortSignature: this.#getSortSignature(),
+              basePathname: this.#basePathname ?? null,
+              optionsSignature: getStructureOptionsSignature(normalizedOptions),
+              analysisMetadata: fileSystem.getAnalysisCacheMetadata(),
+            })
+          })()
+        : undefined
     const persist = this.#canPersistStructureCache()
+
+    if (stableNodeKey) {
+      return session.cache.getOrCompute(
+        stableNodeKey,
+        {
+          persist,
+          constDeps: gitHistoryDependency
+            ? [DIRECTORY_STRUCTURE_VALUE_CACHE_DEPENDENCY, gitHistoryDependency]
+            : [DIRECTORY_STRUCTURE_VALUE_CACHE_DEPENDENCY],
+          staleWhileRevalidate: getFileSystemRuntimeSWRReadOptions(),
+        },
+        async (ctx) => {
+          ctx.recordConstDep(
+            DIRECTORY_STRUCTURE_VALUE_CACHE_DEPENDENCY.name,
+            DIRECTORY_STRUCTURE_VALUE_CACHE_DEPENDENCY.version
+          )
+          recordGitHistoryDependency(ctx, gitHistoryDependency)
+          return buildStructure(ctx)
+        }
+      )
+    }
 
     return session.cache.getOrCompute(
       nodeKey,

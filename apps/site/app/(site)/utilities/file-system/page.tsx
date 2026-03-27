@@ -19,7 +19,11 @@ export default async function Page() {
 
   const Content = await docFile.getExportValue('default')
   const docSections = await docFile.getSections()
-  const referenceSections = await sourceFile.getSections()
+  const sourceExports = await sourceFile.getExports()
+  const referenceSections = sourceExports.map((fileExport) => ({
+    id: fileExport.slug,
+    title: fileExport.title,
+  }))
 
   const sections: TableOfContentsSection[] = [
     ...docSections,
@@ -67,7 +71,7 @@ export default async function Page() {
           >
             API Reference
           </h2>
-          <References source={sourceFile} />
+          <References fileExports={sourceExports} variant="summary" />
         </div>
       </div>
 

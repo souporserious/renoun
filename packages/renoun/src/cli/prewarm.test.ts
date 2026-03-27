@@ -2439,4 +2439,53 @@ describe('collectRenounPrewarmTargets', () => {
       ])
     )
   })
+
+  test('collects History component repository sources as export-history prewarm targets', async () => {
+    project.createSourceFile(
+      '/repo/src/history-view.tsx',
+      `
+        import { Directory, History } from 'renoun'
+
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: {
+            path: 'owner/repo',
+            ref: 'main',
+          },
+        })
+        const repo = docs.getRepository()
+
+        export function Page() {
+          return (
+            <History
+              source={repo}
+              sourceOptions={{
+                ref: 'latest',
+                entry: ['src/index.ts'],
+              }}
+            />
+          )
+        }
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.exportHistory).toEqual(
+      expect.arrayContaining([
+        {
+          repository: {
+            path: 'owner/repo',
+            ref: 'main',
+          },
+          sparsePaths: ['./src/nodes'],
+          options: {
+            ref: 'latest',
+            entry: ['src/index.ts'],
+          },
+        },
+      ])
+    )
+  })
 })

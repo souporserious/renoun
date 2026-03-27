@@ -182,6 +182,10 @@ interface FileExportIndex {
   refCommit: string
   path: string
   headBlobSha: string
+  fileFirstCommitDate?: string
+  fileLastCommitDate?: string
+  fileFirstCommitHash?: string
+  fileLastCommitHash?: string
   perExport: Record<
     string,
     {
@@ -702,6 +706,64 @@ async function addSparseCheckout(
   return spawnWithResult('git', ['sparse-checkout', 'add', '--', ...paths], {
     cwd: repoRoot,
     verbose,
+  })
+}
+
+async function reapplySparseCheckout(repoRoot: string, verbose: boolean) {
+  return spawnWithResult('git', ['sparse-checkout', 'reapply'], {
+    cwd: repoRoot,
+    verbose,
+  })
+}
+
+async function checkoutWorktreePaths(
+  repoRoot: string,
+  scopeDirectories: string[],
+  verbose: boolean
+) {
+  const paths = scopeDirectories.length ? scopeDirectories : ['.']
+  return spawnWithResult('git', ['checkout', '--force', '--', ...paths], {
+    cwd: repoRoot,
+    verbose,
+  })
+}
+
+async function restoreSparseCheckoutPaths(
+  repoRoot: string,
+  scopeDirectories: string[],
+  verbose: boolean
+) {
+  const normalized = normalizeScopeDirectories(scopeDirectories)
+
+  await withSparseCheckoutLock(repoRoot, async () => {
+    if (!(await isSparseCheckoutInitialized(repoRoot))) {
+      await spawnWithResult('git', ['sparse-checkout', 'init', '--cone'], {
+        cwd: repoRoot,
+        verbose,
+      })
+    }
+
+    if (normalized.includes('.')) {
+      await setSparseCheckout(repoRoot, ['.'], verbose)
+    } else {
+      const addResult = await addSparseCheckout(repoRoot, normalized, verbose)
+
+      if (addResult.status !== 0) {
+        const merged = normalizeScopeDirectories([
+          ...(await readSparseCheckoutPaths(repoRoot)),
+          ...normalized,
+        ])
+
+        await setSparseCheckout(repoRoot, merged, verbose)
+      }
+    }
+
+    await reapplySparseCheckout(repoRoot, verbose)
+    await checkoutWorktreePaths(repoRoot, normalized, verbose)
+
+    if (await supportsGitBackfill()) {
+      await runGitBackfill(repoRoot, verbose)
+    }
   })
 }
 
@@ -1228,10 +1290,18 @@ export class GitFileSystem
     }
 
     const analysisRoot = await this.#ensureAnalysisRepoReady()
-    await this.#ensureAnalysisScope(
-      analysisRoot,
+    const analysisScopeDirectories =
       this.#getAnalysisScopeDirectories(relativePath)
-    )
+    await this.#ensureAnalysisScope(analysisRoot, analysisScopeDirectories)
+
+    const preparedFilePath = join(analysisRoot, relativePath)
+    if (!existsSync(preparedFilePath)) {
+      await this.#restoreAnalysisScope(
+        analysisRoot,
+        analysisScopeDirectories,
+        relativePath
+      )
+    }
 
     const analysisScopeId = await this.#createAnalysisScopeId()
     const tsConfigFilePath = join(
@@ -1240,7 +1310,7 @@ export class GitFileSystem
     )
 
     return {
-      filePath: join(analysisRoot, relativePath),
+      filePath: preparedFilePath,
       analysisOptions: this.#createAnalysisOptions(
         tsConfigFilePath,
         analysisScopeId
@@ -1431,6 +1501,26 @@ export class GitFileSystem
     }
 
     await ensureCachedScope(analysisRoot, merged, this.verbose)
+    this.#preparedAnalysisScope = new Set(merged)
+  }
+
+  async #restoreAnalysisScope(
+    analysisRoot: string,
+    scopeDirectories: string[],
+    expectedRelativePath: string
+  ): Promise<void> {
+    const expectedAbsolutePath = join(analysisRoot, expectedRelativePath)
+
+    if (existsSync(expectedAbsolutePath)) {
+      return
+    }
+
+    await restoreSparseCheckoutPaths(analysisRoot, scopeDirectories, this.verbose)
+
+    const { merged } = mergeScopeDirectories(
+      this.#preparedAnalysisScope,
+      scopeDirectories
+    )
     this.#preparedAnalysisScope = new Set(merged)
   }
 
@@ -4600,19 +4690,29 @@ export class GitFileSystem
   }
 
   /** Get metadata for a JavaScript module file (exports at current ref only). */
-  async getModuleMetadata(filePath: string): Promise<GitModuleMetadata> {
+  async getModuleMetadata(
+    filePath: string,
+    options: {
+      includeAuthors?: boolean
+    } = {}
+  ): Promise<GitModuleMetadata> {
     this.#assertOpen()
     await this.#ensureRepoReady()
 
-    const base = await this.getFileMetadata(filePath)
-    if (!hasJavaScriptLikeExtension(base.path)) {
+    const includeAuthors = options.includeAuthors !== false
+    const refCommit = await this.#getRefCommit()
+    const relativePath = this.#normalizeToRepoPath(filePath)
+
+    if (!hasJavaScriptLikeExtension(relativePath)) {
+      const base = await this.getFileMetadata(filePath)
       return { ...base, kind: 'module', exports: {} }
     }
 
     const headMeta = await this.#git!.getBlobMeta(
-      `${base.refCommit}:${base.path}`
+      `${refCommit}:${relativePath}`
     )
     if (!headMeta) {
+      const base = await this.getFileMetadata(filePath)
       return { ...base, kind: 'module', exports: {} }
     }
 
@@ -4621,7 +4721,7 @@ export class GitFileSystem
     // lets the index builder focus on only these names.
     const headExportsMap = await this.#getOrParseExportsForBlob(
       headMeta.sha,
-      base.path,
+      relativePath,
       () => this.#git!.getBlobContentBySha(headMeta.sha)
     )
 
@@ -4635,11 +4735,25 @@ export class GitFileSystem
     const headExportSet = new Set(headExportNames)
 
     const index = await this.#buildFileExportIndex(
-      base.refCommit,
-      base.path,
+      refCommit,
+      relativePath,
       headMeta.sha,
       headExportSet
     )
+
+    const base = includeAuthors
+      ? await this.getFileMetadata(filePath)
+      : ({
+          kind: 'file',
+          path: relativePath,
+          ref: this.ref,
+          refCommit,
+          authors: [],
+          firstCommitDate: index.fileFirstCommitDate,
+          lastCommitDate: index.fileLastCommitDate,
+          firstCommitHash: index.fileFirstCommitHash,
+          lastCommitHash: index.fileLastCommitHash,
+        } satisfies GitFileMetadata)
 
     const exports: Record<string, GitExportMetadata> = {}
     for (const name of headExportNames.sort()) {
@@ -5496,6 +5610,14 @@ export class GitFileSystem
           refCommit,
           path: relPath,
           headBlobSha: headSha,
+          fileFirstCommitDate: commits[0]
+            ? new Date(commits[0].unix * 1000).toISOString()
+            : undefined,
+          fileLastCommitDate: commits[commits.length - 1]
+            ? new Date(commits[commits.length - 1].unix * 1000).toISOString()
+            : undefined,
+          fileFirstCommitHash: commits[0]?.sha,
+          fileLastCommitHash: commits[commits.length - 1]?.sha,
           perExport,
         } satisfies FileExportIndex
       }

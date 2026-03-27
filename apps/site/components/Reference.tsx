@@ -1,5 +1,6 @@
 import {
   Reference as DefaultReference,
+  Link,
   type ReferenceProps,
   type ReferenceComponents,
   type ModuleExport,
@@ -10,7 +11,7 @@ import type { CSSObject } from 'restyle'
 import { Collapse } from './Collapse'
 import { Markdown } from './Markdown'
 
-type ReferencesProps =
+type ReferencesProps = (
   | {
       source: ReferenceProps['source']
       fileExports?: undefined
@@ -19,8 +20,15 @@ type ReferencesProps =
       fileExports: ModuleExport<any>[]
       source?: undefined
     }
+) & {
+  variant?: 'full' | 'summary'
+}
 
 export function References(props: ReferencesProps) {
+  if (props.variant === 'summary' && props.fileExports !== undefined) {
+    return <SummaryReferences fileExports={props.fileExports} />
+  }
+
   const content =
     props.source !== undefined ? (
       <Reference source={props.source} />
@@ -42,6 +50,71 @@ export function References(props: ReferencesProps) {
       }}
     >
       {content}
+    </div>
+  )
+}
+
+function SummaryReferences({
+  fileExports,
+}: {
+  fileExports: ModuleExport<any>[]
+}) {
+  return (
+    <div
+      css={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1.5rem',
+      }}
+    >
+      {fileExports.map((fileExport) => {
+        const title = fileExport.title || fileExport.name
+        const description =
+          typeof fileExport.description === 'string'
+            ? fileExport.description
+            : undefined
+
+        return (
+          <section
+            key={fileExport.name}
+            id={fileExport.slug || fileExport.name}
+            css={{
+              paddingBottom: '1.5rem',
+              borderBottom: '1px solid var(--color-separator)',
+            }}
+          >
+            <div
+              css={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: '1rem',
+              }}
+            >
+              <h3 css={{ margin: 0 }}>{title}</h3>
+              <Link source={fileExport} variant="edit">
+                {({ href }) => (
+                  <a
+                    href={href}
+                    css={{
+                      fontSize: 'var(--font-size-body-3)',
+                      color: 'var(--color-foreground-interactive)',
+                      textDecoration: 'none',
+                    }}
+                  >
+                    View Source
+                  </a>
+                )}
+              </Link>
+            </div>
+            {description ? (
+              <div css={{ marginTop: '0.75rem' }}>
+                <Markdown>{description}</Markdown>
+              </div>
+            ) : null}
+          </section>
+        )
+      })}
     </div>
   )
 }

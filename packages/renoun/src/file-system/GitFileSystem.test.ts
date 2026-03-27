@@ -3298,6 +3298,152 @@ describe('GitFileSystem', () => {
     }
   )
 
+  it.sequential(
+    'restores deleted explicit-ref analysis files before reading them again',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/nodes/core/NodeFunction.js',
+              content: `export function NodeFunction() { return 1 }`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        using store = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+
+        const prepared = await store.prepareAnalysis(
+          'src/nodes/core/NodeFunction.js'
+        )
+        expect(existsSync(prepared.filePath)).toBe(true)
+
+        rmSync(prepared.filePath, { force: true })
+        expect(existsSync(prepared.filePath)).toBe(false)
+
+        const exports = await store.getFileExports('src/nodes/core/NodeFunction.js')
+
+        expect(exports.map((entry) => entry.name)).toContain('NodeFunction')
+        expect(existsSync(prepared.filePath)).toBe(true)
+      } finally {
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.sequential(
+    'restoring one explicit-ref analysis file does not evict another prepared scope from a stale sparse-checkout file',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/nodes/core/NodeFunction.js',
+              content: `export function NodeFunction() { return 1 }`,
+            },
+            {
+              filename: 'src/nodes/accessors/Arrays.js',
+              content: `export const ArrayValue = 2`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        using firstStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+        using secondStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+
+        const firstPrepared = await firstStore.prepareAnalysis(
+          'src/nodes/core/NodeFunction.js'
+        )
+        const secondPrepared = await secondStore.prepareAnalysis(
+          'src/nodes/accessors/Arrays.js'
+        )
+
+        expect(existsSync(firstPrepared.filePath)).toBe(true)
+        expect(existsSync(secondPrepared.filePath)).toBe(true)
+
+        const sparseCheckoutPath = git(dirname(firstPrepared.filePath), [
+          'rev-parse',
+          '--git-path',
+          'info/sparse-checkout',
+        ])
+        writeFileSync(sparseCheckoutPath, 'src/nodes/core\n')
+
+        rmSync(firstPrepared.filePath, { force: true })
+        expect(existsSync(firstPrepared.filePath)).toBe(false)
+        expect(existsSync(secondPrepared.filePath)).toBe(true)
+
+        const exports = await firstStore.getFileExports('src/nodes/core/NodeFunction.js')
+
+        expect(exports.map((entry) => entry.name)).toContain('NodeFunction')
+        expect(existsSync(firstPrepared.filePath)).toBe(true)
+        expect(existsSync(secondPrepared.filePath)).toBe(true)
+      } finally {
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
   test('invalidates explicit-ref analysis caches when remote refs advance', async ({
     repoRoot,
     cacheDirectory,

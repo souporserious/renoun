@@ -28,6 +28,10 @@ import type {
   JavaScriptFileReferenceBaseData,
   JavaScriptFileResolvedTypesData,
 } from '../file-system/reference-artifacts.ts'
+import {
+  deserializeJavaScriptFileReferenceBaseDataFromCache,
+  type PersistedJavaScriptFileReferenceBaseData,
+} from '../file-system/reference-artifacts.ts'
 import type { Section } from '../file-system/types.ts'
 import {
   getAnalysisClientBrowserRuntime as getSharedAnalysisClientBrowserRuntime,
@@ -245,6 +249,14 @@ function ensureRefreshSubscriptionsForCurrentClients(): void {
       isCurrentState: () => isCurrentBrowserClientState(cachedState),
     })
   }
+}
+
+function normalizeReferenceBaseArtifactFromRpc(
+  value: JavaScriptFileReferenceBaseData
+): JavaScriptFileReferenceBaseData {
+  return deserializeJavaScriptFileReferenceBaseDataFromCache(
+    value as PersistedJavaScriptFileReferenceBaseData
+  )
 }
 
 function isCurrentActiveClientState(
@@ -1868,7 +1880,7 @@ export async function readFreshReferenceBaseArtifact(
 ): Promise<JavaScriptFileReferenceBaseData | undefined> {
   const client = await getReadyClient()
   if (client) {
-    return callClientMethod<
+    const value = await callClientMethod<
       {
         filePath: string
         stripInternal: boolean
@@ -1880,6 +1892,8 @@ export async function readFreshReferenceBaseArtifact(
       stripInternal,
       analysisOptions,
     })
+
+    return value ? normalizeReferenceBaseArtifactFromRpc(value) : undefined
   }
 
   const serverModules = await loadAnalysisClientServerModules()
@@ -1913,7 +1927,9 @@ export async function getReferenceBaseArtifact(
       includeClientRpcDependencies: true,
     })
 
-    return toClientRpcResponseValue(response)
+    return normalizeReferenceBaseArtifactFromRpc(
+      toClientRpcResponseValue(response)
+    )
   }
 
   const serverModules = await loadAnalysisClientServerModules()
