@@ -397,9 +397,6 @@ vi.mock('@renoun/mdx/utils', () => ({
   getMDXSections: getMDXSectionsMock,
 }))
 
-let prewarmRenounRpcServerCache:
-  | ((options?: { analysisOptions?: AnalysisOptions }) => Promise<void>)
-  | undefined
 let startPrewarmRenounRpcServerCache:
   | ((
       options?: {
@@ -417,6 +414,14 @@ let collectRenounPrewarmTargets:
       analysisOptions?: AnalysisOptions
     ) => Promise<RenounPrewarmTargets>)
   | undefined
+
+async function runPrewarmToSettled(options?: {
+  analysisOptions?: AnalysisOptions
+}): Promise<void> {
+  const prewarm = startPrewarmRenounRpcServerCache!(options)
+  await prewarm.ready
+  await prewarm.settled
+}
 
 beforeAll(async () => {
   vi.doMock(getProgramModuleSpecifier, () => ({
@@ -466,7 +471,6 @@ beforeAll(async () => {
   }))
 
   const prewarm = await import(prewarmModuleSpecifier)
-  prewarmRenounRpcServerCache = prewarm.prewarmRenounRpcServerCache
   startPrewarmRenounRpcServerCache = prewarm.startPrewarmRenounRpcServerCache
   collectRenounPrewarmTargets = prewarm.collectRenounPrewarmTargets
 })
@@ -548,7 +552,7 @@ afterEach(() => {
   delete process.env.NODE_ENV
 })
 
-describe('prewarmRenounRpcServerCache', () => {
+describe('prewarm cache warming', () => {
   test('collects callsites and prewarms file entry caches plus markdown analysis', async () => {
     project.createSourceFile(
       '/repo/src/test.ts',
@@ -615,7 +619,7 @@ describe('prewarmRenounRpcServerCache', () => {
       throw new Error(`Unexpected file read: ${path}`)
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(
       entryGetExportsMock.mock.calls.map((call) => call[0]).sort()
@@ -678,7 +682,7 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetStructureMock).toHaveBeenCalledWith('/repo/docs', {
       includeExports: 'headers',
@@ -714,7 +718,7 @@ describe('prewarmRenounRpcServerCache', () => {
       { overwrite: true }
     )
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
     expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
@@ -784,10 +788,14 @@ describe('prewarmRenounRpcServerCache', () => {
       }
     )
 
+    let prewarm:
+      | ReturnType<NonNullable<typeof startPrewarmRenounRpcServerCache>>
+      | undefined
+
     try {
-      const prewarmPromise = prewarmRenounRpcServerCache!({ analysisOptions })
+      prewarm = startPrewarmRenounRpcServerCache!({ analysisOptions })
       const prewarmStatus = await Promise.race([
-        prewarmPromise.then(() => 'resolved'),
+        prewarm.ready.then(() => 'resolved'),
         new Promise<'timeout'>((resolve) => {
           setTimeout(() => resolve('timeout'), 1_000)
         }),
@@ -805,6 +813,7 @@ describe('prewarmRenounRpcServerCache', () => {
       expect(backgroundStatus).toBe('started')
     } finally {
       releaseStructureWarm?.()
+      await prewarm?.settled
       await new Promise((resolve) => {
         setTimeout(resolve, 0)
       })
@@ -853,7 +862,7 @@ describe('prewarmRenounRpcServerCache', () => {
       return entriesByPath.get(directoryPath) ?? []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual([
       '/repo/docs/a.ts',
@@ -935,7 +944,7 @@ describe('prewarmRenounRpcServerCache', () => {
       return entriesByPath.get(directoryPath) ?? []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
     expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
@@ -954,7 +963,7 @@ describe('prewarmRenounRpcServerCache', () => {
     delete process.env.RENOUN_SERVER_PORT
     delete process.env.RENOUN_SERVER_ID
 
-    await prewarmRenounRpcServerCache!()
+    await runPrewarmToSettled()
 
     expect(getProjectMock).not.toHaveBeenCalled()
     expect(readDirectoryMock).not.toHaveBeenCalled()
@@ -985,16 +994,16 @@ describe('prewarmRenounRpcServerCache', () => {
     ])
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(1)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(2)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
 
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-b')
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(3)
     expect(readDirectoryMock).toHaveBeenCalledTimes(2)
   })
@@ -1021,11 +1030,11 @@ describe('prewarmRenounRpcServerCache', () => {
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
     process.env.NODE_ENV = 'production'
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(1)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(2)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
   })
@@ -1060,11 +1069,11 @@ describe('prewarmRenounRpcServerCache', () => {
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
     process.env.NODE_ENV = 'production'
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
     expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
     expect(entryGetStructureMock).toHaveBeenCalledTimes(1)
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
     expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(2)
     expect(entryGetStructureMock).toHaveBeenCalledTimes(1)
   })
@@ -1093,7 +1102,7 @@ describe('prewarmRenounRpcServerCache', () => {
     ])
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: nestedProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: nestedProjectOptions })
 
     expect(getWorkspaceChangeTokenMock).toHaveBeenCalledWith(repositoryRootPath)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
@@ -1132,7 +1141,7 @@ describe('prewarmRenounRpcServerCache', () => {
 
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
 
     expect(readDirectoryMock).toHaveBeenCalledTimes(2)
     expect(entryGetExportsMock).toHaveBeenCalledTimes(2)
@@ -1140,7 +1149,7 @@ describe('prewarmRenounRpcServerCache', () => {
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-b')
     getWorkspaceChangedPathsSinceTokenMock.mockResolvedValue(['posts/index.ts'])
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
 
     expect(getWorkspaceChangedPathsSinceTokenMock).toHaveBeenCalledWith(
       '/repo',
@@ -1194,7 +1203,7 @@ describe('prewarmRenounRpcServerCache', () => {
     ])
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledTimes(1)
     expect(entryGetExportTypesMock).toHaveBeenCalledTimes(1)
@@ -1204,7 +1213,7 @@ describe('prewarmRenounRpcServerCache', () => {
       'packages/renoun/src/file-system/entries.ts',
     ])
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
 
     expect(getWorkspaceChangedPathsSinceTokenMock).toHaveBeenCalledWith(
       '/repo',
@@ -1251,7 +1260,7 @@ describe('prewarmRenounRpcServerCache', () => {
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/docs/reference.js')
     expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledWith(
@@ -1296,7 +1305,7 @@ describe('prewarmRenounRpcServerCache', () => {
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/docs/headers.js')
     expect(entryGetCachedReferenceBaseDataMock).not.toHaveBeenCalled()
@@ -1325,7 +1334,7 @@ describe('prewarmRenounRpcServerCache', () => {
     ])
     getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
 
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
     expect(entryGetExportsMock).toHaveBeenCalledTimes(1)
@@ -1335,7 +1344,7 @@ describe('prewarmRenounRpcServerCache', () => {
       'guides/readme.mdx',
     ])
 
-    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    await runPrewarmToSettled({ analysisOptions: tokenProjectOptions })
 
     expect(getProjectMock).toHaveBeenCalledTimes(2)
     expect(getWorkspaceChangedPathsSinceTokenMock).toHaveBeenCalledWith(
@@ -1372,7 +1381,7 @@ describe('prewarmRenounRpcServerCache', () => {
     })
 
     await expect(
-      prewarmRenounRpcServerCache!({ analysisOptions })
+      runPrewarmToSettled({ analysisOptions })
     ).resolves.toBe(undefined)
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/working/index.ts')
   })
@@ -1409,7 +1418,7 @@ describe('prewarmRenounRpcServerCache', () => {
     })
 
     await expect(
-      prewarmRenounRpcServerCache!({ analysisOptions })
+      runPrewarmToSettled({ analysisOptions })
     ).resolves.toBe(undefined)
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/failing/index.ts')
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/working/index.ts')
@@ -1444,7 +1453,7 @@ const schema = { answer: 42 }
       filePath: '/repo/guides/examples/schema.ts',
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(getSourceTextMetadataMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1497,7 +1506,7 @@ const schema = { answer: 42 }
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(nodeFileSystemConstructorMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1554,7 +1563,7 @@ const schema = { answer: 42 }
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/src/nodes/TSL.js')
     expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledWith(
@@ -1604,7 +1613,7 @@ const schema = { answer: 42 }
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual([
       '/repo/src/nodes/TSL.js',
@@ -1673,7 +1682,7 @@ const schema = { answer: 42 }
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual([
       '/repo/src/nodes/TSL.js',
@@ -1750,7 +1759,7 @@ const schema = { answer: 42 }
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledTimes(300)
     expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledTimes(32)
@@ -1824,10 +1833,14 @@ const schema = { answer: 42 }
       return []
     })
 
+    let prewarm:
+      | ReturnType<NonNullable<typeof startPrewarmRenounRpcServerCache>>
+      | undefined
+
     try {
-      const prewarmPromise = prewarmRenounRpcServerCache!({ analysisOptions })
+      prewarm = startPrewarmRenounRpcServerCache!({ analysisOptions })
       const prewarmStatus = await Promise.race([
-        prewarmPromise.then(() => 'resolved'),
+        prewarm.ready.then(() => 'resolved'),
         new Promise<'timeout'>((resolve) => {
           setTimeout(() => resolve('timeout'), 250)
         }),
@@ -1845,6 +1858,7 @@ const schema = { answer: 42 }
       expect(backgroundStatus).toBe('started')
     } finally {
       releaseExportWarm?.()
+      await prewarm?.settled
       await new Promise((resolve) => {
         setTimeout(resolve, 0)
       })
@@ -1899,7 +1913,7 @@ const schema = { answer: 42 }
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock).toHaveBeenCalledTimes(96)
     expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledTimes(96)
@@ -1960,7 +1974,7 @@ const schema = { answer: 42 }
       return []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(entryGetExportsMock.mock.calls.map((call) => call[0])).toEqual([
       '/repo/src/nodes/TSL.js',
@@ -2015,7 +2029,7 @@ const schema = { answer: 42 }
       return entriesByPath.get(directoryPath) ?? []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
     expect(readDirectoryMock).toHaveBeenCalledWith('/repo/known')
@@ -2088,7 +2102,7 @@ const schema = { answer: 42 }
       return entriesByPath.get(directoryPath) ?? []
     })
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(readDirectoryMock).toHaveBeenCalledTimes(3)
     expect(readDirectoryMock).toHaveBeenCalledWith('/repo/src/app')
@@ -2122,7 +2136,7 @@ const schema = { answer: 42 }
       { overwrite: true }
     )
 
-    await prewarmRenounRpcServerCache!({ analysisOptions })
+    await runPrewarmToSettled({ analysisOptions })
 
     expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
     expect(repositoryGetExportHistoryMock).toHaveBeenCalledWith(undefined)
@@ -2182,10 +2196,14 @@ const schema = { answer: 42 }
       }
     })
 
+    let prewarm:
+      | ReturnType<NonNullable<typeof startPrewarmRenounRpcServerCache>>
+      | undefined
+
     try {
-      const prewarmPromise = prewarmRenounRpcServerCache!({ analysisOptions })
+      prewarm = startPrewarmRenounRpcServerCache!({ analysisOptions })
       const prewarmStatus = await Promise.race([
-        prewarmPromise.then(() => 'resolved'),
+        prewarm.ready.then(() => 'resolved'),
         new Promise<'timeout'>((resolve) => {
           setTimeout(() => resolve('timeout'), 250)
         }),
@@ -2203,6 +2221,7 @@ const schema = { answer: 42 }
       expect(backgroundStatus).toBe('started')
     } finally {
       releaseHistoryWarm?.()
+      await prewarm?.settled
       await new Promise((resolve) => {
         setTimeout(resolve, 0)
       })
@@ -2348,7 +2367,7 @@ describe('startPrewarmRenounRpcServerCache', () => {
       }),
     ])
 
-    expect(settledStatus).toBe('resolved')
+    expect(settledStatus).toBe('timeout')
     expect(entryGetStructureMock).toHaveBeenCalledWith('/repo/src/nodes', {
       includeExports: 'headers',
       includeDescriptions: 'snippet',

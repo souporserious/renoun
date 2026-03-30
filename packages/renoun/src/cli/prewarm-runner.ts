@@ -194,8 +194,7 @@ async function runPrewarmInline(
   completionPhase: PrewarmCompletionPhase = 'settled'
 ): Promise<void> {
   try {
-    const { prewarmRenounRpcServerCache, startPrewarmRenounRpcServerCache } =
-      await import('./prewarm.ts')
+    const { startPrewarmRenounRpcServerCache } = await import('./prewarm.ts')
 
     if (completionPhase === 'ready') {
       await startPrewarmRenounRpcServerCache({
@@ -203,7 +202,9 @@ async function runPrewarmInline(
         startSettledInBackground: false,
       }).ready
     } else {
-      await prewarmRenounRpcServerCache(options)
+      const handle = startPrewarmRenounRpcServerCache(options)
+      await handle.ready
+      await handle.settled
     }
 
     getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({

@@ -136,7 +136,6 @@ function createResolvedPrewarmHandle() {
 
 const startPrewarmSafelyMock = vi.fn(() => createResolvedPrewarmHandle())
 const runPrewarmSafelyMock = vi.fn(async () => undefined)
-const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
 
 vi.mock('./prewarm-runner.ts', () => ({
   BUILD_PREWARM_REQUEST_TIMEOUT_MS: 300000,
@@ -147,10 +146,6 @@ vi.mock('./prewarm-runner.ts', () => ({
   }),
   startPrewarmSafely: startPrewarmSafelyMock,
   runPrewarmSafely: runPrewarmSafelyMock,
-}))
-
-vi.mock('./prewarm.ts', () => ({
-  prewarmRenounRpcServerCache: prewarmRenounRpcServerCacheMock,
 }))
 
 let runAppCommand: (typeof import('./app.ts'))['runAppCommand']
@@ -649,7 +644,6 @@ describe('runAppCommand integration', () => {
           timeoutMs: 300000,
         }
       )
-      expect(prewarmRenounRpcServerCacheMock).not.toHaveBeenCalled()
       expect(spawnMock).toHaveBeenCalledTimes(2)
       expect(spawnMock.mock.calls[0]?.[1]).toEqual([
         '/fake/framework-bin.ts',
@@ -782,7 +776,6 @@ describe('runAppCommand integration', () => {
           timeoutMs: 300000,
         }
       )
-      expect(prewarmRenounRpcServerCacheMock).not.toHaveBeenCalled()
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(spawnMock.mock.calls[0]?.[1]).toEqual([
         '/fake/framework-bin.ts',

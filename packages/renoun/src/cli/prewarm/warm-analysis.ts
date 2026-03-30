@@ -452,6 +452,8 @@ export function startWarmRenounPrewarmTargets(
       return
     }
 
+    const backgroundTasks: Array<Promise<void>> = []
+
     if (backgroundWarmFiles.length > 0) {
       logger.debug('Scheduling background renoun file prewarm tasks', () => ({
         data: {
@@ -459,20 +461,24 @@ export function startWarmRenounPrewarmTargets(
         },
       }))
 
-      void runWithAnalysisRpcRequestPriority('background', async () =>
+      backgroundTasks.push(
+        runWithAnalysisRpcRequestPriority('background', async () =>
           warmFiles(backgroundWarmFiles, {
             analysisOptions: options.analysisOptions,
             fileSystem,
             logger,
             phase: 'background',
           })
-        ).catch((error) => {
-          logger.warn('Background renoun file prewarm target failed', () => ({
-            data: {
-              error: formatPrewarmError(error),
-            },
-          }))
-        })
+        )
+          .then(() => undefined)
+          .catch((error) => {
+            logger.warn('Background renoun file prewarm target failed', () => ({
+              data: {
+                error: formatPrewarmError(error),
+              },
+            }))
+          })
+      )
     }
 
     if (settledDirectoryStructureRequests.length > 0) {
@@ -485,21 +491,25 @@ export function startWarmRenounPrewarmTargets(
         })
       )
 
-      void runWithAnalysisRpcRequestPriority('background', async () =>
+      backgroundTasks.push(
+        runWithAnalysisRpcRequestPriority('background', async () =>
           warmDirectoryStructureRequests(settledDirectoryStructureRequests, {
             analysisOptions: options.analysisOptions,
             logger,
           })
-        ).catch((error) => {
-          logger.warn(
-            'Background renoun directory structure prewarm target failed',
-            () => ({
-              data: {
-                error: formatPrewarmError(error),
-              },
-            })
-          )
-        })
+        )
+          .then(() => undefined)
+          .catch((error) => {
+            logger.warn(
+              'Background renoun directory structure prewarm target failed',
+              () => ({
+                data: {
+                  error: formatPrewarmError(error),
+                },
+              })
+            )
+          })
+      )
     }
 
     if (settledExportHistoryRequests.length > 0) {
@@ -512,19 +522,25 @@ export function startWarmRenounPrewarmTargets(
         })
       )
 
-      void runWithAnalysisRpcRequestPriority('background', async () =>
+      backgroundTasks.push(
+        runWithAnalysisRpcRequestPriority('background', async () =>
           warmExportHistoryRequests(settledExportHistoryRequests, { logger })
-        ).catch((error) => {
-          logger.warn(
-            'Background renoun export history prewarm target failed',
-            () => ({
-              data: {
-                error: formatPrewarmError(error),
-              },
-            })
-          )
-        })
+        )
+          .then(() => undefined)
+          .catch((error) => {
+            logger.warn(
+              'Background renoun export history prewarm target failed',
+              () => ({
+                data: {
+                  error: formatPrewarmError(error),
+                },
+              })
+            )
+          })
+      )
     }
+
+    await Promise.all(backgroundTasks)
 
     logger.debug('Finished settled renoun cache prewarm targets')
   })

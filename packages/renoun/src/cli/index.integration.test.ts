@@ -73,7 +73,6 @@ function createResolvedPrewarmHandle() {
 
 const startPrewarmSafelyMock = vi.fn(() => createResolvedPrewarmHandle())
 const runPrewarmSafelyMock = vi.fn(async () => undefined)
-const prewarmRenounRpcServerCacheDirectMock = vi.fn(async () => undefined)
 
 vi.mock('./prewarm-runner.ts', () => ({
   BUILD_PREWARM_REQUEST_TIMEOUT_MS: 300000,
@@ -84,10 +83,6 @@ vi.mock('./prewarm-runner.ts', () => ({
   }),
   startPrewarmSafely: startPrewarmSafelyMock,
   runPrewarmSafely: runPrewarmSafelyMock,
-}))
-
-vi.mock('./prewarm.ts', () => ({
-  prewarmRenounRpcServerCache: prewarmRenounRpcServerCacheDirectMock,
 }))
 
 const runCacheMaintenanceCommandMock = vi.fn(async (args: string[]) => {
@@ -317,7 +312,6 @@ describe('renoun CLI index integration', () => {
           timeoutMs: 300000,
         }
       )
-      expect(prewarmRenounRpcServerCacheDirectMock).not.toHaveBeenCalled()
       resolvePrewarm()
       await importPromise
       expect(spawnMock).toHaveBeenCalledTimes(1)
@@ -399,7 +393,6 @@ describe('renoun CLI index integration', () => {
           timeoutMs: 300000,
         }
       )
-      expect(prewarmRenounRpcServerCacheDirectMock).not.toHaveBeenCalled()
       expect(spawnMock.mock.calls[0]?.[1]).toEqual([
         '/fake/framework-bin.ts',
         'typegen',

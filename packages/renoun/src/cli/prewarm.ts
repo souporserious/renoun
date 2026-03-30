@@ -36,7 +36,7 @@ import {
 } from './prewarm/collect-targets.ts'
 
 const PREWARM_WORKSPACE_GATE_SCOPE = 'prewarm-workspace-gate'
-const PREWARM_WORKSPACE_GATE_VERSION = '6'
+const PREWARM_WORKSPACE_GATE_VERSION = '7'
 const PREWARM_WORKSPACE_GATE_VERSION_DEP = 'prewarm-workspace-gate-version'
 const PREWARM_WORKSPACE_TOKEN_DEP = 'prewarm-workspace-token'
 
@@ -604,16 +604,6 @@ function startRunPrewarmAnalysis(options?: {
       await warmSettledPromise
     }),
   }
-}
-
-export async function prewarmRenounRpcServerCache(options?: {
-  analysisOptions?: AnalysisOptions
-  requestPriority?: AnalysisRpcRequestPriority
-  startSettledInBackground?: boolean
-}): Promise<void> {
-  const handle = startPrewarmRenounRpcServerCache(options)
-  await handle.ready
-  await handle.settled
 }
 
 export function startPrewarmRenounRpcServerCache(options?: {
