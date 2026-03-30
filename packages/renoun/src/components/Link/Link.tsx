@@ -53,6 +53,7 @@ type VariantOptions<
   : { ref?: string } | undefined
 
 interface ReleaseLinkOptions extends GetReleaseUrlOptions {
+  /** Explicit repository override created with `Repository.local(...)` or `Repository.remote(...)`. */
   repository?: RepositoryInput
 }
 
@@ -330,7 +331,7 @@ async function computeLink<Source, Variant extends LinkVariant>({
         }
       }
 
-      repository = Repository.resolve({
+      repository = Repository.resolveUnsafe({
         baseUrl: gitConfig.baseUrl,
         host: gitConfig.host,
         owner: gitConfig.owner,
@@ -415,7 +416,15 @@ async function computeLink<Source, Variant extends LinkVariant>({
     const href = needsRepository
       ? await (method as any).call(source, {
           ...(options as any),
-          repository: (options as any)?.repository ?? config.git!,
+          repository:
+            Repository.resolve((options as any)?.repository) ??
+            Repository.resolveUnsafe({
+              baseUrl: config.git!.baseUrl,
+              host: config.git!.host,
+              owner: config.git!.owner,
+              repository: config.git!.repository,
+              branch: config.git!.branch,
+            } as RepositoryConfig)!,
         })
       : await (method as any).call(source, options)
 
@@ -457,7 +466,7 @@ async function computeLink<Source, Variant extends LinkVariant>({
           '[renoun] Link variant "commit" requires an `options.sha` value.'
         )
       }
-      const repository = Repository.resolve({
+      const repository = Repository.resolveUnsafe({
         baseUrl: gitConfig.baseUrl,
         host: gitConfig.host,
         owner: gitConfig.owner,
@@ -476,7 +485,7 @@ async function computeLink<Source, Variant extends LinkVariant>({
           '[renoun] Link variant "releaseTag" requires an `options.tag` value.'
         )
       }
-      const repository = Repository.resolve({
+      const repository = Repository.resolveUnsafe({
         baseUrl: gitConfig.baseUrl,
         host: gitConfig.host,
         owner: gitConfig.owner,

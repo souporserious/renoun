@@ -6,7 +6,7 @@ import {
   PREWARM_WORKER_NICENESS,
   PREWARM_WORKER_PAYLOAD_ENV_KEY,
 } from './prewarm/constants.ts'
-import { prewarmRenounRpcServerCache } from './prewarm.ts'
+import { startPrewarmRenounRpcServerCache } from './prewarm.ts'
 
 interface PrewarmWorkerPayload {
   analysisOptions?: AnalysisOptions
@@ -14,7 +14,7 @@ interface PrewarmWorkerPayload {
 }
 
 interface PrewarmWorkerMessage {
-  type: 'started' | 'completed' | 'error'
+  type: 'started' | 'ready' | 'completed' | 'error'
   durationMs: number
   error?: string
   priority?: number
@@ -65,10 +65,17 @@ async function runPrewarmWorker(): Promise<void> {
   })
 
   try {
-    await prewarmRenounRpcServerCache({
+    const handle = startPrewarmRenounRpcServerCache({
       analysisOptions: payload.analysisOptions,
       requestPriority: payload.requestPriority,
     })
+    await handle.ready
+    sendPrewarmWorkerMessage({
+      type: 'ready',
+      durationMs: Date.now() - startedAt,
+      priority,
+    })
+    await handle.settled
     sendPrewarmWorkerMessage({
       type: 'completed',
       durationMs: Date.now() - startedAt,

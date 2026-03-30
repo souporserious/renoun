@@ -21,7 +21,7 @@ const posts = new Directory({
 ```ts
 import { Directory, Repository } from 'renoun'
 
-const repo = new Repository('owner/repo')
+const repo = Repository.remote('owner/repo')
 const repoDirectory = new Directory({
   path: 'src',
   repository: repo,

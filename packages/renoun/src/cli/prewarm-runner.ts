@@ -22,21 +22,30 @@ interface PrewarmWorkerMessage {
   priority?: unknown
 }
 
-interface PrewarmRequest {
+type PrewarmCompletionPhase = 'ready' | 'settled'
+
+export interface StartedPrewarmHandle {
+  ready: Promise<void>
+  settled: Promise<void>
+}
+
+interface PrewarmRequest extends StartedPrewarmHandle {
   id: number
   allowInlineFallback: boolean
+  inlineFallbackCompletionPhase: PrewarmCompletionPhase
   timeoutMs: number
   options?: {
     analysisOptions?: AnalysisOptions
     requestPriority?: AnalysisRpcRequestPriority
   }
-  resolveCompletion: () => void
-  completionPromise: Promise<void>
+  resolveReady: () => void
+  resolveSettled: () => void
   signature: string
 }
 
 interface RunPrewarmSafelyExecutionOptions {
   allowInlineFallback?: boolean
+  inlineFallbackCompletionPhase?: PrewarmCompletionPhase
   requestPriority?: AnalysisRpcRequestPriority
   timeoutMs?: number
 }
@@ -158,6 +167,8 @@ function getPrewarmRequestSignature(options?: {
     return (
       JSON.stringify({
         allowInlineFallback: executionOptions?.allowInlineFallback ?? true,
+        inlineFallbackCompletionPhase:
+          executionOptions?.inlineFallbackCompletionPhase ?? 'ready',
         requestPriority: executionOptions?.requestPriority ?? null,
         timeoutMs: executionOptions?.timeoutMs ?? null,
         options: options ?? null,
@@ -179,11 +190,21 @@ async function runPrewarmInline(
     analysisOptions?: AnalysisOptions
     requestPriority?: AnalysisRpcRequestPriority
   },
-  startedAt = Date.now()
+  startedAt = Date.now(),
+  completionPhase: PrewarmCompletionPhase = 'settled'
 ): Promise<void> {
   try {
-    const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
-    await prewarmRenounRpcServerCache(options)
+    const { prewarmRenounRpcServerCache, startPrewarmRenounRpcServerCache } =
+      await import('./prewarm.ts')
+
+    if (completionPhase === 'ready') {
+      await startPrewarmRenounRpcServerCache({
+        ...options,
+        startSettledInBackground: false,
+      }).ready
+    } else {
+      await prewarmRenounRpcServerCache(options)
+    }
 
     getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({
       data: {
@@ -248,22 +269,33 @@ function createPrewarmRequest(
   },
   executionOptions?: RunPrewarmSafelyExecutionOptions
 ): PrewarmRequest {
-  let resolveCompletion!: () => void
-  const completionPromise = new Promise<void>((resolve) => {
-    resolveCompletion = resolve
+  let resolveReadyPromise!: () => void
+  let resolveSettledPromise!: () => void
+  const readyPromise = new Promise<void>((resolve) => {
+    resolveReadyPromise = resolve
+  })
+  const settledPromise = new Promise<void>((resolve) => {
+    resolveSettledPromise = resolve
   })
 
   return {
     id: ++nextPrewarmRequestId,
     allowInlineFallback: executionOptions?.allowInlineFallback ?? true,
+    inlineFallbackCompletionPhase:
+      executionOptions?.inlineFallbackCompletionPhase ?? 'ready',
     timeoutMs: executionOptions?.timeoutMs ?? PREWARM_REQUEST_TIMEOUT_MS,
     options: {
       ...options,
       requestPriority:
         executionOptions?.requestPriority ?? options?.requestPriority,
     },
-    resolveCompletion,
-    completionPromise,
+    ready: readyPromise,
+    settled: settledPromise,
+    resolveReady: resolveReadyPromise,
+    resolveSettled: () => {
+      resolveReadyPromise()
+      resolveSettledPromise()
+    },
     signature: getPrewarmRequestSignature(options, executionOptions),
   }
 }
@@ -285,7 +317,7 @@ function finalizeActivePrewarmRequest(requestId: number): void {
 
 function queueOrSkipPrewarmRequest(
   request: PrewarmRequest
-): Promise<void> | false {
+): StartedPrewarmHandle | false {
   if (!activePrewarmRequest) {
     return false
   }
@@ -294,18 +326,18 @@ function queueOrSkipPrewarmRequest(
     getDebugLogger().debug(
       'Skipping prewarm request because matching prewarm is already running'
     )
-    return activePrewarmRequest.completionPromise
+    return activePrewarmRequest
   }
 
   if (pendingPrewarmRequest?.signature === request.signature) {
     getDebugLogger().debug(
       'Skipping prewarm request because matching prewarm is already queued'
     )
-    return pendingPrewarmRequest.completionPromise
+    return pendingPrewarmRequest
   }
 
   const replacedPendingRequest = pendingPrewarmRequest !== undefined
-  pendingPrewarmRequest?.resolveCompletion()
+  pendingPrewarmRequest?.resolveSettled()
   pendingPrewarmRequest = request
   getDebugLogger().info('Queued Renoun RPC cache prewarm request', () => ({
     data: {
@@ -313,7 +345,7 @@ function queueOrSkipPrewarmRequest(
       replacedPendingRequest,
     },
   }))
-  return request.completionPromise
+  return request
 }
 
 function startPrewarmRequest(request: PrewarmRequest): void {
@@ -324,6 +356,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
     data: { status: 'running' },
   }))
 
+  let didResolveReady = false
   let didHandleTerminalMessage = false
   let didFinalize = false
   let didStartInlineFallback = false
@@ -340,6 +373,15 @@ function startPrewarmRequest(request: PrewarmRequest): void {
     timeoutHandle = undefined
   }
 
+  const resolveReady = () => {
+    if (didResolveReady) {
+      return
+    }
+
+    didResolveReady = true
+    request.resolveReady()
+  }
+
   const finalizeRequest = () => {
     if (didFinalize) {
       return
@@ -347,36 +389,8 @@ function startPrewarmRequest(request: PrewarmRequest): void {
 
     didFinalize = true
     clearRequestTimeout()
-    request.resolveCompletion()
+    request.resolveSettled()
     finalizeActivePrewarmRequest(request.id)
-  }
-
-  const scheduleRequestTimeout = (execution: 'inline' | 'worker') => {
-    clearRequestTimeout()
-    timeoutHandle = setTimeout(() => {
-      getDebugLogger().warn('Renoun RPC cache prewarm timed out', () => ({
-        data: {
-          durationMs: Date.now() - startedAt,
-          timeoutMs: request.timeoutMs,
-          execution,
-        },
-      }))
-
-      if (execution === 'worker' && !didHandleTerminalMessage) {
-        didHandleTerminalMessage = true
-        isAwaitingInlineFallbackCompletion = request.allowInlineFallback
-
-        if (prewarmWorkerProcess && !prewarmWorkerProcess.killed) {
-          prewarmWorkerProcess.kill('SIGKILL')
-        }
-
-        runInlineFallback()
-        return
-      }
-
-      finalizeRequest()
-    }, request.timeoutMs)
-    timeoutHandle.unref()
   }
 
   const runInlineFallback = () => {
@@ -395,10 +409,49 @@ function startPrewarmRequest(request: PrewarmRequest): void {
     didStartInlineFallback = true
     isAwaitingInlineFallbackCompletion = true
     scheduleRequestTimeout('inline')
-    void runPrewarmInline(request.options, startedAt).finally(() => {
+    void runPrewarmInline(
+      request.options,
+      startedAt,
+      request.inlineFallbackCompletionPhase
+    ).finally(() => {
       isAwaitingInlineFallbackCompletion = false
+      resolveReady()
       finalizeRequest()
     })
+  }
+
+  const scheduleRequestTimeout = (execution: 'inline' | 'worker') => {
+    clearRequestTimeout()
+    timeoutHandle = setTimeout(() => {
+      getDebugLogger().warn('Renoun RPC cache prewarm timed out', () => ({
+        data: {
+          durationMs: Date.now() - startedAt,
+          timeoutMs: request.timeoutMs,
+          execution,
+        },
+      }))
+
+      if (execution === 'worker' && !didHandleTerminalMessage) {
+        didHandleTerminalMessage = true
+        isAwaitingInlineFallbackCompletion =
+          !didResolveReady && request.allowInlineFallback
+
+        if (prewarmWorkerProcess && !prewarmWorkerProcess.killed) {
+          prewarmWorkerProcess.kill('SIGKILL')
+        }
+
+        if (didResolveReady) {
+          finalizeRequest()
+          return
+        }
+
+        runInlineFallback()
+        return
+      }
+
+      finalizeRequest()
+    }, request.timeoutMs)
+    timeoutHandle.unref()
   }
 
   const workerLaunchConfig = resolvePrewarmWorkerLaunchConfig()
@@ -445,8 +498,23 @@ function startPrewarmRequest(request: PrewarmRequest): void {
         return
       }
 
+      if (message.type === 'ready') {
+        resolveReady()
+        getDebugLogger().debug('Renoun prewarm worker reached ready state', () => ({
+          data: {
+            durationMs: parsePrewarmWorkerDurationMs(
+              message,
+              fallbackDurationMs
+            ),
+            execution: 'worker',
+          },
+        }))
+        return
+      }
+
       if (message.type === 'completed') {
         didHandleTerminalMessage = true
+        resolveReady()
         getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({
           data: {
             status: 'finished',
@@ -466,6 +534,23 @@ function startPrewarmRequest(request: PrewarmRequest): void {
         }
 
         didHandleTerminalMessage = true
+        if (didResolveReady) {
+          getDebugLogger().warn(
+            'Renoun RPC cache prewarm settled after ready with an error',
+            () => ({
+              data: {
+                error: parsePrewarmWorkerErrorMessage(message),
+                durationMs: parsePrewarmWorkerDurationMs(
+                  message,
+                  fallbackDurationMs
+                ),
+                execution: 'worker',
+              },
+            })
+          )
+          return
+        }
+
         getDebugLogger().warn('Failed to prewarm Renoun RPC cache', () => ({
           data: {
             error: parsePrewarmWorkerErrorMessage(message),
@@ -493,12 +578,19 @@ function startPrewarmRequest(request: PrewarmRequest): void {
           })
         )
       }
+
+      if (didResolveReady) {
+        finalizeRequest()
+        return
+      }
+
       runInlineFallback()
     })
 
     prewarmWorkerProcess.once('exit', (code, signal) => {
       if (!didHandleTerminalMessage) {
         if ((code ?? 0) === 0 && signal === null) {
+          resolveReady()
           getDebugLogger().info('Renoun RPC cache prewarm completed', () => ({
             data: {
               status: 'finished',
@@ -518,6 +610,12 @@ function startPrewarmRequest(request: PrewarmRequest): void {
               },
             })
           )
+
+          if (didResolveReady) {
+            finalizeRequest()
+            return
+          }
+
           runInlineFallback()
           return
         }
@@ -543,6 +641,24 @@ function startPrewarmRequest(request: PrewarmRequest): void {
   }
 }
 
+export function startPrewarmSafely(
+  options?: {
+    analysisOptions?: AnalysisOptions
+    requestPriority?: AnalysisRpcRequestPriority
+  },
+  executionOptions?: RunPrewarmSafelyExecutionOptions
+): StartedPrewarmHandle {
+  const request = createPrewarmRequest(options, executionOptions)
+  const queuedHandle = queueOrSkipPrewarmRequest(request)
+
+  if (queuedHandle) {
+    return queuedHandle
+  }
+
+  startPrewarmRequest(request)
+  return request
+}
+
 export function runPrewarmSafely(
   options?: {
     analysisOptions?: AnalysisOptions
@@ -550,15 +666,10 @@ export function runPrewarmSafely(
   },
   executionOptions?: RunPrewarmSafelyExecutionOptions
 ): Promise<void> {
-  const request = createPrewarmRequest(options, executionOptions)
-  const queuedPromise = queueOrSkipPrewarmRequest(request)
-
-  if (queuedPromise) {
-    return queuedPromise
-  }
-
-  startPrewarmRequest(request)
-  return request.completionPromise
+  return startPrewarmSafely(options, {
+    ...executionOptions,
+    inlineFallbackCompletionPhase: 'settled',
+  }).settled
 }
 
 export { BUILD_PREWARM_REQUEST_TIMEOUT_MS }

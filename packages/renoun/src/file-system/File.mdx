@@ -41,7 +41,7 @@ const title = await guide.getExportValue('title')
 ```ts
 import { Repository } from 'renoun'
 
-const repo = new Repository('owner/repo')
+const repo = Repository.remote('owner/repo')
 const file = repo.getFile('src/index.ts')
 
 const sourceUrl = file.getSourceUrl()

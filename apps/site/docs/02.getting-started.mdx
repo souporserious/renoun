@@ -204,7 +204,7 @@ export const posts = new Directory({
 Here we define a schema for the frontmatter of our MDX files and use it to validate each file in the `posts` directory. This ensures that each file adheres to the schema and provides type safety when accessing the `metadata` export:
 
 ```tsx
-import { posts } from './posts.ts'
+import { posts } from './posts'
 
 const post = await posts.getFile('build-a-button-component-in-react.mdx')
 const metadata = await post.getExportValue('metadata')

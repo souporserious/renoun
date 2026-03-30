@@ -87,6 +87,7 @@ export interface FileRequest {
 }
 
 export type FileRequestMethod =
+  | 'getReferenceBase'
   | 'getExportTypes'
   | 'getExports'
   | 'getGitMetadata'
@@ -939,7 +940,13 @@ function determineDynamicGetFileFallbackMethods(
     return undefined
   }
 
-  return ['getExports', 'getExportTypes', 'getGitMetadata', 'getSections']
+  return [
+    'getExports',
+    'getReferenceBase',
+    'getExportTypes',
+    'getGitMetadata',
+    'getSections',
+  ]
 }
 
 function analyzeGetFileUsageNode(
@@ -995,7 +1002,7 @@ function analyzeGetFileUsageNode(
 
   if (Node.isJsxExpression(parent) && parent.getExpression() === node) {
     if (isReferenceSourceJsxExpression(parent)) {
-      methods.add('getExportTypes')
+      methods.add('getReferenceBase')
       return false
     }
 
@@ -1107,7 +1114,7 @@ function analyzeIdentifierValueUsage(
 
   if (Node.isJsxExpression(parent) && parent.getExpression() === identifier) {
     if (isReferenceSourceJsxExpression(parent)) {
-      methods.add('getExportTypes')
+      methods.add('getReferenceBase')
       return false
     }
 
@@ -1496,7 +1503,10 @@ function expandCollectionEntries(
         recursive: options.recursive,
         includeDirectoryNamedFiles: options.includeDirectoryNamedFiles,
         includeIndexAndReadmeFiles: options.includeIndexAndReadmeFiles,
-        filterExtensions: options.filterExtensions,
+        filterExtensions: resolveDirectoryRequestFilterExtensions(
+          options.filterExtensions,
+          directoryDeclaration.filterExtensions
+        ),
         ...getPrewarmRepositoryScope(directoryDeclaration),
       })
       continue
@@ -1733,6 +1743,14 @@ function resolveRenounRepositoryTarget(
   }
 
   if (Node.isCallExpression(resolved)) {
+    const repositoryInput = resolveRepositoryInputFromFactoryCall(
+      resolved,
+      aliases
+    )
+    if (repositoryInput !== undefined) {
+      return createRepositoryDeclaration(repositoryInput)
+    }
+
     const callExpression = resolved.getExpression()
     if (
       Node.isPropertyAccessExpression(callExpression) &&
@@ -1805,6 +1823,62 @@ function resolveRepositoryInputFromNewExpression(
   }
 
   return resolveRepositoryInputLiteral(firstArgument)
+}
+
+function resolveRepositoryInputFromFactoryCall(
+  callExpression: Expression,
+  aliases: RenounAliases
+): PrewarmRepositoryInput | undefined {
+  const expression = resolveReferenceExpression(callExpression)
+  if (!Node.isCallExpression(expression)) {
+    return undefined
+  }
+
+  const callee = expression.getExpression()
+  if (!Node.isPropertyAccessExpression(callee)) {
+    return undefined
+  }
+
+  if (!isRepositoryConstructorExpression(callee.getExpression(), aliases)) {
+    return undefined
+  }
+
+  const methodName = callee.getName()
+
+  if (methodName === 'local') {
+    const pathArgument = expression.getArguments()[0]
+    const optionsArgument = expression.getArguments()[1]
+    const path =
+      pathArgument && Node.isExpression(pathArgument)
+        ? resolveRepositoryInputLiteral(pathArgument)
+        : '.'
+
+    if (typeof path !== 'string') {
+      return undefined
+    }
+
+    if (!optionsArgument || !Node.isExpression(optionsArgument)) {
+      return path
+    }
+
+    const options = resolveRepositoryInputLiteral(optionsArgument)
+    if (!options || typeof options === 'string') {
+      return undefined
+    }
+
+    return { ...options, path }
+  }
+
+  if (methodName === 'remote' || methodName === 'resolveUnsafe') {
+    const firstArgument = expression.getArguments()[0]
+    if (!firstArgument || !Node.isExpression(firstArgument)) {
+      return undefined
+    }
+
+    return resolveRepositoryInputLiteral(firstArgument)
+  }
+
+  return undefined
 }
 
 function resolveRepositoryInputLiteral(

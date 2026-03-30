@@ -1122,13 +1122,15 @@ async function resolveLocalGitHeadVersion(
 
 function createRuntimeReferenceGitMetadataProviderKey(options: {
   repository: string
+  historyVersion?: string
   ref?: string
 }): string {
-  return `${normalizePathKey(resolve(options.repository))}#${options.ref ?? 'HEAD'}`
+  return `${normalizePathKey(resolve(options.repository))}#${options.historyVersion ?? options.ref ?? 'HEAD'}`
 }
 
 async function createRuntimeReferenceGitMetadataProvider(options: {
   repository: string
+  historyVersion?: string
   ref?: string
 }): Promise<RuntimeReferenceGitMetadataProvider | undefined> {
   try {
@@ -1139,7 +1141,9 @@ async function createRuntimeReferenceGitMetadataProvider(options: {
     })
 
     const historyVersion =
-      options.ref ?? (await resolveLocalGitHeadVersion(options.repository))
+      options.historyVersion ??
+      options.ref ??
+      (await resolveLocalGitHeadVersion(options.repository))
 
     return {
       scopeKey: createRuntimeReferenceGitMetadataProviderKey(options),
@@ -1179,8 +1183,11 @@ async function getRuntimeReferenceGitMetadataProvider(
     return undefined
   }
 
+  const historyVersion =
+    parsedGitScope?.ref ?? (await resolveLocalGitHeadVersion(repository))
   const providerKey = createRuntimeReferenceGitMetadataProviderKey({
     repository,
+    historyVersion,
     ref: parsedGitScope?.ref,
   })
   let inFlightProvider =
@@ -1189,6 +1196,7 @@ async function getRuntimeReferenceGitMetadataProvider(
   if (!inFlightProvider) {
     inFlightProvider = createRuntimeReferenceGitMetadataProvider({
       repository,
+      historyVersion,
       ref: parsedGitScope?.ref,
     }).catch((error) => {
       runtimeReferenceGitMetadataProviderByKey.delete(providerKey)

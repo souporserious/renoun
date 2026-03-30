@@ -64,6 +64,14 @@ vi.mock('../analysis/server.ts', () => ({
   createServer: createServerMock,
 }))
 
+function createResolvedPrewarmHandle() {
+  return {
+    ready: Promise.resolve(),
+    settled: Promise.resolve(),
+  }
+}
+
+const startPrewarmSafelyMock = vi.fn(() => createResolvedPrewarmHandle())
 const runPrewarmSafelyMock = vi.fn(async () => undefined)
 const prewarmRenounRpcServerCacheDirectMock = vi.fn(async () => undefined)
 
@@ -74,6 +82,7 @@ vi.mock('./prewarm-runner.ts', () => ({
       tsConfigFilePath: join(rootPath, 'tsconfig.json'),
     },
   }),
+  startPrewarmSafely: startPrewarmSafelyMock,
   runPrewarmSafely: runPrewarmSafelyMock,
 }))
 
@@ -266,8 +275,8 @@ describe('renoun CLI index integration', () => {
   test('waits for build prewarm before framework build commands', async () => {
     process.argv = ['node', 'renoun', 'next', 'build']
     let resolvePrewarm!: () => void
-    runPrewarmSafelyMock.mockImplementationOnce(
-      () => {
+    startPrewarmSafelyMock.mockImplementationOnce(() => ({
+      ready: new Promise<void>((resolve) => {
         expect(process.env[PROCESS_ENV_KEYS.renounServerPort]).toBe('4321')
         expect(process.env[PROCESS_ENV_KEYS.renounServerId]).toBe(
           'integration-test-server'
@@ -279,13 +288,10 @@ describe('renoun CLI index integration', () => {
           process.env[PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]
         ).toBe(String(DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS))
 
-        return (
-        new Promise<void>((resolve) => {
-          resolvePrewarm = resolve
-        })
-        )
-      }
-    )
+        resolvePrewarm = resolve
+      }),
+      settled: Promise.resolve(),
+    }))
 
     const exitSpy = vi
       .spyOn(process, 'exit')
@@ -296,10 +302,10 @@ describe('renoun CLI index integration', () => {
     try {
       await waitForAssertion(() => {
         expect(createServerMock).toHaveBeenCalledTimes(1)
-        expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
+        expect(startPrewarmSafelyMock).toHaveBeenCalledTimes(1)
       })
       expect(spawnMock).not.toHaveBeenCalled()
-      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+      expect(startPrewarmSafelyMock).toHaveBeenCalledWith(
         {
           analysisOptions: {
             tsConfigFilePath: join(process.cwd(), 'tsconfig.json'),
@@ -366,22 +372,22 @@ describe('renoun CLI index integration', () => {
       .mockImplementation((() => undefined as never) as typeof process.exit)
 
     let resolvePrewarm!: () => void
-    runPrewarmSafelyMock.mockImplementationOnce(
-      () =>
-        new Promise<void>((resolve) => {
-          resolvePrewarm = resolve
-        })
-    )
+    startPrewarmSafelyMock.mockImplementationOnce(() => ({
+      ready: new Promise<void>((resolve) => {
+        resolvePrewarm = resolve
+      }),
+      settled: Promise.resolve(),
+    }))
 
     const importPromise = import('./index.ts')
 
     try {
       await waitForAssertion(() => {
         expect(createServerMock).toHaveBeenCalledTimes(1)
-        expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
+        expect(startPrewarmSafelyMock).toHaveBeenCalledTimes(1)
         expect(spawnMock).toHaveBeenCalledTimes(1)
       })
-      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+      expect(startPrewarmSafelyMock).toHaveBeenCalledWith(
         {
           analysisOptions: {
             tsConfigFilePath: join(workspacePath, 'tsconfig.json'),

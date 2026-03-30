@@ -31,7 +31,7 @@ export default function RootLayout({
         <body className={GeistSans.className}>
           {children}
           <Analytics />
-          <Script>{import('./script.ts')}</Script>
+          <Script>{import('./script')}</Script>
         </body>
       </html>
     </RootProvider>

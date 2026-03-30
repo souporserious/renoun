@@ -132,9 +132,18 @@ import {
   shouldIncludeIgnoredStatusForScope,
 } from './workspace-change-git.ts'
 import { resolvePersistentProjectRootDirectory } from '../utils/get-root-directory.ts'
+import { hashString } from '../utils/stable-serialization.ts'
 
 export interface GitFileSystemOptions extends FileSystemOptions {
-  /** Repository source - remote URL or local path. */
+  /**
+   * Repository source - remote URL or local path.
+   * Only pass values you control.
+   * If an attacker can choose this value, they can decide which repository the
+   * server opens:
+   * - local paths and `file://` URLs can make the server read another local repo
+   * - remote URLs can make the server fetch or clone an attacker-chosen repo
+   * This is a repository-selection trust boundary, not a shell-execution path.
+   */
   repository: string
 
   /** The Git reference to use. */
@@ -521,6 +530,24 @@ function sanitizeRepositorySpecifierForStorage(specifier: string): string {
 
 function sanitizeCachePathSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9_-]/g, '__')
+}
+
+function createHashedCachePathSegment(
+  value: string,
+  options: {
+    fallback?: string
+    maxPrefixLength?: number
+  } = {}
+): string {
+  const fallback = options.fallback ?? 'scope'
+  const maxPrefixLength = options.maxPrefixLength ?? 48
+  const readablePrefix = sanitizeCachePathSegment(value)
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, maxPrefixLength)
+  const prefix = readablePrefix.length > 0 ? readablePrefix : fallback
+
+  return `${prefix}_${hashString(value)}`
 }
 
 /**
@@ -1560,7 +1587,7 @@ export class GitFileSystem
     return join(
       this.cacheDirectory,
       '_analysis',
-      sanitizeCachePathSegment(this.#createAnalysisScopeBase()),
+      createHashedCachePathSegment(this.#createAnalysisScopeBase()),
       sanitizeCachePathSegment(refCommit)
     )
   }

@@ -1,4 +1,4 @@
-import type { ConfigurationOptions } from './types'
+import type { ConfigurationOptions } from './types.ts'
 
 /**
  * The default configuration options.

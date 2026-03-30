@@ -237,7 +237,17 @@ export interface ReferenceProps {
   /** The file path, `JavaScriptFile`, or `ModuleExport` type reference to resolve. */
   source: string | PathLike | JavaScriptFile<any> | ModuleExport<any>
 
-  /** Repository context for string-based `source` values. */
+  /**
+   * Repository context for string-based `source` values.
+   * Pass a `Repository` created from trusted application configuration.
+   * Do not construct it from request params, search params, CMS content, or
+   * MDX frontmatter unless you fully trust them.
+   * If an attacker controls the underlying repository locator, they can choose
+   * which repository the server resolves against:
+   * - local paths and `file://` URLs can expose another local repository
+   * - remote URLs can trigger fetches/clones to attacker-chosen remotes
+   * The concern is repository selection and data access, not command injection.
+   */
   repository?: RepositoryInput
 
   /** File-system context for string-based `source` values. */

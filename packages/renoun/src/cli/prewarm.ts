@@ -23,7 +23,7 @@ import { normalizePathKey } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
   bootstrapRenounPrewarmTargetRepositories,
-  warmRenounPrewarmTargets,
+  startWarmRenounPrewarmTargets,
   type WarmRenounPrewarmTargetsResult,
 } from './prewarm/warm-analysis.ts'
 import {
@@ -74,6 +74,16 @@ type CachedPrewarmWorkspaceGateValue = PrewarmRunResult & {
   workspaceTokenRootPath: string
   workspaceToken: string
   updatedAt: number
+}
+
+type StartedPrewarmAnalysis = {
+  ready: Promise<PrewarmRunResult>
+  settled: Promise<void>
+}
+
+export type StartedRenounRpcServerCachePrewarm = {
+  ready: Promise<void>
+  settled: Promise<void>
 }
 
 let prewarmWorkspaceGateStoreByKey:
@@ -504,79 +514,94 @@ function mergeFileGetDependencyPathsByRequestKey(options: {
   return nextDependencyPathsByRequestKey
 }
 
-async function runPrewarmAnalysis(options?: {
+function startRunPrewarmAnalysis(options?: {
   analysisOptions?: AnalysisOptions
   requestPriority?: AnalysisRpcRequestPriority
   previousState?: CachedPrewarmWorkspaceGateValue
   changedPaths?: ReadonlySet<string> | null
   workspaceTokenRootPath?: string
-}): Promise<PrewarmRunResult> {
+  startSettledInBackground?: boolean
+}): StartedPrewarmAnalysis {
   const logger = getDebugLogger()
-  const project = getProgram(options?.analysisOptions)
-  const targets = await collectRenounPrewarmTargets(
-    project,
-    options?.analysisOptions
-  )
+  let warmSettledPromise: Promise<void> = Promise.resolve()
 
-  if (
-    targets.directoryGetEntries.length === 0 &&
-    targets.directoryGetStructure.length === 0 &&
-    targets.fileGetFile.length === 0 &&
-    targets.exportHistory.length === 0
-  ) {
-    logger.debug('No renoun prewarm targets were found')
-    return {
-      result: 'no-targets',
-      targets,
-      fileGetDependencyPathsByRequestKey: {},
+  const ready = (async () => {
+    const project = getProgram(options?.analysisOptions)
+    const targets = await collectRenounPrewarmTargets(
+      project,
+      options?.analysisOptions
+    )
+
+    if (
+      targets.directoryGetEntries.length === 0 &&
+      targets.directoryGetStructure.length === 0 &&
+      targets.fileGetFile.length === 0 &&
+      targets.exportHistory.length === 0
+    ) {
+      logger.debug('No renoun prewarm targets were found')
+      return {
+        result: 'no-targets' as const,
+        targets,
+        fileGetDependencyPathsByRequestKey: {},
+      }
     }
-  }
 
-  const incrementalTargets =
-    options?.changedPaths && options.workspaceTokenRootPath
-      ? selectIncrementalPrewarmTargets({
-          currentTargets: targets,
-          previousState: options.previousState,
-          changedPaths: options.changedPaths,
-          workspaceTokenRootPath: options.workspaceTokenRootPath,
-        })
-      : undefined
+    const incrementalTargets =
+      options?.changedPaths && options.workspaceTokenRootPath
+        ? selectIncrementalPrewarmTargets({
+            currentTargets: targets,
+            previousState: options.previousState,
+            changedPaths: options.changedPaths,
+            workspaceTokenRootPath: options.workspaceTokenRootPath,
+          })
+        : undefined
 
-  const targetsToWarm = incrementalTargets ?? targets
-  if (
-    targetsToWarm.directoryGetEntries.length === 0 &&
-    targetsToWarm.directoryGetStructure.length === 0 &&
-    targetsToWarm.fileGetFile.length === 0 &&
-    targetsToWarm.exportHistory.length === 0
-  ) {
-    logger.debug('Skipping renoun prewarm because changed paths miss targets')
-    return {
-      result: 'skipped',
-      targets,
-      fileGetDependencyPathsByRequestKey:
-        options?.previousState?.fileGetDependencyPathsByRequestKey ?? {},
+    const targetsToWarm = incrementalTargets ?? targets
+    if (
+      targetsToWarm.directoryGetEntries.length === 0 &&
+      targetsToWarm.directoryGetStructure.length === 0 &&
+      targetsToWarm.fileGetFile.length === 0 &&
+      targetsToWarm.exportHistory.length === 0
+    ) {
+      logger.debug('Skipping renoun prewarm because changed paths miss targets')
+      return {
+        result: 'skipped' as const,
+        targets,
+        fileGetDependencyPathsByRequestKey:
+          options?.previousState?.fileGetDependencyPathsByRequestKey ?? {},
+      }
     }
-  }
 
-  const bootstrapStartedAt = performance.now()
-  const warmResult = await runWithAnalysisRpcRequestPriority(
-    options?.requestPriority,
-    async () =>
-      warmRenounPrewarmTargets(targetsToWarm, {
-        analysisOptions: options?.analysisOptions,
-        isFilePathGitIgnored,
-      })
-  )
-  recordArtifactBootstrapDuration(performance.now() - bootstrapStartedAt)
+    const bootstrapStartedAt = performance.now()
+    const warmHandle = startWarmRenounPrewarmTargets(targetsToWarm, {
+      analysisOptions: options?.analysisOptions,
+      isFilePathGitIgnored,
+      startSettledInBackground: options?.startSettledInBackground,
+    })
+    warmSettledPromise = warmHandle.settled
+
+    const warmResult = await runWithAnalysisRpcRequestPriority(
+      options?.requestPriority,
+      async () => warmHandle.ready
+    )
+    recordArtifactBootstrapDuration(performance.now() - bootstrapStartedAt)
+
+    return {
+      result: incrementalTargets ? ('incremental-warmed' as const) : ('warmed' as const),
+      targets,
+      fileGetDependencyPathsByRequestKey: mergeFileGetDependencyPathsByRequestKey({
+        currentTargets: targets,
+        previousState: options?.previousState,
+        warmResult,
+        usedIncrementalTargets: incrementalTargets !== undefined,
+      }),
+    }
+  })()
 
   return {
-    result: incrementalTargets ? 'incremental-warmed' : 'warmed',
-    targets,
-    fileGetDependencyPathsByRequestKey: mergeFileGetDependencyPathsByRequestKey({
-      currentTargets: targets,
-      previousState: options?.previousState,
-      warmResult,
-      usedIncrementalTargets: incrementalTargets !== undefined,
+    ready,
+    settled: ready.then(async () => {
+      await warmSettledPromise
     }),
   }
 }
@@ -584,88 +609,118 @@ async function runPrewarmAnalysis(options?: {
 export async function prewarmRenounRpcServerCache(options?: {
   analysisOptions?: AnalysisOptions
   requestPriority?: AnalysisRpcRequestPriority
+  startSettledInBackground?: boolean
 }): Promise<void> {
+  const handle = startPrewarmRenounRpcServerCache(options)
+  await handle.ready
+  await handle.settled
+}
+
+export function startPrewarmRenounRpcServerCache(options?: {
+  analysisOptions?: AnalysisOptions
+  requestPriority?: AnalysisRpcRequestPriority
+  startSettledInBackground?: boolean
+}): StartedRenounRpcServerCachePrewarm {
   const logger = getDebugLogger()
-
   if (!hasServerRuntimeInProcessEnv()) {
-    return
-  }
-
-  const workspaceGate = await resolvePrewarmWorkspaceGate(
-    options?.analysisOptions
-  )
-  if (!workspaceGate) {
-    await runPrewarmAnalysis(options)
-    return
-  }
-
-  const previousState =
-    await workspaceGate.store.getPossiblyStale<CachedPrewarmWorkspaceGateValue>(
-      workspaceGate.nodeKey
-    )
-  let changedPaths: ReadonlySet<string> | null | undefined
-  if (
-    previousState?.workspaceToken &&
-    previousState.workspaceToken !== workspaceGate.workspaceToken &&
-    typeof workspaceGate.fileSystem.getWorkspaceChangedPathsSinceToken ===
-      'function'
-  ) {
-    const nextChangedPaths =
-      (await workspaceGate.fileSystem.getWorkspaceChangedPathsSinceToken(
-        workspaceGate.workspaceTokenRootPath,
-        previousState.workspaceToken
-      )) ?? null
-    changedPaths =
-      nextChangedPaths === null ? null : new Set<string>(nextChangedPaths)
-  }
-
-  let didExecutePrewarm = false
-  await workspaceGate.store.getOrCompute(
-    workspaceGate.nodeKey,
-    {
-      persist: true,
-      constDeps: workspaceGate.constDeps,
-    },
-    async (context) => {
-      didExecutePrewarm = true
-      recordConstDependencies(context, workspaceGate.constDeps)
-      const result = await runPrewarmAnalysis({
-        ...options,
-        previousState,
-        changedPaths,
-        workspaceTokenRootPath: workspaceGate.workspaceTokenRootPath,
-      })
-      return {
-        ...result,
-        workspaceRootPath: workspaceGate.workspaceRootPath,
-        workspaceTokenRootPath: workspaceGate.workspaceTokenRootPath,
-        workspaceToken: workspaceGate.workspaceToken,
-        updatedAt: Date.now(),
-      }
+    return {
+      ready: Promise.resolve(),
+      settled: Promise.resolve(),
     }
-  )
+  }
 
-  if (!didExecutePrewarm) {
-    // Keep the active project runtime ready for downstream build requests, but
-    // avoid rerunning the full prewarm when the workspace token is unchanged.
-    getProgram(options?.analysisOptions)
-    await runWithAnalysisRpcRequestPriority(
-      options?.requestPriority,
-      async () => {
-        if (previousState) {
-          await bootstrapRenounPrewarmTargetRepositories(previousState.targets)
+  let settledPromise: Promise<void> = Promise.resolve()
+  const ready = (async () => {
+    const workspaceGate = await resolvePrewarmWorkspaceGate(
+      options?.analysisOptions
+    )
+    if (!workspaceGate) {
+      const prewarmHandle = startRunPrewarmAnalysis(options)
+      settledPromise = prewarmHandle.settled
+      await prewarmHandle.ready
+      return
+    }
+
+    const previousState =
+      await workspaceGate.store.getPossiblyStale<CachedPrewarmWorkspaceGateValue>(
+        workspaceGate.nodeKey
+      )
+    let changedPaths: ReadonlySet<string> | null | undefined
+    if (
+      previousState?.workspaceToken &&
+      previousState.workspaceToken !== workspaceGate.workspaceToken &&
+      typeof workspaceGate.fileSystem.getWorkspaceChangedPathsSinceToken ===
+        'function'
+    ) {
+      const nextChangedPaths =
+        (await workspaceGate.fileSystem.getWorkspaceChangedPathsSinceToken(
+          workspaceGate.workspaceTokenRootPath,
+          previousState.workspaceToken
+        )) ?? null
+      changedPaths =
+        nextChangedPaths === null ? null : new Set<string>(nextChangedPaths)
+    }
+
+    let didExecutePrewarm = false
+    let prewarmHandle: StartedPrewarmAnalysis | undefined
+    await workspaceGate.store.getOrCompute(
+      workspaceGate.nodeKey,
+      {
+        persist: true,
+        constDeps: workspaceGate.constDeps,
+      },
+      async (context) => {
+        didExecutePrewarm = true
+        recordConstDependencies(context, workspaceGate.constDeps)
+        prewarmHandle = startRunPrewarmAnalysis({
+          ...options,
+          previousState,
+          changedPaths,
+          workspaceTokenRootPath: workspaceGate.workspaceTokenRootPath,
+        })
+        const result = await prewarmHandle.ready
+        return {
+          ...result,
+          workspaceRootPath: workspaceGate.workspaceRootPath,
+          workspaceTokenRootPath: workspaceGate.workspaceTokenRootPath,
+          workspaceToken: workspaceGate.workspaceToken,
+          updatedAt: Date.now(),
         }
       }
     )
 
-    logger.debug(
-      'Skipping renoun prewarm because workspace token is unchanged',
-      () => ({
-        data: {
-          workspaceRootPath: workspaceGate.workspaceRootPath,
-          workspaceTokenRootPath: workspaceGate.workspaceTokenRootPath,
-        },
-      })
-    )
+    if (!didExecutePrewarm) {
+      // Keep the active project runtime ready for downstream build requests, but
+      // avoid rerunning the full prewarm when the workspace token is unchanged.
+      getProgram(options?.analysisOptions)
+      await runWithAnalysisRpcRequestPriority(
+        options?.requestPriority,
+        async () => {
+          if (previousState) {
+            await bootstrapRenounPrewarmTargetRepositories(previousState.targets)
+          }
+        }
+      )
+
+      logger.debug(
+        'Skipping renoun prewarm because workspace token is unchanged',
+        () => ({
+          data: {
+            workspaceRootPath: workspaceGate.workspaceRootPath,
+            workspaceTokenRootPath: workspaceGate.workspaceTokenRootPath,
+          },
+        })
+      )
+      return
+    }
+
+    settledPromise = prewarmHandle?.settled ?? Promise.resolve()
+  })()
+
+  return {
+    ready,
+    settled: ready.then(async () => {
+      await settledPromise
+    }),
   }
 }

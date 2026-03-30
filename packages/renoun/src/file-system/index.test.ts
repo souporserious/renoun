@@ -4389,7 +4389,7 @@ date: 2024-12-24
       try {
         const pkg = new Package({
           name: 'remote',
-          repository: 'souporserious/remote',
+          repository: Repository.remote('souporserious/remote'),
         })
         const exports = pkg.getExports()
 

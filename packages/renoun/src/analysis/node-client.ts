@@ -162,6 +162,7 @@ let activeClientState: ActiveClientState | undefined
 let cachedBrowserClientState: BrowserRuntimeClientState | undefined
 let nextActiveClientGeneration = 0
 let hasSubscribedToServerRuntimeEnvChanges = false
+const rpcUnavailableUntilByRuntimeKey = new Map<string, number>()
 const pendingRefreshInvalidationPathsByScope = new Map<
   string | undefined,
   Set<string>
@@ -1208,6 +1209,7 @@ function replaceClientForRuntime(
   attachClientRefreshSubscriptions(nextClientState, {
     onConnected: () => {
       nextClientState.rpcUnavailableUntil = 0
+      rpcUnavailableUntilByRuntimeKey.delete(nextClientState.runtimeKey)
     },
     resyncImmediately: options.resyncImmediately,
   })
@@ -1287,6 +1289,7 @@ function getClient(): WebSocketClient | undefined {
     attachClientRefreshSubscriptions(currentState, {
       onConnected: () => {
         currentState.rpcUnavailableUntil = 0
+        rpcUnavailableUntilByRuntimeKey.delete(currentState.runtimeKey)
       },
       resyncImmediately: hadExistingClient,
     })
@@ -1296,6 +1299,19 @@ function getClient(): WebSocketClient | undefined {
 }
 
 async function getReadyClient(): Promise<WebSocketClient | undefined> {
+  const activeRuntime = getActiveAnalysisServerRuntime()
+  const activeRuntimeKey = activeRuntime
+    ? toServerRuntimeKey(activeRuntime)
+    : undefined
+
+  if (
+    typeof window === 'undefined' &&
+    activeRuntimeKey &&
+    Date.now() < (rpcUnavailableUntilByRuntimeKey.get(activeRuntimeKey) ?? 0)
+  ) {
+    return undefined
+  }
+
   const activeClient = getClient()
   const state = activeClientState
   if (!activeClient || !state || state.client !== activeClient) {
@@ -1319,12 +1335,21 @@ async function getReadyClient(): Promise<WebSocketClient | undefined> {
         if (isCurrentActiveClientState(state)) {
           state.rpcUnavailableUntil = 0
         }
+        rpcUnavailableUntilByRuntimeKey.delete(state.runtimeKey)
         return true
       })
       .catch(() => {
+        const rpcUnavailableUntil =
+          Date.now() + SERVER_RPC_UNAVAILABLE_BACKOFF_MS
+        rpcUnavailableUntilByRuntimeKey.set(
+          state.runtimeKey,
+          rpcUnavailableUntil
+        )
         if (isCurrentActiveClientState(state)) {
-          state.rpcUnavailableUntil =
-            Date.now() + SERVER_RPC_UNAVAILABLE_BACKOFF_MS
+          state.rpcUnavailableUntil = rpcUnavailableUntil
+          disposeActiveClient({
+            invalidateClientRpcState: false,
+          })
         }
         return false
       })

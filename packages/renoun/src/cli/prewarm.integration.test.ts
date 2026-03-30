@@ -92,6 +92,26 @@ describe('collectRenounPrewarmTargets app coverage', () => {
       for (const expectedFile of expected.fileGetFile) {
         expect(discoveredFiles).toContain(expectedFile)
       }
+
+      if (app.name === 'site') {
+        const componentRequest = target.directoryGetEntries.find(
+          (entry) =>
+            entry.directoryPath === resolve(app.rootPath, '../../packages/renoun/src/components')
+        )
+        const hookRequest = target.directoryGetEntries.find(
+          (entry) =>
+            entry.directoryPath === resolve(app.rootPath, '../../packages/renoun/src/hooks')
+        )
+
+        expect(componentRequest?.filterExtensions ? [...componentRequest.filterExtensions].sort() : null).toEqual([
+          'ts',
+          'tsx',
+        ])
+        expect(hookRequest?.filterExtensions ? [...hookRequest.filterExtensions].sort() : null).toEqual([
+          'ts',
+          'tsx',
+        ])
+      }
     }
   }, PREWARM_APP_COVERAGE_TIMEOUT_MS)
 })

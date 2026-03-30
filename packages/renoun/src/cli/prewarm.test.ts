@@ -400,6 +400,17 @@ vi.mock('@renoun/mdx/utils', () => ({
 let prewarmRenounRpcServerCache:
   | ((options?: { analysisOptions?: AnalysisOptions }) => Promise<void>)
   | undefined
+let startPrewarmRenounRpcServerCache:
+  | ((
+      options?: {
+        analysisOptions?: AnalysisOptions
+        requestPriority?: 'bootstrap' | 'immediate' | 'background'
+      }
+    ) => {
+      ready: Promise<void>
+      settled: Promise<void>
+    })
+  | undefined
 let collectRenounPrewarmTargets:
   | ((
       project: ProjectInstance,
@@ -446,6 +457,7 @@ beforeAll(async () => {
   vi.doMock(repositoryModuleSpecifier, () => ({
     Repository: {
       resolve: repositoryResolveMock,
+      resolveUnsafe: repositoryResolveMock,
     },
   }))
 
@@ -455,6 +467,7 @@ beforeAll(async () => {
 
   const prewarm = await import(prewarmModuleSpecifier)
   prewarmRenounRpcServerCache = prewarm.prewarmRenounRpcServerCache
+  startPrewarmRenounRpcServerCache = prewarm.startPrewarmRenounRpcServerCache
   collectRenounPrewarmTargets = prewarm.collectRenounPrewarmTargets
 })
 
@@ -752,18 +765,31 @@ describe('prewarmRenounRpcServerCache', () => {
       markStructureWarmStarted = resolve
     })
 
-    entryGetStructureMock.mockImplementation(async () => {
-      markStructureWarmStarted?.()
-      await structureWarmBlocked
-      return []
-    })
+    entryGetStructureMock.mockImplementation(
+      async (_directoryPath: string, options?: unknown) => {
+        const structureOptions = (options ?? {}) as Record<string, unknown>
+
+        if (
+          structureOptions.includeResolvedTypes === false &&
+          structureOptions.includeSections === false &&
+          structureOptions.includeGitDates === false &&
+          structureOptions.includeAuthors === false
+        ) {
+          return []
+        }
+
+        markStructureWarmStarted?.()
+        await structureWarmBlocked
+        return []
+      }
+    )
 
     try {
       const prewarmPromise = prewarmRenounRpcServerCache!({ analysisOptions })
       const prewarmStatus = await Promise.race([
         prewarmPromise.then(() => 'resolved'),
         new Promise<'timeout'>((resolve) => {
-          setTimeout(() => resolve('timeout'), 250)
+          setTimeout(() => resolve('timeout'), 1_000)
         }),
       ])
 
@@ -833,9 +859,7 @@ describe('prewarmRenounRpcServerCache', () => {
       '/repo/docs/a.ts',
       '/repo/docs/b.ts',
     ])
-    expect(
-      entryGetExportTypesMock.mock.calls.map((call) => call[0]).sort()
-    ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
+    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
     expect(
       entryGetCachedReferenceBaseDataMock.mock.calls
         .map((call) => call[0])
@@ -1536,9 +1560,7 @@ const schema = { answer: 42 }
     expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledWith(
       '/repo/src/nodes/TSL.js'
     )
-    expect(entryGetExportTypesMock).toHaveBeenCalledWith(
-      '/repo/src/nodes/TSL.js'
-    )
+    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
     expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
     expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
     expect(repositoryGetExportHistoryMock).toHaveBeenCalledWith(undefined)
@@ -1593,9 +1615,7 @@ const schema = { answer: 42 }
         .map((call) => call[0])
         .sort()
     ).toEqual(['/repo/src/nodes/TSL.js', '/repo/src/nodes/nodes.js'])
-    expect(
-      entryGetExportTypesMock.mock.calls.map((call) => call[0]).sort()
-    ).toEqual(['/repo/src/nodes/TSL.js', '/repo/src/nodes/nodes.js'])
+    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
     expect(
       entryGetLastCommitDateMock.mock.calls.map((call) => call[0]).sort()
     ).toEqual(['/repo/src/nodes/TSL.js', '/repo/src/nodes/nodes.js'])
@@ -1667,12 +1687,7 @@ const schema = { answer: 42 }
       '/repo/src/nodes/TSL.js',
       '/repo/src/nodes/nodes.js',
     ])
-    expect(
-      entryGetExportTypesMock.mock.calls.map((call) => call[0]).sort()
-    ).toEqual([
-      '/repo/src/nodes/TSL.js',
-      '/repo/src/nodes/nodes.js',
-    ])
+    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
     expect(
       entryGetLastCommitDateMock.mock.calls.map((call) => call[0]).sort()
     ).toEqual([
@@ -1953,9 +1968,7 @@ const schema = { answer: 42 }
     expect(entryGetCachedReferenceBaseDataMock.mock.calls.map((call) => call[0])).toEqual([
       '/repo/src/nodes/TSL.js',
     ])
-    expect(entryGetExportTypesMock.mock.calls.map((call) => call[0])).toEqual([
-      '/repo/src/nodes/TSL.js',
-    ])
+    expect(entryGetExportTypesMock).not.toHaveBeenCalled()
     expect(entryGetLastCommitDateMock.mock.calls.map((call) => call[0])).toEqual([
       '/repo/src/nodes/TSL.js',
     ])
@@ -2194,6 +2207,238 @@ const schema = { answer: 42 }
         setTimeout(resolve, 0)
       })
     }
+  })
+})
+
+describe('startPrewarmRenounRpcServerCache', () => {
+  test('resolves ready after repository bootstrap, tree discovery, and header-only structure warm while settled work continues', async () => {
+    project.createSourceFile(
+      '/repo/src/phased-docs-page.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+
+        docs.getTree()
+        docs.getStructure({
+          includeExports: 'headers',
+          includeDescriptions: 'snippet',
+          includeSections: true,
+          includeResolvedTypes: true,
+          includeGitDates: 'first',
+          includeAuthors: true,
+        })
+        docs.getRepository().getExportHistory()
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'ts')
+          await file.getExports()
+          await file.getExportTypes()
+          return <Reference source={file} />
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    let releaseBootstrap!: () => void
+    const bootstrapBlocked = new Promise<void>((resolve) => {
+      releaseBootstrap = resolve
+    })
+    let releaseHeaderStructure!: () => void
+    const headerStructureBlocked = new Promise<void>((resolve) => {
+      releaseHeaderStructure = resolve
+    })
+    let releaseSettledStructure!: () => void
+    const settledStructureBlocked = new Promise<void>((resolve) => {
+      releaseSettledStructure = resolve
+    })
+    let releaseExportHistory!: () => void
+    const exportHistoryBlocked = new Promise<void>((resolve) => {
+      releaseExportHistory = resolve
+    })
+
+    prepareAnalysisRootMock.mockImplementation(async () => {
+      await bootstrapBlocked
+    })
+    entryGetStructureMock.mockImplementation(
+      async (_directoryPath: string, options?: unknown) => {
+        const structureOptions = (options ?? {}) as Record<string, unknown>
+
+        if (
+          structureOptions.includeResolvedTypes === false &&
+          structureOptions.includeSections === false &&
+          structureOptions.includeGitDates === false &&
+          structureOptions.includeAuthors === false
+        ) {
+          await headerStructureBlocked
+          return []
+        }
+
+        await settledStructureBlocked
+        return []
+      }
+    )
+    repositoryGetExportHistoryMock.mockImplementation(async function* () {
+      await exportHistoryBlocked
+
+      return {
+        generatedAt: new Date(0).toISOString(),
+        repo: 'mock-repo',
+        entryFiles: [],
+        exports: {},
+        nameToId: {},
+      }
+    })
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return [createMockFileEntry('/repo/src/nodes/guide.ts')]
+      }
+
+      return []
+    })
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    const prewarm = startPrewarmRenounRpcServerCache!({
+      analysisOptions,
+      requestPriority: 'bootstrap',
+    })
+
+    let didResolveReady = false
+    void prewarm.ready.then(() => {
+      didResolveReady = true
+    })
+
+    await vi.waitFor(() => {
+      expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
+    })
+    expect(didResolveReady).toBe(false)
+
+    releaseBootstrap()
+
+    await vi.waitFor(() => {
+      expect(entryGetStructureMock).toHaveBeenCalledWith('/repo/src/nodes', {
+        includeExports: 'headers',
+        includeDescriptions: 'snippet',
+        includeSections: false,
+        includeResolvedTypes: false,
+        includeGitDates: false,
+        includeAuthors: false,
+      })
+    })
+    expect(readDirectoryMock).toHaveBeenCalledWith('/repo/src/nodes')
+    expect(didResolveReady).toBe(false)
+
+    releaseHeaderStructure()
+
+    await prewarm.ready
+
+    const settledStatus = await Promise.race([
+      prewarm.settled.then(() => 'resolved'),
+      new Promise<'timeout'>((resolve) => {
+        setTimeout(() => resolve('timeout'), 50)
+      }),
+    ])
+
+    expect(settledStatus).toBe('resolved')
+    expect(entryGetStructureMock).toHaveBeenCalledWith('/repo/src/nodes', {
+      includeExports: 'headers',
+      includeDescriptions: 'snippet',
+      includeSections: true,
+      includeResolvedTypes: true,
+      includeGitDates: 'first',
+      includeAuthors: true,
+    })
+    expect(repositoryGetExportHistoryMock).toHaveBeenCalledTimes(1)
+
+    releaseSettledStructure()
+    releaseExportHistory()
+    await prewarm.settled
+  })
+
+  test('keeps reference base in ready even when export types are deferred to settled', async () => {
+    process.env.NODE_ENV = 'production'
+
+    project.createSourceFile(
+      '/repo/src/reference-phase-page.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+
+        docs.getTree()
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'ts')
+          await file.getExports()
+          await file.getExportTypes()
+          return <Reference source={file} />
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return [createMockFileEntry('/repo/src/nodes/guide.ts')]
+      }
+
+      return []
+    })
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    const prewarm = startPrewarmRenounRpcServerCache!({
+      analysisOptions,
+      requestPriority: 'bootstrap',
+    })
+
+    await prewarm.ready
+
+    expect(entryGetExportsMock).toHaveBeenCalledWith('/repo/src/nodes/guide.ts')
+    expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledWith(
+      '/repo/src/nodes/guide.ts'
+    )
+    expect(targets.directoryGetEntries).toContainEqual({
+      directoryPath: './src/nodes',
+      recursive: true,
+      leafOnly: true,
+      includeDirectoryNamedFiles: true,
+      includeIndexAndReadmeFiles: true,
+      filterExtensions: null,
+      repository: {
+        path: 'owner/repo',
+        ref: 'main',
+      },
+      sparsePaths: ['./src/nodes'],
+      methods: ['getExportTypes', 'getExports', 'getReferenceBase'],
+    })
+
+    const settledStatus = await Promise.race([
+      prewarm.settled.then(() => 'resolved'),
+      new Promise<'timeout'>((resolve) => {
+        setTimeout(() => resolve('timeout'), 50)
+      }),
+    ])
+
+    expect(settledStatus).toBe('resolved')
+    await prewarm.settled
   })
 })
 
@@ -2566,7 +2811,7 @@ describe('collectRenounPrewarmTargets', () => {
         directoryPath: '/repo/docs',
         path: 'typed',
         extensions: ['tsx'],
-        methods: ['getExportTypes'],
+        methods: ['getReferenceBase'],
       },
       {
         directoryPath: '/repo/docs',
@@ -2617,7 +2862,7 @@ describe('collectRenounPrewarmTargets', () => {
         includeDirectoryNamedFiles: true,
         includeIndexAndReadmeFiles: true,
         filterExtensions: new Set(['ts']),
-        methods: ['getExportTypes', 'getExports', 'getGitMetadata'],
+        methods: ['getExports', 'getGitMetadata', 'getReferenceBase'],
       },
     ])
   })
@@ -2665,7 +2910,7 @@ describe('collectRenounPrewarmTargets', () => {
           ref: 'main',
         },
         sparsePaths: ['./src/nodes'],
-        methods: ['getExportTypes', 'getExports', 'getGitMetadata'],
+        methods: ['getExports', 'getGitMetadata', 'getReferenceBase'],
       },
     ])
   })
@@ -2717,7 +2962,7 @@ describe('collectRenounPrewarmTargets', () => {
           ref: 'main',
         },
         sparsePaths: ['./src/nodes'],
-        methods: ['getExportTypes', 'getExports', 'getGitMetadata'],
+        methods: ['getExports', 'getGitMetadata', 'getReferenceBase'],
       },
     ])
   })

@@ -30,6 +30,29 @@ function ensureTypeScriptWorkerLaunchSupport(): void {
   }
 }
 
+function createResolvedPrewarmHandle() {
+  return {
+    ready: Promise.resolve(),
+    settled: Promise.resolve(),
+  }
+}
+
+function mockPrewarmModule(options?: {
+  prewarmRenounRpcServerCache?: (...args: any[]) => Promise<void>
+  startPrewarmRenounRpcServerCache?: (...args: any[]) => {
+    ready: Promise<void>
+    settled: Promise<void>
+  }
+}) {
+  vi.doMock('./prewarm.ts', () => ({
+    prewarmRenounRpcServerCache:
+      options?.prewarmRenounRpcServerCache ?? vi.fn(async () => undefined),
+    startPrewarmRenounRpcServerCache:
+      options?.startPrewarmRenounRpcServerCache ??
+      vi.fn(() => createResolvedPrewarmHandle()),
+  }))
+}
+
 async function settleAsyncPrewarmWork(): Promise<void> {
   await vi.dynamicImportSettled()
   await Promise.resolve()
@@ -114,9 +137,9 @@ describe('runPrewarmSafely', () => {
     const inlinePrewarm = createDeferred<void>()
     const prewarmMock = vi.fn(() => inlinePrewarm.promise)
 
-    vi.doMock('./prewarm.ts', () => ({
+    mockPrewarmModule({
       prewarmRenounRpcServerCache: prewarmMock,
-    }))
+    })
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
@@ -136,6 +159,119 @@ describe('runPrewarmSafely', () => {
 
     await completionPromise
     expect(didResolve).toBe(true)
+  })
+
+  test('exposes ready before settled when the worker reports phased progress', async () => {
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
+    ensureTypeScriptWorkerLaunchSupport()
+    const child = new EventEmitter() as EventEmitter & {
+      killed: boolean
+      kill: ReturnType<typeof vi.fn>
+      unref: ReturnType<typeof vi.fn>
+    }
+    child.killed = false
+    child.kill = vi.fn(() => {
+      child.killed = true
+    })
+    child.unref = vi.fn()
+
+    const spawnMock = vi.fn(() => child)
+
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnMock,
+    }))
+
+    const { startPrewarmSafely } = await import('./prewarm-runner.ts')
+
+    const prewarm = startPrewarmSafely({
+      analysisOptions: { tsConfigFilePath: 'phased-worker.json' },
+    })
+
+    let didResolveReady = false
+    let didResolveSettled = false
+    void prewarm.ready.then(() => {
+      didResolveReady = true
+    })
+    void prewarm.settled.then(() => {
+      didResolveSettled = true
+    })
+
+    await settleAsyncPrewarmWork()
+    expect(spawnMock).toHaveBeenCalledTimes(1)
+    expect(didResolveReady).toBe(false)
+    expect(didResolveSettled).toBe(false)
+
+    child.emit('message', {
+      type: 'ready',
+      durationMs: 5,
+    })
+
+    await vi.waitFor(() => {
+      expect(didResolveReady).toBe(true)
+    })
+    expect(didResolveSettled).toBe(false)
+
+    child.emit('message', {
+      type: 'completed',
+      durationMs: 10,
+    })
+    child.emit('exit', 0, null)
+
+    await prewarm.settled
+    expect(didResolveSettled).toBe(true)
+  })
+
+  test('does not fall back inline when the worker fails after ready', async () => {
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
+    ensureTypeScriptWorkerLaunchSupport()
+    const child = new EventEmitter() as EventEmitter & {
+      killed: boolean
+      kill: ReturnType<typeof vi.fn>
+      unref: ReturnType<typeof vi.fn>
+    }
+    child.killed = false
+    child.kill = vi.fn(() => {
+      child.killed = true
+    })
+    child.unref = vi.fn()
+
+    const spawnMock = vi.fn(() => child)
+    const prewarmMock = vi.fn(async () => undefined)
+    const phasedPrewarmMock = vi.fn(() => ({
+      ready: Promise.resolve(),
+      settled: Promise.resolve(),
+    }))
+
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnMock,
+    }))
+    mockPrewarmModule({
+      prewarmRenounRpcServerCache: prewarmMock,
+      startPrewarmRenounRpcServerCache: phasedPrewarmMock,
+    })
+
+    const { startPrewarmSafely } = await import('./prewarm-runner.ts')
+
+    const prewarm = startPrewarmSafely({
+      analysisOptions: { tsConfigFilePath: 'ready-then-error.json' },
+    })
+
+    child.emit('message', {
+      type: 'ready',
+      durationMs: 5,
+    })
+    await prewarm.ready
+
+    child.emit('message', {
+      type: 'error',
+      error: 'background warm failed',
+      durationMs: 10,
+    })
+    child.emit('exit', 1, null)
+
+    await prewarm.settled
+    expect(prewarmMock).not.toHaveBeenCalled()
+    expect(phasedPrewarmMock).not.toHaveBeenCalled()
   })
 
   test('falls back to inline prewarm when the worker exits before completing', async () => {
@@ -165,9 +301,9 @@ describe('runPrewarmSafely', () => {
     vi.doMock('node:child_process', () => ({
       spawn: spawnMock,
     }))
-    vi.doMock('./prewarm.ts', () => ({
+    mockPrewarmModule({
       prewarmRenounRpcServerCache: prewarmMock,
-    }))
+    })
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
@@ -212,9 +348,9 @@ describe('runPrewarmSafely', () => {
     vi.doMock('node:child_process', () => ({
       spawn: spawnMock,
     }))
-    vi.doMock('./prewarm.ts', () => ({
+    mockPrewarmModule({
       prewarmRenounRpcServerCache: prewarmMock,
-    }))
+    })
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
@@ -274,9 +410,9 @@ describe('runPrewarmSafely', () => {
       vi.doMock('node:child_process', () => ({
         spawn: spawnMock,
       }))
-      vi.doMock('./prewarm.ts', () => ({
+      mockPrewarmModule({
         prewarmRenounRpcServerCache: prewarmMock,
-      }))
+      })
 
       const [{ runPrewarmSafely }, { PREWARM_REQUEST_TIMEOUT_MS }] =
         await Promise.all([
@@ -339,9 +475,9 @@ describe('runPrewarmSafely', () => {
     vi.doMock('node:child_process', () => ({
       spawn: spawnMock,
     }))
-    vi.doMock('./prewarm.ts', () => ({
+    mockPrewarmModule({
       prewarmRenounRpcServerCache: prewarmMock,
-    }))
+    })
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
@@ -439,9 +575,9 @@ describe('runPrewarmSafely', () => {
       }
     )
 
-    vi.doMock('./prewarm.ts', () => ({
+    mockPrewarmModule({
       prewarmRenounRpcServerCache: prewarmMock,
-    }))
+    })
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
@@ -476,9 +612,9 @@ describe('runPrewarmSafely', () => {
       }
     )
 
-    vi.doMock('./prewarm.ts', () => ({
+    mockPrewarmModule({
       prewarmRenounRpcServerCache: prewarmMock,
-    }))
+    })
 
     const { runPrewarmSafely } = await import('./prewarm-runner.ts')
 
@@ -516,9 +652,9 @@ describe('runPrewarmSafely', () => {
         }
       )
 
-      vi.doMock('./prewarm.ts', () => ({
+      mockPrewarmModule({
         prewarmRenounRpcServerCache: prewarmMock,
-      }))
+      })
 
       const [{ runPrewarmSafely }, { PREWARM_REQUEST_TIMEOUT_MS }] =
         await Promise.all([

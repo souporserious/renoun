@@ -30,7 +30,6 @@ import { NodeFileSystem } from './NodeFileSystem.ts'
 import {
   Repository,
   parseGitSpecifier,
-  type RepositoryConfig,
   type RepositoryInput,
 } from './Repository.ts'
 import {
@@ -458,6 +457,7 @@ export interface PackageOptions<
   sourcePath?: PathLike | null
   fileSystem?: FileSystem
   exports?: Record<string, PackageExportOptions<Types, LoaderTypes>>
+  /** Explicit repository context created with `Repository.local(...)` or `Repository.remote(...)`. */
   repository?: RepositoryInput
   /**
    * Optional runtime loaders for individual package exports or a resolver that
@@ -720,44 +720,10 @@ function resolveRepositorySpecifier(repository?: RepositoryInput) {
     return
   }
 
-  const isRepositoryConfig = (
-    value: RepositoryInput
-  ): value is RepositoryConfig => {
-    return Boolean(value && typeof value === 'object' && 'baseUrl' in value)
-  }
-
-  if (repository instanceof Repository) {
-    try {
-      return parseGitSpecifier(repository.toString())
-    } catch {
-      return undefined
-    }
-  }
-
-  if (typeof repository === 'string') {
-    try {
-      return parseGitSpecifier(repository)
-    } catch {
-      return undefined
-    }
-  }
-
-  if (isRepositoryConfig(repository)) {
-    return {
-      host: repository.host,
-      owner: repository.owner,
-      repo: repository.repository,
-      ref: repository.branch,
-      path: repository.path,
-    }
-  }
-
-  if ('path' in repository) {
-    try {
-      return parseGitSpecifier(Repository.resolve(repository)?.toString() ?? '')
-    } catch {
-      return undefined
-    }
+  try {
+    return parseGitSpecifier(repository.toString())
+  } catch {
+    return undefined
   }
 }
 

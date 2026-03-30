@@ -72,6 +72,7 @@ const DEFAULT_GET_FILE_EXTENSIONS = [
 type WarmFileMethod =
   | 'getCodeFenceSourceMetadata'
   | 'getCodeFenceTokens'
+  | 'getReferenceBase'
   | 'getExportTypes'
   | 'getExports'
   | 'getGitMetadata'
@@ -96,6 +97,7 @@ interface WarmFileTask {
 interface WarmRenounPrewarmTargetsOptions {
   analysisOptions?: AnalysisOptions
   isFilePathGitIgnored: (filePath: string) => boolean
+  startSettledInBackground?: boolean
 }
 
 interface RepositoryBootstrapRequest {
@@ -105,6 +107,11 @@ interface RepositoryBootstrapRequest {
 
 export interface WarmRenounPrewarmTargetsResult {
   fileGetDependencyPathsByRequestKey: Record<string, string[]>
+}
+
+export interface StartedWarmRenounPrewarmTargets {
+  ready: Promise<WarmRenounPrewarmTargetsResult>
+  settled: Promise<void>
 }
 
 type RepositoryModule = typeof import('../../file-system/Repository.ts')
@@ -195,212 +202,337 @@ function resolveNearestTsConfigFilePath(
   return undefined
 }
 
+function normalizeWarmValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeWarmValue(item))
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, entryValue]) => [key, normalizeWarmValue(entryValue)])
+    )
+  }
+
+  return value
+}
+
+function getDirectoryStructureRequestKey(request: DirectoryStructureRequest): string {
+  return JSON.stringify({
+    directoryPath: request.directoryPath,
+    options: normalizeWarmValue(request.options ?? null),
+    repository: normalizeWarmValue(request.repository ?? null),
+    sparsePaths: request.sparsePaths?.slice().sort() ?? [],
+  })
+}
+
+function createReadyDirectoryStructureRequest(
+  request: DirectoryStructureRequest
+): DirectoryStructureRequest {
+  return {
+    ...request,
+    options: {
+      ...(request.options ?? {}),
+      includeResolvedTypes: false,
+      includeSections: false,
+      includeGitDates: false,
+      includeAuthors: false,
+    },
+  }
+}
+
+function normalizeDirectoryStructureReadyComparisonOptions(
+  options: DirectoryStructureRequest['options']
+): unknown {
+  const normalizedOptions = options ?? {}
+
+  return normalizeWarmValue({
+    ...normalizedOptions,
+    includeResolvedTypes: normalizedOptions['includeResolvedTypes'] ?? false,
+    includeSections: normalizedOptions['includeSections'] ?? false,
+    includeGitDates: normalizedOptions['includeGitDates'] ?? false,
+    includeAuthors: normalizedOptions['includeAuthors'] ?? false,
+  })
+}
+
+function partitionDirectoryStructureRequests(
+  requests: DirectoryStructureRequest[]
+): {
+  readyRequests: DirectoryStructureRequest[]
+  settledRequests: DirectoryStructureRequest[]
+} {
+  const readyRequests = new Map<string, DirectoryStructureRequest>()
+  const settledRequests = new Map<string, DirectoryStructureRequest>()
+
+  for (const request of requests) {
+    const readyRequest = createReadyDirectoryStructureRequest(request)
+    readyRequests.set(getDirectoryStructureRequestKey(readyRequest), readyRequest)
+
+    if (
+      JSON.stringify(
+        normalizeDirectoryStructureReadyComparisonOptions(request.options)
+      ) ===
+      JSON.stringify(
+        normalizeDirectoryStructureReadyComparisonOptions(readyRequest.options)
+      )
+    ) {
+      continue
+    }
+
+    settledRequests.set(getDirectoryStructureRequestKey(request), request)
+  }
+
+  return {
+    readyRequests: Array.from(readyRequests.values()),
+    settledRequests: Array.from(settledRequests.values()),
+  }
+}
+
 export async function warmRenounPrewarmTargets(
   targets: RenounPrewarmTargets,
   options: WarmRenounPrewarmTargetsOptions
 ): Promise<WarmRenounPrewarmTargetsResult> {
+  const handle = startWarmRenounPrewarmTargets(targets, options)
+  const warmResult = await handle.ready
+  await handle.settled
+  return warmResult
+}
+
+export function startWarmRenounPrewarmTargets(
+  targets: RenounPrewarmTargets,
+  options: WarmRenounPrewarmTargetsOptions
+): StartedWarmRenounPrewarmTargets {
   const logger = getDebugLogger()
   const fileSystem = new NodeFileSystem({
     tsConfigPath: options.analysisOptions?.tsConfigFilePath,
   })
   const warmFilesByPath = new Map<string, WarmFileTask>()
+  let backgroundWarmFiles: WarmFileTask[] = []
+  let settledDirectoryStructureRequests: DirectoryStructureRequest[] = []
+  let settledExportHistoryRequests: ExportHistoryRequest[] = []
 
-  if (targets.directoryGetEntries.length > 0) {
-    logger.debug(
-      'Collecting files from Directory#getEntries callsites',
-      () => ({
-        data: {
-          directories: targets.directoryGetEntries.length,
-        },
-      })
-    )
-  }
-
-  if (targets.fileGetFile.length > 0) {
-    logger.debug('Collecting files from Directory#getFile callsites', () => ({
-      data: {
-        files: targets.fileGetFile.length,
-      },
-    }))
-  }
-
-  if (targets.directoryGetStructure.length > 0) {
-    logger.debug('Collecting Directory#getStructure callsites', () => ({
-      data: {
-        directories: targets.directoryGetStructure.length,
-      },
-    }))
-  }
-
-  if (targets.exportHistory.length > 0) {
-    logger.debug('Collecting Repository#getExportHistory callsites', () => ({
-      data: {
-        histories: targets.exportHistory.length,
-      },
-    }))
-  }
-
-  const [directoryWarmFiles, fileWarmFiles] = await Promise.all([
-    targets.directoryGetEntries.length > 0
-      ? collectWarmFilesFromDirectoryTargets(targets.directoryGetEntries, {
-          fileSystem,
-          isFilePathGitIgnored: options.isFilePathGitIgnored,
-          logger,
+  const ready = (async () => {
+    if (targets.directoryGetEntries.length > 0) {
+      logger.debug(
+        'Collecting files from Directory#getEntries callsites',
+        () => ({
+          data: {
+            directories: targets.directoryGetEntries.length,
+          },
         })
-      : Promise.resolve(new Map<string, WarmFileTask>()),
-    targets.fileGetFile.length > 0
-      ? collectWarmFilesFromGetFileTargets(targets.fileGetFile, {
-          fileSystem,
-          isFilePathGitIgnored: options.isFilePathGitIgnored,
-          logger,
-        })
-      : Promise.resolve(new Map<string, WarmFileTask>()),
-  ])
-
-  for (const task of directoryWarmFiles.values()) {
-    mergeWarmTask(task, warmFilesByPath)
-  }
-
-  for (const task of fileWarmFiles.values()) {
-    mergeWarmTask(task, warmFilesByPath)
-  }
-
-  if (
-    warmFilesByPath.size === 0 &&
-    targets.directoryGetStructure.length === 0 &&
-    targets.exportHistory.length === 0
-  ) {
-    logger.debug('No prewarm files were discovered')
-    return {
-      fileGetDependencyPathsByRequestKey: {},
+      )
     }
-  }
 
-  logger.debug('Prewarming renoun cache targets', () => ({
-    data: {
-      files: warmFilesByPath.size,
-      directoryStructures: targets.directoryGetStructure.length,
-      exportHistories: targets.exportHistory.length,
-    },
-  }))
-
-  const repositoryBootstrapRequests = collectRepositoryBootstrapRequests(
-    targets,
-    warmFilesByPath
-  )
-
-  if (repositoryBootstrapRequests.length > 0) {
-    logger.debug('Bootstrapping repository-backed analysis roots', () => ({
-      data: {
-        repositories: repositoryBootstrapRequests.length,
-      },
-    }))
-
-    await bootstrapRepositoryAnalysisRoots(repositoryBootstrapRequests, {
-      logger,
-    })
-  }
-
-  const blockingWarmFiles = Array.from(warmFilesByPath.values()).filter(
-    (warmFile) => warmFile.bootstrapMethods.size > 0
-  )
-  const backgroundWarmFiles = Array.from(warmFilesByPath.values()).filter(
-    (warmFile) => warmFile.backgroundMethods.size > 0
-  )
-  const shouldWarmDirectoryStructureInBackground =
-    targets.directoryGetStructure.length > 0 &&
-    shouldBackgroundDirectoryStructureWarm()
-  const shouldWarmExportHistoryInBackground =
-    targets.exportHistory.length > 0 && shouldBackgroundExportHistoryWarm()
-
-  if (backgroundWarmFiles.length > 0) {
-    logger.debug('Scheduling background renoun file prewarm tasks', () => ({
-      data: {
-        files: backgroundWarmFiles.length,
-      },
-    }))
-
-    void runWithAnalysisRpcRequestPriority('background', async () =>
-      warmFiles(backgroundWarmFiles, {
-        analysisOptions: options.analysisOptions,
-        fileSystem,
-        logger,
-        phase: 'background',
-      })
-    ).catch((error) => {
-      logger.warn('Background renoun file prewarm target failed', () => ({
+    if (targets.fileGetFile.length > 0) {
+      logger.debug('Collecting files from Directory#getFile callsites', () => ({
         data: {
-          error: formatPrewarmError(error),
+          files: targets.fileGetFile.length,
         },
       }))
-    })
-  }
+    }
 
-  if (shouldWarmExportHistoryInBackground) {
-    logger.debug('Scheduling background renoun export history prewarm tasks', () => ({
-      data: {
-        histories: targets.exportHistory.length,
-      },
-    }))
-
-    void runWithAnalysisRpcRequestPriority('background', async () =>
-      warmExportHistoryRequests(targets.exportHistory, { logger })
-    ).catch((error) => {
-      logger.warn('Background renoun export history prewarm target failed', () => ({
+    if (targets.directoryGetStructure.length > 0) {
+      logger.debug('Collecting Directory#getStructure callsites', () => ({
         data: {
-          error: formatPrewarmError(error),
+          directories: targets.directoryGetStructure.length,
         },
       }))
-    })
-  }
+    }
 
-  if (shouldWarmDirectoryStructureInBackground) {
-    logger.debug('Scheduling background renoun directory structure prewarm tasks', () => ({
+    if (targets.exportHistory.length > 0) {
+      logger.debug('Collecting Repository#getExportHistory callsites', () => ({
+        data: {
+          histories: targets.exportHistory.length,
+        },
+      }))
+    }
+
+    const [directoryWarmFiles, fileWarmFiles] = await Promise.all([
+      targets.directoryGetEntries.length > 0
+        ? collectWarmFilesFromDirectoryTargets(targets.directoryGetEntries, {
+            fileSystem,
+            isFilePathGitIgnored: options.isFilePathGitIgnored,
+            logger,
+          })
+        : Promise.resolve(new Map<string, WarmFileTask>()),
+      targets.fileGetFile.length > 0
+        ? collectWarmFilesFromGetFileTargets(targets.fileGetFile, {
+            fileSystem,
+            isFilePathGitIgnored: options.isFilePathGitIgnored,
+            logger,
+          })
+        : Promise.resolve(new Map<string, WarmFileTask>()),
+    ])
+
+    for (const task of directoryWarmFiles.values()) {
+      mergeWarmTask(task, warmFilesByPath)
+    }
+
+    for (const task of fileWarmFiles.values()) {
+      mergeWarmTask(task, warmFilesByPath)
+    }
+
+    if (
+      warmFilesByPath.size === 0 &&
+      targets.directoryGetStructure.length === 0 &&
+      targets.exportHistory.length === 0
+    ) {
+      logger.debug('No prewarm files were discovered')
+      return {
+        fileGetDependencyPathsByRequestKey: {},
+      }
+    }
+
+    logger.debug('Prewarming renoun cache targets', () => ({
       data: {
-        directories: targets.directoryGetStructure.length,
+        files: warmFilesByPath.size,
+        directoryStructures: targets.directoryGetStructure.length,
+        exportHistories: targets.exportHistory.length,
       },
     }))
 
-    void runWithAnalysisRpcRequestPriority('background', async () =>
-      warmDirectoryStructureRequests(targets.directoryGetStructure, {
-        analysisOptions: options.analysisOptions,
+    const repositoryBootstrapRequests = collectRepositoryBootstrapRequests(
+      targets,
+      warmFilesByPath
+    )
+
+    if (repositoryBootstrapRequests.length > 0) {
+      logger.debug('Bootstrapping repository-backed analysis roots', () => ({
+        data: {
+          repositories: repositoryBootstrapRequests.length,
+        },
+      }))
+
+      await bootstrapRepositoryAnalysisRoots(repositoryBootstrapRequests, {
         logger,
       })
-    ).catch((error) => {
-      logger.warn('Background renoun directory structure prewarm target failed', () => ({
+    }
+
+    const blockingWarmFiles = Array.from(warmFilesByPath.values()).filter(
+      (warmFile) => warmFile.bootstrapMethods.size > 0
+    )
+    backgroundWarmFiles = Array.from(warmFilesByPath.values()).filter(
+      (warmFile) => warmFile.backgroundMethods.size > 0
+    )
+
+    const {
+      readyRequests: readyDirectoryStructureRequests,
+      settledRequests: nextSettledDirectoryStructureRequests,
+    } = partitionDirectoryStructureRequests(targets.directoryGetStructure)
+    settledDirectoryStructureRequests = nextSettledDirectoryStructureRequests
+    settledExportHistoryRequests = targets.exportHistory.slice()
+
+    const [warmResult] = await Promise.all([
+      blockingWarmFiles.length > 0
+        ? warmFiles(blockingWarmFiles, {
+            analysisOptions: options.analysisOptions,
+            fileSystem,
+            logger,
+            phase: 'bootstrap',
+          })
+        : Promise.resolve<WarmRenounPrewarmTargetsResult>({
+            fileGetDependencyPathsByRequestKey: {},
+          }),
+      readyDirectoryStructureRequests.length > 0
+        ? warmDirectoryStructureRequests(readyDirectoryStructureRequests, {
+            analysisOptions: options.analysisOptions,
+            logger,
+          })
+        : Promise.resolve(),
+    ])
+
+    logger.debug('Finished ready renoun cache prewarm targets')
+
+    return warmResult
+  })()
+
+  const settled = ready.then(async () => {
+    if (options.startSettledInBackground === false) {
+      return
+    }
+
+    if (backgroundWarmFiles.length > 0) {
+      logger.debug('Scheduling background renoun file prewarm tasks', () => ({
         data: {
-          error: formatPrewarmError(error),
+          files: backgroundWarmFiles.length,
         },
       }))
-    })
+
+      void runWithAnalysisRpcRequestPriority('background', async () =>
+          warmFiles(backgroundWarmFiles, {
+            analysisOptions: options.analysisOptions,
+            fileSystem,
+            logger,
+            phase: 'background',
+          })
+        ).catch((error) => {
+          logger.warn('Background renoun file prewarm target failed', () => ({
+            data: {
+              error: formatPrewarmError(error),
+            },
+          }))
+        })
+    }
+
+    if (settledDirectoryStructureRequests.length > 0) {
+      logger.debug(
+        'Scheduling background renoun directory structure prewarm tasks',
+        () => ({
+          data: {
+            directories: settledDirectoryStructureRequests.length,
+          },
+        })
+      )
+
+      void runWithAnalysisRpcRequestPriority('background', async () =>
+          warmDirectoryStructureRequests(settledDirectoryStructureRequests, {
+            analysisOptions: options.analysisOptions,
+            logger,
+          })
+        ).catch((error) => {
+          logger.warn(
+            'Background renoun directory structure prewarm target failed',
+            () => ({
+              data: {
+                error: formatPrewarmError(error),
+              },
+            })
+          )
+        })
+    }
+
+    if (settledExportHistoryRequests.length > 0) {
+      logger.debug(
+        'Scheduling background renoun export history prewarm tasks',
+        () => ({
+          data: {
+            histories: settledExportHistoryRequests.length,
+          },
+        })
+      )
+
+      void runWithAnalysisRpcRequestPriority('background', async () =>
+          warmExportHistoryRequests(settledExportHistoryRequests, { logger })
+        ).catch((error) => {
+          logger.warn(
+            'Background renoun export history prewarm target failed',
+            () => ({
+              data: {
+                error: formatPrewarmError(error),
+              },
+            })
+          )
+        })
+    }
+
+    logger.debug('Finished settled renoun cache prewarm targets')
+  })
+
+  return {
+    ready,
+    settled,
   }
-
-  const [warmResult] = await Promise.all([
-    blockingWarmFiles.length > 0
-      ? warmFiles(blockingWarmFiles, {
-          analysisOptions: options.analysisOptions,
-          fileSystem,
-          logger,
-          phase: 'bootstrap',
-        })
-      : Promise.resolve<WarmRenounPrewarmTargetsResult>({
-          fileGetDependencyPathsByRequestKey: {},
-        }),
-    targets.directoryGetStructure.length > 0 &&
-    !shouldWarmDirectoryStructureInBackground
-      ? warmDirectoryStructureRequests(targets.directoryGetStructure, {
-          analysisOptions: options.analysisOptions,
-          logger,
-        })
-      : Promise.resolve(),
-    targets.exportHistory.length > 0 && !shouldWarmExportHistoryInBackground
-      ? warmExportHistoryRequests(targets.exportHistory, { logger })
-      : Promise.resolve(),
-  ])
-
-  logger.debug('Finished prewarming renoun cache targets')
-
-  return warmResult
 }
 
 async function loadRepositoryModule(): Promise<RepositoryModule> {
@@ -987,16 +1119,19 @@ function shouldBackgroundReferenceSectionsWarm(options: {
   )
 }
 
-function shouldBackgroundExportHistoryWarm(): boolean {
-  return hasServerRuntimeInProcessEnv() && isProductionEnvironment()
-}
-
-function shouldBackgroundDirectoryStructureWarm(): boolean {
-  return hasServerRuntimeInProcessEnv() && isProductionEnvironment()
+function shouldBackgroundReferenceMetadataWarm(options: {
+  isJavaScriptTarget: boolean
+}): boolean {
+  return (
+    hasServerRuntimeInProcessEnv() &&
+    isProductionEnvironment() &&
+    options.isJavaScriptTarget
+  )
 }
 
 function hasJavaScriptWarmMethods(methods: ReadonlySet<WarmFileMethod>): boolean {
   return (
+    methods.has('getReferenceBase') ||
     methods.has('getExports') ||
     methods.has('getExportTypes') ||
     methods.has('getGitMetadata') ||
@@ -1004,7 +1139,7 @@ function hasJavaScriptWarmMethods(methods: ReadonlySet<WarmFileMethod>): boolean
   )
 }
 
-function partitionWarmMethods(
+export function partitionWarmMethods(
   methods: Set<WarmFileMethod>,
   options: {
     extension?: string
@@ -1036,6 +1171,31 @@ function partitionWarmMethods(
   }
 
   if (
+    shouldBackgroundReferenceMetadataWarm({
+      isJavaScriptTarget,
+    })
+  ) {
+    if (bootstrapMethods.delete('getGitMetadata')) {
+      backgroundMethods.add('getGitMetadata')
+    }
+
+    if (bootstrapMethods.delete('getExportTypes')) {
+      backgroundMethods.add('getExportTypes')
+    }
+  }
+
+  if (
+    backgroundMethods.size > 0 &&
+    !bootstrapMethods.has('getExports') &&
+    (limitedMethods.has('getReferenceBase') ||
+      limitedMethods.has('getGitMetadata') ||
+      limitedMethods.has('getExportTypes') ||
+      limitedMethods.has('getSections'))
+  ) {
+    bootstrapMethods.add('getExports')
+  }
+
+  if (
     !shouldSplitHighFanoutLeafWarm({
       leafOnly: options.leafOnly,
       fileCount: options.fileCount,
@@ -1054,6 +1214,10 @@ function partitionWarmMethods(
     }
   }
 
+  if (bootstrapMethods.delete('getReferenceBase')) {
+    backgroundMethods.add('getReferenceBase')
+  }
+
   if (bootstrapMethods.delete('getGitMetadata')) {
     backgroundMethods.add('getGitMetadata')
   }
@@ -1064,16 +1228,6 @@ function partitionWarmMethods(
 
   if (bootstrapMethods.delete('getSections')) {
     backgroundMethods.add('getSections')
-  }
-
-  if (
-    backgroundMethods.size > 0 &&
-    !bootstrapMethods.has('getExports') &&
-    (limitedMethods.has('getGitMetadata') ||
-      limitedMethods.has('getExportTypes') ||
-      limitedMethods.has('getSections'))
-  ) {
-    bootstrapMethods.add('getExports')
   }
 
   if (
@@ -1270,8 +1424,8 @@ async function warmExportHistoryRequests(
     async (request) => {
       try {
         const { Repository } = await loadRepositoryModule()
-        const repository = Repository.resolve(
-          request.repository as Parameters<typeof Repository.resolve>[0]
+        const repository = Repository.resolveUnsafe(
+          request.repository as Parameters<typeof Repository.resolveUnsafe>[0]
         )
         if (!repository) {
           return
@@ -1484,8 +1638,8 @@ async function resolveWarmRepository(
   }
 
   const { Repository } = await loadRepositoryModule()
-  const repository = Repository.resolve(
-    repositoryInput as Parameters<typeof Repository.resolve>[0]
+  const repository = Repository.resolveUnsafe(
+    repositoryInput as Parameters<typeof Repository.resolveUnsafe>[0]
   )
   if (!repository) {
     return undefined
@@ -1669,8 +1823,9 @@ function determineGetFileWarmMethods(extension: string): Set<WarmFileMethod> {
 
   if (isJavaScriptLikeExtension(extension)) {
     // When getFile() usage escapes precise collection, fall back to warming
-    // both export headers and export types for JS-like files.
+    // both the reference render path and deep analysis for JS-like files.
     methods.add('getExports')
+    methods.add('getReferenceBase')
     methods.add('getExportTypes')
     methods.add('getGitMetadata')
     methods.add('getSections')
@@ -1742,9 +1897,11 @@ function isJavaScriptWarmTask(warmFile: WarmFileTask): boolean {
   }
 
   return (
+    warmFile.bootstrapMethods.has('getReferenceBase') ||
     warmFile.bootstrapMethods.has('getExports') ||
     warmFile.bootstrapMethods.has('getExportTypes') ||
     warmFile.bootstrapMethods.has('getGitMetadata') ||
+    warmFile.backgroundMethods.has('getReferenceBase') ||
     warmFile.backgroundMethods.has('getExports') ||
     warmFile.backgroundMethods.has('getExportTypes') ||
     warmFile.backgroundMethods.has('getGitMetadata')
@@ -2056,7 +2213,8 @@ async function warmEntryFileCaches(
   })()
   const canWarmReferenceBaseData =
     isJavaScriptWarmTask(warmFile) &&
-    (options.methods.has('getExportTypes') ||
+    (options.methods.has('getReferenceBase') ||
+      options.methods.has('getExportTypes') ||
       options.methods.has('getGitMetadata') ||
       options.methods.has('getSections')) &&
     (typeof file.getCachedReferenceBaseData === 'function' ||

@@ -127,6 +127,14 @@ vi.mock('./framework.ts', () => ({
   resolveFrameworkBinFile: resolveFrameworkBinFileMock,
 }))
 
+function createResolvedPrewarmHandle() {
+  return {
+    ready: Promise.resolve(),
+    settled: Promise.resolve(),
+  }
+}
+
+const startPrewarmSafelyMock = vi.fn(() => createResolvedPrewarmHandle())
 const runPrewarmSafelyMock = vi.fn(async () => undefined)
 const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
 
@@ -137,6 +145,7 @@ vi.mock('./prewarm-runner.ts', () => ({
       tsConfigFilePath: join(rootPath, 'tsconfig.json'),
     },
   }),
+  startPrewarmSafely: startPrewarmSafelyMock,
   runPrewarmSafely: runPrewarmSafelyMock,
 }))
 
@@ -596,18 +605,21 @@ describe('runAppCommand integration', () => {
     }) as unknown as typeof process.on)
 
     process.chdir(projectRoot)
-    runPrewarmSafelyMock.mockImplementationOnce(async () => {
-      expect(process.env[PROCESS_ENV_KEYS.renounServerPort]).toBe('4321')
-      expect(process.env[PROCESS_ENV_KEYS.renounServerId]).toBe(
-        'integration-test-server'
-      )
-      expect(process.env[PROCESS_ENV_KEYS.renounServerClientRpcCache]).toBe(
-        '1'
-      )
-      expect(
-        process.env[PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]
-      ).toBe(String(DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS))
-    })
+    startPrewarmSafelyMock.mockImplementationOnce(() => ({
+      ready: Promise.resolve().then(() => {
+        expect(process.env[PROCESS_ENV_KEYS.renounServerPort]).toBe('4321')
+        expect(process.env[PROCESS_ENV_KEYS.renounServerId]).toBe(
+          'integration-test-server'
+        )
+        expect(process.env[PROCESS_ENV_KEYS.renounServerClientRpcCache]).toBe(
+          '1'
+        )
+        expect(
+          process.env[PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]
+        ).toBe(String(DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS))
+      }),
+      settled: Promise.resolve(),
+    }))
 
     try {
       await runAppCommand({ command: 'build', args: [] })
@@ -615,9 +627,17 @@ describe('runAppCommand integration', () => {
       expect(exitCode).toBe(0)
 
       const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
+      const runtimeTsConfig = JSON.parse(
+        await readFile(join(runtimeRoot, 'tsconfig.json'), 'utf8')
+      ) as {
+        compilerOptions?: {
+          rootDir?: string
+          paths?: Record<string, string[]>
+        }
+      }
 
-      expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
-      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+      expect(startPrewarmSafelyMock).toHaveBeenCalledTimes(1)
+      expect(startPrewarmSafelyMock).toHaveBeenCalledWith(
         {
           analysisOptions: {
             tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
@@ -647,6 +667,8 @@ describe('runAppCommand integration', () => {
           DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS
         ),
       })
+      expect(runtimeTsConfig.compilerOptions?.rootDir).toBeUndefined()
+      expect(runtimeTsConfig.compilerOptions?.paths?.['@/*']).toEqual(['./*'])
     } finally {
       exitSpy.mockRestore()
       processOnSpy.mockRestore()
@@ -741,8 +763,8 @@ describe('runAppCommand integration', () => {
       const exitCode = await exitPromise
       expect(exitCode).toBe(0)
 
-      expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
-      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+      expect(startPrewarmSafelyMock).toHaveBeenCalledTimes(1)
+      expect(startPrewarmSafelyMock).toHaveBeenCalledWith(
         {
           analysisOptions: {
             tsConfigFilePath: join(

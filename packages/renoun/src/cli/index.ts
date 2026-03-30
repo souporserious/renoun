@@ -19,6 +19,7 @@ type AnalysisCliRuntime = {
   createServer: typeof import('../analysis/server.ts').createServer
   getDebugLogger: typeof import('../utils/debug.ts').getDebugLogger
   createDefaultPrewarmOptions: typeof import('./prewarm-runner.ts').createDefaultPrewarmOptions
+  startPrewarmSafely: typeof import('./prewarm-runner.ts').startPrewarmSafely
   runPrewarmSafely: typeof import('./prewarm-runner.ts').runPrewarmSafely
 }
 
@@ -55,6 +56,7 @@ async function loadAnalysisCliRuntime(): Promise<AnalysisCliRuntime> {
     {
       BUILD_PREWARM_REQUEST_TIMEOUT_MS,
       createDefaultPrewarmOptions,
+      startPrewarmSafely,
       runPrewarmSafely,
     },
   ] = await Promise.all([
@@ -68,6 +70,7 @@ async function loadAnalysisCliRuntime(): Promise<AnalysisCliRuntime> {
     createServer,
     getDebugLogger,
     createDefaultPrewarmOptions,
+    startPrewarmSafely,
     runPrewarmSafely,
   }
 }
@@ -137,6 +140,7 @@ if (firstArgument === 'validate') {
     createServer,
     getDebugLogger,
     createDefaultPrewarmOptions,
+    startPrewarmSafely,
     runPrewarmSafely,
   } = await loadAnalysisCliRuntime()
   const { resolveFrameworkBinFile } = await import('./framework.ts')
@@ -275,12 +279,14 @@ if (firstArgument === 'validate') {
                   ? { clientRuntime: buildClientRuntime }
                   : {}),
               },
-              async () =>
-                runPrewarmSafely(prewarmOptions, {
+              async () => {
+                const prewarm = startPrewarmSafely(prewarmOptions, {
                   allowInlineFallback: true,
                   requestPriority: 'bootstrap',
                   timeoutMs: BUILD_PREWARM_REQUEST_TIMEOUT_MS,
                 })
+                await prewarm.ready
+              }
             )
             process.stdout.write('[renoun] Analysis cache prewarmed\n')
           }

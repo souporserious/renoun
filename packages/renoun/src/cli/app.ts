@@ -35,6 +35,7 @@ import {
 import {
   BUILD_PREWARM_REQUEST_TIMEOUT_MS,
   createDefaultPrewarmOptions,
+  startPrewarmSafely,
   runPrewarmSafely,
 } from './prewarm-runner.ts'
 
@@ -564,12 +565,14 @@ export async function runAppCommand({
               : {}),
             ...(buildClientRuntime ? { clientRuntime: buildClientRuntime } : {}),
           },
-          async () =>
-            runPrewarmSafely(prewarmOptions, {
+          async () => {
+            const prewarm = startPrewarmSafely(prewarmOptions, {
               allowInlineFallback: true,
               requestPriority: 'bootstrap',
               timeoutMs: BUILD_PREWARM_REQUEST_TIMEOUT_MS,
             })
+            await prewarm.ready
+          }
         )
         log('Analysis cache prewarmed')
       }

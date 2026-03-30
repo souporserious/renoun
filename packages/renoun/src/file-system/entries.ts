@@ -7481,7 +7481,7 @@ export class Directory<
           normalizeSlashes(absolutePath)
         )
 
-        this.#repository = Repository.resolve(
+        this.#repository = Repository.resolveUnsafe(
           {
             path: detectedRoot,
             cache: this.#cache,

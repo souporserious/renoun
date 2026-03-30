@@ -1356,14 +1356,14 @@ describe('Repository', () => {
       const cache = new Cache({ outputDirectory: join(workspaceRoot, 'cache') })
 
       try {
-        const first = Repository.resolve(
+        const first = Repository.resolveUnsafe(
           {
             path: workspaceRoot,
             ref: 'main',
           },
           cache
         )
-        const second = Repository.resolve(
+        const second = Repository.resolveUnsafe(
           {
             path: workspaceRoot,
             ref: 'main',
@@ -1381,7 +1381,7 @@ describe('Repository', () => {
     test('propagates late sparse paths into a live git file system', () => {
       const workspaceRoot = mkdtempSync(join(tmpdir(), 'renoun-repository-'))
       const cache = new Cache({ outputDirectory: join(workspaceRoot, 'cache') })
-      const repository = Repository.resolve(
+      const repository = Repository.resolveUnsafe(
         {
           path: workspaceRoot,
           ref: 'main',
@@ -1394,7 +1394,7 @@ describe('Repository', () => {
         expect(fileSystem).toBeInstanceOf(GitFileSystem)
 
         const registerSparsePathsSpy = vi.spyOn(fileSystem, 'registerSparsePaths')
-        const resolvedRepository = Repository.resolve(
+        const resolvedRepository = Repository.resolveUnsafe(
           {
             path: workspaceRoot,
             ref: 'main',

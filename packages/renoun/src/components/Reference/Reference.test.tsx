@@ -96,7 +96,7 @@ afterEach(() => {
 describe('Reference', () => {
   test('uses repository context for string sources', async () => {
     const workspaceRoot = createProjectFixture()
-    const repository = Repository.resolve({
+    const repository = Repository.resolveUnsafe({
       path: workspaceRoot,
       cache: new Cache({
         outputDirectory: join(workspaceRoot, '.cache'),
@@ -124,7 +124,7 @@ describe('Reference', () => {
 
   test('uses file system context for string sources', async () => {
     const workspaceRoot = createProjectFixture()
-    const repository = Repository.resolve({
+    const repository = Repository.resolveUnsafe({
       path: workspaceRoot,
       cache: new Cache({
         outputDirectory: join(workspaceRoot, '.cache'),
@@ -154,7 +154,7 @@ describe('Reference', () => {
     const workspaceRoot = createProjectFixture({
       sourceText: 'export class LightingModel { intensity = 1 }\n',
     })
-    const repository = Repository.resolve({
+    const repository = Repository.resolveUnsafe({
       path: workspaceRoot,
       cache: new Cache({
         outputDirectory: join(workspaceRoot, '.cache'),
@@ -193,7 +193,7 @@ describe('Reference', () => {
         },
       },
     })
-    const repository = Repository.resolve({
+    const repository = Repository.resolveUnsafe({
       path: workspaceRoot,
       cache: new Cache({
         outputDirectory: join(workspaceRoot, '.cache'),
@@ -226,7 +226,7 @@ describe('Reference', () => {
         return `export const export${index} = ${index}`
       }).join('\n'),
     })
-    const repository = Repository.resolve({
+    const repository = Repository.resolveUnsafe({
       path: workspaceRoot,
       cache: new Cache({
         outputDirectory: join(workspaceRoot, '.cache'),

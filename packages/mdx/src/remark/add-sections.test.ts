@@ -438,7 +438,7 @@ export const sections = []
     `)
   })
 
-  test.concurrent('handles custom heading tags via options', async () => {
+  test('handles custom heading tags via options', async () => {
     const mdxSource = `# Markdown Heading
 
 <Heading id="custom-heading">Custom Heading Component</Heading>
@@ -476,7 +476,7 @@ export const sections = []
     `)
   })
 
-  test.concurrent('handles section tags via options', async () => {
+  test('handles section tags via options', async () => {
     const mdxSource = `<Section id="getting-started" title="Getting Started" depth={1}>
 Some content here
 </Section>
@@ -529,7 +529,7 @@ More content
     expect(code).toContain('_jsx("code"')
   })
 
-  test.concurrent('combines markdown headings with JSX heading elements', async () => {
+  test('combines markdown headings with JSX heading elements', async () => {
     const mdxSource = `# Overview
 
 Some intro text.

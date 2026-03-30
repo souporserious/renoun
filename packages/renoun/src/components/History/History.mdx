@@ -3,15 +3,15 @@
 Pass a repository as the `source` prop:
 
 ```tsx
-import { Directory } from 'renoun'
+import { Directory, Repository } from 'renoun'
 import { History } from 'renoun/components'
 
 const directory = new Directory({
   path: 'packages/renoun',
-  repository: {
+  repository: Repository.remote({
     path: 'https://github.com/souporserious/renoun',
     ref: 'main',
-  },
+  }),
 })
 
 export default async function Page() {
@@ -40,15 +40,15 @@ Passing a repository is the recommended form because React server rendering can 
 ## Custom Rendering
 
 ```tsx
-import { Directory } from 'renoun'
+import { Directory, Repository } from 'renoun'
 import { History, type HistoryComponents } from 'renoun/components'
 
 const directory = new Directory({
   path: 'packages/renoun',
-  repository: {
+  repository: Repository.remote({
     path: 'https://github.com/souporserious/renoun',
     ref: 'main',
-  },
+  }),
 })
 const repo = directory.getRepository()
 
@@ -93,7 +93,7 @@ export default async function Page() {
 Use `selectEntries` to project the final report before rendering:
 
 ```tsx
-import { Directory } from 'renoun'
+import { Directory, Repository } from 'renoun'
 import {
   History,
   getRecentlyAddedHistoryEntries,
@@ -102,10 +102,10 @@ import {
 
 const directory = new Directory({
   path: 'packages/renoun',
-  repository: {
+  repository: Repository.remote({
     path: 'https://github.com/souporserious/renoun',
     ref: 'main',
-  },
+  }),
 })
 const repo = directory.getRepository()
 

@@ -55,7 +55,15 @@ export interface RepositoryConfig {
 }
 
 export interface BaseRepositoryOptions {
-  /** Local path or remote repository URL/specifier. */
+  /**
+   * Local path or remote repository URL/specifier.
+   * Only use trusted configuration here.
+   * If this comes from user input, the user can choose which repository the
+   * server reads:
+   * - local paths and `file://` URLs can point at another local repository
+   * - remote URLs can trigger fetches/clones to attacker-chosen remotes
+   * The risk is unintended file access or outbound git/network access.
+   */
   path: string
 
   /** Git reference to use for git operations and default URLs. */
@@ -97,7 +105,10 @@ export type RepositoryOptions =
   | CloneRepositoryOptions
   | VirtualRepositoryOptions
 
-export type RepositoryInput =
+/** Explicit repository instances accepted by higher-level APIs. */
+export type RepositoryInput = Repository
+
+export type UnsafeRepositoryInput =
   | Repository
   | RepositoryConfig
   | RepositoryOptions
@@ -746,6 +757,27 @@ export class Repository {
 
   static resolve(
     repository?: RepositoryInput,
+    _cache?: Cache
+  ): Repository | undefined {
+    if (!repository) {
+      return undefined
+    }
+
+    if (!(repository instanceof Repository)) {
+      throw new Error(
+        'Expected a Repository instance. Create one with `Repository.local(...)` or `Repository.remote(...)` before passing it to higher-level renoun APIs.'
+      )
+    }
+
+    return repository
+  }
+
+  /**
+   * Parses raw repository locators and config objects.
+   * Only use this with trusted application configuration, never end-user input.
+   */
+  static resolveUnsafe(
+    repository?: UnsafeRepositoryInput,
     cache?: Cache
   ): Repository | undefined {
     if (!repository) {
@@ -781,6 +813,25 @@ export class Repository {
     return candidate
   }
 
+  /** Creates a repository rooted at a local checkout. */
+  static local(
+    path: string = '.',
+    options: Omit<CloneRepositoryOptions, 'path'> = {}
+  ): Repository {
+    return this.resolveUnsafe({ ...options, path })!
+  }
+
+  /** Creates a repository rooted at a remote git host or remote URL. */
+  static remote(
+    repository:
+      | string
+      | RepositoryConfig
+      | (RepositoryOptions & { path: string })
+  ): Repository {
+    return this.resolveUnsafe(repository)!
+  }
+
+  /** Prefer `Repository.local(...)` or `Repository.remote(...)` for new code. */
   constructor(repository?: RepositoryOptions | RepositoryConfig | string) {
     const options =
       repository === undefined
