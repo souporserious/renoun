@@ -161,7 +161,7 @@
     "prettier": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
-    "styled-components": "6.3.11",
+    "styled-components": "6.3.12",
     "tm-grammars": "catalog:",
     "tm-themes": "catalog:",
     "valibot": "catalog:",
@@ -174,7 +174,7 @@
     "alien-signals": "^3.1.2",
     "fast-ignore": "2.0.0",
     "minimatch": "10.2.4",
-    "oniguruma-to-es": "4.3.4",
+    "oniguruma-to-es": "4.3.5",
     "restyle": "catalog:",
     "ts-morph": "catalog:",
     "vscode-textmate": "9.3.2"

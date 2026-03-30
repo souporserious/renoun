@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "lib": ["ESNext", "DOM"],
+    "lib": ["es2024", "dom"],
     "skipLibCheck": true,
     "strict": true,
     "noUnusedLocals": true,
@@ -10,7 +10,8 @@
     "noPropertyAccessFromIndexSignature": true,
     "forceConsistentCasingInFileNames": true,
     "esModuleInterop": true,
-    "module": "Preserve",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "allowImportingTsExtensions": true,
     "rewriteRelativeImportExtensions": true,
     "allowSyntheticDefaultImports": true,
@@ -21,7 +22,8 @@
     "stripInternal": true,
     "rootDir": "./src",
     "outDir": "./dist",
-    "declaration": true
+    "declaration": true,
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"],
   "exclude": [

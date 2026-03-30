@@ -1,39 +1,52 @@
 {
   "compilerOptions": {
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
     "strict": true,
-    "noEmit": true,
-    "incremental": true,
-    "esModuleInterop": true,
+    "target": "es2024",
     "module": "esnext",
     "moduleResolution": "bundler",
+    "lib": [
+      "dom",
+      "es2024"
+    ],
+    "types": [
+      "node"
+    ],
+    "noUncheckedSideEffectImports": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "forceConsistentCasingInFileNames": true,
     "jsx": "react-jsx",
     "jsxImportSource": "restyle",
+    "verbatimModuleSyntax": true,
     "plugins": [
       {
         "name": "next"
       }
     ],
-    "baseUrl": ".",
     "paths": {
-      "@/*": ["*"]
+      "@/*": [
+        "./*"
+      ]
     },
-    "target": "ES2017"
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true
   },
   "mdx": {
     "checkMdx": true
   },
   "include": [
+    "src",
     "next-env.d.ts",
     ".next/types/**/*.ts",
     "**/*.ts",
     "**/*.tsx",
     ".next/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules"
+  ]
 }
