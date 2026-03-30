@@ -1,5 +1,42 @@
 # renoun
 
+## 11.7.0
+
+### Minor Changes
+
+- 9d421a1: Fixes cache isolation for git-backed analysis by keying runtime git metadata to
+  resolved history state and by hashing isolated analysis worktree directories so
+  different repositories cannot collide in the same cache path.
+
+  ### Breaking Changes
+
+  Makes repository selection APIs more explicit by requiring `Repository`
+  instances at higher-level entry points and by adding `Repository.local(...)`
+  and `Repository.remote(...)` helpers for intentional repository construction.
+
+  This is a breaking API change for callers that passed raw repository strings or
+  configs directly into high-level components and file-system helpers.
+
+- 61077ca: Improves persisted directory snapshots for warm `Directory#getTree()` calls so
+  git-backed directories can rebuild navigation faster across instances.
+
+### Patch Changes
+
+- 8eb20cb: Improves git-backed build stability by preserving warmed file analysis caches
+  across workers and coordinating shared analysis sparse-checkout scopes during
+  concurrent builds.
+- 9294458: Improves `Directory#getStructure()` indexing performance by flattening
+  directory structure collection, reusing persisted structure manifests on warm
+  reads, and batching module export metadata for header-only JavaScript
+  structures. This additionally adds prewarm support for
+  `Directory#getStructure()` callsites so search and other indexing routes can
+  warm structure caches.
+- a49d54b: Improve overall cache and workspace-token invalidation.
+- 377fd96: Runs build analysis prewarm in the background through the CLI server so Next.js
+  can start immediately while lower-priority cache warming continues behind
+  foreground build requests.
+- 36278ac: Improves granular concurrency and cache invalidation.
+
 ## 11.6.0
 
 ### Minor Changes
