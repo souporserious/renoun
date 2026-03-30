@@ -4,6 +4,11 @@ import { getDebugLogger } from '../utils/debug.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { getProgram } from '../analysis/get-program.ts'
 import { hasServerRuntimeInProcessEnv } from '../analysis/runtime-env.ts'
+import { recordArtifactBootstrapDuration } from '../analysis/rpc/build-profile.ts'
+import {
+  runWithAnalysisRpcRequestPriority,
+  type AnalysisRpcRequestPriority,
+} from '../analysis/request-priority.ts'
 import type { AnalysisOptions } from '../analysis/types.ts'
 import {
   CacheStore,
@@ -17,6 +22,7 @@ import { FileSystemSnapshot } from '../file-system/Snapshot.ts'
 import { normalizePathKey } from '../utils/path.ts'
 import { getRootDirectory } from '../utils/get-root-directory.ts'
 import {
+  bootstrapRenounPrewarmTargetRepositories,
   warmRenounPrewarmTargets,
   type WarmRenounPrewarmTargetsResult,
 } from './prewarm/warm-analysis.ts'
@@ -30,7 +36,7 @@ import {
 } from './prewarm/collect-targets.ts'
 
 const PREWARM_WORKSPACE_GATE_SCOPE = 'prewarm-workspace-gate'
-const PREWARM_WORKSPACE_GATE_VERSION = '5'
+const PREWARM_WORKSPACE_GATE_VERSION = '6'
 const PREWARM_WORKSPACE_GATE_VERSION_DEP = 'prewarm-workspace-gate-version'
 const PREWARM_WORKSPACE_TOKEN_DEP = 'prewarm-workspace-token'
 
@@ -258,7 +264,8 @@ function toNormalizedPrewarmTargets(
     directoryGetStructure: targets.directoryGetStructure
       .map((request) => ({
         directoryPath: normalizePathKey(request.directoryPath),
-        repository: request.repository ?? null,
+        repository: normalizePrewarmTargetValue(request.repository ?? null),
+        sparsePaths: request.sparsePaths?.slice().sort() ?? null,
         options: request.options ?? null,
       }))
       .sort((left, right) => {
@@ -499,6 +506,7 @@ function mergeFileGetDependencyPathsByRequestKey(options: {
 
 async function runPrewarmAnalysis(options?: {
   analysisOptions?: AnalysisOptions
+  requestPriority?: AnalysisRpcRequestPriority
   previousState?: CachedPrewarmWorkspaceGateValue
   changedPaths?: ReadonlySet<string> | null
   workspaceTokenRootPath?: string
@@ -550,10 +558,16 @@ async function runPrewarmAnalysis(options?: {
     }
   }
 
-  const warmResult = await warmRenounPrewarmTargets(targetsToWarm, {
-    analysisOptions: options?.analysisOptions,
-    isFilePathGitIgnored,
-  })
+  const bootstrapStartedAt = performance.now()
+  const warmResult = await runWithAnalysisRpcRequestPriority(
+    options?.requestPriority,
+    async () =>
+      warmRenounPrewarmTargets(targetsToWarm, {
+        analysisOptions: options?.analysisOptions,
+        isFilePathGitIgnored,
+      })
+  )
+  recordArtifactBootstrapDuration(performance.now() - bootstrapStartedAt)
 
   return {
     result: incrementalTargets ? 'incremental-warmed' : 'warmed',
@@ -569,6 +583,7 @@ async function runPrewarmAnalysis(options?: {
 
 export async function prewarmRenounRpcServerCache(options?: {
   analysisOptions?: AnalysisOptions
+  requestPriority?: AnalysisRpcRequestPriority
 }): Promise<void> {
   const logger = getDebugLogger()
 
@@ -634,6 +649,14 @@ export async function prewarmRenounRpcServerCache(options?: {
     // Keep the active project runtime ready for downstream build requests, but
     // avoid rerunning the full prewarm when the workspace token is unchanged.
     getProgram(options?.analysisOptions)
+    await runWithAnalysisRpcRequestPriority(
+      options?.requestPriority,
+      async () => {
+        if (previousState) {
+          await bootstrapRenounPrewarmTargetRepositories(previousState.targets)
+        }
+      }
+    )
 
     logger.debug(
       'Skipping renoun prewarm because workspace token is unchanged',

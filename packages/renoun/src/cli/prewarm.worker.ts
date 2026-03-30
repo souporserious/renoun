@@ -1,6 +1,7 @@
 import { getPriority, setPriority } from 'node:os'
 
 import type { AnalysisOptions } from '../analysis/types.ts'
+import type { AnalysisRpcRequestPriority } from '../analysis/request-priority.ts'
 import {
   PREWARM_WORKER_NICENESS,
   PREWARM_WORKER_PAYLOAD_ENV_KEY,
@@ -9,6 +10,7 @@ import { prewarmRenounRpcServerCache } from './prewarm.ts'
 
 interface PrewarmWorkerPayload {
   analysisOptions?: AnalysisOptions
+  requestPriority?: AnalysisRpcRequestPriority
 }
 
 interface PrewarmWorkerMessage {
@@ -65,6 +67,7 @@ async function runPrewarmWorker(): Promise<void> {
   try {
     await prewarmRenounRpcServerCache({
       analysisOptions: payload.analysisOptions,
+      requestPriority: payload.requestPriority,
     })
     sendPrewarmWorkerMessage({
       type: 'completed',

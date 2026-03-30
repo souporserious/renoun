@@ -58,6 +58,7 @@ import {
   trimTrailingSlashes,
 } from '../utils/path.ts'
 import { createConcurrentQueue, mapConcurrent } from '../utils/concurrency.ts'
+import { isProductionEnvironment } from '../utils/env.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -130,6 +131,7 @@ import {
   getWorkspaceChangeTokenFromGit,
   shouldIncludeIgnoredStatusForScope,
 } from './workspace-change-git.ts'
+import { resolvePersistentProjectRootDirectory } from '../utils/get-root-directory.ts'
 
 export interface GitFileSystemOptions extends FileSystemOptions {
   /** Repository source - remote URL or local path. */
@@ -225,13 +227,14 @@ interface NormalizedExportHistoryRefScope {
   previousReleaseTag?: string
 }
 
-const REMOTE_REF_CACHE_TTL_MS = 60_000
+const REMOTE_REF_CACHE_TTL_MS = 5 * 60_000
 const REMOTE_REF_TIMEOUT_MS = 8_000
 const REF_IDENTITY_CACHE_TTL_MS = 60_000
 const ANALYSIS_WORKTREE_READY_WAIT_ATTEMPTS = 20
 const ANALYSIS_WORKTREE_READY_WAIT_DELAY_MS = 50
 const cachedRepoRefUpdateInFlight = new Map<string, Promise<void>>()
 const cachedAnalysisWorktreePreparationInFlight = new Map<string, Promise<void>>()
+const cachedAnalysisWorktreeBootstrapInFlight = new Map<string, Promise<void>>()
 const cachedRemoteRefSyncChecks = new Map<
   string,
   {
@@ -293,6 +296,8 @@ interface PrepareRepoOptions {
 
 let isCachedBackfillSupport: boolean | null = null
 const SPARSE_CHECKOUT_LOCK_DIRECTORY_NAME = '.renoun-sparse-checkout.lock'
+const FULL_ANALYSIS_WORKTREE_READY_FILE_NAME =
+  '.renoun-full-analysis-worktree.v7.ready'
 const SPARSE_CHECKOUT_LOCK_TTL_MS = 30_000
 const SPARSE_CHECKOUT_LOCK_POLL_MS = 25
 
@@ -480,8 +485,22 @@ function withSparseCheckoutLockSync<Type>(
   }
 }
 
-function resolveDefaultGitCacheDirectory(startDirectory?: string): string {
+function resolveDefaultGitCacheDirectory(
+  startDirectory?: string,
+  options?: {
+    preferPersistentProjectRoot?: boolean
+  }
+): string {
   try {
+    if (options?.preferPersistentProjectRoot && startDirectory) {
+      const persistentProjectRoot =
+        resolvePersistentProjectRootDirectory(startDirectory)
+
+      if (persistentProjectRoot !== resolve('/')) {
+        return join(persistentProjectRoot, '.renoun', 'cache', 'git')
+      }
+    }
+
     return join(
       resolveCacheRootDirectory({
         startDirectory,
@@ -716,6 +735,65 @@ async function reapplySparseCheckout(repoRoot: string, verbose: boolean) {
   })
 }
 
+async function disableSparseCheckout(repoRoot: string, verbose: boolean) {
+  return spawnWithResult('git', ['sparse-checkout', 'disable'], {
+    cwd: repoRoot,
+    verbose,
+  })
+}
+
+async function resetWorktreeToHead(repoRoot: string, verbose: boolean) {
+  return spawnWithResult('git', ['reset', '--hard', 'HEAD'], {
+    cwd: repoRoot,
+    verbose,
+  })
+}
+
+async function clearGitIndexLockIfPresent(
+  repoRoot: string,
+  verbose: boolean
+): Promise<void> {
+  const gitPath = await spawnWithStdout(
+    'git',
+    ['rev-parse', '--git-path', 'index.lock'],
+    {
+      cwd: repoRoot,
+    }
+  ).catch(() => '')
+
+  const trimmedPath = gitPath.trim()
+  if (!trimmedPath) {
+    return
+  }
+
+  const absoluteLockPath = resolve(repoRoot, trimmedPath)
+  if (!existsSync(absoluteLockPath)) {
+    return
+  }
+
+  await rm(absoluteLockPath, { force: true })
+
+  if (verbose) {
+    console.log(
+      `[GitFileSystem] cleared stale git index lock at ${absoluteLockPath}`
+    )
+  }
+}
+
+function assertGitCommandSucceeded(
+  result: Awaited<ReturnType<typeof spawnWithResult>>,
+  action: string
+): void {
+  if (result.status === 0) {
+    return
+  }
+
+  const stderr = result.stderr ? String(result.stderr).trim() : ''
+  throw new Error(
+    `[GitFileSystem] Failed to ${action}${stderr ? `: ${stderr}` : ''}`
+  )
+}
+
 async function checkoutWorktreePaths(
   repoRoot: string,
   scopeDirectories: string[],
@@ -725,6 +803,29 @@ async function checkoutWorktreePaths(
   return spawnWithResult('git', ['checkout', '--force', '--', ...paths], {
     cwd: repoRoot,
     verbose,
+  })
+}
+
+function reapplySparseCheckoutSync(repoRoot: string, verbose: boolean) {
+  return spawnSync('git', ['sparse-checkout', 'reapply'], {
+    cwd: repoRoot,
+    stdio: verbose ? 'inherit' : 'pipe',
+    encoding: 'utf8',
+    shell: false,
+  })
+}
+
+function checkoutWorktreePathsSync(
+  repoRoot: string,
+  scopeDirectories: string[],
+  verbose: boolean
+) {
+  const paths = scopeDirectories.length ? scopeDirectories : ['.']
+  return spawnSync('git', ['checkout', '--force', '--', ...paths], {
+    cwd: repoRoot,
+    stdio: verbose ? 'inherit' : 'pipe',
+    encoding: 'utf8',
+    shell: false,
   })
 }
 
@@ -874,6 +975,47 @@ function collectScopeDirectoryAncestors(path: string): string[] {
   return scopeDirectories
 }
 
+function coversScopeDirectories(
+  existingScopeDirectories: Iterable<string>,
+  requestedScopeDirectories: string[]
+): boolean {
+  const existing = new Set(normalizeScopeDirectories(Array.from(existingScopeDirectories)))
+  const requested = normalizeScopeDirectories(requestedScopeDirectories)
+
+  if (existing.has('.')) {
+    return true
+  }
+
+  if (requested.includes('.')) {
+    return existing.has('.')
+  }
+
+  for (const scopeDirectory of requested) {
+    let currentScopeDirectory = scopeDirectory
+    let covered = existing.has(currentScopeDirectory)
+
+    while (!covered && currentScopeDirectory && currentScopeDirectory !== '.') {
+      const parentScopeDirectory = normalizePath(dirname(currentScopeDirectory))
+      if (
+        !parentScopeDirectory ||
+        parentScopeDirectory === '.' ||
+        parentScopeDirectory === currentScopeDirectory
+      ) {
+        break
+      }
+
+      covered = existing.has(parentScopeDirectory)
+      currentScopeDirectory = parentScopeDirectory
+    }
+
+    if (!covered) {
+      return false
+    }
+  }
+
+  return true
+}
+
 /** Merges the prepared scope directories with the new scope directories. */
 function mergeScopeDirectories(
   prepared: Set<string>,
@@ -904,35 +1046,60 @@ async function ensureCachedScope(
   repoRoot: string,
   scopeDirectories: string[],
   verbose: boolean
-) {
+): Promise<string[]> {
   const normalized = normalizeScopeDirectories(scopeDirectories)
 
-  await withSparseCheckoutLock(repoRoot, async () => {
+  return withSparseCheckoutLock(repoRoot, async () => {
+    let shouldMaterializeScope = false
+
     if (!(await isSparseCheckoutInitialized(repoRoot))) {
       await spawnWithResult('git', ['sparse-checkout', 'init', '--cone'], {
         cwd: repoRoot,
         verbose,
       })
+      shouldMaterializeScope = true
     }
 
-    if (normalized.includes('.')) {
-      await setSparseCheckout(repoRoot, ['.'], verbose)
-    } else {
-      const addResult = await addSparseCheckout(repoRoot, normalized, verbose)
+    const currentScopeDirectories = await readSparseCheckoutPaths(repoRoot)
+    if (
+      coversScopeDirectories(currentScopeDirectories, normalized) &&
+      !shouldMaterializeScope
+    ) {
+      return currentScopeDirectories
+    }
 
-      if (addResult.status !== 0) {
-        const merged = normalizeScopeDirectories([
-          ...(await readSparseCheckoutPaths(repoRoot)),
-          ...normalized,
-        ])
+    if (!coversScopeDirectories(currentScopeDirectories, normalized)) {
+      shouldMaterializeScope = true
 
-        await setSparseCheckout(repoRoot, merged, verbose)
+      if (normalized.includes('.')) {
+        await setSparseCheckout(repoRoot, ['.'], verbose)
+      } else {
+        const addResult = await addSparseCheckout(repoRoot, normalized, verbose)
+
+        if (addResult.status !== 0) {
+          const merged = normalizeScopeDirectories([
+            ...(await readSparseCheckoutPaths(repoRoot)),
+            ...normalized,
+          ])
+
+          await setSparseCheckout(repoRoot, merged, verbose)
+        }
       }
     }
 
-    if (await supportsGitBackfill()) {
-      await runGitBackfill(repoRoot, verbose)
+    if (shouldMaterializeScope) {
+      await reapplySparseCheckout(repoRoot, verbose)
+      await checkoutWorktreePaths(repoRoot, normalized, verbose)
+
+      if (await supportsGitBackfill()) {
+        await runGitBackfill(repoRoot, verbose)
+      }
     }
+
+    return normalizeScopeDirectories([
+      ...(await readSparseCheckoutPaths(repoRoot)),
+      ...normalized,
+    ])
   })
 }
 
@@ -940,36 +1107,61 @@ function ensureCachedScopeSync(
   repoRoot: string,
   scopeDirectories: string[],
   verbose: boolean
-) {
+): string[] {
   const normalized = normalizeScopeDirectories(scopeDirectories)
 
-  withSparseCheckoutLockSync(repoRoot, () => {
+  return withSparseCheckoutLockSync(repoRoot, () => {
+    let shouldMaterializeScope = false
+
     if (!isSparseCheckoutInitializedSync(repoRoot)) {
       spawnSync('git', ['sparse-checkout', 'init', '--cone'], {
         cwd: repoRoot,
         stdio: verbose ? 'inherit' : 'ignore',
         shell: false,
       })
+      shouldMaterializeScope = true
     }
 
-    if (normalized.includes('.')) {
-      setSparseCheckoutSync(repoRoot, ['.'], verbose)
-    } else {
-      const addResult = addSparseCheckoutSync(repoRoot, normalized, verbose)
+    const currentScopeDirectories = readSparseCheckoutPathsSync(repoRoot)
+    if (
+      coversScopeDirectories(currentScopeDirectories, normalized) &&
+      !shouldMaterializeScope
+    ) {
+      return currentScopeDirectories
+    }
 
-      if (addResult.status !== 0) {
-        const merged = normalizeScopeDirectories([
-          ...readSparseCheckoutPathsSync(repoRoot),
-          ...normalized,
-        ])
+    if (!coversScopeDirectories(currentScopeDirectories, normalized)) {
+      shouldMaterializeScope = true
 
-        setSparseCheckoutSync(repoRoot, merged, verbose)
+      if (normalized.includes('.')) {
+        setSparseCheckoutSync(repoRoot, ['.'], verbose)
+      } else {
+        const addResult = addSparseCheckoutSync(repoRoot, normalized, verbose)
+
+        if (addResult.status !== 0) {
+          const merged = normalizeScopeDirectories([
+            ...readSparseCheckoutPathsSync(repoRoot),
+            ...normalized,
+          ])
+
+          setSparseCheckoutSync(repoRoot, merged, verbose)
+        }
       }
     }
 
-    if (supportsGitBackfillSync()) {
-      runGitBackfillSync(repoRoot, verbose)
+    if (shouldMaterializeScope) {
+      reapplySparseCheckoutSync(repoRoot, verbose)
+      checkoutWorktreePathsSync(repoRoot, normalized, verbose)
+
+      if (supportsGitBackfillSync()) {
+        runGitBackfillSync(repoRoot, verbose)
+      }
     }
+
+    return normalizeScopeDirectories([
+      ...readSparseCheckoutPathsSync(repoRoot),
+      ...normalized,
+    ])
   })
 }
 
@@ -1048,7 +1240,10 @@ export class GitFileSystem
       ? resolve(String(options.cacheDirectory))
       : sharedCacheRoot
         ? join(sharedCacheRoot, 'git')
-        : resolveDefaultGitCacheDirectory(cacheStartDirectory)
+        : resolveDefaultGitCacheDirectory(cacheStartDirectory, {
+            preferPersistentProjectRoot:
+              this.repositoryIsRemote || this.#refIsExplicit,
+          })
 
     this.verbose = Boolean(options.verbose)
     this.maxBufferBytes = options.maxBufferBytes ?? 100 * 1024 * 1024
@@ -1104,6 +1299,30 @@ export class GitFileSystem
       this.getAbsolutePath(this.#tsConfigPath),
       this.#createAnalysisScopeIdSync()
     )
+  }
+
+  /** @internal */
+  async prepareAnalysisRoot(): Promise<string | undefined> {
+    await this.#ensureRepoReady()
+
+    if (!this.#shouldUseIsolatedAnalysisRoot()) {
+      return undefined
+    }
+
+    const analysisRoot = await this.#ensureAnalysisRepoReady()
+
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot)
+      this.#preparedAnalysisScope = new Set(['.'])
+      return analysisRoot
+    }
+
+    const bootstrapScopeDirectories = this.#getAnalysisBootstrapScopeDirectories()
+    if (bootstrapScopeDirectories.length > 0) {
+      await this.#ensureAnalysisScope(analysisRoot, bootstrapScopeDirectories)
+    }
+
+    return analysisRoot
   }
 
   override prepareAnalysis(filePath: string) {
@@ -1249,6 +1468,10 @@ export class GitFileSystem
   }
 
   #getAnalysisScopeDirectories(filePath: string): string[] {
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      return ['.']
+    }
+
     const scopeDirectories = new Set<string>()
 
     for (const preparedScopeDirectory of this.prepareScopeDirectories) {
@@ -1274,22 +1497,26 @@ export class GitFileSystem
       : ['.']
   }
 
+  #getAnalysisBootstrapScopeDirectories(): string[] {
+    return this.#getAnalysisScopeDirectories(
+      this.#normalizeToRepoPath(this.#tsConfigPath)
+    )
+  }
+
   async #getPreparedAnalysisContext(filePath: string): Promise<{
     filePath: string
     analysisOptions: AnalysisOptions
   }> {
-    await this.#ensureRepoReady()
-
+    const analysisRoot = await this.prepareAnalysisRoot()
     const relativePath = this.#normalizeToRepoPath(filePath)
 
-    if (!this.#shouldUseIsolatedAnalysisRoot()) {
+    if (!analysisRoot) {
       return {
         filePath: this.getAbsolutePath(relativePath),
         analysisOptions: this.getAnalysisCacheMetadata(),
       }
     }
 
-    const analysisRoot = await this.#ensureAnalysisRepoReady()
     const analysisScopeDirectories =
       this.#getAnalysisScopeDirectories(relativePath)
     await this.#ensureAnalysisScope(analysisRoot, analysisScopeDirectories)
@@ -1323,6 +1550,10 @@ export class GitFileSystem
       this.#refIsExplicit &&
       looksLikeCacheClone(this.repoRoot, this.cacheDirectory)
     )
+  }
+
+  #shouldUseFullAnalysisWorktree(): boolean {
+    return this.#shouldUseIsolatedAnalysisRoot() && isProductionEnvironment()
   }
 
   #resolveAnalysisRepoRootPath(refCommit: string): string {
@@ -1491,17 +1722,78 @@ export class GitFileSystem
     analysisRoot: string,
     scopeDirectories: string[]
   ): Promise<void> {
-    const { merged, missing } = mergeScopeDirectories(
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot)
+      this.#preparedAnalysisScope = new Set(['.'])
+      return
+    }
+
+    const { merged } = mergeScopeDirectories(
       this.#preparedAnalysisScope,
       scopeDirectories
     )
 
-    if (missing.length === 0) {
+    const preparedScopeDirectories = await ensureCachedScope(
+      analysisRoot,
+      merged,
+      this.verbose
+    )
+    this.#preparedAnalysisScope = new Set(preparedScopeDirectories)
+  }
+
+  async #ensureFullAnalysisWorktree(
+    analysisRoot: string,
+    force = false
+  ): Promise<void> {
+    const readyMarkerPath = join(
+      analysisRoot,
+      FULL_ANALYSIS_WORKTREE_READY_FILE_NAME
+    )
+
+    if (!force && existsSync(readyMarkerPath)) {
       return
     }
 
-    await ensureCachedScope(analysisRoot, merged, this.verbose)
-    this.#preparedAnalysisScope = new Set(merged)
+    await withSparseCheckoutLock(analysisRoot, async () => {
+      if (!force && existsSync(readyMarkerPath)) {
+        return
+      }
+
+      await clearGitIndexLockIfPresent(analysisRoot, this.verbose)
+
+      if (await isSparseCheckoutInitialized(analysisRoot)) {
+        assertGitCommandSucceeded(
+          await disableSparseCheckout(analysisRoot, this.verbose),
+          `disable sparse-checkout for "${analysisRoot}"`
+        )
+      }
+
+      if (await supportsGitBackfill()) {
+        await runGitBackfill(analysisRoot, this.verbose)
+      }
+
+      assertGitCommandSucceeded(
+        await resetWorktreeToHead(analysisRoot, this.verbose),
+        `reset full analysis worktree for "${analysisRoot}"`
+      )
+
+      await writeFile(readyMarkerPath, 'ready\n')
+    })
+  }
+
+  async #ensureBootstrappedAnalysisWorktree(
+    analysisRoot: string,
+    force = false
+  ): Promise<void> {
+    const bootstrapKey = force ? `${analysisRoot}:force` : analysisRoot
+
+    await getOrCreateInFlight(
+      cachedAnalysisWorktreeBootstrapInFlight,
+      bootstrapKey,
+      async () => {
+        await this.#ensureFullAnalysisWorktree(analysisRoot, force)
+      }
+    )
   }
 
   async #restoreAnalysisScope(
@@ -1512,6 +1804,12 @@ export class GitFileSystem
     const expectedAbsolutePath = join(analysisRoot, expectedRelativePath)
 
     if (existsSync(expectedAbsolutePath)) {
+      return
+    }
+
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot, true)
+      this.#preparedAnalysisScope = new Set(['.'])
       return
     }
 
@@ -2502,8 +2800,12 @@ export class GitFileSystem
     if (missing.length === 0) {
       return
     }
-    ensureCachedScopeSync(this.repoRoot, merged, this.verbose)
-    this.#preparedScope = new Set(merged)
+    const preparedScopeDirectories = ensureCachedScopeSync(
+      this.repoRoot,
+      merged,
+      this.verbose
+    )
+    this.#preparedScope = new Set(preparedScopeDirectories)
   }
 
   #maybeUpdateCachedRepoForRefSync(
@@ -4834,8 +5136,12 @@ export class GitFileSystem
     // Always run sparse-checkout + backfill for cache clones.
     // The backfill command is idempotent and ensures blobs are available
     // for all commits in the sparse-checkout scope.
-    await ensureCachedScope(this.repoRoot, merged, this.verbose)
-    this.#preparedScope = new Set(merged)
+    const preparedScopeDirectories = await ensureCachedScope(
+      this.repoRoot,
+      merged,
+      this.verbose
+    )
+    this.#preparedScope = new Set(preparedScopeDirectories)
   }
 
   async #ensureRepoReady(

@@ -443,8 +443,19 @@ export abstract class BaseFileSystem {
 
   getFileExports(filePath: string) {
     return this.prepareAnalysis(filePath).then(
-      ({ filePath: preparedFilePath, analysisOptions }) =>
-        getFileExports(preparedFilePath, analysisOptions)
+      async ({ filePath: preparedFilePath, analysisOptions }) => {
+        if (this.supportsServerManagedReferenceArtifacts()) {
+          return (
+            await getReferenceBaseArtifact(
+              preparedFilePath,
+              false,
+              analysisOptions
+            )
+          ).exportMetadata
+        }
+
+        return getFileExports(preparedFilePath, analysisOptions)
+      }
     )
   }
 

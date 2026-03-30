@@ -58,6 +58,7 @@ import {
   type JavaScriptFileReferenceBaseData,
   type JavaScriptFileResolvedTypesData,
   type PersistedJavaScriptFileReferenceBaseData,
+  type PersistedJavaScriptFileResolvedTypesData,
 } from '../file-system/reference-artifacts.ts'
 import type {
   FileExportsWithDependenciesResult,
@@ -112,9 +113,19 @@ import {
 } from './cache.ts'
 import {
   isRpcBuildProfileEnabled,
+  recordArtifactQueueDepth,
+  recordArtifactScheduling,
   recordRpcCacheReuse,
   recordRpcCacheReuseStaleReason,
 } from './rpc/build-profile.ts'
+import {
+  getSharedAnalysisArtifactScheduler,
+  type AnalysisArtifactFamily,
+  type AnalysisArtifactKind,
+  type AnalysisArtifactPriority,
+  type AnalysisArtifactRequest,
+} from './artifact-scheduler.ts'
+import { getCurrentAnalysisRpcRequestPriority } from './request-priority.ts'
 import type { RuntimeAnalysisSession } from './runtime-analysis-session.ts'
 import {
   getRuntimeAnalysisSession as getSharedRuntimeAnalysisSession,
@@ -3100,6 +3111,71 @@ function getRuntimeAnalysisConstDeps(): CacheStoreConstDependency[] {
   return [...RUNTIME_ANALYSIS_CONST_DEPS]
 }
 
+function getAnalysisArtifactPriority(): AnalysisArtifactPriority {
+  const currentPriority = getCurrentAnalysisRpcRequestPriority()
+  if (currentPriority === 'background') {
+    return 'background'
+  }
+  if (currentPriority === 'bootstrap') {
+    return 'bootstrap'
+  }
+  return 'immediate'
+}
+
+function getAnalysisArtifactScheduler() {
+  return getSharedAnalysisArtifactScheduler({
+    onQueueDepthSample({ family, priority, depth }) {
+      recordArtifactQueueDepth({
+        family,
+        priority,
+        depth,
+      })
+    },
+    onTaskComplete({ request, mode, queueWaitMs, runMs, promoted, error }) {
+      recordArtifactScheduling({
+        kind: request.kind,
+        family: request.family,
+        mode,
+        queueWaitMs,
+        runMs,
+        promoted,
+        error,
+        target: request.targetPath,
+      })
+    },
+  })
+}
+
+function createAnalysisArtifactRequest(options: {
+  key: string
+  kind: AnalysisArtifactKind
+  family: AnalysisArtifactFamily
+  analysisScopeId?: string
+  targetPath?: string
+  dependencyHintPaths?: readonly string[]
+}): AnalysisArtifactRequest {
+  return {
+    key: options.key,
+    kind: options.kind,
+    family: options.family,
+    priority: getAnalysisArtifactPriority(),
+    analysisScopeId: options.analysisScopeId,
+    targetPath: options.targetPath,
+    dependencyHintPaths: options.dependencyHintPaths,
+  }
+}
+
+async function submitAnalysisArtifact<Value>(
+  request: AnalysisArtifactRequest,
+  hooks: {
+    readFresh?: () => Promise<Value | undefined>
+    compute: () => Promise<Value>
+  }
+): Promise<Value> {
+  const result = await getAnalysisArtifactScheduler().submit(request, hooks)
+  return result.value
+}
+
 function getRuntimeCacheReuseProfileTarget(options: {
   filePath?: string
   fallback: string
@@ -4143,97 +4219,121 @@ export async function getCachedReferenceBaseArtifact(
   const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
   const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
+  const artifactNodeKey = createRuntimeReferenceBaseArtifactNodeKey({
+    filePath: options.filePath,
+    compilerOptionsVersion,
+    stripInternal: options.stripInternal,
+  })
+  const artifactRequest = createAnalysisArtifactRequest({
+    key: artifactNodeKey,
+    kind: 'file.referenceBase',
+    family: 'reference-render',
+    analysisScopeId: getResolvedProjectAnalysisScopeId(project),
+    targetPath: normalizeCacheFilePath(options.filePath) ?? options.filePath,
+    dependencyHintPaths: [options.filePath],
+  })
 
-  if (
-    runtimeCacheStore &&
-    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
-  ) {
-    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
-    const nodeKey = createRuntimeReferenceBaseArtifactNodeKey({
-      filePath: options.filePath,
-      compilerOptionsVersion,
-      stripInternal: options.stripInternal,
-    })
-
-    const persisted = await getOrComputeRuntimeAnalysisCacheValue(
-      runtimeCacheStore,
-      nodeKey,
-      {
-        persist: true,
-        ...swrReadConfig,
-      },
-      async (context) => {
-        await recordProgramCompilerOptionsDependency(
-          context,
+  return submitAnalysisArtifact(artifactRequest, {
+    readFresh:
+      runtimeCacheStore &&
+      canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+        ? () =>
+            readFreshRuntimeReferenceBaseArtifact(runtimeCacheStore, {
+              filePath: options.filePath,
+              compilerOptionsVersion,
+              stripInternal: options.stripInternal,
+            })
+        : undefined,
+    compute: async () => {
+      if (
+        runtimeCacheStore &&
+        canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+      ) {
+        const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
+        const persisted = await getOrComputeRuntimeAnalysisCacheValue(
           runtimeCacheStore,
-          project
+          artifactNodeKey,
+          {
+            persist: true,
+            ...swrReadConfig,
+          },
+          async (context) => {
+            await recordProgramCompilerOptionsDependency(
+              context,
+              runtimeCacheStore,
+              project
+            )
+
+            const computed = await buildReferenceBaseArtifactValue({
+              project,
+              filePath: options.filePath,
+              stripInternal: options.stripInternal,
+            })
+
+            for (const dependencyPath of computed.dependencyPaths) {
+              await recordFileDependencyIfPossible(
+                context,
+                runtimeCacheStore,
+                dependencyPath
+              )
+            }
+
+            if (computed.gitHistoryDependency) {
+              context.recordConstDep(
+                computed.gitHistoryDependency.name,
+                computed.gitHistoryDependency.version
+              )
+            }
+
+            return computed.persisted
+          }
         )
 
-        const computed = await buildReferenceBaseArtifactValue({
-          project,
-          filePath: options.filePath,
-          stripInternal: options.stripInternal,
-        })
-
-        for (const dependencyPath of computed.dependencyPaths) {
-          await recordFileDependencyIfPossible(
-            context,
-            runtimeCacheStore,
-            dependencyPath
-          )
-        }
-
-        if (computed.gitHistoryDependency) {
-          context.recordConstDep(
-            computed.gitHistoryDependency.name,
-            computed.gitHistoryDependency.version
-          )
-        }
-
-        return computed.persisted
+        return deserializeJavaScriptFileReferenceBaseDataFromCache(persisted)
       }
-    )
 
-    return deserializeJavaScriptFileReferenceBaseDataFromCache(persisted)
-  }
+      return createFallbackProgramFileCache(
+        project,
+        options.filePath,
+        `${RUNTIME_ANALYSIS_CACHE_NAMES.referenceBaseArtifact}:${options.stripInternal ? 'public' : 'all'}`,
+        async () =>
+          deserializeJavaScriptFileReferenceBaseDataFromCache(
+            (await buildReferenceBaseArtifactValue({
+              project,
+              filePath: options.filePath,
+              stripInternal: options.stripInternal,
+            })).persisted
+          ),
+        {
+          deps: (value) => {
+            const dependencyPaths = new Set<string>([
+              options.filePath,
+              ...value.exportMetadata
+                .map((metadata) => metadata.path)
+                .filter(
+                  (path): path is string =>
+                    typeof path === 'string' && path.length > 0
+                ),
+            ])
+            const deps: ProgramCacheDependency[] = Array.from(
+              dependencyPaths.values()
+            ).map((path) => ({
+              kind: 'file' as const,
+              path,
+            }))
 
-  return createFallbackProgramFileCache(
-    project,
-    options.filePath,
-    `${RUNTIME_ANALYSIS_CACHE_NAMES.referenceBaseArtifact}:${options.stripInternal ? 'public' : 'all'}`,
-    async () =>
-      deserializeJavaScriptFileReferenceBaseDataFromCache(
-        (await buildReferenceBaseArtifactValue({
-          project,
-          filePath: options.filePath,
-          stripInternal: options.stripInternal,
-        })).persisted
-      ),
-    {
-      deps: (value) => {
-        const dependencyPaths = new Set<string>([
-          options.filePath,
-          ...value.exportMetadata
-            .map((metadata) => metadata.path)
-            .filter((path): path is string => typeof path === 'string' && path.length > 0),
-        ])
-        const deps: ProgramCacheDependency[] = Array.from(
-          dependencyPaths.values()
-        ).map((path) => ({
-          kind: 'file' as const,
-          path,
-        }))
+            deps.push({
+              kind: 'const' as const,
+              name: 'program:compiler-options',
+              version: compilerOptionsVersion,
+            })
 
-        deps.push({
-          kind: 'const' as const,
-          name: 'program:compiler-options',
-          version: compilerOptionsVersion,
-        })
-
-        return deps
-      },
-    }
-  )
+            return deps
+          },
+        }
+      )
+    },
+  })
 }
 
 export async function getCachedReferenceResolvedTypesArtifact(
@@ -4245,87 +4345,119 @@ export async function getCachedReferenceResolvedTypesArtifact(
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
   const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
+  const artifactNodeKey = createRuntimeReferenceResolvedTypesArtifactNodeKey({
+    filePath: options.filePath,
+    compilerOptionsVersion,
+  })
 
-  if (
-    runtimeCacheStore &&
-    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
-  ) {
-    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
-    const nodeKey = createRuntimeReferenceResolvedTypesArtifactNodeKey({
-      filePath: options.filePath,
-      compilerOptionsVersion,
-    })
+  return submitAnalysisArtifact(
+    createAnalysisArtifactRequest({
+      key: artifactNodeKey,
+      kind: 'file.referenceResolvedTypes',
+      family: 'type-resolution',
+      analysisScopeId: getResolvedProjectAnalysisScopeId(project),
+      targetPath: normalizeCacheFilePath(options.filePath) ?? options.filePath,
+      dependencyHintPaths: [options.filePath],
+    }),
+    {
+      readFresh:
+        runtimeCacheStore &&
+        canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+          ? async () => {
+              const freshness =
+                await runtimeCacheStore.store.getWithFreshness<PersistedJavaScriptFileResolvedTypesData>(
+                  artifactNodeKey
+                )
 
-    const persisted = await getOrComputeRuntimeAnalysisCacheValue(
-      runtimeCacheStore,
-      nodeKey,
-      {
-        persist: true,
-        ...swrReadConfig,
-      },
-      async (context) => {
-        await recordProgramCompilerOptionsDependency(
-          context,
-          runtimeCacheStore,
-          project
-        )
+              if (!freshness.fresh || freshness.value === undefined) {
+                return undefined
+              }
 
-        const typeResolution = await resolveCachedFileExportsWithDependencies(
+              return deserializeJavaScriptFileResolvedTypesDataFromCache(
+                freshness.value
+              )
+            }
+          : undefined,
+      compute: async () => {
+        if (
+          runtimeCacheStore &&
+          canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+        ) {
+          const swrReadConfig = getRuntimeAnalysisSWRReadConfig([
+            options.filePath,
+          ])
+
+          const persisted = await getOrComputeRuntimeAnalysisCacheValue(
+            runtimeCacheStore,
+            artifactNodeKey,
+            {
+              persist: true,
+              ...swrReadConfig,
+            },
+            async (context) => {
+              await recordProgramCompilerOptionsDependency(
+                context,
+                runtimeCacheStore,
+                project
+              )
+
+              const typeResolution =
+                await resolveCachedFileExportsWithDependencies(project, {
+                  filePath: options.filePath,
+                })
+              const dependencyPaths = typeResolution.dependencies.length
+                ? typeResolution.dependencies
+                : [options.filePath]
+
+              await recordFileDependenciesIfPossible(
+                context,
+                runtimeCacheStore,
+                dependencyPaths
+              )
+
+              return serializeJavaScriptFileResolvedTypesDataForCache({
+                resolvedTypes: typeResolution.resolvedTypes,
+                typeDependencies: dependencyPaths,
+              })
+            }
+          )
+
+          return deserializeJavaScriptFileResolvedTypesDataFromCache(persisted)
+        }
+
+        return createFallbackProgramFileCache(
           project,
+          options.filePath,
+          RUNTIME_ANALYSIS_CACHE_NAMES.referenceResolvedTypesArtifact,
+          async () => {
+            const typeResolution = await resolveCachedFileExportsWithDependencies(
+              project,
+              {
+                filePath: options.filePath,
+              }
+            )
+            return {
+              resolvedTypes: typeResolution.resolvedTypes,
+              typeDependencies: typeResolution.dependencies.length
+                ? typeResolution.dependencies
+                : [options.filePath],
+            }
+          },
           {
-            filePath: options.filePath,
+            deps: (value) => [
+              ...value.typeDependencies.map((path) => ({
+                kind: 'file' as const,
+                path,
+              })),
+              {
+                kind: 'const' as const,
+                name: 'program:compiler-options',
+                version: compilerOptionsVersion,
+              },
+            ],
           }
         )
-        const dependencyPaths = typeResolution.dependencies.length
-          ? typeResolution.dependencies
-          : [options.filePath]
-
-        await recordFileDependenciesIfPossible(
-          context,
-          runtimeCacheStore,
-          dependencyPaths
-        )
-
-        return serializeJavaScriptFileResolvedTypesDataForCache({
-          resolvedTypes: typeResolution.resolvedTypes,
-          typeDependencies: dependencyPaths,
-        })
-      }
-    )
-
-    return deserializeJavaScriptFileResolvedTypesDataFromCache(persisted)
-  }
-
-  return createFallbackProgramFileCache(
-    project,
-    options.filePath,
-    RUNTIME_ANALYSIS_CACHE_NAMES.referenceResolvedTypesArtifact,
-    async () => {
-      const typeResolution = await resolveCachedFileExportsWithDependencies(
-        project,
-        {
-          filePath: options.filePath,
-        }
-      )
-      return {
-        resolvedTypes: typeResolution.resolvedTypes,
-        typeDependencies: typeResolution.dependencies.length
-          ? typeResolution.dependencies
-          : [options.filePath],
-      }
-    },
-    {
-      deps: (value) => [
-        ...value.typeDependencies.map((path) => ({
-          kind: 'file' as const,
-          path,
-        })),
-        {
-          kind: 'const' as const,
-          name: 'program:compiler-options',
-          version: compilerOptionsVersion,
-        },
-      ],
+      },
     }
   )
 }
@@ -4341,95 +4473,127 @@ export async function getCachedReferenceSectionsArtifact(
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
   const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
+  const artifactNodeKey = createRuntimeReferenceSectionsArtifactNodeKey({
+    filePath: options.filePath,
+    compilerOptionsVersion,
+    stripInternal: options.stripInternal,
+    slugCasing: options.slugCasing,
+  })
 
-  if (
-    runtimeCacheStore &&
-    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
-  ) {
-    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
-    const nodeKey = createRuntimeReferenceSectionsArtifactNodeKey({
-      filePath: options.filePath,
-      compilerOptionsVersion,
-      stripInternal: options.stripInternal,
-      slugCasing: options.slugCasing,
-    })
-
-    return getOrComputeRuntimeAnalysisCacheValue(
-      runtimeCacheStore,
-      nodeKey,
-      {
-        persist: true,
-        ...swrReadConfig,
-      },
-      async (context) => {
-        await recordProgramCompilerOptionsDependency(
-          context,
-          runtimeCacheStore,
-          project
-        )
-
-        const [outlineRanges, referenceBaseData] = await Promise.all([
-          getCachedOutlineRanges(project, options.filePath),
-          getCachedReferenceBaseArtifact(project, {
-            filePath: options.filePath,
-            stripInternal: options.stripInternal,
-          }),
-        ])
-
-        await recordFileDependenciesIfPossible(
-          context,
-          runtimeCacheStore,
-          [
-            options.filePath,
-            ...referenceBaseData.exportMetadata
-              .map((metadata) => metadata.path)
-              .filter(
-                (path): path is string =>
-                  typeof path === 'string' && path.length > 0
-              ),
-          ]
-        )
-
-        return buildJavaScriptFileSections({
-          outlineRanges,
-          exportMetadata: referenceBaseData.exportMetadata,
-          slugCasing: options.slugCasing,
-        })
-      }
-    )
-  }
-
-  return createFallbackProgramFileCache(
-    project,
-    options.filePath,
-    `${RUNTIME_ANALYSIS_CACHE_NAMES.referenceSectionsArtifact}:${options.slugCasing}:${options.stripInternal ? 'public' : 'all'}`,
-    async () => {
-      const [outlineRanges, referenceBaseData] = await Promise.all([
-        getCachedOutlineRanges(project, options.filePath),
-        getCachedReferenceBaseArtifact(project, {
-          filePath: options.filePath,
-          stripInternal: options.stripInternal,
-        }),
-      ])
-
-      return buildJavaScriptFileSections({
-        outlineRanges,
-        exportMetadata: referenceBaseData.exportMetadata,
-        slugCasing: options.slugCasing,
-      })
-    },
+  return submitAnalysisArtifact(
+    createAnalysisArtifactRequest({
+      key: artifactNodeKey,
+      kind: 'file.referenceSections',
+      family: 'reference-sections',
+      analysisScopeId: getResolvedProjectAnalysisScopeId(project),
+      targetPath: normalizeCacheFilePath(options.filePath) ?? options.filePath,
+      dependencyHintPaths: [options.filePath],
+    }),
     {
-      deps: [
-        {
-          kind: 'file' as const,
-          path: options.filePath,
-        },
-        {
-          kind: 'const' as const,
-          name: 'program:compiler-options',
-          version: compilerOptionsVersion,
-        },
-      ],
+      readFresh:
+        runtimeCacheStore &&
+        canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+          ? async () => {
+              const freshness =
+                await runtimeCacheStore.store.getWithFreshness<Section[]>(
+                  artifactNodeKey
+                )
+
+              if (!freshness.fresh || freshness.value === undefined) {
+                return undefined
+              }
+
+              return freshness.value
+            }
+          : undefined,
+      compute: async () => {
+        if (
+          runtimeCacheStore &&
+          canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+        ) {
+          const swrReadConfig = getRuntimeAnalysisSWRReadConfig([
+            options.filePath,
+          ])
+
+          return getOrComputeRuntimeAnalysisCacheValue(
+            runtimeCacheStore,
+            artifactNodeKey,
+            {
+              persist: true,
+              ...swrReadConfig,
+            },
+            async (context) => {
+              await recordProgramCompilerOptionsDependency(
+                context,
+                runtimeCacheStore,
+                project
+              )
+
+              const [outlineRanges, referenceBaseData] = await Promise.all([
+                getCachedOutlineRanges(project, options.filePath),
+                getCachedReferenceBaseArtifact(project, {
+                  filePath: options.filePath,
+                  stripInternal: options.stripInternal,
+                }),
+              ])
+
+              await recordFileDependenciesIfPossible(
+                context,
+                runtimeCacheStore,
+                [
+                  options.filePath,
+                  ...referenceBaseData.exportMetadata
+                    .map((metadata) => metadata.path)
+                    .filter(
+                      (path): path is string =>
+                        typeof path === 'string' && path.length > 0
+                    ),
+                ]
+              )
+
+              return buildJavaScriptFileSections({
+                outlineRanges,
+                exportMetadata: referenceBaseData.exportMetadata,
+                slugCasing: options.slugCasing,
+              })
+            }
+          )
+        }
+
+        return createFallbackProgramFileCache(
+          project,
+          options.filePath,
+          `${RUNTIME_ANALYSIS_CACHE_NAMES.referenceSectionsArtifact}:${options.slugCasing}:${options.stripInternal ? 'public' : 'all'}`,
+          async () => {
+            const [outlineRanges, referenceBaseData] = await Promise.all([
+              getCachedOutlineRanges(project, options.filePath),
+              getCachedReferenceBaseArtifact(project, {
+                filePath: options.filePath,
+                stripInternal: options.stripInternal,
+              }),
+            ])
+
+            return buildJavaScriptFileSections({
+              outlineRanges,
+              exportMetadata: referenceBaseData.exportMetadata,
+              slugCasing: options.slugCasing,
+            })
+          },
+          {
+            deps: [
+              {
+                kind: 'file' as const,
+                path: options.filePath,
+              },
+              {
+                kind: 'const' as const,
+                name: 'program:compiler-options',
+                version: compilerOptionsVersion,
+              },
+            ],
+          }
+        )
+      },
     }
   )
 }
@@ -4917,118 +5081,45 @@ export async function resolveCachedFileExportsWithDependencies(
   const compilerOptionsVersion = getCompilerOptionsVersion(project)
   const runtimeScope = getRuntimeAnalysisScopeOptions(project, options.filePath)
   const runtimeCacheStore = await getRuntimeAnalysisSession(runtimeScope)
-
-  if (
-    runtimeCacheStore &&
-    canUseRuntimePathCache(runtimeCacheStore, options.filePath)
-  ) {
-    const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
-    const nodeKey = createResolvedFileExportsWithDependenciesRuntimeNodeKey({
+  const artifactNodeKey = createResolvedFileExportsWithDependenciesRuntimeNodeKey(
+    {
       filePath: options.filePath,
       compilerOptionsVersion,
       filter: options.filter,
-    })
+    }
+  )
 
-    return getOrComputeRuntimeAnalysisCacheValue(
-      runtimeCacheStore,
-      nodeKey,
-      {
-        persist: true,
-        ...swrReadConfig,
-      },
-      async (context) => {
-        await recordProgramCompilerOptionsDependency(
-          context,
-          runtimeCacheStore,
-          project
-        )
-        await recordFileDependencyIfPossible(
-          context,
-          runtimeCacheStore,
-          options.filePath
-        )
+  const computeResolvedFileExports = async (): Promise<ResolvedFileExportsResult> => {
+    if (
+      runtimeCacheStore &&
+      canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+    ) {
+      const swrReadConfig = getRuntimeAnalysisSWRReadConfig([options.filePath])
 
-        const fileExportsResult = await getCachedFileExportsWithDependencies(
-          project,
-          options.filePath
-        )
-        const result = await baseResolveFileExportsWithDependencies(
-          project,
-          options.filePath,
-          options.filter,
-          {
-            seedFileExportsByFilePath: new Map([
-              [options.filePath, fileExportsResult],
-            ]),
-            blockedPersistentResolvedFilePaths:
-              options.blockedPersistentResolvedFilePaths,
-            readFreshResolvedFileExportsByFilePath: async (filePath) => {
-              if (filePath === options.filePath) {
-                return undefined
-              }
-
-              return readFreshRuntimeResolvedFileExportsWithDependencies(
-                runtimeCacheStore,
-                {
-                  filePath,
-                  compilerOptionsVersion,
-                  filter: options.filter,
-                }
-              )
-            },
-            resolveFileExportsByFilePath: async (
-              filePath,
-              blockedPersistentResolvedFilePaths
-            ) => {
-              if (filePath === options.filePath) {
-                return undefined
-              }
-
-              return resolveCachedFileExportsWithDependencies(project, {
-                filePath,
-                filter: options.filter,
-                blockedPersistentResolvedFilePaths,
-              })
-            },
-          }
-        )
-        const dependencyPaths = new Set<string>([
-          options.filePath,
-          ...(result.dependencies ?? []),
-        ])
-
-        await recordFileDependenciesIfPossible(
-          context,
-          runtimeCacheStore,
-          Array.from(dependencyPaths.values())
-        )
-
-        if (shouldTrackRuntimeTypeScriptDependencies()) {
-          await recordRuntimeTypeScriptDependencySidecar(
+      return getOrComputeRuntimeAnalysisCacheValue(
+        runtimeCacheStore,
+        artifactNodeKey,
+        {
+          persist: true,
+          ...swrReadConfig,
+        },
+        async (context) => {
+          await recordProgramCompilerOptionsDependency(
             context,
-            project,
             runtimeCacheStore,
-            options.filePath,
-            compilerOptionsVersion,
-            {
-              disablePersistUntilReady: false,
-            }
+            project
           )
-        }
+          await recordFileDependencyIfPossible(
+            context,
+            runtimeCacheStore,
+            options.filePath
+          )
 
-        return result
-      }
-    )
-  }
-
-  return createFallbackProgramFileCache(
-    project,
-    options.filePath,
-    toResolvedFileExportsWithDependenciesCacheName(options.filter),
-    () =>
-      getCachedFileExportsWithDependencies(project, options.filePath).then(
-        (fileExportsResult) =>
-          baseResolveFileExportsWithDependencies(
+          const fileExportsResult = await getCachedFileExportsWithDependencies(
+            project,
+            options.filePath
+          )
+          const result = await baseResolveFileExportsWithDependencies(
             project,
             options.filePath,
             options.filter,
@@ -5038,28 +5129,136 @@ export async function resolveCachedFileExportsWithDependencies(
               ]),
               blockedPersistentResolvedFilePaths:
                 options.blockedPersistentResolvedFilePaths,
+              readFreshResolvedFileExportsByFilePath: async (filePath) => {
+                if (filePath === options.filePath) {
+                  return undefined
+                }
+
+                return readFreshRuntimeResolvedFileExportsWithDependencies(
+                  runtimeCacheStore,
+                  {
+                    filePath,
+                    compilerOptionsVersion,
+                    filter: options.filter,
+                  }
+                )
+              },
+              resolveFileExportsByFilePath: async (
+                filePath,
+                blockedPersistentResolvedFilePaths
+              ) => {
+                if (filePath === options.filePath) {
+                  return undefined
+                }
+
+                return resolveCachedFileExportsWithDependencies(project, {
+                  filePath,
+                  filter: options.filter,
+                  blockedPersistentResolvedFilePaths,
+                })
+              },
             }
           )
-      ),
-    {
-      deps: (result) => {
-        const dependencyPaths = new Set<string>([
-          options.filePath,
-          ...(result.dependencies ?? []),
-        ])
+          const dependencyPaths = new Set<string>([
+            options.filePath,
+            ...(result.dependencies ?? []),
+          ])
 
-        return [
-          ...Array.from(dependencyPaths.values()).map((path) => ({
-            kind: 'file' as const,
-            path,
-          })),
-          {
-            kind: 'const' as const,
-            name: 'program:compiler-options',
-            version: compilerOptionsVersion,
-          },
-        ]
-      },
+          await recordFileDependenciesIfPossible(
+            context,
+            runtimeCacheStore,
+            Array.from(dependencyPaths.values())
+          )
+
+          if (shouldTrackRuntimeTypeScriptDependencies()) {
+            await recordRuntimeTypeScriptDependencySidecar(
+              context,
+              project,
+              runtimeCacheStore,
+              options.filePath,
+              compilerOptionsVersion,
+              {
+                disablePersistUntilReady: false,
+              }
+            )
+          }
+
+          return result
+        }
+      )
+    }
+
+    return createFallbackProgramFileCache(
+      project,
+      options.filePath,
+      toResolvedFileExportsWithDependenciesCacheName(options.filter),
+      () =>
+        getCachedFileExportsWithDependencies(project, options.filePath).then(
+          (fileExportsResult) =>
+            baseResolveFileExportsWithDependencies(
+              project,
+              options.filePath,
+              options.filter,
+              {
+                seedFileExportsByFilePath: new Map([
+                  [options.filePath, fileExportsResult],
+                ]),
+                blockedPersistentResolvedFilePaths:
+                  options.blockedPersistentResolvedFilePaths,
+              }
+            )
+        ),
+      {
+        deps: (result) => {
+          const dependencyPaths = new Set<string>([
+            options.filePath,
+            ...(result.dependencies ?? []),
+          ])
+
+          return [
+            ...Array.from(dependencyPaths.values()).map((path) => ({
+              kind: 'file' as const,
+              path,
+            })),
+            {
+              kind: 'const' as const,
+              name: 'program:compiler-options',
+              version: compilerOptionsVersion,
+            },
+          ]
+        },
+      }
+    )
+  }
+
+  if (options.blockedPersistentResolvedFilePaths?.has(options.filePath)) {
+    return computeResolvedFileExports()
+  }
+
+  return submitAnalysisArtifact(
+    createAnalysisArtifactRequest({
+      key: artifactNodeKey,
+      kind: 'file.resolvedExports',
+      family: 'type-resolution',
+      analysisScopeId: getResolvedProjectAnalysisScopeId(project),
+      targetPath: normalizeCacheFilePath(options.filePath) ?? options.filePath,
+      dependencyHintPaths: [options.filePath],
+    }),
+    {
+      readFresh:
+        runtimeCacheStore &&
+        canUseRuntimePathCache(runtimeCacheStore, options.filePath)
+          ? () =>
+              readFreshRuntimeResolvedFileExportsWithDependencies(
+                runtimeCacheStore,
+                {
+                  filePath: options.filePath,
+                  compilerOptionsVersion,
+                  filter: options.filter,
+                }
+              )
+          : undefined,
+      compute: computeResolvedFileExports,
     }
   )
 }

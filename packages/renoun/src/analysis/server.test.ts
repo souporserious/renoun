@@ -915,4 +915,64 @@ describe('analysis server refresh invalidations', () => {
       dependencies: ['/repo/arrays.ts'],
     })
   }, 45_000)
+
+  test('serves getFileExports from the shared reference base artifact', async () => {
+    globalThis.WebSocket = TestWebSocket as unknown as typeof WebSocket
+    process.env['RENOUN_SERVER_REFRESH_NOTIFICATIONS'] = '0'
+
+    vi.spyOn(getProgramModule, 'getProgram').mockReturnValue({} as never)
+    const getCachedReferenceBaseArtifactSpy = vi
+      .spyOn(cachedAnalysis, 'getCachedReferenceBaseArtifact')
+      .mockResolvedValue({
+        exportMetadata: [
+          {
+            name: 'answer',
+            path: '/repo/src/a.ts',
+            position: 1,
+            kind: 0 as never,
+          },
+        ],
+        gitMetadataByName: {},
+        fileGitMetadata: {
+          authors: [],
+          firstCommitDate: undefined,
+          lastCommitDate: undefined,
+        },
+      })
+    const getCachedFileExportsSpy = vi
+      .spyOn(cachedAnalysis, 'getCachedFileExports')
+      .mockRejectedValue(
+        new Error('expected server getFileExports to use reference base')
+      )
+
+    server = await createServer({ host: '127.0.0.1' })
+    client = new WebSocketClient(server.getId())
+    await client.ready(WEBSOCKET_READY_TIMEOUT_MS)
+
+    const result = await client.callMethod<
+      {
+        filePath: string
+      },
+      unknown
+    >('getFileExports', {
+      filePath: '/repo/src/a.ts',
+    })
+
+    expect(result).toEqual([
+      {
+        name: 'answer',
+        path: '/repo/src/a.ts',
+        position: 1,
+        kind: 0,
+      },
+    ])
+    expect(getCachedReferenceBaseArtifactSpy).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        filePath: '/repo/src/a.ts',
+        stripInternal: false,
+      }
+    )
+    expect(getCachedFileExportsSpy).not.toHaveBeenCalled()
+  })
 })

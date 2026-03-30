@@ -49,6 +49,47 @@ type CacheReuseStaleReasonFlushEntry = {
   staleCount: number
 }
 
+type ArtifactScheduleStats = {
+  samples: number
+  totalQueueWaitMs: number
+  maxQueueWaitMs: number
+  totalRunMs: number
+  maxRunMs: number
+  leaderCount: number
+  followerCount: number
+  freshCount: number
+  promotionCount: number
+  errorCount: number
+}
+
+type ArtifactScheduleFlushEntry = {
+  key: string
+  samples: number
+  totalQueueWaitMs: number
+  avgQueueWaitMs: number
+  maxQueueWaitMs: number
+  totalRunMs: number
+  avgRunMs: number
+  maxRunMs: number
+  leaderCount: number
+  followerCount: number
+  freshCount: number
+  promotionCount: number
+  errorCount: number
+}
+
+type QueueDepthFlushEntry = {
+  key: string
+  maxDepth: number
+}
+
+type ArtifactBootstrapFlushEntry = {
+  count: number
+  totalMs: number
+  avgMs: number
+  maxMs: number
+}
+
 type BuildProfileSummary = {
   topSlowMethods: FlushEntry[]
   topSlowTargets: FlushEntry[]
@@ -57,6 +98,11 @@ type BuildProfileSummary = {
   topCacheMissTargets: CacheReuseFlushEntry[]
   topCacheMissFiles: CacheReuseFlushEntry[]
   topCacheStaleReasons: CacheReuseStaleReasonFlushEntry[]
+  topArtifactKindsByQueueWait: ArtifactScheduleFlushEntry[]
+  topArtifactTargetsByQueueWait: ArtifactScheduleFlushEntry[]
+  topArtifactFamiliesByQueueWait: ArtifactScheduleFlushEntry[]
+  topArtifactQueueDepths: QueueDepthFlushEntry[]
+  artifactBootstrap: ArtifactBootstrapFlushEntry | null
 }
 
 export type RpcCacheReuseOutcome =
@@ -74,6 +120,15 @@ const cacheReuseMethodStats = new Map<string, CacheReuseStats>()
 const cacheReuseTargetStats = new Map<string, CacheReuseStats>()
 const cacheReuseStaleReasonMethodStats = new Map<string, number>()
 const cacheReuseStaleReasonTargetStats = new Map<string, number>()
+const artifactKindStats = new Map<string, ArtifactScheduleStats>()
+const artifactTargetStats = new Map<string, ArtifactScheduleStats>()
+const artifactFamilyStats = new Map<string, ArtifactScheduleStats>()
+const artifactQueueDepthStats = new Map<string, number>()
+const artifactBootstrapStats = {
+  count: 0,
+  totalMs: 0,
+  maxMs: 0,
+}
 
 interface BuildProfileConfig {
   enabled: boolean
@@ -265,6 +320,48 @@ function toStaleReasonFlushEntries(
     .sort((a, b) => b.staleCount - a.staleCount)
 }
 
+function toArtifactScheduleFlushEntries(
+  stats: Map<string, ArtifactScheduleStats>
+): ArtifactScheduleFlushEntry[] {
+  return [...stats.entries()]
+    .map(([key, value]) => ({
+      key,
+      samples: value.samples,
+      totalQueueWaitMs: Number(value.totalQueueWaitMs.toFixed(3)),
+      avgQueueWaitMs: Number(
+        (value.totalQueueWaitMs / Math.max(1, value.samples)).toFixed(3)
+      ),
+      maxQueueWaitMs: Number(value.maxQueueWaitMs.toFixed(3)),
+      totalRunMs: Number(value.totalRunMs.toFixed(3)),
+      avgRunMs: Number(
+        (value.totalRunMs / Math.max(1, value.samples)).toFixed(3)
+      ),
+      maxRunMs: Number(value.maxRunMs.toFixed(3)),
+      leaderCount: value.leaderCount,
+      followerCount: value.followerCount,
+      freshCount: value.freshCount,
+      promotionCount: value.promotionCount,
+      errorCount: value.errorCount,
+    }))
+    .sort((a, b) => {
+      if (b.totalQueueWaitMs !== a.totalQueueWaitMs) {
+        return b.totalQueueWaitMs - a.totalQueueWaitMs
+      }
+      return b.totalRunMs - a.totalRunMs
+    })
+}
+
+function toQueueDepthFlushEntries(
+  stats: Map<string, number>
+): QueueDepthFlushEntry[] {
+  return [...stats.entries()]
+    .map(([key, maxDepth]) => ({
+      key,
+      maxDepth,
+    }))
+    .sort((a, b) => b.maxDepth - a.maxDepth)
+}
+
 function getProfileTargetKey(key: string): string | undefined {
   const firstSpaceIndex = key.indexOf(' ')
 
@@ -366,6 +463,10 @@ function createBuildProfileSummary(): BuildProfileSummary {
   const staleReasons = toStaleReasonFlushEntries(
     cacheReuseStaleReasonMethodStats
   )
+  const artifactKinds = toArtifactScheduleFlushEntries(artifactKindStats)
+  const artifactTargets = toArtifactScheduleFlushEntries(artifactTargetStats)
+  const artifactFamilies = toArtifactScheduleFlushEntries(artifactFamilyStats)
+  const queueDepths = toQueueDepthFlushEntries(artifactQueueDepthStats)
 
   return {
     topSlowMethods: slowMethods.slice(0, PROFILE_SUMMARY_LIMIT),
@@ -381,6 +482,30 @@ function createBuildProfileSummary(): BuildProfileSummary {
       .filter((entry) => entry.missCount > 0)
       .slice(0, PROFILE_SUMMARY_LIMIT),
     topCacheStaleReasons: staleReasons.slice(0, PROFILE_SUMMARY_LIMIT),
+    topArtifactKindsByQueueWait: artifactKinds.slice(0, PROFILE_SUMMARY_LIMIT),
+    topArtifactTargetsByQueueWait: artifactTargets.slice(
+      0,
+      PROFILE_SUMMARY_LIMIT
+    ),
+    topArtifactFamiliesByQueueWait: artifactFamilies.slice(
+      0,
+      PROFILE_SUMMARY_LIMIT
+    ),
+    topArtifactQueueDepths: queueDepths.slice(0, PROFILE_SUMMARY_LIMIT),
+    artifactBootstrap:
+      artifactBootstrapStats.count > 0
+        ? {
+            count: artifactBootstrapStats.count,
+            totalMs: Number(artifactBootstrapStats.totalMs.toFixed(3)),
+            avgMs: Number(
+              (
+                artifactBootstrapStats.totalMs /
+                Math.max(1, artifactBootstrapStats.count)
+              ).toFixed(3)
+            ),
+            maxMs: Number(artifactBootstrapStats.maxMs.toFixed(3)),
+          }
+        : null,
   }
 }
 
@@ -447,6 +572,60 @@ function recordStaleReasonSample(stats: Map<string, number>, key: string): void 
   stats.set(key, (stats.get(key) ?? 0) + 1)
 }
 
+function recordArtifactScheduleSample(
+  stats: Map<string, ArtifactScheduleStats>,
+  key: string,
+  options: {
+    queueWaitMs: number
+    runMs: number
+    mode: 'fresh' | 'leader' | 'follower'
+    promoted: boolean
+    error: boolean
+  }
+): void {
+  const existing = stats.get(key)
+  if (existing) {
+    existing.samples += 1
+    existing.totalQueueWaitMs += options.queueWaitMs
+    existing.maxQueueWaitMs = Math.max(
+      existing.maxQueueWaitMs,
+      options.queueWaitMs
+    )
+    existing.totalRunMs += options.runMs
+    existing.maxRunMs = Math.max(existing.maxRunMs, options.runMs)
+    if (options.mode === 'leader') existing.leaderCount += 1
+    if (options.mode === 'follower') existing.followerCount += 1
+    if (options.mode === 'fresh') existing.freshCount += 1
+    if (options.promoted) existing.promotionCount += 1
+    if (options.error) existing.errorCount += 1
+    return
+  }
+
+  stats.set(key, {
+    samples: 1,
+    totalQueueWaitMs: options.queueWaitMs,
+    maxQueueWaitMs: options.queueWaitMs,
+    totalRunMs: options.runMs,
+    maxRunMs: options.runMs,
+    leaderCount: options.mode === 'leader' ? 1 : 0,
+    followerCount: options.mode === 'follower' ? 1 : 0,
+    freshCount: options.mode === 'fresh' ? 1 : 0,
+    promotionCount: options.promoted ? 1 : 0,
+    errorCount: options.error ? 1 : 0,
+  })
+}
+
+function recordQueueDepthSample(
+  stats: Map<string, number>,
+  key: string,
+  depth: number
+): void {
+  const existing = stats.get(key) ?? 0
+  if (depth > existing) {
+    stats.set(key, depth)
+  }
+}
+
 function flushProfile() {
   const { enabled, profileOutputPath, workspaceRoot } = getBuildProfileConfig()
 
@@ -466,7 +645,12 @@ function flushProfile() {
     cacheReuseMethodStats.size === 0 &&
     cacheReuseTargetStats.size === 0 &&
     cacheReuseStaleReasonMethodStats.size === 0 &&
-    cacheReuseStaleReasonTargetStats.size === 0
+    cacheReuseStaleReasonTargetStats.size === 0 &&
+    artifactKindStats.size === 0 &&
+    artifactTargetStats.size === 0 &&
+    artifactFamilyStats.size === 0 &&
+    artifactQueueDepthStats.size === 0 &&
+    artifactBootstrapStats.count === 0
   ) {
     return
   }
@@ -488,6 +672,24 @@ function flushProfile() {
     cacheReuseStaleReasonTargets: toStaleReasonFlushEntries(
       cacheReuseStaleReasonTargetStats
     ),
+    artifactKinds: toArtifactScheduleFlushEntries(artifactKindStats),
+    artifactTargets: toArtifactScheduleFlushEntries(artifactTargetStats),
+    artifactFamilies: toArtifactScheduleFlushEntries(artifactFamilyStats),
+    artifactQueueDepths: toQueueDepthFlushEntries(artifactQueueDepthStats),
+    artifactBootstrap:
+      artifactBootstrapStats.count > 0
+        ? {
+            count: artifactBootstrapStats.count,
+            totalMs: Number(artifactBootstrapStats.totalMs.toFixed(3)),
+            avgMs: Number(
+              (
+                artifactBootstrapStats.totalMs /
+                Math.max(1, artifactBootstrapStats.count)
+              ).toFixed(3)
+            ),
+            maxMs: Number(artifactBootstrapStats.maxMs.toFixed(3)),
+          }
+        : null,
   }
 
   mkdirSync(dirname(profileOutputPath), { recursive: true })
@@ -544,6 +746,72 @@ export function recordRpcCacheReuseStaleReason(options: {
       `${options.method} ${options.target} ${options.reason}`
     )
   }
+}
+
+export function recordArtifactScheduling(options: {
+  kind: string
+  family: string
+  mode: 'fresh' | 'leader' | 'follower'
+  queueWaitMs: number
+  runMs: number
+  promoted: boolean
+  error?: boolean
+  target?: string
+}): void {
+  if (!isRpcBuildProfileEnabled()) {
+    return
+  }
+
+  registerFlushHook()
+  const sample = {
+    queueWaitMs: options.queueWaitMs,
+    runMs: options.runMs,
+    mode: options.mode,
+    promoted: options.promoted,
+    error: options.error === true,
+  } as const
+
+  recordArtifactScheduleSample(artifactKindStats, options.kind, sample)
+  recordArtifactScheduleSample(artifactFamilyStats, options.family, sample)
+
+  if (options.target && artifactTargetStats.size < MAX_METHOD_TARGET_ENTRIES) {
+    recordArtifactScheduleSample(
+      artifactTargetStats,
+      `${options.kind} ${options.target}`,
+      sample
+    )
+  }
+}
+
+export function recordArtifactQueueDepth(options: {
+  family: string
+  priority: string
+  depth: number
+}): void {
+  if (!isRpcBuildProfileEnabled()) {
+    return
+  }
+
+  registerFlushHook()
+  recordQueueDepthSample(
+    artifactQueueDepthStats,
+    `${options.family}:${options.priority}`,
+    options.depth
+  )
+}
+
+export function recordArtifactBootstrapDuration(durationMs: number): void {
+  if (!isRpcBuildProfileEnabled()) {
+    return
+  }
+
+  registerFlushHook()
+  artifactBootstrapStats.count += 1
+  artifactBootstrapStats.totalMs += durationMs
+  artifactBootstrapStats.maxMs = Math.max(
+    artifactBootstrapStats.maxMs,
+    durationMs
+  )
 }
 
 function registerFlushHook() {

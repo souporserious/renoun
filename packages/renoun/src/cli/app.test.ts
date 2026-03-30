@@ -131,6 +131,7 @@ const runPrewarmSafelyMock = vi.fn(async () => undefined)
 const prewarmRenounRpcServerCacheMock = vi.fn(async () => undefined)
 
 vi.mock('./prewarm-runner.ts', () => ({
+  BUILD_PREWARM_REQUEST_TIMEOUT_MS: 300000,
   createDefaultPrewarmOptions: (rootPath = process.cwd()) => ({
     analysisOptions: {
       tsConfigFilePath: join(rootPath, 'tsconfig.json'),
@@ -321,6 +322,12 @@ describe('runAppCommand integration', () => {
     }) as unknown as typeof process.on)
 
     process.chdir(projectRoot)
+    runPrewarmSafelyMock.mockImplementationOnce(async () => {
+      expect(process.env[PROCESS_ENV_KEYS.renounServerPort]).toBe('4321')
+      expect(process.env[PROCESS_ENV_KEYS.renounServerId]).toBe(
+        'integration-test-server'
+      )
+    })
 
     try {
       await runAppCommand({ command: 'dev', args: ['--port', '4000'] })
@@ -501,6 +508,7 @@ describe('runAppCommand integration', () => {
     }) as unknown as typeof process.on)
 
     process.chdir(projectRoot)
+    runPrewarmSafelyMock.mockImplementationOnce(() => new Promise(() => {}))
 
     try {
       await runAppCommand({ command: 'dev', args: [] })
@@ -588,6 +596,18 @@ describe('runAppCommand integration', () => {
     }) as unknown as typeof process.on)
 
     process.chdir(projectRoot)
+    runPrewarmSafelyMock.mockImplementationOnce(async () => {
+      expect(process.env[PROCESS_ENV_KEYS.renounServerPort]).toBe('4321')
+      expect(process.env[PROCESS_ENV_KEYS.renounServerId]).toBe(
+        'integration-test-server'
+      )
+      expect(process.env[PROCESS_ENV_KEYS.renounServerClientRpcCache]).toBe(
+        '1'
+      )
+      expect(
+        process.env[PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs]
+      ).toBe(String(DEFAULT_BUILD_ANALYSIS_CLIENT_RPC_CACHE_TTL_MS))
+    })
 
     try {
       await runAppCommand({ command: 'build', args: [] })
@@ -596,13 +616,20 @@ describe('runAppCommand integration', () => {
 
       const runtimeRoot = join(projectRoot, '.renoun', 'app', '-renoun-blog')
 
-      expect(runPrewarmSafelyMock).not.toHaveBeenCalled()
-      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
-      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledWith({
-        analysisOptions: {
-          tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
+      expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
+      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+        {
+          analysisOptions: {
+            tsConfigFilePath: join(runtimeRoot, 'tsconfig.json'),
+          },
         },
-      })
+        {
+          allowInlineFallback: true,
+          requestPriority: 'bootstrap',
+          timeoutMs: 300000,
+        }
+      )
+      expect(prewarmRenounRpcServerCacheMock).not.toHaveBeenCalled()
       expect(spawnMock).toHaveBeenCalledTimes(2)
       expect(spawnMock.mock.calls[0]?.[1]).toEqual([
         '/fake/framework-bin.ts',
@@ -714,8 +741,26 @@ describe('runAppCommand integration', () => {
       const exitCode = await exitPromise
       expect(exitCode).toBe(0)
 
-      expect(prewarmRenounRpcServerCacheMock).toHaveBeenCalledTimes(1)
-      expect(runPrewarmSafelyMock).not.toHaveBeenCalled()
+      expect(runPrewarmSafelyMock).toHaveBeenCalledTimes(1)
+      expect(runPrewarmSafelyMock).toHaveBeenCalledWith(
+        {
+          analysisOptions: {
+            tsConfigFilePath: join(
+              projectRoot,
+              '.renoun',
+              'app',
+              '-renoun-blog',
+              'tsconfig.json'
+            ),
+          },
+        },
+        {
+          allowInlineFallback: true,
+          requestPriority: 'bootstrap',
+          timeoutMs: 300000,
+        }
+      )
+      expect(prewarmRenounRpcServerCacheMock).not.toHaveBeenCalled()
       expect(spawnMock).toHaveBeenCalledTimes(1)
       expect(spawnMock.mock.calls[0]?.[1]).toEqual([
         '/fake/framework-bin.ts',

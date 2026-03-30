@@ -17,7 +17,10 @@ import { basename, dirname, join } from 'node:path'
 import { spawn } from 'node:child_process'
 
 import { createServer } from '../analysis/server.ts'
-import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
+import {
+  createServerRuntimeProcessEnv,
+  runWithServerRuntimeProcessEnv,
+} from '../analysis/runtime-env.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isFilePathGitIgnored } from '../utils/is-file-path-git-ignored.ts'
 import { joinPaths } from '../utils/path.ts'
@@ -30,6 +33,7 @@ import {
   shouldSkipBuildPrewarmForMissingNextGeneratedTypes,
 } from './build-prewarm-guard.ts'
 import {
+  BUILD_PREWARM_REQUEST_TIMEOUT_MS,
   createDefaultPrewarmOptions,
   runPrewarmSafely,
 } from './prewarm-runner.ts'
@@ -445,9 +449,17 @@ export async function runAppCommand({
     const id = server.getId()
 
     if (command === 'dev') {
-      void runPrewarmSafely(createDefaultPrewarmOptions(runtimeDirectory), {
-        allowInlineFallback: false,
-      })
+      void runWithServerRuntimeProcessEnv(
+        {
+          port,
+          id,
+          ...(buildClientRuntime ? { clientRuntime: buildClientRuntime } : {}),
+        },
+        async () =>
+          runPrewarmSafely(createDefaultPrewarmOptions(runtimeDirectory), {
+            allowInlineFallback: false,
+          })
+      )
     }
 
     if (resolvedExample.framework === 'next') {
@@ -525,22 +537,41 @@ export async function runAppCommand({
         )
       } else {
         log('Prewarming analysis cache for build...')
-
-        try {
-          const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
-          await prewarmRenounRpcServerCache(prewarmOptions)
-          log('Analysis cache prewarmed')
-        } catch (error) {
-          getDebugLogger().warn(
-            'Failed to prewarm Renoun RPC cache before build',
-            () => ({
-              data: {
-                error: error instanceof Error ? error.message : String(error),
-                runtimeDirectory,
-              },
+        await runWithServerRuntimeProcessEnv(
+          {
+            port,
+            id,
+            ...(typeof process.env[PROCESS_ENV_KEYS.renounServerHost] ===
+              'string' &&
+            process.env[PROCESS_ENV_KEYS.renounServerHost]!.length > 0
+              ? {
+                  host: process.env[PROCESS_ENV_KEYS.renounServerHost]!,
+                }
+              : {}),
+            ...(typeof
+              process.env[
+                PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
+              ] === 'string' &&
+            process.env[
+              PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
+            ]!.length > 0
+              ? {
+                  emitRefreshNotifications:
+                    process.env[
+                      PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective
+                    ] === '1',
+                }
+              : {}),
+            ...(buildClientRuntime ? { clientRuntime: buildClientRuntime } : {}),
+          },
+          async () =>
+            runPrewarmSafely(prewarmOptions, {
+              allowInlineFallback: true,
+              requestPriority: 'bootstrap',
+              timeoutMs: BUILD_PREWARM_REQUEST_TIMEOUT_MS,
             })
-          )
-        }
+        )
+        log('Analysis cache prewarmed')
       }
     }
 

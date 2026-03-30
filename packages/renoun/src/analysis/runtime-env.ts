@@ -77,6 +77,45 @@ export function createServerRuntimeProcessEnv(
   }
 }
 
+const SERVER_RUNTIME_PROCESS_ENV_KEYS = [
+  PROCESS_ENV_KEYS.renounServerPort,
+  PROCESS_ENV_KEYS.renounServerHost,
+  PROCESS_ENV_KEYS.renounServerId,
+  PROCESS_ENV_KEYS.renounServerClientRpcCache,
+  PROCESS_ENV_KEYS.renounServerClientRpcCacheTtlMs,
+  PROCESS_ENV_KEYS.renounServerClientRefreshNotifications,
+  PROCESS_ENV_KEYS.renounServerRefreshNotificationsEffective,
+] as const
+
+export async function runWithServerRuntimeProcessEnv<Type>(
+  runtime: AnalysisServerRuntime,
+  task: () => Promise<Type>
+): Promise<Type> {
+  const previousValues = new Map<string, string | undefined>()
+
+  for (const key of SERVER_RUNTIME_PROCESS_ENV_KEYS) {
+    previousValues.set(key, process.env[key])
+  }
+
+  Object.assign(process.env, createServerRuntimeProcessEnv(runtime))
+  notifyServerRuntimeEnvChanged()
+
+  try {
+    return await task()
+  } finally {
+    for (const key of SERVER_RUNTIME_PROCESS_ENV_KEYS) {
+      const previousValue = previousValues.get(key)
+      if (previousValue === undefined) {
+        delete process.env[key]
+      } else {
+        process.env[key] = previousValue
+      }
+    }
+
+    notifyServerRuntimeEnvChanged()
+  }
+}
+
 const serverRuntimeEnvListeners = new Set<
   (runtime: AnalysisServerRuntime | undefined) => void
 >()

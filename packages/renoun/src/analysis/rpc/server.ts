@@ -1053,6 +1053,17 @@ export class WebSocketServer {
         originalError:
           error instanceof Error ? error : new Error(String(error)),
       })
+      getDebugLogger().error('rpc-handler-failed', () => ({
+        data: {
+          method: request.method,
+          code: serverError.code,
+          timedOut,
+          originalError:
+            serverError.originalError instanceof Error
+              ? serverError.originalError
+              : error,
+        },
+      }))
       if (!isNotification) {
         // Include detailed error data (name/message/stack) in development to surface
         // actionable stack traces at the caller. In production, omit the stack.

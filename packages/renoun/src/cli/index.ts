@@ -2,7 +2,10 @@
 import { spawn } from 'node:child_process'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 import { isRenounDebugEnabled } from '../utils/env.ts'
-import { createServerRuntimeProcessEnv } from '../analysis/runtime-env.ts'
+import {
+  createServerRuntimeProcessEnv,
+  runWithServerRuntimeProcessEnv,
+} from '../analysis/runtime-env.ts'
 import { createBuildAnalysisClientRuntime } from './build-analysis-runtime.ts'
 import {
   ensureNextGeneratedTypes,
@@ -12,6 +15,7 @@ import {
 
 type Framework = 'next' | 'vite' | 'waku'
 type AnalysisCliRuntime = {
+  BUILD_PREWARM_REQUEST_TIMEOUT_MS: typeof import('./prewarm-runner.ts').BUILD_PREWARM_REQUEST_TIMEOUT_MS
   createServer: typeof import('../analysis/server.ts').createServer
   getDebugLogger: typeof import('../utils/debug.ts').getDebugLogger
   createDefaultPrewarmOptions: typeof import('./prewarm-runner.ts').createDefaultPrewarmOptions
@@ -48,7 +52,11 @@ async function loadAnalysisCliRuntime(): Promise<AnalysisCliRuntime> {
   const [
     { createServer },
     { getDebugLogger },
-    { createDefaultPrewarmOptions, runPrewarmSafely },
+    {
+      BUILD_PREWARM_REQUEST_TIMEOUT_MS,
+      createDefaultPrewarmOptions,
+      runPrewarmSafely,
+    },
   ] = await Promise.all([
     import('../analysis/server.ts'),
     import('../utils/debug.ts'),
@@ -56,6 +64,7 @@ async function loadAnalysisCliRuntime(): Promise<AnalysisCliRuntime> {
   ])
 
   return {
+    BUILD_PREWARM_REQUEST_TIMEOUT_MS,
     createServer,
     getDebugLogger,
     createDefaultPrewarmOptions,
@@ -124,6 +133,7 @@ if (firstArgument === 'validate') {
   firstArgument === 'waku'
 ) {
   const {
+    BUILD_PREWARM_REQUEST_TIMEOUT_MS,
     createServer,
     getDebugLogger,
     createDefaultPrewarmOptions,
@@ -193,9 +203,26 @@ if (firstArgument === 'validate') {
         }))
 
         if (!isProduction) {
-          void runPrewarmSafely(createDefaultPrewarmOptions(), {
-            allowInlineFallback: false,
-          })
+          void runWithServerRuntimeProcessEnv(
+            {
+              port,
+              id,
+              ...(typeof serverHost === 'string' && serverHost.length > 0
+                ? { host: serverHost }
+                : {}),
+              ...(typeof serverRefreshNotificationsEffective === 'string' &&
+              serverRefreshNotificationsEffective.length > 0
+                ? {
+                    emitRefreshNotifications:
+                      serverRefreshNotificationsEffective === '1',
+                  }
+                : {}),
+            },
+            async () =>
+              runPrewarmSafely(createDefaultPrewarmOptions(), {
+                allowInlineFallback: false,
+              })
+          )
         } else {
           const prewarmOptions = createDefaultPrewarmOptions()
           const nextGeneratedTypesStatus = await ensureNextGeneratedTypes({
@@ -230,23 +257,32 @@ if (firstArgument === 'validate') {
             process.stdout.write(
               '[renoun] Prewarming analysis cache for build...\n'
             )
-
-            try {
-              const { prewarmRenounRpcServerCache } = await import('./prewarm.ts')
-              await prewarmRenounRpcServerCache(prewarmOptions)
-              process.stdout.write('[renoun] Analysis cache prewarmed\n')
-            } catch (error) {
-              getDebugLogger().warn(
-                'Failed to prewarm Renoun RPC cache before framework build',
-                () => ({
-                  data: {
-                    framework: firstArgument,
-                    error:
-                      error instanceof Error ? error.message : String(error),
-                  },
+            await runWithServerRuntimeProcessEnv(
+              {
+                port,
+                id,
+                ...(typeof serverHost === 'string' && serverHost.length > 0
+                  ? { host: serverHost }
+                  : {}),
+                ...(typeof serverRefreshNotificationsEffective === 'string' &&
+                serverRefreshNotificationsEffective.length > 0
+                  ? {
+                      emitRefreshNotifications:
+                        serverRefreshNotificationsEffective === '1',
+                    }
+                  : {}),
+                ...(buildClientRuntime
+                  ? { clientRuntime: buildClientRuntime }
+                  : {}),
+              },
+              async () =>
+                runPrewarmSafely(prewarmOptions, {
+                  allowInlineFallback: true,
+                  requestPriority: 'bootstrap',
+                  timeoutMs: BUILD_PREWARM_REQUEST_TIMEOUT_MS,
                 })
-              )
-            }
+            )
+            process.stdout.write('[renoun] Analysis cache prewarmed\n')
           }
         }
 
@@ -427,6 +463,7 @@ if (firstArgument === 'validate') {
   }
 } else if (firstArgument === 'watch') {
   const {
+    BUILD_PREWARM_REQUEST_TIMEOUT_MS: _BUILD_PREWARM_REQUEST_TIMEOUT_MS,
     createServer,
     getDebugLogger,
     createDefaultPrewarmOptions,
@@ -449,17 +486,25 @@ if (firstArgument === 'validate') {
       'cli.watch',
       async () => {
         const server = await createServer()
+        const port = String(await server.getPort())
+        const id = server.getId()
 
         if (getDebugLogger().isEnabled('info')) {
-          const port = await server.getPort()
           getDebugLogger().info('Watch server created', () => ({
-            data: { port },
+            data: { port, serverId: id },
           }))
         }
 
-        void runPrewarmSafely(createDefaultPrewarmOptions(), {
-          allowInlineFallback: false,
-        })
+        void runWithServerRuntimeProcessEnv(
+          {
+            port,
+            id,
+          },
+          async () =>
+            runPrewarmSafely(createDefaultPrewarmOptions(), {
+              allowInlineFallback: false,
+            })
+        )
 
         return server
       },

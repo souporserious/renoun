@@ -13,13 +13,18 @@ import { fileURLToPath } from 'node:url'
 import { NodeFileSystem } from '../../file-system/NodeFileSystem.ts'
 import type { ExportHistoryGenerator } from '../../file-system/types.ts'
 import { extractCodeFenceSnippetsFromMarkdown } from '../../analysis/markdown-code-fence-languages.ts'
+import { runWithAnalysisRpcRequestPriority } from '../../analysis/request-priority.ts'
 import { hasServerRuntimeInProcessEnv } from '../../analysis/runtime-env.ts'
 import type { AnalysisOptions } from '../../analysis/types.ts'
+import {
+  getSourceTextMetadata,
+  getTokens,
+  getTypeScriptDependencyPaths,
+} from '../../analysis/node-client.ts'
 import { forEachConcurrent } from '../../utils/concurrency.ts'
 import { getDebugLogger } from '../../utils/debug.ts'
 import { isProductionEnvironment } from '../../utils/env.ts'
 import { isJavaScriptLikeExtension } from '../../utils/is-javascript-like-extension.ts'
-import type { Highlighter } from '../../utils/create-highlighter.ts'
 import type {
   DirectoryEntriesRequest,
   DirectoryStructureRequest,
@@ -41,6 +46,7 @@ const PREWARM_STRUCTURE_CONCURRENCY = Math.max(
   Math.min(4, Math.ceil(cpus().length / 4))
 )
 const PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT = 96
+const PREWARM_SERVER_FULL_LEAF_ROUTE_FILE_LIMIT = 96
 const PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT = 16
 const PREWARM_SERVER_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT = 32
 const REPOSITORY_MODULE_SPECIFIER_EXTENSION =
@@ -75,8 +81,8 @@ interface WarmFileTask {
   cacheKey: string
   absolutePath: string
   extension?: string
-  methods: Set<WarmFileMethod>
-  background?: boolean
+  bootstrapMethods: Set<WarmFileMethod>
+  backgroundMethods: Set<WarmFileMethod>
   fileGetRequestKeys?: Set<string>
   repositoryTarget?: {
     directoryPath: string
@@ -92,6 +98,11 @@ interface WarmRenounPrewarmTargetsOptions {
   isFilePathGitIgnored: (filePath: string) => boolean
 }
 
+interface RepositoryBootstrapRequest {
+  repository: FileRequest['repository'] | DirectoryEntriesRequest['repository']
+  sparsePaths?: string[]
+}
+
 export interface WarmRenounPrewarmTargetsResult {
   fileGetDependencyPathsByRequestKey: Record<string, string[]>
 }
@@ -101,21 +112,9 @@ type EntriesModule = Pick<
   typeof import('../../file-system/entries.ts'),
   'Directory' | 'isFile'
 >
-type AnalysisClientServerModule = Pick<
-  typeof import('../../analysis/client.server.ts'),
-  | 'createHighlighter'
-  | 'getCachedSourceTextMetadata'
-  | 'getCachedTokens'
-  | 'getCachedTypeScriptDependencyPaths'
-  | 'getProgram'
->
 
 let repositoryModulePromise: Promise<RepositoryModule> | undefined
 let entriesModulePromise: Promise<EntriesModule> | undefined
-let analysisClientServerModulePromise:
-  | Promise<AnalysisClientServerModule>
-  | undefined
-let prewarmHighlighterPromise: Promise<Highlighter | null> | undefined
 
 function shouldSkipWorkspaceGitIgnoredWarmPath(
   filePath: string,
@@ -285,12 +284,34 @@ export async function warmRenounPrewarmTargets(
     },
   }))
 
+  const repositoryBootstrapRequests = collectRepositoryBootstrapRequests(
+    targets,
+    warmFilesByPath
+  )
+
+  if (repositoryBootstrapRequests.length > 0) {
+    logger.debug('Bootstrapping repository-backed analysis roots', () => ({
+      data: {
+        repositories: repositoryBootstrapRequests.length,
+      },
+    }))
+
+    await bootstrapRepositoryAnalysisRoots(repositoryBootstrapRequests, {
+      logger,
+    })
+  }
+
   const blockingWarmFiles = Array.from(warmFilesByPath.values()).filter(
-    (warmFile) => warmFile.background !== true
+    (warmFile) => warmFile.bootstrapMethods.size > 0
   )
   const backgroundWarmFiles = Array.from(warmFilesByPath.values()).filter(
-    (warmFile) => warmFile.background === true
+    (warmFile) => warmFile.backgroundMethods.size > 0
   )
+  const shouldWarmDirectoryStructureInBackground =
+    targets.directoryGetStructure.length > 0 &&
+    shouldBackgroundDirectoryStructureWarm()
+  const shouldWarmExportHistoryInBackground =
+    targets.exportHistory.length > 0 && shouldBackgroundExportHistoryWarm()
 
   if (backgroundWarmFiles.length > 0) {
     logger.debug('Scheduling background renoun file prewarm tasks', () => ({
@@ -299,12 +320,54 @@ export async function warmRenounPrewarmTargets(
       },
     }))
 
-    void warmFiles(backgroundWarmFiles, {
-      analysisOptions: options.analysisOptions,
-      fileSystem,
-      logger,
-    }).catch((error) => {
+    void runWithAnalysisRpcRequestPriority('background', async () =>
+      warmFiles(backgroundWarmFiles, {
+        analysisOptions: options.analysisOptions,
+        fileSystem,
+        logger,
+        phase: 'background',
+      })
+    ).catch((error) => {
       logger.warn('Background renoun file prewarm target failed', () => ({
+        data: {
+          error: formatPrewarmError(error),
+        },
+      }))
+    })
+  }
+
+  if (shouldWarmExportHistoryInBackground) {
+    logger.debug('Scheduling background renoun export history prewarm tasks', () => ({
+      data: {
+        histories: targets.exportHistory.length,
+      },
+    }))
+
+    void runWithAnalysisRpcRequestPriority('background', async () =>
+      warmExportHistoryRequests(targets.exportHistory, { logger })
+    ).catch((error) => {
+      logger.warn('Background renoun export history prewarm target failed', () => ({
+        data: {
+          error: formatPrewarmError(error),
+        },
+      }))
+    })
+  }
+
+  if (shouldWarmDirectoryStructureInBackground) {
+    logger.debug('Scheduling background renoun directory structure prewarm tasks', () => ({
+      data: {
+        directories: targets.directoryGetStructure.length,
+      },
+    }))
+
+    void runWithAnalysisRpcRequestPriority('background', async () =>
+      warmDirectoryStructureRequests(targets.directoryGetStructure, {
+        analysisOptions: options.analysisOptions,
+        logger,
+      })
+    ).catch((error) => {
+      logger.warn('Background renoun directory structure prewarm target failed', () => ({
         data: {
           error: formatPrewarmError(error),
         },
@@ -318,17 +381,19 @@ export async function warmRenounPrewarmTargets(
           analysisOptions: options.analysisOptions,
           fileSystem,
           logger,
+          phase: 'bootstrap',
         })
       : Promise.resolve<WarmRenounPrewarmTargetsResult>({
           fileGetDependencyPathsByRequestKey: {},
         }),
-    targets.directoryGetStructure.length > 0
+    targets.directoryGetStructure.length > 0 &&
+    !shouldWarmDirectoryStructureInBackground
       ? warmDirectoryStructureRequests(targets.directoryGetStructure, {
           analysisOptions: options.analysisOptions,
           logger,
         })
       : Promise.resolve(),
-    targets.exportHistory.length > 0
+    targets.exportHistory.length > 0 && !shouldWarmExportHistoryInBackground
       ? warmExportHistoryRequests(targets.exportHistory, { logger })
       : Promise.resolve(),
   ])
@@ -350,19 +415,6 @@ async function loadRepositoryModule(): Promise<RepositoryModule> {
   return repositoryModulePromise
 }
 
-async function loadAnalysisClientServerModule():
-  Promise<AnalysisClientServerModule> {
-  if (!analysisClientServerModulePromise) {
-    const analysisClientServerModuleUrl = new URL(
-      `../../analysis/client.server${REPOSITORY_MODULE_SPECIFIER_EXTENSION}`,
-      import.meta.url
-    )
-    analysisClientServerModulePromise = import(analysisClientServerModuleUrl.href)
-  }
-
-  return analysisClientServerModulePromise
-}
-
 async function loadEntriesModule(): Promise<EntriesModule> {
   if (!entriesModulePromise) {
     const entriesModuleUrl = new URL(
@@ -379,20 +431,7 @@ async function warmTypeScriptDependencyPaths(
   filePath: string,
   analysisOptions: AnalysisOptions | undefined
 ): Promise<void> {
-  const { getCachedTypeScriptDependencyPaths, getProgram } =
-    await loadAnalysisClientServerModule()
-  const project = getProgram(analysisOptions)
-  await getCachedTypeScriptDependencyPaths(project, filePath)
-}
-
-async function getPrewarmHighlighter(): Promise<Highlighter | null> {
-  if (!prewarmHighlighterPromise) {
-    prewarmHighlighterPromise = loadAnalysisClientServerModule()
-      .then((module) => module.createHighlighter({ theme: undefined }))
-      .catch(() => null)
-  }
-
-  return prewarmHighlighterPromise
+  await getTypeScriptDependencyPaths(filePath, analysisOptions)
 }
 
 async function collectWarmFilesFromDirectoryTargets(
@@ -427,10 +466,8 @@ async function collectWarmFilesFromDirectoryTargets(
             repository: repository as any,
           })
           const entries = request.leafOnly
-            ? collectLeafFilesFromEntries(
-                await directory.getEntries({
-                  recursive: true,
-                  includeDirectoryNamedFiles: true,
+            ? collectLeafFilesFromNavigationTree(
+                await directory.getTree({
                   includeIndexAndReadmeFiles:
                     request.includeIndexAndReadmeFiles,
                 }),
@@ -473,10 +510,6 @@ async function collectWarmFilesFromDirectoryTargets(
           }
 
           const eligibleFileCount = eligibleEntries.length
-          const background = shouldBackgroundHighFanoutLeafWarm({
-            leafOnly: request.leafOnly === true,
-            fileCount: eligibleFileCount,
-          })
           const sampledEntries = selectHighFanoutLeafWarmSample(
             eligibleEntries,
             {
@@ -488,19 +521,38 @@ async function collectWarmFilesFromDirectoryTargets(
                 ? entry.getPathname()
                 : filePath
           )
+          const sampledEntriesSet = new Set(sampledEntries)
 
-          for (const { entry, filePath, extension } of sampledEntries) {
-
-            const methods = limitHighFanoutLeafWarmMethods(
+          for (const candidate of eligibleEntries) {
+            const { entry, filePath, extension } = candidate
+            const { bootstrapMethods, backgroundMethods } = partitionWarmMethods(
               request.methods && request.methods.length > 0
                 ? new Set<WarmFileMethod>(request.methods)
                 : determineDirectoryWarmMethods(extension),
               {
+                extension,
                 leafOnly: request.leafOnly === true,
                 fileCount: eligibleFileCount,
               }
             )
-            if (methods.size === 0) {
+            if (!sampledEntriesSet.has(candidate)) {
+              backgroundMethods.clear()
+            } else if (
+              !shouldUseBackgroundHighFanoutLeafWarm({
+                leafOnly: request.leafOnly === true,
+                fileCount: eligibleFileCount,
+              })
+            ) {
+              for (const method of backgroundMethods) {
+                bootstrapMethods.add(method)
+              }
+              backgroundMethods.clear()
+            }
+
+            if (
+              bootstrapMethods.size === 0 &&
+              backgroundMethods.size === 0
+            ) {
               continue
             }
 
@@ -517,8 +569,8 @@ async function collectWarmFilesFromDirectoryTargets(
                 }),
                 absolutePath: filePath,
                 extension,
-                methods,
-                background,
+                bootstrapMethods,
+                backgroundMethods,
                 repositoryTarget: {
                   directoryPath: request.directoryPath,
                   path: entry.relativePath,
@@ -537,13 +589,11 @@ async function collectWarmFilesFromDirectoryTargets(
           request.directoryPath
         )
         const filePaths = request.leafOnly
-          ? collectLeafFilesFromEntries(
+          ? collectLeafFilesFromNavigationTree(
               await new Directory({
                 path: absoluteDirectoryPath,
                 fileSystem: options.fileSystem,
-              }).getEntries({
-                recursive: true,
-                includeDirectoryNamedFiles: true,
+              }).getTree({
                 includeIndexAndReadmeFiles:
                   request.includeIndexAndReadmeFiles,
               }),
@@ -586,10 +636,6 @@ async function collectWarmFilesFromDirectoryTargets(
         }
 
         const eligibleFileCount = eligibleFilePaths.length
-        const background = shouldBackgroundHighFanoutLeafWarm({
-          leafOnly: request.leafOnly === true,
-          fileCount: eligibleFileCount,
-        })
         const sampledFilePaths = selectHighFanoutLeafWarmSample(
           eligibleFilePaths,
           {
@@ -598,19 +644,38 @@ async function collectWarmFilesFromDirectoryTargets(
           },
           ({ filePath }) => relative(absoluteDirectoryPath, filePath)
         )
+        const sampledFilePathsSet = new Set(sampledFilePaths)
 
-        for (const { filePath, extension } of sampledFilePaths) {
-
-          const methods = limitHighFanoutLeafWarmMethods(
+        for (const candidate of eligibleFilePaths) {
+          const { filePath, extension } = candidate
+          const { bootstrapMethods, backgroundMethods } = partitionWarmMethods(
             request.methods && request.methods.length > 0
               ? new Set<WarmFileMethod>(request.methods)
               : determineDirectoryWarmMethods(extension),
             {
+              extension,
               leafOnly: request.leafOnly === true,
               fileCount: eligibleFileCount,
             }
           )
-          if (methods.size === 0) {
+          if (!sampledFilePathsSet.has(candidate)) {
+            backgroundMethods.clear()
+          } else if (
+            !shouldUseBackgroundHighFanoutLeafWarm({
+              leafOnly: request.leafOnly === true,
+              fileCount: eligibleFileCount,
+            })
+          ) {
+            for (const method of backgroundMethods) {
+              bootstrapMethods.add(method)
+            }
+            backgroundMethods.clear()
+          }
+
+          if (
+            bootstrapMethods.size === 0 &&
+            backgroundMethods.size === 0
+          ) {
             continue
           }
 
@@ -619,8 +684,8 @@ async function collectWarmFilesFromDirectoryTargets(
               cacheKey: filePath,
               absolutePath: filePath,
               extension,
-              methods,
-              background,
+              bootstrapMethods,
+              backgroundMethods,
             },
             warmFilesByPath
           )
@@ -652,10 +717,21 @@ async function collectWarmFilesFromGetFileTargets(
 ): Promise<Map<string, WarmFileTask>> {
   const warmFilesByPath = new Map<string, WarmFileTask>()
   const deduplicatedTargets = dedupeGetFileTargets(getFileTargets)
+  const deduplicatedRequests = Array.from(deduplicatedTargets.values())
+  const sampledGetFileRequestKeys = new Set(
+    selectHighFanoutLeafWarmSample(
+      deduplicatedRequests,
+      {
+        leafOnly: true,
+        fileCount: deduplicatedRequests.length,
+      },
+      (request) => `${request.directoryPath}/${request.path}`
+    ).map((request) => getFileRequestKey(request))
+  )
   const { Directory } = await loadEntriesModule()
 
   await forEachConcurrent(
-    Array.from(deduplicatedTargets.values()),
+    deduplicatedRequests,
     {
       concurrency: PREWARM_FILE_CACHE_CONCURRENCY,
     },
@@ -686,8 +762,32 @@ async function collectWarmFilesFromGetFileTargets(
           }
 
           const extension = file.extension
-          const methods = resolveGetFileWarmMethods(request, extension)
-          if (methods.size === 0) {
+          const { bootstrapMethods, backgroundMethods } = partitionWarmMethods(
+            resolveGetFileWarmMethods(request, extension),
+            {
+              extension,
+              leafOnly: true,
+              fileCount: deduplicatedRequests.length,
+            }
+          )
+          if (!sampledGetFileRequestKeys.has(getFileRequestKey(request))) {
+            backgroundMethods.clear()
+          } else if (
+            !shouldUseBackgroundHighFanoutLeafWarm({
+              leafOnly: true,
+              fileCount: deduplicatedRequests.length,
+            })
+          ) {
+            for (const method of backgroundMethods) {
+              bootstrapMethods.add(method)
+            }
+            backgroundMethods.clear()
+          }
+
+          if (
+            bootstrapMethods.size === 0 &&
+            backgroundMethods.size === 0
+          ) {
             return
           }
 
@@ -696,7 +796,8 @@ async function collectWarmFilesFromGetFileTargets(
               cacheKey: getFileRequestKey(request),
               absolutePath: filePath,
               extension,
-              methods,
+              bootstrapMethods,
+              backgroundMethods,
               fileGetRequestKeys: new Set([getFileRequestKey(request)]),
               repositoryTarget: {
                 directoryPath: request.directoryPath,
@@ -727,8 +828,32 @@ async function collectWarmFilesFromGetFileTargets(
           return
         }
 
-        const methods = resolveGetFileWarmMethods(request, extension)
-        if (methods.size === 0) {
+        const { bootstrapMethods, backgroundMethods } = partitionWarmMethods(
+          resolveGetFileWarmMethods(request, extension),
+          {
+            extension,
+            leafOnly: true,
+            fileCount: deduplicatedRequests.length,
+          }
+        )
+        if (!sampledGetFileRequestKeys.has(getFileRequestKey(request))) {
+          backgroundMethods.clear()
+        } else if (
+          !shouldUseBackgroundHighFanoutLeafWarm({
+            leafOnly: true,
+            fileCount: deduplicatedRequests.length,
+          })
+        ) {
+          for (const method of backgroundMethods) {
+            bootstrapMethods.add(method)
+          }
+          backgroundMethods.clear()
+        }
+
+        if (
+          bootstrapMethods.size === 0 &&
+          backgroundMethods.size === 0
+        ) {
           return
         }
 
@@ -737,7 +862,8 @@ async function collectWarmFilesFromGetFileTargets(
             cacheKey: getFileRequestKey(request),
             absolutePath: filePath,
             extension,
-            methods,
+            bootstrapMethods,
+            backgroundMethods,
             fileGetRequestKeys: new Set([getFileRequestKey(request)]),
           },
           warmFilesByPath
@@ -760,66 +886,38 @@ async function collectWarmFilesFromGetFileTargets(
   return warmFilesByPath
 }
 
-function collectLeafFilesFromEntries<
+function collectLeafFilesFromNavigationTree<
   Entry extends {
     absolutePath: string
     getPathname?: () => string
   },
 >(
-  entries: Entry[],
+  entries: Array<NavigationTreeEntry<Entry>>,
   isFileEntry: (entry: Entry) => boolean
 ): Entry[] {
-  const descendantPathnames = new Set<string>()
-  const pathnamesByEntry = new Map<Entry, string>()
-
-  for (const entry of entries) {
-    if (typeof entry.getPathname !== 'function') {
-      continue
-    }
-
-    const pathname = entry.getPathname()
-    pathnamesByEntry.set(entry, pathname)
-
-    let parentPathname = pathname
-    while (true) {
-      const lastSeparatorIndex = parentPathname.lastIndexOf('/')
-      parentPathname =
-        lastSeparatorIndex > 0 ? parentPathname.slice(0, lastSeparatorIndex) : '/'
-
-      if (!parentPathname) {
-        parentPathname = '/'
-      }
-
-      descendantPathnames.add(parentPathname)
-
-      if (parentPathname === '/') {
-        break
-      }
-    }
-  }
-
   const leafFiles: Entry[] = []
-  const seenLeafPathnames = new Set<string>()
 
-  for (const entry of entries) {
-    if (!isFileEntry(entry)) {
-      continue
+  const visit = (currentEntries: Array<NavigationTreeEntry<Entry>>) => {
+    for (const { entry, children } of currentEntries) {
+      if (children && children.length > 0) {
+        visit(children)
+        continue
+      }
+
+      if (isFileEntry(entry)) {
+        leafFiles.push(entry)
+      }
     }
-
-    const pathname = pathnamesByEntry.get(entry)
-    if (!pathname || descendantPathnames.has(pathname)) {
-      continue
-    }
-
-    if (seenLeafPathnames.has(pathname)) {
-      continue
-    }
-
-    seenLeafPathnames.add(pathname)
-    leafFiles.push(entry)
   }
+
+  visit(entries)
 
   return leafFiles
+}
+
+type NavigationTreeEntry<Entry> = {
+  entry: Entry
+  children?: Array<NavigationTreeEntry<Entry>>
 }
 
 function limitHighFanoutLeafWarmMethods(
@@ -828,7 +926,7 @@ function limitHighFanoutLeafWarmMethods(
 ): Set<WarmFileMethod> {
   if (
     !options.leafOnly ||
-    options.fileCount <= PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT
+    options.fileCount <= getHighFanoutLeafFullWarmLimit()
   ) {
     return methods
   }
@@ -843,6 +941,14 @@ function limitHighFanoutLeafWarmMethods(
   return limitedMethods
 }
 
+function getHighFanoutLeafFullWarmLimit(): number {
+  if (hasServerRuntimeInProcessEnv()) {
+    return PREWARM_SERVER_FULL_LEAF_ROUTE_FILE_LIMIT
+  }
+
+  return PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT
+}
+
 function getHighFanoutLeafWarmSampleLimit(): number {
   if (hasServerRuntimeInProcessEnv()) {
     return PREWARM_SERVER_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT
@@ -851,16 +957,139 @@ function getHighFanoutLeafWarmSampleLimit(): number {
   return PREWARM_HIGH_FANOUT_LEAF_ROUTE_SAMPLE_LIMIT
 }
 
-function shouldBackgroundHighFanoutLeafWarm(options: {
+function shouldSplitHighFanoutLeafWarm(options: {
   leafOnly: boolean
   fileCount: number
 }): boolean {
   return (
     hasServerRuntimeInProcessEnv() &&
-    isProductionEnvironment() &&
     options.leafOnly &&
-    options.fileCount > PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT
+    options.fileCount > getHighFanoutLeafFullWarmLimit()
   )
+}
+
+function shouldUseBackgroundHighFanoutLeafWarm(options: {
+  leafOnly: boolean
+  fileCount: number
+}): boolean {
+  return (
+    shouldSplitHighFanoutLeafWarm(options) && isProductionEnvironment()
+  )
+}
+
+function shouldBackgroundReferenceSectionsWarm(options: {
+  isJavaScriptTarget: boolean
+}): boolean {
+  return (
+    hasServerRuntimeInProcessEnv() &&
+    isProductionEnvironment() &&
+    options.isJavaScriptTarget
+  )
+}
+
+function shouldBackgroundExportHistoryWarm(): boolean {
+  return hasServerRuntimeInProcessEnv() && isProductionEnvironment()
+}
+
+function shouldBackgroundDirectoryStructureWarm(): boolean {
+  return hasServerRuntimeInProcessEnv() && isProductionEnvironment()
+}
+
+function hasJavaScriptWarmMethods(methods: ReadonlySet<WarmFileMethod>): boolean {
+  return (
+    methods.has('getExports') ||
+    methods.has('getExportTypes') ||
+    methods.has('getGitMetadata') ||
+    methods.has('getSections')
+  )
+}
+
+function partitionWarmMethods(
+  methods: Set<WarmFileMethod>,
+  options: {
+    extension?: string
+    leafOnly: boolean
+    fileCount: number
+  }
+): {
+  bootstrapMethods: Set<WarmFileMethod>
+  backgroundMethods: Set<WarmFileMethod>
+} {
+  const limitedMethods = limitHighFanoutLeafWarmMethods(methods, {
+    leafOnly: options.leafOnly,
+    fileCount: options.fileCount,
+  })
+  const bootstrapMethods = new Set(limitedMethods)
+  const backgroundMethods = new Set<WarmFileMethod>()
+  const isJavaScriptTarget =
+    typeof options.extension === 'string'
+      ? isJavaScriptLikeExtension(options.extension)
+      : hasJavaScriptWarmMethods(limitedMethods)
+
+  if (
+    shouldBackgroundReferenceSectionsWarm({
+      isJavaScriptTarget,
+    }) &&
+    bootstrapMethods.delete('getSections')
+  ) {
+    backgroundMethods.add('getSections')
+  }
+
+  if (
+    !shouldSplitHighFanoutLeafWarm({
+      leafOnly: options.leafOnly,
+      fileCount: options.fileCount,
+    })
+  ) {
+    return {
+      bootstrapMethods,
+      backgroundMethods,
+    }
+  }
+
+  if (!isJavaScriptTarget) {
+    return {
+      bootstrapMethods,
+      backgroundMethods,
+    }
+  }
+
+  if (bootstrapMethods.delete('getGitMetadata')) {
+    backgroundMethods.add('getGitMetadata')
+  }
+
+  if (bootstrapMethods.delete('getExportTypes')) {
+    backgroundMethods.add('getExportTypes')
+  }
+
+  if (bootstrapMethods.delete('getSections')) {
+    backgroundMethods.add('getSections')
+  }
+
+  if (
+    backgroundMethods.size > 0 &&
+    !bootstrapMethods.has('getExports') &&
+    (limitedMethods.has('getGitMetadata') ||
+      limitedMethods.has('getExportTypes') ||
+      limitedMethods.has('getSections'))
+  ) {
+    bootstrapMethods.add('getExports')
+  }
+
+  if (
+    shouldUseBackgroundHighFanoutLeafWarm({
+      leafOnly: options.leafOnly,
+      fileCount: options.fileCount,
+    }) &&
+    bootstrapMethods.delete('getExports')
+  ) {
+    backgroundMethods.add('getExports')
+  }
+
+  return {
+    bootstrapMethods,
+    backgroundMethods,
+  }
 }
 
 function selectHighFanoutLeafWarmSample<Candidate>(
@@ -870,7 +1099,7 @@ function selectHighFanoutLeafWarmSample<Candidate>(
 ): Candidate[] {
   if (
     !options.leafOnly ||
-    options.fileCount <= PREWARM_FULL_LEAF_ROUTE_FILE_LIMIT
+    options.fileCount <= getHighFanoutLeafFullWarmLimit()
   ) {
     return candidates
   }
@@ -994,16 +1223,19 @@ async function warmDirectoryStructureRequests(
     },
     async (request) => {
       try {
-        const fileSystem = getEntryWarmFileSystem(
-          fileSystemsByTsConfigPath,
-          options.analysisOptions
-        )
+        const repository = request.repository
+          ? await resolveWarmRepository(request.repository, request.sparsePaths)
+          : undefined
+        const fileSystem = repository
+          ? undefined
+          : getEntryWarmFileSystem(
+              fileSystemsByTsConfigPath,
+              options.analysisOptions
+            )
         const directory = new Directory({
           path: request.directoryPath,
-          fileSystem,
-          ...(request.repository
-            ? { repository: request.repository as any }
-            : {}),
+          ...(fileSystem ? { fileSystem } : {}),
+          ...(repository ? { repository: repository as any } : {}),
         })
 
         await directory.getStructure(request.options as any)
@@ -1116,6 +1348,131 @@ function formatRepositoryTarget(repository: unknown): string {
   }
 
   return 'unknown'
+}
+
+function collectRepositoryBootstrapRequests(
+  targets: RenounPrewarmTargets,
+  warmFilesByPath?: Map<string, WarmFileTask>
+): RepositoryBootstrapRequest[] {
+  const uniqueRequests = new Map<string, RepositoryBootstrapRequest>()
+
+  const addRequest = (
+    repository:
+      | FileRequest['repository']
+      | DirectoryEntriesRequest['repository']
+      | undefined,
+    sparsePaths?: string[]
+  ) => {
+    if (!repository) {
+      return
+    }
+
+    const request: RepositoryBootstrapRequest = {
+      repository,
+      ...(sparsePaths && sparsePaths.length > 0
+        ? { sparsePaths: [...sparsePaths].sort() }
+        : {}),
+    }
+    const key = JSON.stringify({
+      repository: normalizePrewarmKeyValue(repository),
+      sparsePaths: request.sparsePaths ?? [],
+    })
+
+    if (!uniqueRequests.has(key)) {
+      uniqueRequests.set(key, request)
+    }
+  }
+
+  for (const request of targets.directoryGetEntries) {
+    addRequest(request.repository, request.sparsePaths)
+  }
+
+  for (const request of targets.fileGetFile) {
+    addRequest(request.repository, request.sparsePaths)
+  }
+
+  for (const request of targets.directoryGetStructure) {
+    addRequest(request.repository, request.sparsePaths)
+  }
+
+  for (const request of targets.exportHistory) {
+    addRequest(request.repository, request.sparsePaths)
+  }
+
+  if (warmFilesByPath) {
+    for (const warmFile of warmFilesByPath.values()) {
+      addRequest(
+        warmFile.repositoryTarget?.repository,
+        warmFile.repositoryTarget?.sparsePaths
+      )
+    }
+  }
+
+  return Array.from(uniqueRequests.values())
+}
+
+async function bootstrapRepositoryAnalysisRoots(
+  requests: RepositoryBootstrapRequest[],
+  options: {
+    logger: ReturnType<typeof getDebugLogger>
+  }
+): Promise<void> {
+  await forEachConcurrent(
+    requests,
+    {
+      concurrency: PREWARM_STRUCTURE_CONCURRENCY,
+    },
+    async (request) => {
+      try {
+        const repository = await resolveWarmRepository(
+          request.repository,
+          request.sparsePaths
+        )
+        const fileSystem =
+          repository && typeof (repository as { getFileSystem?: unknown }).getFileSystem === 'function'
+            ? (
+                repository as {
+                  getFileSystem: () => {
+                    prepareAnalysisRoot?: () => Promise<unknown>
+                  }
+                }
+              ).getFileSystem()
+            : undefined
+
+        if (
+          fileSystem &&
+          typeof fileSystem.prepareAnalysisRoot === 'function'
+        ) {
+          await fileSystem.prepareAnalysisRoot()
+        }
+      } catch (error) {
+        options.logger.warn(
+          'Skipping renoun repository analysis bootstrap target',
+          () => ({
+            data: {
+              repository: formatRepositoryTarget(request.repository),
+              sparsePaths: request.sparsePaths ?? [],
+              error: formatPrewarmError(error),
+            },
+          })
+        )
+      }
+    }
+  )
+}
+
+export async function bootstrapRenounPrewarmTargetRepositories(
+  targets: RenounPrewarmTargets
+): Promise<void> {
+  const requests = collectRepositoryBootstrapRequests(targets)
+
+  if (requests.length === 0) {
+    return
+  }
+
+  await bootstrapRepositoryAnalysisRoots(requests, {
+    logger: getDebugLogger(),
+  })
 }
 
 async function resolveWarmRepository(
@@ -1352,8 +1709,12 @@ function mergeWarmTask(
     return
   }
 
-  for (const method of task.methods) {
-    existing.methods.add(method)
+  for (const method of task.bootstrapMethods) {
+    existing.bootstrapMethods.add(method)
+  }
+
+  for (const method of task.backgroundMethods) {
+    existing.backgroundMethods.add(method)
   }
 
   if (task.fileGetRequestKeys) {
@@ -1373,12 +1734,6 @@ function mergeWarmTask(
   if (!existing.extension && task.extension) {
     existing.extension = task.extension
   }
-
-  if (task.background !== true) {
-    existing.background = false
-  } else if (existing.background === undefined) {
-    existing.background = true
-  }
 }
 
 function isJavaScriptWarmTask(warmFile: WarmFileTask): boolean {
@@ -1387,9 +1742,12 @@ function isJavaScriptWarmTask(warmFile: WarmFileTask): boolean {
   }
 
   return (
-    warmFile.methods.has('getExports') ||
-    warmFile.methods.has('getExportTypes') ||
-    warmFile.methods.has('getGitMetadata')
+    warmFile.bootstrapMethods.has('getExports') ||
+    warmFile.bootstrapMethods.has('getExportTypes') ||
+    warmFile.bootstrapMethods.has('getGitMetadata') ||
+    warmFile.backgroundMethods.has('getExports') ||
+    warmFile.backgroundMethods.has('getExportTypes') ||
+    warmFile.backgroundMethods.has('getGitMetadata')
   )
 }
 
@@ -1403,6 +1761,7 @@ async function warmFiles(
     analysisOptions?: AnalysisOptions
     fileSystem: NodeFileSystem
     logger: ReturnType<typeof getDebugLogger>
+    phase: 'bootstrap' | 'background'
   }
 ): Promise<WarmRenounPrewarmTargetsResult> {
   const nearestTsConfigFilePathByDirectory = new Map<string, string | undefined>()
@@ -1415,6 +1774,14 @@ async function warmFiles(
       concurrency: PREWARM_FILE_CACHE_CONCURRENCY,
     },
     async (warmFile) => {
+      const methods =
+        options.phase === 'background'
+          ? warmFile.backgroundMethods
+          : warmFile.bootstrapMethods
+      if (methods.size === 0) {
+        return
+      }
+
       let cachedSourceText: string | undefined
       const readSourceText = async () => {
         if (cachedSourceText === undefined) {
@@ -1436,13 +1803,14 @@ async function warmFiles(
       )
 
       if (
+        options.phase === 'bootstrap' &&
         warmFile.fileGetRequestKeys &&
         warmFile.fileGetRequestKeys.size > 0 &&
         !warmFile.repositoryTarget &&
         isJavaScriptWarmTask(warmFile)
       ) {
         try {
-          const dependencyPaths = await getTypeScriptDependencyPaths(
+          const dependencyPaths = await getNormalizedTypeScriptDependencyPaths(
             warmFile.absolutePath,
             warmAnalysisOptions
           )
@@ -1467,6 +1835,7 @@ async function warmFiles(
         await warmEntryFileCaches(warmFile, {
           analysisOptions: warmAnalysisOptions,
           fileSystemsByTsConfigPath: entryFileSystemByTsConfigPath,
+          methods,
         })
       } catch (error) {
         options.logger.warn(
@@ -1481,8 +1850,8 @@ async function warmFiles(
       }
 
       if (
-        (warmFile.methods.has('getCodeFenceSourceMetadata') ||
-          warmFile.methods.has('getCodeFenceTokens')) &&
+        (methods.has('getCodeFenceSourceMetadata') ||
+          methods.has('getCodeFenceTokens')) &&
         isMarkdownWarmTask(warmFile)
       ) {
         try {
@@ -1507,11 +1876,7 @@ async function warmFiles(
                 nearestTsConfigFilePathByDirectory
               )
             )
-            const analysisClientServer = await loadAnalysisClientServerModule()
-            const project =
-              analysisClientServer.getProgram(snippetAnalysisOptions)
-            const sourceMetadata =
-              await analysisClientServer.getCachedSourceTextMetadata(project, {
+            const sourceMetadata = await getSourceTextMetadata({
               ...(snippetPath ? { filePath: snippetPath } : {}),
               ...(snippetBaseDirectory
                 ? { baseDirectory: snippetBaseDirectory }
@@ -1521,6 +1886,7 @@ async function warmFiles(
               shouldFormat: snippet.shouldFormat,
               isFormattingExplicit: true,
               virtualizeFilePath: snippetPath !== undefined,
+              analysisOptions: snippetAnalysisOptions,
             })
 
             if (
@@ -1546,20 +1912,19 @@ async function warmFiles(
               }
             }
 
-            if (!warmFile.methods.has('getCodeFenceTokens')) {
+            if (!methods.has('getCodeFenceTokens')) {
               continue
             }
 
-            await analysisClientServer.getCachedTokens(project, {
+            await getTokens({
               allowErrors: snippet.allowErrors,
               value: sourceMetadata.value,
               language: sourceMetadata.language,
               filePath: sourceMetadata.filePath,
-              highlighter: null,
               showErrors: snippet.showErrors,
               theme: undefined,
               waitForWarmResult: true,
-              highlighterLoader: getPrewarmHighlighter,
+              analysisOptions: snippetAnalysisOptions,
             })
           }
         } catch (error) {
@@ -1582,16 +1947,13 @@ async function warmFiles(
   }
 }
 
-async function getTypeScriptDependencyPaths(
+async function getNormalizedTypeScriptDependencyPaths(
   filePath: string,
   analysisOptions: AnalysisOptions | undefined
 ): Promise<string[]> {
-  const { getCachedTypeScriptDependencyPaths, getProgram } =
-    await loadAnalysisClientServerModule()
-  const project = getProgram(analysisOptions)
-  const dependencyPaths = await getCachedTypeScriptDependencyPaths(
-    project,
-    filePath
+  const dependencyPaths = await getTypeScriptDependencyPaths(
+    filePath,
+    analysisOptions
   )
   const normalizedPaths = new Set<string>([resolve(filePath)])
 
@@ -1644,6 +2006,7 @@ async function warmEntryFileCaches(
   options: {
     analysisOptions: AnalysisOptions | undefined
     fileSystemsByTsConfigPath: Map<string, NodeFileSystem>
+    methods: ReadonlySet<WarmFileMethod>
   }
 ): Promise<void> {
   const { Directory } = await loadEntriesModule()
@@ -1693,8 +2056,9 @@ async function warmEntryFileCaches(
   })()
   const canWarmReferenceBaseData =
     isJavaScriptWarmTask(warmFile) &&
-    (warmFile.methods.has('getExportTypes') ||
-      warmFile.methods.has('getGitMetadata')) &&
+    (options.methods.has('getExportTypes') ||
+      options.methods.has('getGitMetadata') ||
+      options.methods.has('getSections')) &&
     (typeof file.getCachedReferenceBaseData === 'function' ||
       typeof file.getCachedReferenceData === 'function')
   let fileExports: unknown[] | undefined
@@ -1708,7 +2072,7 @@ async function warmEntryFileCaches(
   }
 
   if (
-    warmFile.methods.has('getExports') &&
+    options.methods.has('getExports') &&
     typeof file.getExports === 'function'
   ) {
     const exports = await file.getExports()
@@ -1718,19 +2082,19 @@ async function warmEntryFileCaches(
   }
 
   if (
-    warmFile.methods.has('getExportTypes') &&
+    options.methods.has('getExportTypes') &&
     typeof file.getExportTypes === 'function'
   ) {
     await file.getExportTypes()
   }
 
   if (
-    warmFile.methods.has('getGitMetadata') &&
+    options.methods.has('getGitMetadata') &&
     typeof file.getLastCommitDate === 'function'
   ) {
     await file.getLastCommitDate()
 
-    if (warmFile.methods.has('getExports')) {
+    if (options.methods.has('getExports')) {
       if (typeof file.getCachedGitExportMetadataByName === 'function') {
         await file.getCachedGitExportMetadataByName()
       } else if (fileExports && fileExports.length > 0) {
@@ -1752,7 +2116,7 @@ async function warmEntryFileCaches(
     }
   }
 
-  if (warmFile.methods.has('getSections')) {
+  if (options.methods.has('getSections')) {
     if (
       isJavaScriptWarmTask(warmFile) &&
       typeof file.getOutlineRanges === 'function'
@@ -1760,12 +2124,11 @@ async function warmEntryFileCaches(
       await file.getOutlineRanges()
     }
 
-    if (
-      isMarkdownWarmTask(warmFile) &&
-      typeof file.getSections === 'function'
-    ) {
+    if (typeof file.getSections === 'function') {
       await file.getSections()
+    }
 
+    if (isMarkdownWarmTask(warmFile)) {
       if (typeof file.getStaticExportValue === 'function') {
         await file.getStaticExportValue('metadata').catch(() => undefined)
       }

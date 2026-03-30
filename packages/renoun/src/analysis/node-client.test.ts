@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     getCachedFileExportMetadata: vi.fn(),
     getCachedFileExportStaticValue: vi.fn(),
     getCachedFileExports: vi.fn(),
+    getCachedReferenceBaseArtifact: vi.fn(),
     getCachedOutlineRanges: vi.fn(),
     getCachedTokens: vi.fn(),
     invalidateRuntimeAnalysisCachePath: vi.fn(),
@@ -45,6 +46,7 @@ vi.mock('./cached-analysis.ts', () => ({
   getCachedFileExportMetadata: mocks.getCachedFileExportMetadata,
   getCachedFileExportStaticValue: mocks.getCachedFileExportStaticValue,
   getCachedFileExports: mocks.getCachedFileExports,
+  getCachedReferenceBaseArtifact: mocks.getCachedReferenceBaseArtifact,
   getCachedOutlineRanges: mocks.getCachedOutlineRanges,
   getCachedSourceTextMetadata: mocks.getCachedSourceTextMetadata,
   getCachedTokens: mocks.getCachedTokens,
@@ -75,6 +77,7 @@ vi.mock('./client.server.ts', () => ({
   getCachedFileExportStaticValue: mocks.getCachedFileExportStaticValue,
   getCachedFileExportText: mocks.getCachedFileExportText,
   getCachedFileExports: mocks.getCachedFileExports,
+  getCachedReferenceBaseArtifact: mocks.getCachedReferenceBaseArtifact,
   getCachedOutlineRanges: mocks.getCachedOutlineRanges,
   getCachedSourceTextMetadata: mocks.getCachedSourceTextMetadata,
   getCachedTokens: mocks.getCachedTokens,
@@ -120,6 +123,7 @@ describe('analysis node client transport guards', () => {
     mocks.invalidateRuntimeAnalysisCachePath.mockClear()
     mocks.invalidateProgramCachesByPaths.mockClear()
     mocks.invalidateProgramFileCache.mockClear()
+    mocks.getCachedReferenceBaseArtifact.mockClear()
     mocks.invalidateSharedFileTextPrefixCachePath.mockClear()
     mocks.createHighlighter.mockClear()
     mocks.configureAnalysisCacheRuntime.mockClear()
@@ -147,6 +151,47 @@ describe('analysis node client transport guards', () => {
       value: 'local-result',
       language: 'txt',
     })
+  })
+
+  test('uses the shared reference base artifact for local file exports fallback', async () => {
+    delete process.env['RENOUN_SERVER_PORT']
+    delete process.env['RENOUN_SERVER_ID']
+
+    mocks.getCachedReferenceBaseArtifact.mockResolvedValue({
+      exportMetadata: [
+        {
+          name: 'answer',
+          path: '/project/src/a.ts',
+          position: 1,
+          kind: 0,
+        },
+      ],
+      gitMetadataByName: {},
+      fileGitMetadata: {
+        authors: [],
+      },
+    })
+
+    const module = await import('./node-client.ts')
+    const exports = await module.getFileExports('/project/src/a.ts')
+
+    expect(mocks.getProgram).toHaveBeenCalledTimes(1)
+    expect(mocks.getCachedReferenceBaseArtifact).toHaveBeenCalledWith(
+      expect.anything(),
+      {
+        filePath: '/project/src/a.ts',
+        stripInternal: false,
+      }
+    )
+    expect(mocks.getCachedFileExports).not.toHaveBeenCalled()
+    expect(exports).toEqual([
+      {
+        name: 'answer',
+        path: '/project/src/a.ts',
+        position: 1,
+        kind: 0,
+      },
+    ])
   })
 
   test('retries loading server modules after a preload failure', async () => {

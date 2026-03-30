@@ -4,9 +4,11 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import type { AnalysisOptions } from '../analysis/types.ts'
+import type { AnalysisRpcRequestPriority } from '../analysis/request-priority.ts'
 import { getDebugLogger } from '../utils/debug.ts'
 import { isVitestRuntime } from '../utils/env.ts'
 import {
+  BUILD_PREWARM_REQUEST_TIMEOUT_MS,
   PREWARM_REQUEST_TIMEOUT_MS,
   PREWARM_WORKER_PAYLOAD_ENV_KEY,
 } from './prewarm/constants.ts'
@@ -23,12 +25,20 @@ interface PrewarmWorkerMessage {
 interface PrewarmRequest {
   id: number
   allowInlineFallback: boolean
-  options?: { analysisOptions?: AnalysisOptions }
+  timeoutMs: number
+  options?: {
+    analysisOptions?: AnalysisOptions
+    requestPriority?: AnalysisRpcRequestPriority
+  }
+  resolveCompletion: () => void
+  completionPromise: Promise<void>
   signature: string
 }
 
 interface RunPrewarmSafelyExecutionOptions {
   allowInlineFallback?: boolean
+  requestPriority?: AnalysisRpcRequestPriority
+  timeoutMs?: number
 }
 
 type PrewarmWorkerExecArgvResolverOptions = {
@@ -142,11 +152,14 @@ export function resolvePrewarmWorkerEntryFilePath(
 
 function getPrewarmRequestSignature(options?: {
   analysisOptions?: AnalysisOptions
+  requestPriority?: AnalysisRpcRequestPriority
 }, executionOptions?: RunPrewarmSafelyExecutionOptions): string {
   try {
     return (
       JSON.stringify({
         allowInlineFallback: executionOptions?.allowInlineFallback ?? true,
+        requestPriority: executionOptions?.requestPriority ?? null,
+        timeoutMs: executionOptions?.timeoutMs ?? null,
         options: options ?? null,
       }) ?? 'null'
     )
@@ -162,7 +175,10 @@ function shouldUsePrewarmWorker(): boolean {
 }
 
 async function runPrewarmInline(
-  options?: { analysisOptions?: AnalysisOptions },
+  options?: {
+    analysisOptions?: AnalysisOptions
+    requestPriority?: AnalysisRpcRequestPriority
+  },
   startedAt = Date.now()
 ): Promise<void> {
   try {
@@ -225,6 +241,33 @@ let activePrewarmRequest: PrewarmRequest | undefined
 let pendingPrewarmRequest: PrewarmRequest | undefined
 let nextPrewarmRequestId = 0
 
+function createPrewarmRequest(
+  options?: {
+    analysisOptions?: AnalysisOptions
+    requestPriority?: AnalysisRpcRequestPriority
+  },
+  executionOptions?: RunPrewarmSafelyExecutionOptions
+): PrewarmRequest {
+  let resolveCompletion!: () => void
+  const completionPromise = new Promise<void>((resolve) => {
+    resolveCompletion = resolve
+  })
+
+  return {
+    id: ++nextPrewarmRequestId,
+    allowInlineFallback: executionOptions?.allowInlineFallback ?? true,
+    timeoutMs: executionOptions?.timeoutMs ?? PREWARM_REQUEST_TIMEOUT_MS,
+    options: {
+      ...options,
+      requestPriority:
+        executionOptions?.requestPriority ?? options?.requestPriority,
+    },
+    resolveCompletion,
+    completionPromise,
+    signature: getPrewarmRequestSignature(options, executionOptions),
+  }
+}
+
 function finalizeActivePrewarmRequest(requestId: number): void {
   if (!activePrewarmRequest || activePrewarmRequest.id !== requestId) {
     return
@@ -240,7 +283,9 @@ function finalizeActivePrewarmRequest(requestId: number): void {
   }
 }
 
-function queueOrSkipPrewarmRequest(request: PrewarmRequest): boolean {
+function queueOrSkipPrewarmRequest(
+  request: PrewarmRequest
+): Promise<void> | false {
   if (!activePrewarmRequest) {
     return false
   }
@@ -249,17 +294,18 @@ function queueOrSkipPrewarmRequest(request: PrewarmRequest): boolean {
     getDebugLogger().debug(
       'Skipping prewarm request because matching prewarm is already running'
     )
-    return true
+    return activePrewarmRequest.completionPromise
   }
 
   if (pendingPrewarmRequest?.signature === request.signature) {
     getDebugLogger().debug(
       'Skipping prewarm request because matching prewarm is already queued'
     )
-    return true
+    return pendingPrewarmRequest.completionPromise
   }
 
   const replacedPendingRequest = pendingPrewarmRequest !== undefined
+  pendingPrewarmRequest?.resolveCompletion()
   pendingPrewarmRequest = request
   getDebugLogger().info('Queued Renoun RPC cache prewarm request', () => ({
     data: {
@@ -267,7 +313,7 @@ function queueOrSkipPrewarmRequest(request: PrewarmRequest): boolean {
       replacedPendingRequest,
     },
   }))
-  return true
+  return request.completionPromise
 }
 
 function startPrewarmRequest(request: PrewarmRequest): void {
@@ -301,6 +347,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
 
     didFinalize = true
     clearRequestTimeout()
+    request.resolveCompletion()
     finalizeActivePrewarmRequest(request.id)
   }
 
@@ -310,7 +357,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
       getDebugLogger().warn('Renoun RPC cache prewarm timed out', () => ({
         data: {
           durationMs: Date.now() - startedAt,
-          timeoutMs: PREWARM_REQUEST_TIMEOUT_MS,
+          timeoutMs: request.timeoutMs,
           execution,
         },
       }))
@@ -328,7 +375,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
       }
 
       finalizeRequest()
-    }, PREWARM_REQUEST_TIMEOUT_MS)
+    }, request.timeoutMs)
     timeoutHandle.unref()
   }
 
@@ -371,6 +418,7 @@ function startPrewarmRequest(request: PrewarmRequest): void {
           ...process.env,
           [PREWARM_WORKER_PAYLOAD_ENV_KEY]: JSON.stringify({
             analysisOptions: request.options?.analysisOptions,
+            requestPriority: request.options?.requestPriority,
           }),
         },
       }
@@ -496,19 +544,21 @@ function startPrewarmRequest(request: PrewarmRequest): void {
 }
 
 export function runPrewarmSafely(
-  options?: { analysisOptions?: AnalysisOptions },
+  options?: {
+    analysisOptions?: AnalysisOptions
+    requestPriority?: AnalysisRpcRequestPriority
+  },
   executionOptions?: RunPrewarmSafelyExecutionOptions
-): void {
-  const request: PrewarmRequest = {
-    id: ++nextPrewarmRequestId,
-    allowInlineFallback: executionOptions?.allowInlineFallback ?? true,
-    options,
-    signature: getPrewarmRequestSignature(options, executionOptions),
-  }
+): Promise<void> {
+  const request = createPrewarmRequest(options, executionOptions)
+  const queuedPromise = queueOrSkipPrewarmRequest(request)
 
-  if (queueOrSkipPrewarmRequest(request)) {
-    return
+  if (queuedPromise) {
+    return queuedPromise
   }
 
   startPrewarmRequest(request)
+  return request.completionPromise
 }
+
+export { BUILD_PREWARM_REQUEST_TIMEOUT_MS }

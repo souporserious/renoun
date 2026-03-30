@@ -86,6 +86,7 @@ const getWorkspaceChangedPathsSinceTokenMock =
     ) => Promise<readonly string[] | null>
   >()
 const registerSparsePathMock = vi.fn<(path: string) => void>()
+const prepareAnalysisRootMock = vi.fn<() => Promise<unknown>>()
 const repositoryGetExportHistoryMock =
   vi.fn<(options?: Record<string, unknown>) => AsyncGenerator<unknown, unknown, void>>()
 const repositoryResolveMock = vi.fn()
@@ -197,7 +198,7 @@ class MockEntriesDirectory {
     }
 
     const normalizedFilePath = resolve(filePath).replace(/\\/g, '/')
-    if (!normalizedFilePath.includes('/.next/cache/renoun/')) {
+    if (!normalizedFilePath.includes('/.renoun/cache/')) {
       return undefined
     }
 
@@ -341,7 +342,18 @@ class MockEntriesDirectory {
           continue
         }
 
-        nodes.push({ entry: createMockWarmEntryFile(filePath) })
+        const repositoryRelativePath = this.#getRepositoryRelativePath(filePath)
+
+        nodes.push({
+          entry: {
+            ...createMockWarmEntryFile(filePath),
+            absolutePath: filePath,
+            relativePath:
+              repositoryRelativePath ?? relative(this.#path, filePath),
+            workspacePath: filePath,
+            extension: extname(filePath).replace(/^\./, ''),
+          },
+        })
       }
 
       return nodes
@@ -426,6 +438,7 @@ beforeAll(async () => {
     getFileExports: getFileExportsMock,
     getOutlineRanges: getOutlineRangesMock,
     getSourceTextMetadata: getSourceTextMetadataMock,
+    getTypeScriptDependencyPaths: getCachedTypeScriptDependencyPathsMock,
     getTokens: getTokensMock,
     resolveFileExportsWithDependencies: resolveFileExportsWithDependenciesMock,
   }))
@@ -467,14 +480,17 @@ beforeEach(() => {
     exports: [],
     dependencies: [],
   })
-  getSourceTextMetadataMock.mockImplementation(async (_project, options) => ({
-    value: options['value'],
-    language: options['language'],
-    filePath:
-      typeof options['filePath'] === 'string'
-        ? options['filePath']
-        : '/virtual/snippet.ts',
-  }))
+  getSourceTextMetadataMock.mockImplementation(async (...args) => {
+    const options = (args[args.length - 1] ?? {}) as Record<string, unknown>
+    return {
+      value: options['value'],
+      language: options['language'],
+      filePath:
+        typeof options['filePath'] === 'string'
+          ? options['filePath']
+          : '/virtual/snippet.ts',
+    }
+  })
   getTokensMock.mockResolvedValue([])
   entryGetCachedReferenceBaseDataMock.mockResolvedValue(undefined)
   entryGetCachedReferenceDataMock.mockResolvedValue(undefined)
@@ -491,8 +507,10 @@ beforeEach(() => {
   getWorkspaceChangeTokenMock.mockResolvedValue(null)
   getWorkspaceChangedPathsSinceTokenMock.mockResolvedValue(null)
   registerSparsePathMock.mockReset()
+  prepareAnalysisRootMock.mockReset()
   repositoryGetExportHistoryMock.mockReset()
   repositoryResolveMock.mockReset()
+  prepareAnalysisRootMock.mockResolvedValue(undefined)
   repositoryGetExportHistoryMock.mockImplementation(async function* () {
     return {
       generatedAt: new Date(0).toISOString(),
@@ -505,6 +523,9 @@ beforeEach(() => {
   repositoryResolveMock.mockReturnValue({
     registerSparsePath: registerSparsePathMock,
     getExportHistory: repositoryGetExportHistoryMock,
+    getFileSystem: () => ({
+      prepareAnalysisRoot: prepareAnalysisRootMock,
+    }),
   })
 })
 
@@ -608,7 +629,14 @@ describe('prewarmRenounRpcServerCache', () => {
     expect(
       entryGetSectionsMock.mock.calls.map((call) => call[0]).sort()
     ).toEqual(
-      ['/repo/namespaced/guide.mdx', '/repo/namespaced/readme.md'].sort()
+      [
+        '/repo/direct/index.ts',
+        '/repo/inline/content.tsx',
+        '/repo/namespaced/guide.mdx',
+        '/repo/namespaced/page.mjs',
+        '/repo/namespaced/readme.md',
+        '/repo/object/main.mts',
+      ].sort()
     )
     expect(readFileMock.mock.calls.map((call) => call[0]).sort()).toEqual(
       ['/repo/namespaced/guide.mdx', '/repo/namespaced/readme.md'].sort()
@@ -646,6 +674,115 @@ describe('prewarmRenounRpcServerCache', () => {
       includeResolvedTypes: false,
       includeGitDates: true,
     })
+  })
+
+  test('prewarms repository-backed Directory#getStructure callsites with sparse scope', async () => {
+    project.createSourceFile(
+      '/repo/src/search-remote.ts',
+      `
+        import { Directory, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+
+        docs.getStructure({
+          includeExports: 'headers',
+          includeSections: false,
+          includeResolvedTypes: false,
+          includeGitDates: 'first',
+        })
+      `,
+      { overwrite: true }
+    )
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
+    expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
+    expect(entryGetStructureMock).toHaveBeenCalledWith('/repo/src/nodes', {
+      includeExports: 'headers',
+      includeSections: false,
+      includeResolvedTypes: false,
+      includeGitDates: 'first',
+    })
+    expect(prepareAnalysisRootMock.mock.invocationCallOrder[0]).toBeLessThan(
+      entryGetStructureMock.mock.invocationCallOrder[0]
+    )
+  })
+
+  test('does not block production server-backed prewarm on directory structure warming', async () => {
+    process.env.NODE_ENV = 'production'
+
+    project.createSourceFile(
+      '/repo/src/search-background.ts',
+      `
+        import { Directory, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+
+        docs.getStructure({
+          includeExports: 'headers',
+          includeSections: false,
+          includeResolvedTypes: false,
+          includeGitDates: 'first',
+        })
+      `,
+      { overwrite: true }
+    )
+
+    let releaseStructureWarm: (() => void) | undefined
+    const structureWarmBlocked = new Promise<void>((resolve) => {
+      releaseStructureWarm = resolve
+    })
+    let markStructureWarmStarted: (() => void) | undefined
+    const structureWarmStarted = new Promise<void>((resolve) => {
+      markStructureWarmStarted = resolve
+    })
+
+    entryGetStructureMock.mockImplementation(async () => {
+      markStructureWarmStarted?.()
+      await structureWarmBlocked
+      return []
+    })
+
+    try {
+      const prewarmPromise = prewarmRenounRpcServerCache!({ analysisOptions })
+      const prewarmStatus = await Promise.race([
+        prewarmPromise.then(() => 'resolved'),
+        new Promise<'timeout'>((resolve) => {
+          setTimeout(() => resolve('timeout'), 250)
+        }),
+      ])
+
+      expect(prewarmStatus).toBe('resolved')
+
+      const backgroundStatus = await Promise.race([
+        structureWarmStarted.then(() => 'started'),
+        new Promise<'timeout'>((resolve) => {
+          setTimeout(() => resolve('timeout'), 250)
+        }),
+      ])
+
+      expect(backgroundStatus).toBe('started')
+    } finally {
+      releaseStructureWarm?.()
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+    }
   })
 
   test('prewarms dynamic getFile reference routes by warming matching directory files', async () => {
@@ -712,6 +849,81 @@ describe('prewarmRenounRpcServerCache', () => {
         .map((call) => call[0])
         .sort()
     ).toEqual(['/repo/docs/a.ts', '/repo/docs/b.ts'])
+  })
+
+  test('prewarms getTree leaf routes using navigation tree leaves instead of raw entry pathnames', async () => {
+    project.createSourceFile(
+      '/repo/src/repository-tree-page.tsx',
+      `
+        import { Directory, Reference, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+
+        docs.getTree()
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'ts')
+          await file.getExports()
+          await file.getLastCommitDate()
+          return <Reference source={file} />
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      const entriesByPath = new Map<
+        string,
+        Array<{
+          name: string
+          path: string
+          isDirectory: boolean
+          isFile: boolean
+        }>
+      >([
+        [
+          '/repo/src/nodes',
+          [
+            createMockFileEntry('/repo/src/nodes/tsl.ts'),
+            {
+              name: 'tsl',
+              path: '/repo/src/nodes/tsl',
+              isDirectory: true,
+              isFile: false,
+            },
+          ],
+        ],
+        [
+          '/repo/src/nodes/tsl',
+          [createMockFileEntry('/repo/src/nodes/tsl/base.ts')],
+        ],
+      ])
+
+      return entriesByPath.get(directoryPath) ?? []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
+    expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
+    expect(entryGetExportsMock.mock.calls.map((call) => call[0]).sort()).toEqual([
+      '/repo/src/nodes/tsl.ts',
+      '/repo/src/nodes/tsl/base.ts',
+    ])
+    expect(
+      entryGetCachedReferenceBaseDataMock.mock.calls
+        .map((call) => call[0])
+        .sort()
+    ).toEqual(['/repo/src/nodes/tsl.ts', '/repo/src/nodes/tsl/base.ts'])
   })
 
   test('is a no-op when server environment variables are missing', async () => {
@@ -792,6 +1004,45 @@ describe('prewarmRenounRpcServerCache', () => {
     await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
     expect(getProjectMock).toHaveBeenCalledTimes(2)
     expect(readDirectoryMock).toHaveBeenCalledTimes(1)
+  })
+
+  test('still bootstraps repository analysis roots when workspace token is unchanged', async () => {
+    const tokenProjectOptions: AnalysisOptions = {
+      ...analysisOptions,
+      tsConfigFilePath: `/repo/tsconfig.production-repository.${Date.now()}.json`,
+    }
+
+    project.createSourceFile(
+      '/repo/src/production-repository-token-gate.ts',
+      `
+        import { Directory, Repository } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: docsRepository,
+        })
+
+        docs.getStructure({
+          includeExports: 'headers',
+        })
+      `,
+      { overwrite: true }
+    )
+
+    getWorkspaceChangeTokenMock.mockResolvedValue('workspace-token-a')
+    process.env.NODE_ENV = 'production'
+
+    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
+    expect(entryGetStructureMock).toHaveBeenCalledTimes(1)
+
+    await prewarmRenounRpcServerCache!({ analysisOptions: tokenProjectOptions })
+    expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(2)
+    expect(entryGetStructureMock).toHaveBeenCalledTimes(1)
   })
 
   test('uses the project root as the workspace token scope when available', async () => {
@@ -1172,21 +1423,20 @@ const schema = { answer: 42 }
     await prewarmRenounRpcServerCache!({ analysisOptions })
 
     expect(getSourceTextMetadataMock).toHaveBeenCalledWith(
-      project,
       expect.objectContaining({
+        analysisOptions,
         filePath: './examples/schema.ts',
         baseDirectory: '/repo/guides',
         language: 'ts',
       })
     )
-    expect(getClientServerProjectMock).toHaveBeenCalledWith(analysisOptions)
     expect(getCachedTypeScriptDependencyPathsMock).toHaveBeenCalledWith(
-      project,
-      '/repo/guides/examples/schema.ts'
+      '/repo/guides/examples/schema.ts',
+      analysisOptions
     )
     expect(getTokensMock).toHaveBeenCalledWith(
-      project,
       expect.objectContaining({
+        analysisOptions,
         allowErrors: '2307',
         value: 'const schema = { answer: 42 }\n',
         language: 'ts',
@@ -1194,7 +1444,6 @@ const schema = { answer: 42 }
         showErrors: false,
         theme: undefined,
         waitForWarmResult: true,
-        highlighterLoader: expect.any(Function),
       })
     )
   })
@@ -1291,6 +1540,7 @@ const schema = { answer: 42 }
       '/repo/src/nodes/TSL.js'
     )
     expect(registerSparsePathMock).toHaveBeenCalledWith('./src/nodes')
+    expect(prepareAnalysisRootMock).toHaveBeenCalledTimes(1)
     expect(repositoryGetExportHistoryMock).toHaveBeenCalledWith(undefined)
   })
 
@@ -1385,17 +1635,17 @@ const schema = { answer: 42 }
     )
 
     isFilePathGitIgnoredMock.mockImplementation((filePath: string) => {
-      return filePath.includes('/.next/cache/renoun/')
+      return filePath.includes('/.renoun/cache/')
     })
 
     readDirectoryMock.mockImplementation(async (directoryPath: string) => {
       if (directoryPath === '/repo/src/nodes') {
         return [
           createMockFileEntry(
-            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/TSL.js'
+            '/repo/.renoun/cache/git/github_mrdoob_threejs/src/nodes/TSL.js'
           ),
           createMockFileEntry(
-            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/nodes.js'
+            '/repo/.renoun/cache/git/github_mrdoob_threejs/src/nodes/nodes.js'
           ),
         ]
       }
@@ -1477,7 +1727,7 @@ const schema = { answer: 42 }
 
     readDirectoryMock.mockImplementation(async (directoryPath: string) => {
       if (directoryPath === '/repo/src/nodes') {
-        return Array.from({ length: 100 }, (_, index) =>
+        return Array.from({ length: 300 }, (_, index) =>
           createMockFileEntry(`/repo/src/nodes/Leaf${index}.js`)
         )
       }
@@ -1487,12 +1737,13 @@ const schema = { answer: 42 }
 
     await prewarmRenounRpcServerCache!({ analysisOptions })
 
-    expect(entryGetExportsMock).toHaveBeenCalledTimes(32)
+    expect(entryGetExportsMock).toHaveBeenCalledTimes(300)
     expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledTimes(32)
     expect(entryGetLastCommitDateMock).toHaveBeenCalledTimes(32)
     expect(entryGetCachedGitExportMetadataByNameMock).toHaveBeenCalledTimes(32)
     expect(entryGetExportTypesMock).toHaveBeenCalledTimes(32)
     expect(entryGetOutlineRangesMock).toHaveBeenCalledTimes(32)
+    expect(entryGetSectionsMock).toHaveBeenCalledTimes(32)
   })
 
   test('does not block production server-backed high-fanout leaf-only route prewarm on sampled leaf warming', async () => {
@@ -1535,7 +1786,7 @@ const schema = { answer: 42 }
 
     readDirectoryMock.mockImplementation(async (directoryPath: string) => {
       if (directoryPath === '/repo/src/nodes') {
-        return Array.from({ length: 100 }, (_, index) =>
+        return Array.from({ length: 300 }, (_, index) =>
           createMockFileEntry(`/repo/src/nodes/Leaf${index}.js`)
         )
       }
@@ -1543,18 +1794,18 @@ const schema = { answer: 42 }
       return []
     })
 
-    let releaseExportsWarm: (() => void) | undefined
-    const exportsWarmBlocked = new Promise<void>((resolve) => {
-      releaseExportsWarm = resolve
+    let releaseExportWarm: (() => void) | undefined
+    const exportWarmBlocked = new Promise<void>((resolve) => {
+      releaseExportWarm = resolve
     })
-    let markExportsWarmStarted: (() => void) | undefined
-    const exportsWarmStarted = new Promise<void>((resolve) => {
-      markExportsWarmStarted = resolve
+    let markExportWarmStarted: (() => void) | undefined
+    const exportWarmStarted = new Promise<void>((resolve) => {
+      markExportWarmStarted = resolve
     })
 
     entryGetExportsMock.mockImplementation(async () => {
-      markExportsWarmStarted?.()
-      await exportsWarmBlocked
+      markExportWarmStarted?.()
+      await exportWarmBlocked
       return []
     })
 
@@ -1570,7 +1821,7 @@ const schema = { answer: 42 }
       expect(prewarmStatus).toBe('resolved')
 
       const backgroundStatus = await Promise.race([
-        exportsWarmStarted.then(() => 'started'),
+        exportWarmStarted.then(() => 'started'),
         new Promise<'timeout'>((resolve) => {
           setTimeout(() => resolve('timeout'), 250)
         }),
@@ -1578,11 +1829,71 @@ const schema = { answer: 42 }
 
       expect(backgroundStatus).toBe('started')
     } finally {
-      releaseExportsWarm?.()
+      releaseExportWarm?.()
       await new Promise((resolve) => {
         setTimeout(resolve, 0)
       })
     }
+  })
+
+  test('fully warms production server-backed moderate leaf-only route sets before sampling kicks in', async () => {
+    process.env.NODE_ENV = 'production'
+
+    project.createSourceFile(
+      '/repo/src/moderate-reference-route.tsx',
+      `
+        import { Directory, Reference, Repository, Section } from 'renoun'
+
+        const docsRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          filter: '**/*.js',
+          repository: docsRepository,
+        })
+
+        docs.getTree()
+
+        async function renderPage(pathname: string) {
+          const file = docs.getFile(pathname, 'js')
+          await file.getExports()
+          await file.getLastCommitDate()
+
+          return (
+            <>
+              <Reference source={file} />
+              <Section source={file} />
+            </>
+          )
+        }
+
+        void renderPage
+      `,
+      { overwrite: true }
+    )
+
+    readDirectoryMock.mockImplementation(async (directoryPath: string) => {
+      if (directoryPath === '/repo/src/nodes') {
+        return Array.from({ length: 96 }, (_, index) =>
+          createMockFileEntry(`/repo/src/nodes/Leaf${index}.js`)
+        )
+      }
+
+      return []
+    })
+
+    await prewarmRenounRpcServerCache!({ analysisOptions })
+
+    expect(entryGetExportsMock).toHaveBeenCalledTimes(96)
+    expect(entryGetCachedReferenceBaseDataMock).toHaveBeenCalledTimes(96)
+    expect(entryGetLastCommitDateMock).toHaveBeenCalledTimes(96)
+    expect(entryGetCachedGitExportMetadataByNameMock).toHaveBeenCalledTimes(
+      96
+    )
+    expect(entryGetExportTypesMock).toHaveBeenCalledTimes(96)
+    expect(entryGetOutlineRangesMock).toHaveBeenCalledTimes(96)
   })
 
   test('preserves directory constructor filters when prewarming repository-backed dynamic reference routes', async () => {
@@ -1616,17 +1927,17 @@ const schema = { answer: 42 }
     )
 
     isFilePathGitIgnoredMock.mockImplementation((filePath: string) => {
-      return filePath.includes('/.next/cache/renoun/')
+      return filePath.includes('/.renoun/cache/')
     })
 
     readDirectoryMock.mockImplementation(async (directoryPath: string) => {
       if (directoryPath === '/repo/src/nodes') {
         return [
           createMockFileEntry(
-            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/TSL.js'
+            '/repo/.renoun/cache/git/github_mrdoob_threejs/src/nodes/TSL.js'
           ),
           createMockFileEntry(
-            '/repo/.next/cache/renoun/git/github_mrdoob_threejs/src/nodes/Guide.mdx'
+            '/repo/.renoun/cache/git/github_mrdoob_threejs/src/nodes/Guide.mdx'
           ),
         ]
       }
@@ -1813,6 +2124,77 @@ const schema = { answer: 42 }
       ])
     )
   })
+
+  test('does not block production server-backed prewarm on export history warming', async () => {
+    process.env.NODE_ENV = 'production'
+
+    project.createSourceFile(
+      '/repo/src/history-background.ts',
+      `
+        import { Directory, Repository } from 'renoun'
+
+        const remoteRepository = new Repository({
+          path: 'owner/repo',
+          ref: 'main',
+        })
+        const docs = new Directory({
+          path: 'src/nodes',
+          repository: remoteRepository,
+        })
+
+        docs.getRepository().getExportHistory()
+      `,
+      { overwrite: true }
+    )
+
+    let releaseHistoryWarm: (() => void) | undefined
+    const historyWarmBlocked = new Promise<void>((resolve) => {
+      releaseHistoryWarm = resolve
+    })
+    let markHistoryWarmStarted: (() => void) | undefined
+    const historyWarmStarted = new Promise<void>((resolve) => {
+      markHistoryWarmStarted = resolve
+    })
+
+    repositoryGetExportHistoryMock.mockImplementation(async function* () {
+      markHistoryWarmStarted?.()
+      await historyWarmBlocked
+
+      return {
+        generatedAt: new Date(0).toISOString(),
+        repo: 'mock-repo',
+        entryFiles: [],
+        exports: {},
+        nameToId: {},
+      }
+    })
+
+    try {
+      const prewarmPromise = prewarmRenounRpcServerCache!({ analysisOptions })
+      const prewarmStatus = await Promise.race([
+        prewarmPromise.then(() => 'resolved'),
+        new Promise<'timeout'>((resolve) => {
+          setTimeout(() => resolve('timeout'), 250)
+        }),
+      ])
+
+      expect(prewarmStatus).toBe('resolved')
+
+      const backgroundStatus = await Promise.race([
+        historyWarmStarted.then(() => 'started'),
+        new Promise<'timeout'>((resolve) => {
+          setTimeout(() => resolve('timeout'), 250)
+        }),
+      ])
+
+      expect(backgroundStatus).toBe('started')
+    } finally {
+      releaseHistoryWarm?.()
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+    }
+  })
 })
 
 describe('collectRenounPrewarmTargets', () => {
@@ -1851,7 +2233,7 @@ describe('collectRenounPrewarmTargets', () => {
         import { Directory } from 'renoun'
 
         const docs = new Directory({
-          path: '/repo/docs',
+          path: 'src/nodes',
           repository: { path: 'owner/repo', ref: 'main' },
         })
 
@@ -1870,8 +2252,9 @@ describe('collectRenounPrewarmTargets', () => {
 
     expect(targets.directoryGetStructure).toEqual([
       {
-        directoryPath: '/repo/docs',
+        directoryPath: './src/nodes',
         repository: { path: 'owner/repo', ref: 'main' },
+        sparsePaths: ['./src/nodes'],
         options: {
           includeExports: 'headers',
           includeSections: false,

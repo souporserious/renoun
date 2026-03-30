@@ -74,6 +74,7 @@ export interface DirectoryStructureRequest {
   directoryPath: string
   options?: Record<string, unknown>
   repository?: PrewarmRepositoryInput
+  sparsePaths?: string[]
 }
 
 export interface FileRequest {
@@ -339,8 +340,8 @@ export async function collectRenounPrewarmTargets(
 
       addDirectoryStructureRequest(getStructureRequests, {
         directoryPath: getPrewarmDirectoryPath(methodTarget.declaration),
-        repository: methodTarget.declaration.repository?.input,
         options: resolveDirectoryGetStructureOptions(callExpression),
+        ...getPrewarmRepositoryScope(methodTarget.declaration),
       })
       continue
     }
@@ -1403,11 +1404,17 @@ function addDirectoryStructureRequest(
   const key = JSON.stringify({
     directoryPath: request.directoryPath,
     repository: normalizePrewarmDirectoryStructureValue(request.repository),
+    sparsePaths: request.sparsePaths?.slice().sort() ?? [],
     options: normalizePrewarmDirectoryStructureValue(request.options),
   })
 
   if (!requests.has(key)) {
-    requests.set(key, request)
+    requests.set(key, {
+      ...request,
+      ...(request.sparsePaths
+        ? { sparsePaths: request.sparsePaths.slice().sort() }
+        : {}),
+    })
   }
 }
 

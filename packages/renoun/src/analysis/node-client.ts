@@ -112,6 +112,7 @@ import {
 import type { AnalysisServerRuntime } from './runtime-env.ts'
 import type { AnalysisOptions } from './types.ts'
 import type { AnalysisClientServerModules } from './client.server.types.ts'
+import { getCurrentAnalysisRpcRequestPriority } from './request-priority.ts'
 import { PROCESS_ENV_KEYS } from '../utils/env-keys.ts'
 
 export type { AnalysisClientBrowserRefreshNotification } from './client-refresh-state.ts'
@@ -699,18 +700,25 @@ async function callClientMethod<Params extends Record<string, unknown>, Value>(
 ): Promise<Value> {
   const cacheParams = options.cacheParams ?? params
   rememberWorkspaceRootCandidates(params)
+  const requestParams = attachImplicitRpcRequestPriority(params)
 
   if (
     options.disableRpcCache === true ||
     !shouldUseClientRpcCache(options.serverRuntime) ||
     !CLIENT_CACHED_RPC_METHODS.has(method as ClientCachedRpcMethod)
   ) {
-    return activeClient.callMethod<Params, Value>(method, params)
+    return activeClient.callMethod<typeof requestParams, Value>(
+      method,
+      requestParams
+    )
   }
 
   const ttlMs = getClientRpcCacheTtlMs()
   if (ttlMs <= 0) {
-    return activeClient.callMethod<Params, Value>(method, params)
+    return activeClient.callMethod<typeof requestParams, Value>(
+      method,
+      requestParams
+    )
   }
 
   const typedMethod = method as ClientCachedRpcMethod
@@ -721,7 +729,10 @@ async function callClientMethod<Params extends Record<string, unknown>, Value>(
       shouldConsumeRefreshNotifications(options.serverRuntime)
     )
   ) {
-    return activeClient.callMethod<Params, Value>(method, params)
+    return activeClient.callMethod<typeof requestParams, Value>(
+      method,
+      requestParams
+    )
   }
 
   const cacheKey = toClientRpcCacheKey(
@@ -755,7 +766,7 @@ async function callClientMethod<Params extends Record<string, unknown>, Value>(
     params
   )
   const request = activeClient
-    .callMethod<Params, Value>(method, params)
+    .callMethod<typeof requestParams, Value>(method, requestParams)
     .then((value) => {
       const dependencyPaths = new Set(requestDependencyPaths)
       for (const dependencyPath of collectClientRpcResponseDependencyPaths(
@@ -792,6 +803,25 @@ async function callClientMethod<Params extends Record<string, unknown>, Value>(
   })
 
   return request
+}
+
+function attachImplicitRpcRequestPriority<Params extends Record<string, unknown>>(
+  params: Params
+): Params | (Params & { priority: 'bootstrap' | 'background' }) {
+  if ('priority' in params) {
+    return params
+  }
+
+  const priority = getCurrentAnalysisRpcRequestPriority()
+
+  if (priority !== 'background' && priority !== 'bootstrap') {
+    return params
+  }
+
+  return {
+    ...params,
+    priority,
+  }
 }
 
 function queueRefreshResync(
@@ -1843,6 +1873,29 @@ export async function getTokens(
   })
 }
 
+export async function getTypeScriptDependencyPaths(
+  filePath: string,
+  analysisOptions?: AnalysisOptions
+): Promise<string[]> {
+  const client = await getReadyClient()
+  if (client) {
+    return callClientMethod<
+      {
+        filePath: string
+        analysisOptions?: AnalysisOptions
+      },
+      string[]
+    >(client, 'getTypeScriptDependencyPaths', {
+      filePath,
+      analysisOptions,
+    })
+  }
+
+  const serverModules = await loadAnalysisClientServerModules()
+  const project = serverModules.getProgram(analysisOptions)
+  return serverModules.getCachedTypeScriptDependencyPaths(project, filePath)
+}
+
 /**
  * Get the exports of a file.
  */
@@ -1870,7 +1923,12 @@ export async function getFileExports(
 
   const serverModules = await loadAnalysisClientServerModules()
   const project = serverModules.getProgram(analysisOptions)
-  return serverModules.getCachedFileExports(project, filePath)
+  return (
+    await serverModules.getCachedReferenceBaseArtifact(project, {
+      filePath,
+      stripInternal: false,
+    })
+  ).exportMetadata
 }
 
 export async function readFreshReferenceBaseArtifact(

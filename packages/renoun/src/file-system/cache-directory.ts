@@ -154,7 +154,11 @@ export function resolveCacheRootDirectory(
     )
 
     if (nextAppRoot) {
-      return join(nextAppRoot, '.next', 'cache', 'renoun')
+      return join(
+        resolvePersistentProjectRootDirectory(nextAppRoot),
+        '.renoun',
+        'cache'
+      )
     }
 
     return join(workspaceRootDirectory, '.renoun', 'cache')

@@ -3611,7 +3611,17 @@ function toWorkspaceTokenScopePath(depKey: string): string | undefined {
 
 function hasWorkspaceTokenUnsafePathKey(pathKeys: Iterable<string>): boolean {
   for (const pathKey of pathKeys) {
-    if (pathKey.includes('.__renoun_snippet_')) {
+    const normalizedPathKey = normalizeCachePathKey(pathKey)
+
+    if (
+      normalizedPathKey.includes('.__renoun_snippet_') ||
+      normalizedPathKey === '.next' ||
+      normalizedPathKey.startsWith('.next/') ||
+      normalizedPathKey.includes('/.next/') ||
+      normalizedPathKey === 'node_modules/.cache' ||
+      normalizedPathKey.startsWith('node_modules/.cache/') ||
+      normalizedPathKey.includes('/node_modules/.cache/')
+    ) {
       return true
     }
   }

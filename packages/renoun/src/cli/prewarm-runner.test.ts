@@ -110,6 +110,34 @@ describe('resolvePrewarmWorkerEntryFilePath', () => {
 })
 
 describe('runPrewarmSafely', () => {
+  test('returns a promise that resolves after inline prewarm completes', async () => {
+    const inlinePrewarm = createDeferred<void>()
+    const prewarmMock = vi.fn(() => inlinePrewarm.promise)
+
+    vi.doMock('./prewarm.ts', () => ({
+      prewarmRenounRpcServerCache: prewarmMock,
+    }))
+
+    const { runPrewarmSafely } = await import('./prewarm-runner.ts')
+
+    let didResolve = false
+    const completionPromise = runPrewarmSafely({
+      analysisOptions: { tsConfigFilePath: 'await-inline.json' },
+    }).then(() => {
+      didResolve = true
+    })
+
+    await settleAsyncPrewarmWork()
+
+    expect(prewarmMock).toHaveBeenCalledTimes(1)
+    expect(didResolve).toBe(false)
+
+    inlinePrewarm.resolve()
+
+    await completionPromise
+    expect(didResolve).toBe(true)
+  })
+
   test('falls back to inline prewarm when the worker exits before completing', async () => {
     process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
     ensureTypeScriptWorkerLaunchSupport()
@@ -328,6 +356,75 @@ describe('runPrewarmSafely', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(prewarmMock).not.toHaveBeenCalled()
+  })
+
+  test('passes background request priority to the prewarm worker payload', async () => {
+    process.env[PREWARM_FORCE_WORKER_ENV_KEY] = '1'
+    ensureTypeScriptWorkerLaunchSupport()
+    const spawnMock = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        killed: boolean
+        kill: ReturnType<typeof vi.fn>
+        unref: ReturnType<typeof vi.fn>
+      }
+
+      child.killed = false
+      child.kill = vi.fn(() => {
+        child.killed = true
+      })
+      child.unref = vi.fn()
+
+      setTimeout(() => {
+        child.emit('exit', 0, null)
+      }, 0)
+
+      return child
+    })
+
+    vi.doMock('node:child_process', () => ({
+      spawn: spawnMock,
+    }))
+    vi.doMock('../utils/env.ts', async () => {
+      const actual = await vi.importActual<typeof import('../utils/env.ts')>(
+        '../utils/env.ts'
+      )
+
+      return {
+        ...actual,
+        isVitestRuntime: () => false,
+      }
+    })
+
+    const [{ runPrewarmSafely }, { PREWARM_WORKER_PAYLOAD_ENV_KEY }] =
+      await Promise.all([
+        import('./prewarm-runner.ts'),
+        import('./prewarm/constants.ts'),
+      ])
+
+    runPrewarmSafely(
+      { analysisOptions: { tsConfigFilePath: 'node20.json' } },
+      {
+        allowInlineFallback: false,
+        requestPriority: 'background',
+      }
+    )
+
+    await vi.waitFor(() => {
+      expect(spawnMock).toHaveBeenCalledTimes(1)
+    })
+
+    const spawnOptions = spawnMock.mock.calls[0]?.[2] as
+      | { env?: Record<string, string> }
+      | undefined
+    const payload = JSON.parse(
+      String(spawnOptions?.env?.[PREWARM_WORKER_PAYLOAD_ENV_KEY] ?? '{}')
+    ) as {
+      analysisOptions?: { tsConfigFilePath?: string }
+      requestPriority?: string
+    }
+
+    expect(payload.analysisOptions?.tsConfigFilePath).toBe('node20.json')
+    expect(payload.requestPriority).toBe('background')
   })
 
   test('keeps only the latest pending distinct request', async () => {

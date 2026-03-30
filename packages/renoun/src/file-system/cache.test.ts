@@ -7847,6 +7847,91 @@ export type Metadata = Value`,
     })
   })
 
+  test('treats generated analysis cache paths as workspace-token-unsafe and reuses persisted entries through unrelated .next churn', async () => {
+    await withProductionSqliteCache(async (tmpDirectory) => {
+      const sourceFilePath = join(
+        tmpDirectory,
+        '.next',
+        'cache',
+        'renoun',
+        'git',
+        '_analysis',
+        'repo',
+        'commit',
+        'src',
+        'nodes',
+        'utils',
+        'MemberNode.js'
+      )
+      const tsConfigPath = join(tmpDirectory, 'tsconfig.json')
+      mkdirSync(dirname(sourceFilePath), { recursive: true })
+      writeFileSync(sourceFilePath, 'export const value = 1', 'utf8')
+      writeFileSync(tsConfigPath, '{"compilerOptions":{}}', 'utf8')
+
+      const dbPath = join(tmpDirectory, 'fs-cache.sqlite')
+      const persistence = new SqliteCacheStorePersistence({ dbPath })
+      const nodeKey = 'test:workspace-token-fast-path-generated-analysis'
+
+      const firstFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'stable-token'
+      )
+      const firstSnapshot = new FileSystemSnapshot(
+        firstFileSystem,
+        'workspace-token-generated-analysis-first'
+      )
+      const firstStore = new CacheStore({
+        snapshot: firstSnapshot,
+        persistence,
+      })
+      await firstStore.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (context) => {
+          await context.recordFileDep(sourceFilePath)
+          return { value: 1 }
+        }
+      )
+      const previousToken =
+        (await firstSnapshot.getWorkspaceChangeToken?.('.')) ?? null
+      expect(previousToken).toBeTruthy()
+
+      const secondFileSystem = new TokenAwareNodeFileSystem(
+        getRootDirectory(),
+        tsConfigPath,
+        'next-build-token'
+      )
+      secondFileSystem.setChangedPathsSinceToken('.', previousToken!, [
+        normalizePathKey(join(tmpDirectory, '.next', 'server', 'app', 'page.js')),
+      ])
+      const secondReadBinary = vi.spyOn(secondFileSystem, 'readFileBinary')
+      const secondSnapshot = new FileSystemSnapshot(
+        secondFileSystem,
+        'workspace-token-generated-analysis-second'
+      )
+      const secondStore = new CacheStore({
+        snapshot: secondSnapshot,
+        persistence,
+      })
+
+      let computeCount = 0
+      const value = await secondStore.getOrCompute(
+        nodeKey,
+        { persist: true },
+        async (context) => {
+          computeCount += 1
+          await context.recordFileDep(sourceFilePath)
+          return { value: 2 }
+        }
+      )
+
+      expect(value).toEqual({ value: 1 })
+      expect(computeCount).toBe(0)
+      expect(secondReadBinary.mock.calls.length).toBeGreaterThan(0)
+    })
+  })
+
   test('persist: true then persist: false on same key deletes DB row', async () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-persist-false-')
@@ -8690,7 +8775,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('prefers the nearest Next app .next cache/renoun directory for sqlite persistence', () => {
+  test('stores Next app sqlite persistence under the app .renoun/cache directory', () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-next-app-'))
     const workspaceRoot = join(tmpDirectory, 'workspace')
     const appRoot = join(workspaceRoot, 'apps', 'site')
@@ -8721,7 +8806,7 @@ export type Metadata = Value`,
       const canonicalAppRoot = realpathSync(appRoot)
       withWorkingDirectory(appRoot, () => {
         expect(getDefaultCacheDatabasePath()).toBe(
-          join(canonicalAppRoot, '.next', 'cache', 'renoun', 'fs-cache.sqlite')
+          join(canonicalAppRoot, '.renoun', 'cache', 'fs-cache.sqlite')
         )
       })
     } finally {
@@ -8729,7 +8814,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('uses the Next app .next cache/renoun directory when projectRoot is passed directly', () => {
+  test('uses the Next app .renoun/cache directory when projectRoot is passed directly', () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-next-project-root-')
     )
@@ -8761,7 +8846,7 @@ export type Metadata = Value`,
     try {
       const canonicalAppRoot = realpathSync(appRoot)
       expect(getDefaultCacheDatabasePath(appRoot)).toBe(
-        join(canonicalAppRoot, '.next', 'cache', 'renoun', 'fs-cache.sqlite')
+        join(canonicalAppRoot, '.renoun', 'cache', 'fs-cache.sqlite')
       )
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
@@ -8776,14 +8861,14 @@ export type Metadata = Value`,
     const appRoot = join(workspaceRoot, 'apps', 'site')
     const cachedRepoRoot = join(
       appRoot,
-      '.next',
+      '.renoun',
       'cache',
-      'renoun',
       'git',
       'repo'
     )
 
     mkdirSync(join(appRoot, 'app'), { recursive: true })
+    mkdirSync(join(appRoot, '.next'), { recursive: true })
     mkdirSync(cachedRepoRoot, { recursive: true })
     writeFileSync(
       join(workspaceRoot, 'package.json'),
@@ -8818,9 +8903,8 @@ export type Metadata = Value`,
       const canonicalAppRoot = realpathSync(appRoot)
       const expectedDbPath = join(
         canonicalAppRoot,
-        '.next',
+        '.renoun',
         'cache',
-        'renoun',
         'fs-cache.sqlite'
       )
 
@@ -11291,7 +11375,7 @@ export type Metadata = Value`,
     )
     const nodeKey = 'test:sqlite-compute-slot-heartbeat'
     const persistence = createShortTtlComputeSlotPersistence(dbPath, {
-      slotTtlMs: 60,
+      slotTtlMs: 180,
       withHeartbeat: true,
     })
     const firstStore = new CacheStore({ snapshot, persistence })
@@ -11304,7 +11388,7 @@ export type Metadata = Value`,
         { persist: true },
         async () => {
           computeCount += 1
-          await new Promise((resolve) => setTimeout(resolve, 220))
+          await new Promise((resolve) => setTimeout(resolve, 650))
           return 'first'
         }
       )

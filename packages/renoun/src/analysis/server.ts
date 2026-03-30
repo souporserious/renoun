@@ -82,6 +82,10 @@ import {
 import type { AnalysisServerClientRuntime } from './runtime-env.ts'
 import type { AnalysisOptions } from './types.ts'
 import {
+  runWithAnalysisRpcRequestPriority,
+  type AnalysisRpcRequestPriority,
+} from './request-priority.ts'
+import {
   extractCodeFenceLanguagesFromMarkdown,
   isMarkdownCodeFenceSourcePath,
 } from './markdown-code-fence-languages.ts'
@@ -128,7 +132,11 @@ const CODE_FENCE_PREWARM_MAX_DIRECTORY_COUNT = 1_000
 const CODE_FENCE_PREWARM_MAX_LANGUAGE_COUNT = 24
 const CODE_FENCE_PREWARM_FILE_READ_MAX_BYTES = 256_000
 const GIT_SCOPED_RENDER_REQUEST_CONCURRENCY = 1
+const GIT_SCOPED_SECTIONS_REQUEST_CONCURRENCY = 1
 const GIT_SCOPED_TYPE_RESOLUTION_REQUEST_CONCURRENCY = 1
+const BACKGROUND_RENDER_REQUEST_CONCURRENCY = 2
+const BACKGROUND_SECTIONS_REQUEST_CONCURRENCY = 1
+const BACKGROUND_TYPE_RESOLUTION_REQUEST_CONCURRENCY = 1
 const GIT_SCOPED_REQUEST_QUEUE_IDLE_TTL_MS = 5 * 60_000
 const GIT_SCOPED_REQUEST_QUEUE_MAX_KEYS = 2_048
 type GitScopedRequestQueueState = {
@@ -139,10 +147,23 @@ const gitScopedRenderRequestQueues = new Map<
   string,
   GitScopedRequestQueueState
 >()
+const gitScopedSectionsRequestQueues = new Map<
+  string,
+  GitScopedRequestQueueState
+>()
 const gitScopedTypeResolutionRequestQueues = new Map<
   string,
   GitScopedRequestQueueState
 >()
+const backgroundRenderRequestQueue = createConcurrentQueue(
+  BACKGROUND_RENDER_REQUEST_CONCURRENCY
+)
+const backgroundSectionsRequestQueue = createConcurrentQueue(
+  BACKGROUND_SECTIONS_REQUEST_CONCURRENCY
+)
+const backgroundTypeResolutionRequestQueue = createConcurrentQueue(
+  BACKGROUND_TYPE_RESOLUTION_REQUEST_CONCURRENCY
+)
 const CODE_FENCE_PREWARM_FILE_READ_CONCURRENCY = 6
 const CODE_FENCE_PREWARM_TOKENIZE_CONCURRENCY = 4
 const STARTUP_RUNTIME_PREWARM_TOKENIZE_CONCURRENCY = 4
@@ -172,54 +193,75 @@ async function runWithGitScopedRequestBackpressure<Type>(
   options: {
     analysisOptions?: AnalysisOptions
     filePath?: string
-    queueKind: 'render' | 'type-resolution'
+    queueKind: 'render' | 'sections' | 'type-resolution'
+    priority?: AnalysisRpcRequestPriority
   },
   task: () => Promise<Type>
 ): Promise<Type> {
-  const analysisScopeId = options.analysisOptions?.analysisScopeId
+  const runTask = async () =>
+    runWithAnalysisRpcRequestPriority(options.priority, async () => {
+      const analysisScopeId = options.analysisOptions?.analysisScopeId
 
-  if (
-    !isProductionEnvironment() ||
-    !isGitScopedAnalysisOptions(options.analysisOptions) ||
-    typeof analysisScopeId !== 'string'
-  ) {
-    return task()
-  }
-
-  const queueKey =
-    typeof options.filePath === 'string' && options.filePath.length > 0
-      ? `${analysisScopeId}:${options.filePath}`
-      : analysisScopeId
-  const queueMap =
-    options.queueKind === 'render'
-      ? gitScopedRenderRequestQueues
-      : gitScopedTypeResolutionRequestQueues
-  const concurrency =
-    options.queueKind === 'render'
-      ? GIT_SCOPED_RENDER_REQUEST_CONCURRENCY
-      : GIT_SCOPED_TYPE_RESOLUTION_REQUEST_CONCURRENCY
-  const now = Date.now()
-  let queueState = queueMap.get(queueKey)
-
-  if (!queueState) {
-    queueState = {
-      queue: createConcurrentQueue(concurrency),
-      lastAccessedAt: now,
-    }
-    queueMap.set(queueKey, queueState)
-  } else {
-    queueState.lastAccessedAt = now
-  }
-
-  if (queueMap.size > GIT_SCOPED_REQUEST_QUEUE_MAX_KEYS) {
-    for (const [key, value] of queueMap.entries()) {
-      if (now - value.lastAccessedAt > GIT_SCOPED_REQUEST_QUEUE_IDLE_TTL_MS) {
-        queueMap.delete(key)
+      if (
+        !isProductionEnvironment() ||
+        !isGitScopedAnalysisOptions(options.analysisOptions) ||
+        typeof analysisScopeId !== 'string'
+      ) {
+        return task()
       }
-    }
+
+      const queueKey =
+        typeof options.filePath === 'string' && options.filePath.length > 0
+          ? `${analysisScopeId}:${options.filePath}`
+          : analysisScopeId
+      const queueMap =
+        options.queueKind === 'render'
+          ? gitScopedRenderRequestQueues
+          : options.queueKind === 'sections'
+            ? gitScopedSectionsRequestQueues
+            : gitScopedTypeResolutionRequestQueues
+      const concurrency =
+        options.queueKind === 'render'
+          ? GIT_SCOPED_RENDER_REQUEST_CONCURRENCY
+          : options.queueKind === 'sections'
+            ? GIT_SCOPED_SECTIONS_REQUEST_CONCURRENCY
+            : GIT_SCOPED_TYPE_RESOLUTION_REQUEST_CONCURRENCY
+      const now = Date.now()
+      let queueState = queueMap.get(queueKey)
+
+      if (!queueState) {
+        queueState = {
+          queue: createConcurrentQueue(concurrency),
+          lastAccessedAt: now,
+        }
+        queueMap.set(queueKey, queueState)
+      } else {
+        queueState.lastAccessedAt = now
+      }
+
+      if (queueMap.size > GIT_SCOPED_REQUEST_QUEUE_MAX_KEYS) {
+        for (const [key, value] of queueMap.entries()) {
+          if (now - value.lastAccessedAt > GIT_SCOPED_REQUEST_QUEUE_IDLE_TTL_MS) {
+            queueMap.delete(key)
+          }
+        }
+      }
+
+      return queueState.queue.run(task)
+    })
+
+  if (isProductionEnvironment() && options.priority === 'background') {
+    const backgroundQueue =
+      options.queueKind === 'render'
+        ? backgroundRenderRequestQueue
+        : options.queueKind === 'sections'
+          ? backgroundSectionsRequestQueue
+          : backgroundTypeResolutionRequestQueue
+
+    return backgroundQueue.run(runTask)
   }
 
-  return queueState.queue.run(task)
+  return runTask()
 }
 
 type StartupRuntimeMetadataWarmupSample = {
@@ -1541,15 +1583,18 @@ export async function createServer(options?: CreateServerOptions) {
     'getSourceTextMetadata',
     async function getSourceTextMetadata({
       analysisOptions,
+      priority,
       ...options
     }: GetSourceTextMetadataOptions & {
       analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
     }) {
       return runWithGitScopedRequestBackpressure(
         {
           analysisOptions,
           filePath: options.filePath,
           queueKind: 'render',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
@@ -1567,6 +1612,7 @@ export async function createServer(options?: CreateServerOptions) {
     'getCodeBlockTokens',
     async function getCodeBlockTokens({
       analysisOptions,
+      priority,
       languages,
       waitForWarmResult,
       allowErrors,
@@ -1589,6 +1635,7 @@ export async function createServer(options?: CreateServerOptions) {
         'highlighter' | 'project' | 'value' | 'language' | 'filePath'
       > & {
         analysisOptions?: AnalysisOptions
+        priority?: AnalysisRpcRequestPriority
         languages?: HighlighterInitializationOptions['languages']
         waitForWarmResult?: boolean
         includeClientRpcDependencies?: boolean
@@ -1603,6 +1650,7 @@ export async function createServer(options?: CreateServerOptions) {
                 ? sourcePath
                 : undefined,
           queueKind: 'render',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
@@ -1676,9 +1724,11 @@ export async function createServer(options?: CreateServerOptions) {
     'getTokens',
     async function getTokens({
       analysisOptions,
+      priority,
       ...options
     }: GetTokensOptions & {
       analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
       languages?: HighlighterInitializationOptions['languages']
       waitForWarmResult?: boolean
     }) {
@@ -1687,6 +1737,7 @@ export async function createServer(options?: CreateServerOptions) {
           analysisOptions,
           filePath: options.filePath,
           queueKind: 'render',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
@@ -1812,21 +1863,29 @@ export async function createServer(options?: CreateServerOptions) {
     async function getFileExports({
       filePath,
       analysisOptions,
+      priority,
       includeClientRpcDependencies,
     }: {
       filePath: string
       analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
       includeClientRpcDependencies?: boolean
     }) {
       return runWithGitScopedRequestBackpressure(
         {
           analysisOptions,
           filePath,
-          queueKind: 'render',
+          queueKind: 'sections',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
-          const fileExports = await getCachedFileExports(project, filePath)
+          const fileExports = (
+            await getCachedReferenceBaseArtifact(project, {
+              filePath,
+              stripInternal: false,
+            })
+          ).exportMetadata
 
           if (includeClientRpcDependencies) {
             return toRpcValueWithDependenciesResponse(
@@ -1874,11 +1933,13 @@ export async function createServer(options?: CreateServerOptions) {
       filePath,
       stripInternal,
       analysisOptions,
+      priority,
       includeClientRpcDependencies,
     }: {
       filePath: string
       stripInternal: boolean
       analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
       includeClientRpcDependencies?: boolean
     }) {
       return runWithGitScopedRequestBackpressure(
@@ -1886,6 +1947,7 @@ export async function createServer(options?: CreateServerOptions) {
           analysisOptions,
           filePath,
           queueKind: 'render',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
@@ -1921,10 +1983,12 @@ export async function createServer(options?: CreateServerOptions) {
     async function getReferenceResolvedTypesArtifact({
       filePath,
       analysisOptions,
+      priority,
       includeClientRpcDependencies,
     }: {
       filePath: string
       analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
       includeClientRpcDependencies?: boolean
     }) {
       return runWithGitScopedRequestBackpressure(
@@ -1932,6 +1996,7 @@ export async function createServer(options?: CreateServerOptions) {
           analysisOptions,
           filePath,
           queueKind: 'type-resolution',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
@@ -1963,12 +2028,14 @@ export async function createServer(options?: CreateServerOptions) {
       stripInternal,
       slugCasing,
       analysisOptions,
+      priority,
       includeClientRpcDependencies,
     }: {
       filePath: string
       stripInternal: boolean
       slugCasing: SlugCasing
       analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
       includeClientRpcDependencies?: boolean
     }) {
       return runWithGitScopedRequestBackpressure(
@@ -1976,6 +2043,7 @@ export async function createServer(options?: CreateServerOptions) {
           analysisOptions,
           filePath,
           queueKind: 'render',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
@@ -2020,11 +2088,13 @@ export async function createServer(options?: CreateServerOptions) {
     async function resolveFileExportsWithDependencies({
       filePath,
       analysisOptions,
+      priority,
       filter,
       includeClientRpcDependencies,
     }: {
       filePath: string
       analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
       filter?: TypeFilter
       includeClientRpcDependencies?: boolean
     }) {
@@ -2033,6 +2103,7 @@ export async function createServer(options?: CreateServerOptions) {
           analysisOptions,
           filePath,
           queueKind: 'type-resolution',
+          priority,
         },
         async () => {
           const project = getProgram(analysisOptions)
@@ -2052,6 +2123,36 @@ export async function createServer(options?: CreateServerOptions) {
           }
 
           return result
+        }
+      )
+    },
+    {
+      memoize: getProductionRpcMemoizeOptions(),
+      concurrency: 8,
+    }
+  )
+
+  server.registerMethod(
+    'getTypeScriptDependencyPaths',
+    async function getTypeScriptDependencyPaths({
+      filePath,
+      analysisOptions,
+      priority,
+    }: {
+      filePath: string
+      analysisOptions?: AnalysisOptions
+      priority?: AnalysisRpcRequestPriority
+    }) {
+      return runWithGitScopedRequestBackpressure(
+        {
+          analysisOptions,
+          filePath,
+          queueKind: 'type-resolution',
+          priority,
+        },
+        async () => {
+          const project = getProgram(analysisOptions)
+          return getCachedTypeScriptDependencyPaths(project, filePath)
         }
       )
     },

@@ -8,6 +8,7 @@ import {
   mkdtempSync,
   existsSync,
   realpathSync,
+  statSync,
   symlinkSync,
 } from 'node:fs'
 import { basename, join, dirname, relative, resolve } from 'node:path'
@@ -338,7 +339,7 @@ describe('GitFileSystem', () => {
     }
   })
 
-  it('prefers the nearest Next app .next cache/renoun directory for clone caches', () => {
+  it('stores Next app clone caches under the app .renoun/cache directory', () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-next-app-'))
     const workspaceRoot = join(tmpDirectory, 'workspace')
     const appRoot = join(workspaceRoot, 'apps', 'site')
@@ -371,7 +372,54 @@ describe('GitFileSystem', () => {
         const store = new GitFileSystem({ repository: '.' })
         try {
           expect(store.cacheDirectory).toBe(
-            resolve(canonicalAppRoot, '.next', 'cache', 'renoun', 'git')
+            resolve(canonicalAppRoot, '.renoun', 'cache', 'git')
+          )
+        } finally {
+          store.close()
+        }
+      })
+    } finally {
+      rmSync(tmpDirectory, { recursive: true, force: true })
+    }
+  })
+
+  it('stores remote explicit-ref clone caches under the project .renoun/cache root in Next apps', () => {
+    const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-next-remote-'))
+    const workspaceRoot = join(tmpDirectory, 'workspace')
+    const appRoot = join(workspaceRoot, 'apps', 'site')
+
+    mkdirSync(join(appRoot, 'app'), { recursive: true })
+    writeFileSync(
+      join(workspaceRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-git-next-remote-workspace',
+        private: true,
+        workspaces: ['apps/*'],
+      }),
+      'utf8'
+    )
+    writeFileSync(
+      join(appRoot, 'package.json'),
+      JSON.stringify({
+        name: 'renoun-git-next-remote-app',
+        private: true,
+        dependencies: {
+          next: '15.0.0',
+        },
+      }),
+      'utf8'
+    )
+
+    try {
+      const canonicalAppRoot = realpathSync(appRoot)
+      withWorkingDirectory(appRoot, () => {
+        const store = new GitFileSystem({
+          repository: 'owner/repo',
+          ref: 'main',
+        })
+        try {
+          expect(store.cacheDirectory).toBe(
+            resolve(canonicalAppRoot, '.renoun', 'cache', 'git')
           )
         } finally {
           store.close()
@@ -3299,6 +3347,163 @@ describe('GitFileSystem', () => {
   )
 
   it.sequential(
+    'reuses an already prepared explicit-ref analysis sparse scope across fresh instances without rewriting it',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/nodes/core/NodeFunction.js',
+              content: `export function NodeFunction() { return 1 }`,
+            },
+            {
+              filename: 'src/other/Other.js',
+              content: `export const otherValue = 2`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        using firstStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+        using secondStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+
+        const prepared = await firstStore.prepareAnalysis(
+          'src/nodes/core/NodeFunction.js'
+        )
+        expect(existsSync(prepared.filePath)).toBe(true)
+
+        const sparseCheckoutPath = git(dirname(prepared.filePath), [
+          'rev-parse',
+          '--git-path',
+          'info/sparse-checkout',
+        ])
+        const beforeMtimeMs = statSync(sparseCheckoutPath).mtimeMs
+
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        const secondPrepared = await secondStore.prepareAnalysis(
+          'src/nodes/core/NodeFunction.js'
+        )
+        const afterMtimeMs = statSync(sparseCheckoutPath).mtimeMs
+
+        expect(secondPrepared.filePath).toBe(prepared.filePath)
+        expect(afterMtimeMs).toBe(beforeMtimeMs)
+      } finally {
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.sequential(
+    'bootstraps the full explicit-ref analysis worktree before file analysis in production',
+    async () => {
+      const previousNodeEnv = process.env.NODE_ENV
+      process.env.NODE_ENV = 'production'
+
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/nodes/core/NodeFunction.js',
+              content: `export function NodeFunction() { return 1 }`,
+            },
+            {
+              filename: 'src/nodes/utils/LoopNode.js',
+              content: `export function LoopNode() { return NodeFunction() }`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        using store = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src/nodes'],
+        })
+
+        const analysisRoot = await store.prepareAnalysisRoot()
+
+        expect(analysisRoot).toBeTruthy()
+        expect(
+          existsSync(
+            join(
+              analysisRoot!,
+              '.renoun-full-analysis-worktree.v7.ready'
+            )
+          )
+        ).toBe(true)
+        expect(
+          existsSync(join(analysisRoot!, 'src/nodes/core/NodeFunction.js'))
+        ).toBe(true)
+        expect(
+          existsSync(join(analysisRoot!, 'src/nodes/utils/LoopNode.js'))
+        ).toBe(true)
+      } finally {
+        if (previousNodeEnv === undefined) {
+          delete process.env.NODE_ENV
+        } else {
+          process.env.NODE_ENV = previousNodeEnv
+        }
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.sequential(
     'restores deleted explicit-ref analysis files before reading them again',
     async () => {
       const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
@@ -3351,6 +3556,82 @@ describe('GitFileSystem', () => {
 
         expect(exports.map((entry) => entry.name)).toContain('NodeFunction')
         expect(existsSync(prepared.filePath)).toBe(true)
+      } finally {
+        rmSync(repoRoot, { recursive: true, force: true })
+        rmSync(cacheDirectory, { recursive: true, force: true })
+        rmSync(bareRoot, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.sequential(
+    're-materializes explicit-ref sparse-checkout files after init before resolving transitive exports',
+    async () => {
+      const repoRoot = mkdtempSync(join(tmpdir(), 'renoun-test-repo-'))
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const bareRoot = mkdtempSync(join(tmpdir(), 'renoun-test-bare-'))
+      const bareRepo = join(bareRoot, 'repo.git')
+      initRepo(repoRoot)
+
+      try {
+        commitFiles(
+          repoRoot,
+          [
+            {
+              filename: 'tsconfig.json',
+              content: JSON.stringify({
+                compilerOptions: {
+                  allowJs: true,
+                  checkJs: true,
+                },
+                include: ['src/**/*.js'],
+              }),
+            },
+            {
+              filename: 'src/index.js',
+              content: `export { value } from './dep.js'`,
+            },
+            {
+              filename: 'src/dep.js',
+              content: `export const value = 1`,
+            },
+          ],
+          'init'
+        )
+
+        git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
+        const fileUrl = pathToFileURL(bareRepo).toString()
+
+        using firstStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src'],
+        })
+        using secondStore = new GitFileSystem({
+          repository: fileUrl,
+          cacheDirectory,
+          ref: 'main',
+          sparse: ['src'],
+        })
+
+        const prepared = await firstStore.prepareAnalysis('src/index.js')
+        const analysisRoot = git(dirname(prepared.filePath), [
+          'rev-parse',
+          '--show-toplevel',
+        ]).trim()
+        const dependencyPath = join(analysisRoot, 'src/dep.js')
+
+        expect(existsSync(dependencyPath)).toBe(true)
+
+        git(analysisRoot, ['sparse-checkout', 'disable'])
+        rmSync(dependencyPath, { force: true })
+        expect(existsSync(dependencyPath)).toBe(false)
+
+        const exports = await secondStore.getFileExports('src/index.js')
+
+        expect(exports.map((entry) => entry.name)).toContain('value')
+        expect(existsSync(dependencyPath)).toBe(true)
       } finally {
         rmSync(repoRoot, { recursive: true, force: true })
         rmSync(cacheDirectory, { recursive: true, force: true })
@@ -3526,7 +3807,7 @@ describe('GitFileSystem', () => {
         remoteRefNodeKey,
         {
           remoteSha: firstMetadata.refCommit,
-          checkedAt: Date.now() - 120_000,
+          checkedAt: Date.now() - 600_000,
         },
         {
           persist: true,
@@ -3633,7 +3914,7 @@ describe('GitFileSystem', () => {
           remoteRefNodeKey,
           {
             remoteSha: firstCommit.hash,
-            checkedAt: Date.now() - 120_000,
+            checkedAt: Date.now() - 600_000,
           },
           {
             persist: true,

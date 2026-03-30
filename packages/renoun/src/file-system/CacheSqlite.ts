@@ -633,16 +633,16 @@ export class SqliteCacheStorePersistence implements CacheStorePersistence {
     }
 
     const now = Date.now()
-    const expiresAt = now + ttlMs
+    const maxBufferedExpiresAt = now + ttlMs * 3
 
     return this.#runWithBusyRetries(() => {
       const result = this.#prepareStatement(
         `
             UPDATE cache_inflight
-            SET expires_at = ?
+            SET expires_at = MIN(MAX(expires_at, ?) + ?, ?)
             WHERE node_key = ? AND owner = ?
           `
-      ).run(expiresAt, nodeKey, owner)
+      ).run(now, ttlMs, maxBufferedExpiresAt, nodeKey, owner)
 
       return Number((result as { changes?: number }).changes ?? 0) > 0
     })
