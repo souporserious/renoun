@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from 'vitest'
 import {
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
   rmSync,
   mkdtempSync,
@@ -20,6 +21,7 @@ import {
   GitFileSystem,
   ensureCacheClone,
   ensureCacheCloneSync,
+  resetGitCapabilitySupportCachesForTests,
 } from './GitFileSystem'
 import {
   getRootDirectory,
@@ -2887,6 +2889,103 @@ describe('GitFileSystem', () => {
     }
   })
 
+  it.sequential(
+    'reclones legacy cached repos with blobless filtering even when git backfill is unavailable',
+    async () => {
+      const cacheDirectory = mkdtempSync(join(tmpdir(), 'renoun-test-cache-'))
+      const spec = 'owner/repo'
+      const target = join(cacheDirectory, createGitCloneDirectoryName(spec))
+      mkdirSync(join(target, '.git'), { recursive: true })
+
+      resetGitCapabilitySupportCachesForTests()
+
+      try {
+        const originalSpawnWithResult = spawnModule.spawnWithResult
+        const spawnSpy = vi
+          .spyOn(spawnModule, 'spawnWithResult')
+          .mockImplementation(async (command, commandArguments, options) => {
+            if (
+              command === 'git' &&
+              commandArguments[0] === 'backfill' &&
+              commandArguments[1] === '-h'
+            ) {
+              return {
+                status: 1,
+                stdout: '',
+                stderr: "git: 'backfill' is not a git command. See 'git --help'.",
+              }
+            }
+
+            if (
+              command === 'git' &&
+              commandArguments[0] === 'clone' &&
+              commandArguments[1] === '-h'
+            ) {
+              return {
+                status: 129,
+                stdout: 'usage: git clone\n    --filter <filter-spec>\n',
+                stderr: '',
+              }
+            }
+
+            if (
+              command === 'git' &&
+              commandArguments[0] === 'config' &&
+              commandArguments[1] === '--get' &&
+              commandArguments[2] === 'remote.origin.promisor'
+            ) {
+              return {
+                status: 1,
+                stdout: '',
+                stderr: '',
+              }
+            }
+
+            if (command === 'git' && commandArguments[0] === 'clone') {
+              const cloneTarget = String(
+                commandArguments[commandArguments.length - 1]
+              )
+              mkdirSync(join(cloneTarget, '.git'), { recursive: true })
+              writeFileSync(
+                join(cloneTarget, '.git', 'config'),
+                '[remote "origin"]\n\tpromisor = true\n\tpartialclonefilter = blob:none\n',
+                'utf8'
+              )
+              return {
+                status: 0,
+                stdout: '',
+                stderr: '',
+              }
+            }
+
+            return originalSpawnWithResult(command, commandArguments, options)
+          })
+
+        const clonedTarget = await ensureCacheClone({
+          spec,
+          cacheDirectory,
+        })
+        const cloneCall = spawnSpy.mock.calls.find(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments[0] === 'clone' &&
+            commandArguments[1] !== '-h'
+        )
+
+        expect(clonedTarget).toBe(target)
+        expect(cloneCall?.[1]).toContain('--filter=blob:none')
+        expect(existsSync(join(target, '.git'))).toBe(true)
+        expect(
+          readdirSync(cacheDirectory).filter((entry) => entry.includes('.legacy-'))
+        ).toEqual([])
+      } finally {
+        resetGitCapabilitySupportCachesForTests()
+        vi.restoreAllMocks()
+        rmSync(cacheDirectory, { recursive: true, force: true })
+      }
+    }
+  )
+
   test('rejects scp-style clone URLs with query/hash suffixes', async ({
     cacheDirectory,
   }) => {
@@ -3426,7 +3525,7 @@ describe('GitFileSystem', () => {
   )
 
   it.sequential(
-    'bootstraps the full explicit-ref analysis worktree before file analysis in production',
+    'bootstraps only the requested explicit-ref analysis sparse scope in production',
     async () => {
       const previousNodeEnv = process.env.NODE_ENV
       process.env.NODE_ENV = 'production'
@@ -3459,12 +3558,17 @@ describe('GitFileSystem', () => {
               filename: 'src/nodes/utils/LoopNode.js',
               content: `export function LoopNode() { return NodeFunction() }`,
             },
+            {
+              filename: 'src/other/Other.js',
+              content: `export const Other = 1`,
+            },
           ],
           'init'
         )
 
         git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
         const fileUrl = pathToFileURL(bareRepo).toString()
+        const spawnSpy = vi.spyOn(spawnModule, 'spawnWithResult')
 
         using store = new GitFileSystem({
           repository: fileUrl,
@@ -3480,17 +3584,35 @@ describe('GitFileSystem', () => {
           existsSync(
             join(
               analysisRoot!,
-              '.renoun-full-analysis-worktree.v7.ready'
+              '.renoun-full-analysis-worktree.v8.ready'
             )
           )
-        ).toBe(true)
-        expect(
-          existsSync(join(analysisRoot!, 'src/nodes/core/NodeFunction.js'))
-        ).toBe(true)
-        expect(
-          existsSync(join(analysisRoot!, 'src/nodes/utils/LoopNode.js'))
-        ).toBe(true)
+        ).toBe(false)
+
+        const sparseDisableCalls = spawnSpy.mock.calls.filter(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments[0] === 'sparse-checkout' &&
+            commandArguments[1] === 'disable'
+        )
+        const resetHardCalls = spawnSpy.mock.calls.filter(
+          ([command, commandArguments]) =>
+            command === 'git' &&
+            commandArguments[0] === 'reset' &&
+            commandArguments[1] === '--hard' &&
+            commandArguments[2] === 'HEAD'
+        )
+        expect(sparseDisableCalls).toHaveLength(0)
+        expect(resetHardCalls).toHaveLength(0)
+
+        const sparseCheckoutPath = git(analysisRoot!, [
+          'rev-parse',
+          '--git-path',
+          'info/sparse-checkout',
+        ])
+        expect(readFileSync(sparseCheckoutPath, 'utf8')).toContain('src/nodes')
       } finally {
+        vi.restoreAllMocks()
         if (previousNodeEnv === undefined) {
           delete process.env.NODE_ENV
         } else {

@@ -17,6 +17,7 @@ import {
   readFileSync,
   readdirSync,
   realpathSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -58,7 +59,6 @@ import {
   trimTrailingSlashes,
 } from '../utils/path.ts'
 import { createConcurrentQueue, mapConcurrent } from '../utils/concurrency.ts'
-import { isProductionEnvironment } from '../utils/env.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -241,6 +241,7 @@ const REMOTE_REF_TIMEOUT_MS = 8_000
 const REF_IDENTITY_CACHE_TTL_MS = 60_000
 const ANALYSIS_WORKTREE_READY_WAIT_ATTEMPTS = 20
 const ANALYSIS_WORKTREE_READY_WAIT_DELAY_MS = 50
+const cachedClonePreparationInFlight = new Map<string, Promise<void>>()
 const cachedRepoRefUpdateInFlight = new Map<string, Promise<void>>()
 const cachedAnalysisWorktreePreparationInFlight = new Map<string, Promise<void>>()
 const cachedAnalysisWorktreeBootstrapInFlight = new Map<string, Promise<void>>()
@@ -304,11 +305,47 @@ interface PrepareRepoOptions {
 }
 
 let isCachedBackfillSupport: boolean | null = null
+let isCachedCloneFilterSupport: boolean | null = null
 const SPARSE_CHECKOUT_LOCK_DIRECTORY_NAME = '.renoun-sparse-checkout.lock'
 const FULL_ANALYSIS_WORKTREE_READY_FILE_NAME =
-  '.renoun-full-analysis-worktree.v7.ready'
+  '.renoun-full-analysis-worktree.v8.ready'
 const SPARSE_CHECKOUT_LOCK_TTL_MS = 30_000
 const SPARSE_CHECKOUT_LOCK_POLL_MS = 25
+
+/** Detects if git clone supports the --filter flag. */
+async function supportsGitCloneFilter(): Promise<boolean> {
+  if (isCachedCloneFilterSupport !== null) {
+    return isCachedCloneFilterSupport
+  }
+
+  const result = await spawnWithResult('git', ['clone', '-h'], {
+    cwd: process.cwd(),
+    verbose: false,
+  })
+
+  const output = `${result.stdout}\n${result.stderr}`
+  const isSupported = output.includes('--filter')
+  isCachedCloneFilterSupport = isSupported
+  return isSupported
+}
+
+function supportsGitCloneFilterSync(): boolean {
+  if (isCachedCloneFilterSupport !== null) {
+    return isCachedCloneFilterSupport
+  }
+
+  const result = spawnSync('git', ['clone', '-h'], {
+    cwd: process.cwd(),
+    stdio: 'pipe',
+    encoding: 'utf8',
+    shell: false,
+  })
+
+  const output = `${result.stdout ?? ''}\n${result.stderr ?? ''}`
+  const isSupported = output.includes('--filter')
+  isCachedCloneFilterSupport = isSupported
+  return isSupported
+}
 
 /** Detects if git backfill is supported. */
 async function supportsGitBackfill(): Promise<boolean> {
@@ -329,6 +366,12 @@ async function supportsGitBackfill(): Promise<boolean> {
   return isSupported
 }
 
+/** @internal */
+export function resetGitCapabilitySupportCachesForTests(): void {
+  isCachedBackfillSupport = null
+  isCachedCloneFilterSupport = null
+}
+
 function supportsGitBackfillSync(): boolean {
   if (isCachedBackfillSupport !== null) {
     return isCachedBackfillSupport
@@ -343,6 +386,347 @@ function supportsGitBackfillSync(): boolean {
   const isSupported = !output.includes('is not a git command')
   isCachedBackfillSupport = isSupported
   return isSupported
+}
+
+async function readGitConfigValue(
+  repoRoot: string,
+  key: string
+): Promise<string | undefined> {
+  const result = await spawnWithResult('git', ['config', '--get', key], {
+    cwd: repoRoot,
+    verbose: false,
+  })
+
+  if (result.status !== 0) {
+    return undefined
+  }
+
+  const value = result.stdout.trim()
+  return value.length > 0 ? value : undefined
+}
+
+function readGitConfigValueSync(
+  repoRoot: string,
+  key: string
+): string | undefined {
+  const result = spawnSync('git', ['config', '--get', key], {
+    cwd: repoRoot,
+    stdio: 'pipe',
+    encoding: 'utf8',
+    shell: false,
+  })
+
+  if (result.status !== 0) {
+    return undefined
+  }
+
+  const value = String(result.stdout ?? '').trim()
+  return value.length > 0 ? value : undefined
+}
+
+async function isBloblessPartialClone(repoRoot: string): Promise<boolean> {
+  const promisor = await readGitConfigValue(repoRoot, 'remote.origin.promisor')
+  if (promisor?.toLowerCase() !== 'true') {
+    return false
+  }
+
+  return (
+    (await readGitConfigValue(repoRoot, 'remote.origin.partialclonefilter')) ===
+    'blob:none'
+  )
+}
+
+function isBloblessPartialCloneSync(repoRoot: string): boolean {
+  const promisor = readGitConfigValueSync(repoRoot, 'remote.origin.promisor')
+  if (promisor?.toLowerCase() !== 'true') {
+    return false
+  }
+
+  return (
+    readGitConfigValueSync(repoRoot, 'remote.origin.partialclonefilter') ===
+    'blob:none'
+  )
+}
+
+function createCloneCommandArguments(options: {
+  cloneUrl: string
+  target: string
+  depth?: number
+  useCloneFilter: boolean
+}): string[] {
+  const { cloneUrl, target, depth, useCloneFilter } = options
+
+  return [
+    'clone',
+    '-c',
+    'core.fsmonitor=',
+    '-c',
+    'core.sshCommand=',
+    ...(typeof depth === 'number' && depth > 0
+      ? ['--depth', String(Math.floor(Math.abs(depth)))]
+      : []),
+    ...(useCloneFilter ? ['--filter=blob:none'] : []),
+    '--no-checkout',
+    '--sparse',
+    '--',
+    assertSafeCloneUrl(cloneUrl),
+    assertSafeFsPath(target, 'clone target'),
+  ]
+}
+
+async function cloneCacheRepository(options: {
+  cloneUrl: string
+  target: string
+  depth?: number
+  verbose: boolean
+  redactedSpec: string
+  useCloneFilter: boolean
+}): Promise<void> {
+  const { cloneUrl, target, depth, verbose, redactedSpec, useCloneFilter } =
+    options
+
+  let clone = await spawnWithResult(
+    'git',
+    createCloneCommandArguments({
+      cloneUrl,
+      target,
+      depth,
+      useCloneFilter,
+    }),
+    { cwd: process.cwd(), verbose }
+  )
+
+  if (clone.status !== 0 && useCloneFilter) {
+    if (verbose) {
+      const stderr = clone.stderr ? String(clone.stderr).trim() : ''
+      console.warn(
+        `[GitFileSystem] blobless clone failed for ${redactedSpec}${
+          stderr ? `: ${stderr}` : ''
+        }. Retrying without clone filtering.`
+      )
+    }
+
+    clone = await spawnWithResult(
+      'git',
+      createCloneCommandArguments({
+        cloneUrl,
+        target,
+        depth,
+        useCloneFilter: false,
+      }),
+      { cwd: process.cwd(), verbose }
+    )
+  }
+
+  if (clone.status !== 0) {
+    const stderr = clone.stderr ? String(clone.stderr).trim() : ''
+    throw new Error(
+      `Failed to clone ${redactedSpec}${stderr ? `: ${stderr}` : ''}`
+    )
+  }
+}
+
+function cloneCacheRepositorySync(options: {
+  cloneUrl: string
+  target: string
+  depth?: number
+  verbose: boolean
+  redactedSpec: string
+  useCloneFilter: boolean
+}): void {
+  const { cloneUrl, target, depth, verbose, redactedSpec, useCloneFilter } =
+    options
+
+  let clone = spawnSync(
+    'git',
+    createCloneCommandArguments({
+      cloneUrl,
+      target,
+      depth,
+      useCloneFilter,
+    }),
+    {
+      cwd: process.cwd(),
+      stdio: 'pipe',
+      encoding: 'utf8',
+      shell: false,
+    }
+  )
+
+  if (clone.status !== 0 && useCloneFilter) {
+    if (verbose) {
+      const stderr = clone.stderr ? String(clone.stderr).trim() : ''
+      console.warn(
+        `[GitFileSystem] blobless clone failed for ${redactedSpec}${
+          stderr ? `: ${stderr}` : ''
+        }. Retrying without clone filtering.`
+      )
+    }
+
+    clone = spawnSync(
+      'git',
+      createCloneCommandArguments({
+        cloneUrl,
+        target,
+        depth,
+        useCloneFilter: false,
+      }),
+      {
+        cwd: process.cwd(),
+        stdio: 'pipe',
+        encoding: 'utf8',
+        shell: false,
+      }
+    )
+  }
+
+  if (clone.status !== 0) {
+    const stderr = clone.stderr ? String(clone.stderr).trim() : ''
+    throw new Error(
+      `Failed to clone ${redactedSpec}${stderr ? `: ${stderr}` : ''}`
+    )
+  }
+}
+
+async function maybeUpgradeCacheCloneToBloblessPartialClone(options: {
+  target: string
+  cloneUrl: string
+  depth?: number
+  verbose: boolean
+  redactedSpec: string
+  supportsCloneFilter: boolean
+}): Promise<void> {
+  const {
+    target,
+    cloneUrl,
+    depth,
+    verbose,
+    redactedSpec,
+    supportsCloneFilter,
+  } = options
+
+  if (!supportsCloneFilter) {
+    return
+  }
+
+  if (await isBloblessPartialClone(target)) {
+    return
+  }
+
+  if (verbose) {
+    console.log(
+      `[GitFileSystem] Replacing legacy cache clone for ${redactedSpec} with blobless clone metadata…`
+    )
+  }
+
+  const backupTarget = `${target}.legacy-${process.pid}-${Date.now()}`
+
+  try {
+    await rename(target, backupTarget)
+  } catch (error) {
+    if (verbose) {
+      const message =
+        error instanceof Error ? error.message : 'unknown rename error'
+      console.warn(
+        `[GitFileSystem] Failed to stage legacy cache clone upgrade for ${redactedSpec}: ${message}`
+      )
+    }
+    return
+  }
+
+  try {
+    await cloneCacheRepository({
+      cloneUrl,
+      target,
+      depth,
+      verbose,
+      redactedSpec,
+      useCloneFilter: true,
+    })
+    await rm(backupTarget, { recursive: true, force: true })
+  } catch (error) {
+    await rm(target, { recursive: true, force: true })
+    await rename(backupTarget, target).catch(() => undefined)
+
+    if (verbose) {
+      const message =
+        error instanceof Error ? error.message : 'unknown clone error'
+      console.warn(
+        `[GitFileSystem] Failed to upgrade cached clone for ${redactedSpec}. Continuing with the existing cache: ${message}`
+      )
+    }
+  }
+}
+
+function maybeUpgradeCacheCloneToBloblessPartialCloneSync(options: {
+  target: string
+  cloneUrl: string
+  depth?: number
+  verbose: boolean
+  redactedSpec: string
+  supportsCloneFilter: boolean
+}): void {
+  const {
+    target,
+    cloneUrl,
+    depth,
+    verbose,
+    redactedSpec,
+    supportsCloneFilter,
+  } = options
+
+  if (!supportsCloneFilter || isBloblessPartialCloneSync(target)) {
+    return
+  }
+
+  if (verbose) {
+    console.log(
+      `[GitFileSystem] Replacing legacy cache clone for ${redactedSpec} with blobless clone metadata…`
+    )
+  }
+
+  const backupTarget = `${target}.legacy-${process.pid}-${Date.now()}`
+
+  try {
+    renameSync(target, backupTarget)
+  } catch (error) {
+    if (verbose) {
+      const message =
+        error instanceof Error ? error.message : 'unknown rename error'
+      console.warn(
+        `[GitFileSystem] Failed to stage legacy cache clone upgrade for ${redactedSpec}: ${message}`
+      )
+    }
+    return
+  }
+
+  try {
+    cloneCacheRepositorySync({
+      cloneUrl,
+      target,
+      depth,
+      verbose,
+      redactedSpec,
+      useCloneFilter: true,
+    })
+    rmSync(backupTarget, { recursive: true, force: true })
+  } catch (error) {
+    rmSync(target, { recursive: true, force: true })
+
+    try {
+      renameSync(backupTarget, target)
+    } catch {
+      // Leave the best-effort migration failure surfaced through the warning below.
+    }
+
+    if (verbose) {
+      const message =
+        error instanceof Error ? error.message : 'unknown clone error'
+      console.warn(
+        `[GitFileSystem] Failed to upgrade cached clone for ${redactedSpec}. Continuing with the existing cache: ${message}`
+      )
+    }
+  }
 }
 
 async function readSparseCheckoutPaths(repoRoot: string): Promise<string[]> {
@@ -594,50 +978,54 @@ export async function ensureCacheClone(
     )
   }
 
+  const supportsCloneFilter = await supportsGitCloneFilter()
   const supportsBackfill = await supportsGitBackfill()
+
+  if (verbose && !supportsCloneFilter) {
+    console.log(
+      '[GitFileSystem] git clone filtering is not available. Falling back to a full clone.'
+    )
+  }
 
   if (verbose && !supportsBackfill) {
     console.log(
-      '[GitFileSystem] git backfill is not available. Falling back to full clone.'
+      '[GitFileSystem] git backfill is not available. Continuing without sparse backfill optimization.'
     )
   }
 
-  if (!existsSync(gitDir)) {
-    if (verbose) {
-      console.log(`[GitFileSystem] Cloning ${redactedSpec} into ${target}…`)
-    }
+  await getOrCreateInFlight(
+    cachedClonePreparationInFlight,
+    target,
+    async () => {
+      if (existsSync(gitDir)) {
+        await maybeUpgradeCacheCloneToBloblessPartialClone({
+          target,
+          cloneUrl,
+          depth,
+          verbose,
+          redactedSpec,
+          supportsCloneFilter,
+        })
+      }
 
-    const safeCloneUrl = assertSafeCloneUrl(cloneUrl)
-    const safeTarget = assertSafeFsPath(target, 'clone target')
-    const clone = await spawnWithResult(
-      'git',
-      [
-        'clone',
-        // Inject core.fsmonitor and core.sshCommand to prevent config injection RCE
-        '-c',
-        'core.fsmonitor=',
-        '-c',
-        'core.sshCommand=',
-        ...(typeof depth === 'number' && depth > 0
-          ? ['--depth', String(Math.floor(Math.abs(depth)))]
-          : []),
-        ...(supportsBackfill ? ['--filter=blob:none'] : []),
-        '--no-checkout',
-        '--sparse',
-        '--',
-        safeCloneUrl,
-        safeTarget,
-      ],
-      { cwd: process.cwd(), verbose }
-    )
+      if (existsSync(gitDir)) {
+        return
+      }
 
-    if (clone.status !== 0) {
-      const stderr = clone.stderr ? String(clone.stderr).trim() : ''
-      throw new Error(
-        `Failed to clone ${redactedSpec}${stderr ? `: ${stderr}` : ''}`
-      )
+      if (verbose) {
+        console.log(`[GitFileSystem] Cloning ${redactedSpec} into ${target}…`)
+      }
+
+      await cloneCacheRepository({
+        cloneUrl,
+        target,
+        depth,
+        verbose,
+        redactedSpec,
+        useCloneFilter: supportsCloneFilter,
+      })
     }
-  }
+  )
 
   return target
 }
@@ -680,12 +1068,30 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
     )
   }
 
+  const supportsCloneFilter = supportsGitCloneFilterSync()
   const supportsBackfill = supportsGitBackfillSync()
+
+  if (verbose && !supportsCloneFilter) {
+    console.log(
+      '[GitFileSystem] git clone filtering is not available. Falling back to a full clone.'
+    )
+  }
 
   if (verbose && !supportsBackfill) {
     console.log(
-      '[GitFileSystem] git backfill is not available. Falling back to full clone.'
+      '[GitFileSystem] git backfill is not available. Continuing without sparse backfill optimization.'
     )
+  }
+
+  if (existsSync(gitDir)) {
+    maybeUpgradeCacheCloneToBloblessPartialCloneSync({
+      target,
+      cloneUrl,
+      depth,
+      verbose,
+      redactedSpec,
+      supportsCloneFilter,
+    })
   }
 
   if (!existsSync(gitDir)) {
@@ -693,38 +1099,14 @@ export function ensureCacheCloneSync(options: PrepareRepoOptions): string {
       console.log(`[GitFileSystem] Cloning ${redactedSpec} into ${target}…`)
     }
 
-    const safeCloneUrl = assertSafeCloneUrl(cloneUrl)
-    const safeTarget = assertSafeFsPath(target, 'clone target')
-    const cloneArgs = [
-      'clone',
-      '-c',
-      'core.fsmonitor=',
-      '-c',
-      'core.sshCommand=',
-      ...(typeof depth === 'number' && depth > 0
-        ? ['--depth', String(Math.floor(Math.abs(depth)))]
-        : []),
-      ...(supportsBackfill ? ['--filter=blob:none'] : []),
-      '--no-checkout',
-      '--sparse',
-      '--',
-      safeCloneUrl,
-      safeTarget,
-    ]
-
-    const clone = spawnSync('git', cloneArgs, {
-      cwd: process.cwd(),
-      stdio: 'pipe',
-      encoding: 'utf8',
-      shell: false,
+    cloneCacheRepositorySync({
+      cloneUrl,
+      target,
+      depth,
+      verbose,
+      redactedSpec,
+      useCloneFilter: supportsCloneFilter,
     })
-
-    if (clone.status !== 0) {
-      const stderr = clone.stderr ? String(clone.stderr).trim() : ''
-      throw new Error(
-        `Failed to clone ${redactedSpec}${stderr ? `: ${stderr}` : ''}`
-      )
-    }
   }
 
   return target
@@ -1130,6 +1512,48 @@ async function ensureCachedScope(
   })
 }
 
+async function bootstrapCachedScope(
+  repoRoot: string,
+  scopeDirectories: string[],
+  verbose: boolean
+): Promise<string[]> {
+  const normalized = normalizeScopeDirectories(scopeDirectories)
+
+  return withSparseCheckoutLock(repoRoot, async () => {
+    if (!(await isSparseCheckoutInitialized(repoRoot))) {
+      await spawnWithResult('git', ['sparse-checkout', 'init', '--cone'], {
+        cwd: repoRoot,
+        verbose,
+      })
+    }
+
+    const currentScopeDirectories = await readSparseCheckoutPaths(repoRoot)
+    const canReuseCurrentScope =
+      coversScopeDirectories(currentScopeDirectories, normalized) &&
+      !currentScopeDirectories.includes('.')
+
+    if (!canReuseCurrentScope) {
+      await setSparseCheckout(repoRoot, normalized, verbose)
+    }
+
+    await reapplySparseCheckout(repoRoot, verbose)
+    await checkoutWorktreePaths(repoRoot, normalized, verbose)
+
+    if (await supportsGitBackfill()) {
+      await runGitBackfill(repoRoot, verbose)
+    }
+
+    if (canReuseCurrentScope) {
+      return currentScopeDirectories
+    }
+
+    return normalizeScopeDirectories([
+      ...(await readSparseCheckoutPaths(repoRoot)),
+      ...normalized,
+    ])
+  })
+}
+
 function ensureCachedScopeSync(
   repoRoot: string,
   scopeDirectories: string[],
@@ -1338,15 +1762,9 @@ export class GitFileSystem
 
     const analysisRoot = await this.#ensureAnalysisRepoReady()
 
-    if (this.#shouldUseFullAnalysisWorktree()) {
-      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot)
-      this.#preparedAnalysisScope = new Set(['.'])
-      return analysisRoot
-    }
-
     const bootstrapScopeDirectories = this.#getAnalysisBootstrapScopeDirectories()
     if (bootstrapScopeDirectories.length > 0) {
-      await this.#ensureAnalysisScope(analysisRoot, bootstrapScopeDirectories)
+      await this.#bootstrapAnalysisScope(analysisRoot, bootstrapScopeDirectories)
     }
 
     return analysisRoot
@@ -1495,10 +1913,6 @@ export class GitFileSystem
   }
 
   #getAnalysisScopeDirectories(filePath: string): string[] {
-    if (this.#shouldUseFullAnalysisWorktree()) {
-      return ['.']
-    }
-
     const scopeDirectories = new Set<string>()
 
     for (const preparedScopeDirectory of this.prepareScopeDirectories) {
@@ -1577,10 +1991,6 @@ export class GitFileSystem
       this.#refIsExplicit &&
       looksLikeCacheClone(this.repoRoot, this.cacheDirectory)
     )
-  }
-
-  #shouldUseFullAnalysisWorktree(): boolean {
-    return this.#shouldUseIsolatedAnalysisRoot() && isProductionEnvironment()
   }
 
   #resolveAnalysisRepoRootPath(refCommit: string): string {
@@ -1749,12 +2159,6 @@ export class GitFileSystem
     analysisRoot: string,
     scopeDirectories: string[]
   ): Promise<void> {
-    if (this.#shouldUseFullAnalysisWorktree()) {
-      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot)
-      this.#preparedAnalysisScope = new Set(['.'])
-      return
-    }
-
     const { merged } = mergeScopeDirectories(
       this.#preparedAnalysisScope,
       scopeDirectories
@@ -1763,6 +2167,18 @@ export class GitFileSystem
     const preparedScopeDirectories = await ensureCachedScope(
       analysisRoot,
       merged,
+      this.verbose
+    )
+    this.#preparedAnalysisScope = new Set(preparedScopeDirectories)
+  }
+
+  async #bootstrapAnalysisScope(
+    analysisRoot: string,
+    scopeDirectories: string[]
+  ): Promise<void> {
+    const preparedScopeDirectories = await bootstrapCachedScope(
+      analysisRoot,
+      scopeDirectories,
       this.verbose
     )
     this.#preparedAnalysisScope = new Set(preparedScopeDirectories)
@@ -1834,12 +2250,6 @@ export class GitFileSystem
       return
     }
 
-    if (this.#shouldUseFullAnalysisWorktree()) {
-      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot, true)
-      this.#preparedAnalysisScope = new Set(['.'])
-      return
-    }
-
     await restoreSparseCheckoutPaths(analysisRoot, scopeDirectories, this.verbose)
 
     const { merged } = mergeScopeDirectories(
@@ -1847,6 +2257,13 @@ export class GitFileSystem
       scopeDirectories
     )
     this.#preparedAnalysisScope = new Set(merged)
+
+    if (existsSync(expectedAbsolutePath)) {
+      return
+    }
+
+    await this.#ensureBootstrappedAnalysisWorktree(analysisRoot, true)
+    this.#preparedAnalysisScope = new Set(['.'])
   }
 
   async getGitFileMetadata(path: string): Promise<GitMetadata> {
