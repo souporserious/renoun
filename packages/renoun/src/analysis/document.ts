@@ -10,6 +10,9 @@ import { isTrackedVirtualSnippetStableFilePath } from './query/snippet-registry.
 
 const GENERATED_DOCUMENT_SCOPE = '_renoun'
 const RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS = '__renoun_source'
+const SYNTHETIC_MODULE_EXPORT_TEXT = 'export {}'
+const SYNTHETIC_MODULE_EXPORT_LINE_PATTERN =
+  /(?:\r\n|\n|\r)[ \t]*export \{\}$/
 const MAX_RESOLVED_VIRTUALIZED_STABLE_FILE_PATHS_PER_PROJECT = 512
 const resolvedVirtualizedStableFilePathsByProject = new WeakMap<
   Project,
@@ -99,7 +102,7 @@ function toProtectedAnalysisDocumentStableFilePath(filePath: string): string {
 
 export function coerceAnalysisDocumentSourceFileToModule(
   sourceFile: SourceFile
-): void {
+): boolean {
   const hasImports = sourceFile.getImportDeclarations().length > 0
   const hasExports =
     sourceFile.getExportDeclarations().length > 0 ||
@@ -117,7 +120,43 @@ export function coerceAnalysisDocumentSourceFileToModule(
     const separator =
       currentText.length === 0 || /(?:\r\n|\n|\r)$/.test(currentText) ? '' : '\n'
     sourceFile.replaceWithText(`${currentText}${separator}export {}\n`)
+    return true
   }
+
+  return false
+}
+
+export function trimSyntheticAnalysisDocumentModuleExport(value: string): string {
+  const normalizedValue = value.trim()
+
+  if (normalizedValue === SYNTHETIC_MODULE_EXPORT_TEXT) {
+    return ''
+  }
+
+  return normalizedValue
+    .replace(SYNTHETIC_MODULE_EXPORT_LINE_PATTERN, '')
+    .trimEnd()
+}
+
+export function sourceFileTextMatchesAnalysisDocumentValue(
+  sourceFileText: string,
+  value: string
+): boolean {
+  const normalizedSourceFileText = sourceFileText.trim()
+  const normalizedValue = value.trim()
+
+  if (normalizedSourceFileText === normalizedValue) {
+    return true
+  }
+
+  if (normalizedValue.endsWith(SYNTHETIC_MODULE_EXPORT_TEXT)) {
+    return false
+  }
+
+  return (
+    trimSyntheticAnalysisDocumentModuleExport(normalizedSourceFileText) ===
+    normalizedValue
+  )
 }
 
 function isJavaScriptLikeAnalysisDocument(options: {

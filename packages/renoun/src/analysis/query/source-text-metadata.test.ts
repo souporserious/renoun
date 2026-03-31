@@ -187,6 +187,14 @@ describe('getSourceTextMetadata', () => {
     const firstSourceFile = project.getSourceFileOrThrow(first.filePath!)
     const secondSourceFile = project.getSourceFileOrThrow(second.filePath!)
 
+    expect(first.value).toBe('const snippetValue = 1')
+    expect(second.value).toBe('const snippetValue = 1')
+    expect(firstSourceFile.getFullText()).toBe(
+      'const snippetValue = 1\nexport {}\n'
+    )
+    expect(secondSourceFile.getFullText()).toBe(
+      'const snippetValue = 1\nexport {}\n'
+    )
     expect(firstSourceFile.getExportDeclarations()).toHaveLength(1)
     expect(secondSourceFile.getExportDeclarations()).toHaveLength(1)
     expect(
@@ -195,6 +203,44 @@ describe('getSourceTextMetadata', () => {
         .filter((diagnostic) => diagnostic.getCode() === 2451)
     ).toHaveLength(0)
   })
+
+  test(
+    'rehydrates shimmed snippet source files without rewriting them when metadata omits the synthetic export',
+    () => {
+      const project = new Project({
+        useInMemoryFileSystem: true,
+      })
+      const filePath = '_renoun/example.__renoun_snippet_sig.ts'
+      const metadata = {
+        value: 'const snippetValue = 1',
+        language: 'ts' as const,
+        filePath,
+        valueSignature: 'sig',
+      }
+
+      hydrateSourceTextMetadataSourceFile(project, metadata)
+
+      const initialSourceFile = project.getSourceFileOrThrow(filePath)
+      const initialStableSourceFile = project.getSourceFileOrThrow(
+        '_renoun/example.ts'
+      )
+      const createSourceFileSpy = vi.spyOn(project, 'createSourceFile')
+
+      hydrateSourceTextMetadataSourceFile(project, metadata)
+
+      expect(createSourceFileSpy).not.toHaveBeenCalled()
+      expect(project.getSourceFile(filePath)).toBe(initialSourceFile)
+      expect(project.getSourceFile('_renoun/example.ts')).toBe(
+        initialStableSourceFile
+      )
+      expect(initialSourceFile.getFullText()).toBe(
+        'const snippetValue = 1\nexport {}\n'
+      )
+      expect(initialStableSourceFile.getFullText()).toBe(
+        'const snippetValue = 1\nexport {}\n'
+      )
+    }
+  )
 
   test('keeps stable explicit snippet paths available for relative imports', async () => {
     const project = new Project({

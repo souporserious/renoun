@@ -9,7 +9,9 @@ import {
   getAnalysisDocumentStableFilePath,
   getSourceTextValueSignature,
   resolveAnalysisDocument,
+  sourceFileTextMatchesAnalysisDocumentValue,
   toSourceTextMetadata,
+  trimSyntheticAnalysisDocumentModuleExport,
   updateAnalysisDocumentValue,
   hydrateAnalysisDocumentSourceFile,
 } from '../document.ts'
@@ -96,8 +98,16 @@ export function hydrateSourceTextMetadataSourceFile(
   const stableSourceFile = project.getSourceFile(stableFilePath)
 
   if (
-    virtualSourceFile?.getFullText() === metadata.value &&
-    stableSourceFile?.getFullText() === metadata.value
+    virtualSourceFile &&
+    stableSourceFile &&
+    sourceFileTextMatchesAnalysisDocumentValue(
+      virtualSourceFile.getFullText(),
+      metadata.value
+    ) &&
+    sourceFileTextMatchesAnalysisDocumentValue(
+      stableSourceFile.getFullText(),
+      metadata.value
+    )
   ) {
     touchVirtualSnippetRegistration(project, {
       ...hydratedDocument,
@@ -229,11 +239,15 @@ export async function getSourceTextMetadata({
         }
       }
 
-      coerceAnalysisDocumentSourceFileToModule(sourceFile)
+      const addedSyntheticModuleExport =
+        coerceAnalysisDocumentSourceFileToModule(sourceFile)
+      const normalizedSourceText = sourceFile.getFullText().trim()
 
       const normalizedDocument = updateAnalysisDocumentValue(
         document,
-        sourceFile.getFullText().trim()
+        addedSyntheticModuleExport
+          ? trimSyntheticAnalysisDocumentModuleExport(normalizedSourceText)
+          : normalizedSourceText
       )
 
       if (project.getSourceFile(normalizedDocument.filePath) !== sourceFile) {
