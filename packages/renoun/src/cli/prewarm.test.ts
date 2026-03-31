@@ -2986,6 +2986,40 @@ describe('collectRenounPrewarmTargets', () => {
     ])
   })
 
+  test('infers directory filter extensions from explicit loader maps when filters are dynamic', async () => {
+    project.createSourceFile(
+      '/repo/src/loader-filter-inference.tsx',
+      `
+        import { Directory } from 'renoun'
+
+        const keepVisibleEntries = async () => true
+        const docs = new Directory({
+          path: '/repo/docs',
+          loader: {
+            ts: async () => ({}),
+            tsx: async () => ({}),
+          },
+          filter: keepVisibleEntries,
+        })
+
+        docs.getEntries({ recursive: true })
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.directoryGetEntries).toEqual([
+      {
+        directoryPath: '/repo/docs',
+        recursive: true,
+        includeDirectoryNamedFiles: true,
+        includeIndexAndReadmeFiles: true,
+        filterExtensions: new Set(['ts', 'tsx']),
+      },
+    ])
+  })
+
   test('treats getTree callsites as recursive directory prewarm targets', async () => {
     project.createSourceFile(
       '/repo/src/routes.ts',

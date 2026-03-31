@@ -52,6 +52,10 @@ export const ComponentsDirectory = new Directory({
 
 export const PublicComponentsDirectory = new Directory({
   ...componentDirectoryOptions,
+  loader: {
+    ts: componentDirectoryOptions.loader.ts,
+    tsx: componentDirectoryOptions.loader.tsx,
+  },
   filter: shouldIncludePublicComponentEntry,
 })
 

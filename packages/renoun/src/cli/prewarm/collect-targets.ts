@@ -1470,6 +1470,24 @@ function parseFilterExtensions(
   return null
 }
 
+function resolveLoaderExtensions(
+  loaderValue: LiteralExpressionValue | LiteralExpressionValue[] | Symbol
+): Set<string> | null {
+  if (
+    loaderValue === null ||
+    typeof loaderValue !== 'object' ||
+    Array.isArray(loaderValue)
+  ) {
+    return null
+  }
+
+  const extensions = Object.keys(loaderValue).filter(
+    (value) => value.length > 0
+  )
+
+  return extensions.length > 0 ? new Set(extensions) : null
+}
+
 function expandCollectionEntries(
   collectionSymbol: TsMorphSymbol,
   options: Omit<DirectoryEntriesRequest, 'directoryPath'>,
@@ -1957,6 +1975,19 @@ function resolveDirectoryDeclarationFromNewExpression(
 
       if (typeof filterValue === 'string') {
         filterExtensions = parseFilterExtensions(filterValue)
+      }
+    }
+
+    if (filterExtensions === null) {
+      const loaderProperty = firstArgument.getProperty('loader')
+      if (
+        loaderProperty &&
+        Node.isPropertyAssignment(loaderProperty) &&
+        Node.isExpression(loaderProperty.getInitializerOrThrow())
+      ) {
+        filterExtensions = resolveLoaderExtensions(
+          resolveLiteralExpression(loaderProperty.getInitializerOrThrow())
+        )
       }
     }
   }
