@@ -2,9 +2,9 @@ import { Link } from 'renoun'
 
 import {
   DocsDirectory,
-  ComponentsDirectory,
   HooksDirectory,
   GuidesDirectory,
+  PublicComponentsDirectory,
 } from '@/collections'
 import { NavigationBoundary } from './NavigationBoundary'
 import { SidebarLink } from './SidebarLink'
@@ -67,7 +67,7 @@ export function Sidebar() {
             }}
           >
             <h3 className="title">Components</h3>
-            <TreeNavigation source={ComponentsDirectory} />
+            <TreeNavigation source={PublicComponentsDirectory} />
           </li>
 
           <li

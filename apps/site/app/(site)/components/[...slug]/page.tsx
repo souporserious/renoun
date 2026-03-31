@@ -9,7 +9,11 @@ import {
   Link,
 } from 'renoun'
 
-import { RootCollection, ComponentsDirectory } from '@/collections'
+import {
+  RootCollection,
+  ComponentsDirectory,
+  PublicComponentsDirectory,
+} from '@/collections'
 import { CodePreview } from '@/components/CodePreview'
 import { MDX } from '@/components/MDX'
 import { References } from '@/components/Reference'
@@ -18,7 +22,9 @@ import { TableOfContents } from '@/components/TableOfContents'
 import { coerceDate } from '@/utils/date'
 
 export async function generateStaticParams() {
-  const entries = await ComponentsDirectory.getEntries({ recursive: true })
+  const entries = await PublicComponentsDirectory.getEntries({
+    recursive: true,
+  })
 
   return entries.map((entry) => ({
     slug: entry.getPathnameSegments({ includeBasePathname: false }),
