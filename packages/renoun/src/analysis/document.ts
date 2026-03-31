@@ -13,6 +13,8 @@ const RESERVED_ANALYSIS_DOCUMENT_STABLE_ALIAS = '__renoun_source'
 const SYNTHETIC_MODULE_EXPORT_TEXT = 'export {}'
 const SYNTHETIC_MODULE_EXPORT_LINE_PATTERN =
   /(?:\r\n|\n|\r)[ \t]*export \{\}$/
+const SYNTHETIC_MODULE_EXPORT_TRAILING_LINE_PATTERN =
+  /((?:\r\n|\n|\r))[ \t]*export \{\}(?:\r\n|\n|\r)?$/
 const MAX_RESOLVED_VIRTUALIZED_STABLE_FILE_PATHS_PER_PROJECT = 512
 const resolvedVirtualizedStableFilePathsByProject = new WeakMap<
   Project,
@@ -126,11 +128,27 @@ export function coerceAnalysisDocumentSourceFileToModule(
   return false
 }
 
-export function trimSyntheticAnalysisDocumentModuleExport(value: string): string {
+export function trimSyntheticAnalysisDocumentModuleExport(
+  value: string,
+  options: {
+    preserveTrailingNewline?: boolean
+  } = {}
+): string {
   const normalizedValue = value.trim()
 
   if (normalizedValue === SYNTHETIC_MODULE_EXPORT_TEXT) {
     return ''
+  }
+
+  if (options.preserveTrailingNewline) {
+    const withoutTrailingSyntheticExport = value.replace(
+      SYNTHETIC_MODULE_EXPORT_TRAILING_LINE_PATTERN,
+      '$1'
+    )
+
+    if (withoutTrailingSyntheticExport !== value) {
+      return withoutTrailingSyntheticExport.trimStart()
+    }
   }
 
   return normalizedValue

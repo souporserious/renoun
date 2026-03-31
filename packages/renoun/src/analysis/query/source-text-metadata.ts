@@ -241,12 +241,15 @@ export async function getSourceTextMetadata({
 
       const addedSyntheticModuleExport =
         coerceAnalysisDocumentSourceFileToModule(sourceFile)
-      const normalizedSourceText = sourceFile.getFullText().trim()
+      const sourceText = sourceFile.getFullText()
+      const normalizedSourceText = sourceText.trim()
 
       const normalizedDocument = updateAnalysisDocumentValue(
         document,
         addedSyntheticModuleExport
-          ? trimSyntheticAnalysisDocumentModuleExport(normalizedSourceText)
+          ? trimSyntheticAnalysisDocumentModuleExport(sourceText, {
+              preserveTrailingNewline: shouldFormat,
+            })
           : normalizedSourceText
       )
 
