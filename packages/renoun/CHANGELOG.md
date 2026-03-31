@@ -1,5 +1,16 @@
 # renoun
 
+## 11.7.1
+
+### Patch Changes
+
+- b368f84: Fixes a git-backed build regression where remote cache clones could fall back to
+  full clones when `git backfill` was unavailable. This also stops production explicit-ref analysis bootstraps from forcing a full analysis worktree up front, so isolated analysis roots now start from the requested sparse scope and only widen lazily as analysis needs more files.
+- 0a772ac: Fixes a `CodeBlock` regression where the synthetic trailing `export {}` used for
+  TypeScript module-scoped analysis could leak back into rendered source. The
+  synthetic export is now kept for type-checking only and trimmed from displayed
+  snippet output again.
+
 ## 11.7.0
 
 ### Minor Changes
