@@ -1,9 +1,11 @@
-import { PublicComponentsDirectory } from '@/collections'
+import { ComponentsDirectory, isPublicComponentEntry } from '@/collections'
 import { Card } from '@/components/Card'
 import { Row } from '@/components/Row'
 
 export default async function Components() {
-  const entries = await PublicComponentsDirectory.getEntries()
+  const entries = (await ComponentsDirectory.getEntries()).filter(
+    isPublicComponentEntry
+  )
 
   return (
     <div

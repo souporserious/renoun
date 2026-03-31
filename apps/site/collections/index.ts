@@ -1,12 +1,12 @@
 import { Collection } from 'renoun'
 
-import { HooksDirectory, PublicComponentsDirectory } from './renoun'
+import { HooksDirectory, PublicComponentEntries } from './renoun'
 import { DocsDirectory, GuidesDirectory } from './site'
 
 export const RootCollection = new Collection({
   entries: [
     DocsDirectory,
-    PublicComponentsDirectory,
+    ...PublicComponentEntries,
     HooksDirectory,
     GuidesDirectory,
   ],

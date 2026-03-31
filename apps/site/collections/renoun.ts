@@ -1,10 +1,7 @@
-import {
-  Directory,
-  FileNotFoundError,
-  isDirectory,
-  isJavaScriptFile,
-  type FileSystemEntry,
-} from 'renoun'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
+import { Collection, Directory, type FileSystemEntry } from 'renoun'
 import { z } from 'zod'
 
 export const FileSystemDirectory = new Directory({
@@ -50,94 +47,51 @@ export const ComponentsDirectory = new Directory({
   filter: '**/*.{ts,tsx}',
 })
 
-export const PublicComponentsDirectory = new Directory({
-  ...componentDirectoryOptions,
-  loader: {
-    ts: componentDirectoryOptions.loader.ts,
-    tsx: componentDirectoryOptions.loader.tsx,
-  },
-  filter: shouldIncludePublicComponentEntry,
+const publicComponentEntryPaths = await readFile(
+  resolve(process.cwd(), '../../packages/renoun/src/components/index.ts'),
+  'utf8'
+).then((sourceText) => {
+  const entryPaths: string[] = []
+  const seenEntryPaths = new Set<string>()
+
+  for (const match of sourceText.matchAll(/from ['"]\.\/([^'"]+)['"]/g)) {
+    const specifier = match[1]
+    if (!specifier) {
+      continue
+    }
+
+    const entryPath = specifier.endsWith('/index.ts')
+      ? specifier.slice(0, -'/index.ts'.length)
+      : specifier.replace(/\.(?:ts|tsx)$/, '')
+
+    if (entryPath.length === 0 || seenEntryPaths.has(entryPath)) {
+      continue
+    }
+
+    seenEntryPaths.add(entryPath)
+    entryPaths.push(entryPath)
+  }
+
+  return entryPaths
 })
 
-export async function shouldIncludePublicComponentEntry(
-  entry: FileSystemEntry<any>
-): Promise<boolean> {
-  const normalizedRelativePath = normalizeComponentEntryPath(entry.relativePath)
-
-  if (isDirectory(entry)) {
-    if (isExamplesDirectoryPath(normalizedRelativePath)) {
-      return true
-    }
-
-    if (normalizedRelativePath.includes('/examples/')) {
-      return false
-    }
-
-    const componentFile = await entry
-      .getFile(entry.baseName, ['ts', 'tsx'])
-      .catch((error) => {
-        if (error instanceof FileNotFoundError) {
-          return undefined
-        }
-        throw error
-      })
-
-    if (!componentFile) {
-      return false
-    }
-
-    return (await componentFile.getExports()).length > 0
-  }
-
-  if (!isJavaScriptFile(entry)) {
-    return false
-  }
-
-  if (entry.extension !== 'ts' && entry.extension !== 'tsx') {
-    return false
-  }
-
-  if (isExamplesDirectoryPath(normalizedRelativePath)) {
-    return false
-  }
-
-  if (
-    normalizedRelativePath.includes('/examples/') ||
-    normalizedRelativePath.endsWith('.examples.ts') ||
-    normalizedRelativePath.endsWith('.examples.tsx')
-  ) {
-    return false
-  }
-
-  const parentRelativePath = normalizeComponentEntryPath(
-    entry.getParent().relativePath
+export const PublicComponentEntries = await Promise.all(
+  publicComponentEntryPaths.map((entryPath) =>
+    ComponentsDirectory.getEntry(entryPath)
   )
-  if (parentRelativePath.length > 0) {
-    if (entry.baseName !== entry.getParent().baseName) {
-      return false
-    }
+)
 
-    return (await entry.getExports()).length > 0
-  }
+const publicComponentPathnames = new Set(
+  PublicComponentEntries.map((entry) => entry.getPathname())
+)
 
-  const normalizedBaseName = entry.baseName.toLowerCase()
-  if (normalizedBaseName === 'index' || normalizedBaseName === 'readme') {
-    return false
-  }
-
-  return (await entry.getExports()).length > 0
+export function isPublicComponentEntry(entry: FileSystemEntry<any>): boolean {
+  return publicComponentPathnames.has(entry.getPathname())
 }
 
-function normalizeComponentEntryPath(relativePath: string): string {
-  return relativePath.replaceAll('\\', '/').toLowerCase()
-}
-
-function isExamplesDirectoryPath(normalizedRelativePath: string): boolean {
-  return (
-    normalizedRelativePath === 'examples' ||
-    normalizedRelativePath.endsWith('/examples')
-  )
-}
+export const PublicComponentsDirectory = new Collection({
+  entries: PublicComponentEntries,
+})
 
 type HookSchema = Record<string, unknown>
 

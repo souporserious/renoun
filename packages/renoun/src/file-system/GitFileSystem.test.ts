@@ -3525,7 +3525,7 @@ describe('GitFileSystem', () => {
   )
 
   it.sequential(
-    'bootstraps only the requested explicit-ref analysis sparse scope in production',
+    'bootstraps the full explicit-ref analysis worktree in production',
     async () => {
       const previousNodeEnv = process.env.NODE_ENV
       process.env.NODE_ENV = 'production'
@@ -3568,7 +3568,7 @@ describe('GitFileSystem', () => {
 
         git(tmpdir(), ['clone', '--bare', repoRoot, bareRepo])
         const fileUrl = pathToFileURL(bareRepo).toString()
-        const spawnSpy = vi.spyOn(spawnModule, 'spawnWithResult')
+        vi.spyOn(spawnModule, 'spawnWithResult')
 
         using store = new GitFileSystem({
           repository: fileUrl,
@@ -3587,30 +3587,13 @@ describe('GitFileSystem', () => {
               '.renoun-full-analysis-worktree.v8.ready'
             )
           )
-        ).toBe(false)
-
-        const sparseDisableCalls = spawnSpy.mock.calls.filter(
-          ([command, commandArguments]) =>
-            command === 'git' &&
-            commandArguments[0] === 'sparse-checkout' &&
-            commandArguments[1] === 'disable'
-        )
-        const resetHardCalls = spawnSpy.mock.calls.filter(
-          ([command, commandArguments]) =>
-            command === 'git' &&
-            commandArguments[0] === 'reset' &&
-            commandArguments[1] === '--hard' &&
-            commandArguments[2] === 'HEAD'
-        )
-        expect(sparseDisableCalls).toHaveLength(0)
-        expect(resetHardCalls).toHaveLength(0)
-
-        const sparseCheckoutPath = git(analysisRoot!, [
-          'rev-parse',
-          '--git-path',
-          'info/sparse-checkout',
-        ])
-        expect(readFileSync(sparseCheckoutPath, 'utf8')).toContain('src/nodes')
+        ).toBe(true)
+        expect(
+          existsSync(join(analysisRoot!, 'src/nodes/core/NodeFunction.js'))
+        ).toBe(true)
+        expect(
+          existsSync(join(analysisRoot!, 'src/nodes/utils/LoopNode.js'))
+        ).toBe(true)
       } finally {
         vi.restoreAllMocks()
         if (previousNodeEnv === undefined) {

@@ -59,6 +59,7 @@ import {
   trimTrailingSlashes,
 } from '../utils/path.ts'
 import { createConcurrentQueue, mapConcurrent } from '../utils/concurrency.ts'
+import { isProductionEnvironment } from '../utils/env.ts'
 import {
   hasJavaScriptLikeExtension,
   type JavaScriptLikeExtension,
@@ -1762,6 +1763,12 @@ export class GitFileSystem
 
     const analysisRoot = await this.#ensureAnalysisRepoReady()
 
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot)
+      this.#preparedAnalysisScope = new Set(['.'])
+      return analysisRoot
+    }
+
     const bootstrapScopeDirectories = this.#getAnalysisBootstrapScopeDirectories()
     if (bootstrapScopeDirectories.length > 0) {
       await this.#bootstrapAnalysisScope(analysisRoot, bootstrapScopeDirectories)
@@ -1913,6 +1920,10 @@ export class GitFileSystem
   }
 
   #getAnalysisScopeDirectories(filePath: string): string[] {
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      return ['.']
+    }
+
     const scopeDirectories = new Set<string>()
 
     for (const preparedScopeDirectory of this.prepareScopeDirectories) {
@@ -1991,6 +2002,10 @@ export class GitFileSystem
       this.#refIsExplicit &&
       looksLikeCacheClone(this.repoRoot, this.cacheDirectory)
     )
+  }
+
+  #shouldUseFullAnalysisWorktree(): boolean {
+    return this.#shouldUseIsolatedAnalysisRoot() && isProductionEnvironment()
   }
 
   #resolveAnalysisRepoRootPath(refCommit: string): string {
@@ -2159,6 +2174,12 @@ export class GitFileSystem
     analysisRoot: string,
     scopeDirectories: string[]
   ): Promise<void> {
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot)
+      this.#preparedAnalysisScope = new Set(['.'])
+      return
+    }
+
     const { merged } = mergeScopeDirectories(
       this.#preparedAnalysisScope,
       scopeDirectories
@@ -2247,6 +2268,12 @@ export class GitFileSystem
     const expectedAbsolutePath = join(analysisRoot, expectedRelativePath)
 
     if (existsSync(expectedAbsolutePath)) {
+      return
+    }
+
+    if (this.#shouldUseFullAnalysisWorktree()) {
+      await this.#ensureBootstrappedAnalysisWorktree(analysisRoot, true)
+      this.#preparedAnalysisScope = new Set(['.'])
       return
     }
 

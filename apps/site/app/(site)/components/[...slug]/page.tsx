@@ -12,7 +12,7 @@ import {
 import {
   RootCollection,
   ComponentsDirectory,
-  PublicComponentsDirectory,
+  isPublicComponentEntry,
 } from '@/collections'
 import { CodePreview } from '@/components/CodePreview'
 import { MDX } from '@/components/MDX'
@@ -22,9 +22,11 @@ import { TableOfContents } from '@/components/TableOfContents'
 import { coerceDate } from '@/utils/date'
 
 export async function generateStaticParams() {
-  const entries = await PublicComponentsDirectory.getEntries({
-    recursive: true,
-  })
+  const entries = (
+    await ComponentsDirectory.getEntries({
+      recursive: true,
+    })
+  ).filter(isPublicComponentEntry)
 
   return entries.map((entry) => ({
     slug: entry.getPathnameSegments({ includeBasePathname: false }),
