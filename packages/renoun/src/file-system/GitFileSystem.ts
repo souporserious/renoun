@@ -244,7 +244,10 @@ const ANALYSIS_WORKTREE_READY_WAIT_ATTEMPTS = 20
 const ANALYSIS_WORKTREE_READY_WAIT_DELAY_MS = 50
 const cachedClonePreparationInFlight = new Map<string, Promise<void>>()
 const cachedRepoRefUpdateInFlight = new Map<string, Promise<void>>()
-const cachedAnalysisWorktreePreparationInFlight = new Map<string, Promise<void>>()
+const cachedAnalysisWorktreePreparationInFlight = new Map<
+  string,
+  Promise<void>
+>()
 const cachedAnalysisWorktreeBootstrapInFlight = new Map<string, Promise<void>>()
 const cachedRemoteRefSyncChecks = new Map<
   string,
@@ -928,7 +931,8 @@ function createHashedCachePathSegment(
   const maxPrefixLength = options.maxPrefixLength ?? 48
   const readablePrefix = sanitizeCachePathSegment(value)
     .replace(/_+/g, '_')
-    .replace(/^_+|_+$/g, '')
+    .replace(/^_/, '')
+    .replace(/_$/, '')
     .slice(0, maxPrefixLength)
   const prefix = readablePrefix.length > 0 ? readablePrefix : fallback
 
@@ -1389,7 +1393,9 @@ function coversScopeDirectories(
   existingScopeDirectories: Iterable<string>,
   requestedScopeDirectories: string[]
 ): boolean {
-  const existing = new Set(normalizeScopeDirectories(Array.from(existingScopeDirectories)))
+  const existing = new Set(
+    normalizeScopeDirectories(Array.from(existingScopeDirectories))
+  )
   const requested = normalizeScopeDirectories(requestedScopeDirectories)
 
   if (existing.has('.')) {
@@ -1769,9 +1775,13 @@ export class GitFileSystem
       return analysisRoot
     }
 
-    const bootstrapScopeDirectories = this.#getAnalysisBootstrapScopeDirectories()
+    const bootstrapScopeDirectories =
+      this.#getAnalysisBootstrapScopeDirectories()
     if (bootstrapScopeDirectories.length > 0) {
-      await this.#bootstrapAnalysisScope(analysisRoot, bootstrapScopeDirectories)
+      await this.#bootstrapAnalysisScope(
+        analysisRoot,
+        bootstrapScopeDirectories
+      )
     }
 
     return analysisRoot
@@ -2277,7 +2287,11 @@ export class GitFileSystem
       return
     }
 
-    await restoreSparseCheckoutPaths(analysisRoot, scopeDirectories, this.verbose)
+    await restoreSparseCheckoutPaths(
+      analysisRoot,
+      scopeDirectories,
+      this.verbose
+    )
 
     const { merged } = mergeScopeDirectories(
       this.#preparedAnalysisScope,
@@ -2707,10 +2721,7 @@ export class GitFileSystem
       }
     }
 
-    const safeRef = assertSafeGitArg(
-      await this.#getResolvedObjectRef(),
-      'ref'
-    )
+    const safeRef = assertSafeGitArg(await this.#getResolvedObjectRef(), 'ref')
     const result = await spawnWithResult(
       'git',
       ['log', '-1', '--format=%ct', safeRef, '--', relativePath],
@@ -4581,10 +4592,14 @@ export class GitFileSystem
       const logRef = logStartCommit
         ? `${logStartCommit}..${endCommit}`
         : endCommit
-      const contentCommits = await this.#gitLogCached(logRef, scopeDirectories, {
-        reverse: true, // Oldest to Newest
-        limit,
-      })
+      const contentCommits = await this.#gitLogCached(
+        logRef,
+        scopeDirectories,
+        {
+          reverse: true, // Oldest to Newest
+          limit,
+        }
+      )
 
       if (contentCommits.length === 0) {
         if (resumeReport) {
@@ -5383,9 +5398,8 @@ export class GitFileSystem
             settledReport = computedReport
           },
           follower: async () => {
-            settledReport = await session.cache.get<ExportHistoryReport>(
-              reportNodeKey
-            )
+            settledReport =
+              await session.cache.get<ExportHistoryReport>(reportNodeKey)
           },
         })
 
@@ -6170,7 +6184,11 @@ export class GitFileSystem
     let relativePath = path
     if (absolutePath && isSubPath(absolutePath, this.repoRoot)) {
       relativePath = relative(this.repoRoot, absolutePath)
-    } else if (absolutePath && analysisRoot && isSubPath(absolutePath, analysisRoot)) {
+    } else if (
+      absolutePath &&
+      analysisRoot &&
+      isSubPath(absolutePath, analysisRoot)
+    ) {
       relativePath = relative(analysisRoot, absolutePath)
     }
 
