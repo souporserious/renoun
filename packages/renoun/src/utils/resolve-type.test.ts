@@ -157,20 +157,41 @@ describe('resolveType', () => {
                   },
                   "text": "nodeType",
                   "type": {
-                    "filePath": "array-node.js",
-                    "kind": "String",
-                    "position": {
-                      "end": {
-                        "column": 10,
-                        "line": 20,
+                    "kind": "UnionType",
+                    "text": "null | string",
+                    "types": [
+                      {
+                        "filePath": "array-node.js",
+                        "kind": "Null",
+                        "position": {
+                          "end": {
+                            "column": 10,
+                            "line": 20,
+                          },
+                          "start": {
+                            "column": 9,
+                            "line": 15,
+                          },
+                        },
+                        "text": "null",
                       },
-                      "start": {
-                        "column": 9,
-                        "line": 15,
+                      {
+                        "filePath": "array-node.js",
+                        "kind": "String",
+                        "position": {
+                          "end": {
+                            "column": 10,
+                            "line": 20,
+                          },
+                          "start": {
+                            "column": 9,
+                            "line": 15,
+                          },
+                        },
+                        "text": "string",
+                        "value": undefined,
                       },
-                    },
-                    "text": "string",
-                    "value": undefined,
+                    ],
                   },
                 },
                 {
@@ -229,27 +250,12 @@ describe('resolveType', () => {
                   },
                   "text": "values = null",
                   "type": {
-                    "filePath": "array-node.js",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "Array",
-                    "position": {
-                      "end": {
-                        "column": 10,
-                        "line": 20,
-                      },
-                      "start": {
-                        "column": 9,
-                        "line": 15,
-                      },
-                    },
-                    "text": "Array<Node>",
-                    "typeArguments": [
+                    "kind": "UnionType",
+                    "text": "null | Array<Node>",
+                    "types": [
                       {
                         "filePath": "array-node.js",
-                        "kind": "TypeReference",
-                        "moduleSpecifier": undefined,
-                        "name": "Node",
+                        "kind": "Null",
                         "position": {
                           "end": {
                             "column": 10,
@@ -260,8 +266,44 @@ describe('resolveType', () => {
                             "line": 15,
                           },
                         },
-                        "text": "Node",
-                        "typeArguments": [],
+                        "text": "null",
+                      },
+                      {
+                        "filePath": "array-node.js",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "Array",
+                        "position": {
+                          "end": {
+                            "column": 10,
+                            "line": 20,
+                          },
+                          "start": {
+                            "column": 9,
+                            "line": 15,
+                          },
+                        },
+                        "text": "Array<Node>",
+                        "typeArguments": [
+                          {
+                            "filePath": "array-node.js",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
+                            "name": "Node",
+                            "position": {
+                              "end": {
+                                "column": 10,
+                                "line": 20,
+                              },
+                              "start": {
+                                "column": 9,
+                                "line": 15,
+                              },
+                            },
+                            "text": "Node",
+                            "typeArguments": [],
+                          },
+                        ],
                       },
                     ],
                   },
@@ -427,29 +469,14 @@ describe('resolveType', () => {
               },
             },
             "scope": undefined,
-            "text": "Array<Node>",
+            "text": "Array<Node> | null",
             "type": {
-              "filePath": "array-node.js",
-              "kind": "TypeReference",
-              "moduleSpecifier": undefined,
-              "name": "Array",
-              "position": {
-                "end": {
-                  "column": 31,
-                  "line": 18,
-                },
-                "start": {
-                  "column": 11,
-                  "line": 18,
-                },
-              },
-              "text": "Array<Node>",
-              "typeArguments": [
+              "kind": "UnionType",
+              "text": "null | Array<Node>",
+              "types": [
                 {
                   "filePath": "array-node.js",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "Node",
+                  "kind": "Null",
                   "position": {
                     "end": {
                       "column": 31,
@@ -460,8 +487,44 @@ describe('resolveType', () => {
                       "line": 18,
                     },
                   },
-                  "text": "Node",
-                  "typeArguments": [],
+                  "text": "null",
+                },
+                {
+                  "filePath": "array-node.js",
+                  "kind": "TypeReference",
+                  "moduleSpecifier": undefined,
+                  "name": "Array",
+                  "position": {
+                    "end": {
+                      "column": 31,
+                      "line": 18,
+                    },
+                    "start": {
+                      "column": 11,
+                      "line": 18,
+                    },
+                  },
+                  "text": "Array<Node>",
+                  "typeArguments": [
+                    {
+                      "filePath": "array-node.js",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Node",
+                      "position": {
+                        "end": {
+                          "column": 31,
+                          "line": 18,
+                        },
+                        "start": {
+                          "column": 11,
+                          "line": 18,
+                        },
+                      },
+                      "text": "Node",
+                      "typeArguments": [],
+                    },
+                  ],
                 },
               ],
             },
@@ -1534,11 +1597,11 @@ describe('resolveType', () => {
                 "position": {
                   "end": {
                     "column": 15356,
-                    "line": 4,
+                    "line": 3,
                   },
                   "start": {
                     "column": 15015,
-                    "line": 4,
+                    "line": 3,
                   },
                 },
                 "text": "Promise<{ slug: string; filePath: string; }>",
@@ -2360,11 +2423,11 @@ describe('resolveType', () => {
         "position": {
           "end": {
             "column": 4402,
-            "line": 4,
+            "line": 3,
           },
           "start": {
             "column": 3482,
-            "line": 4,
+            "line": 3,
           },
         },
         "text": ""foo"",
@@ -2990,11 +3053,11 @@ describe('resolveType', () => {
                     "position": {
                       "end": {
                         "column": 314,
-                        "line": 6,
+                        "line": 5,
                       },
                       "start": {
                         "column": 301,
-                        "line": 6,
+                        "line": 5,
                       },
                     },
                     "text": "[key: string]: { value: number; }",
@@ -3537,11 +3600,11 @@ describe('resolveType', () => {
               "position": {
                 "end": {
                   "column": 15356,
-                  "line": 4,
+                  "line": 3,
                 },
                 "start": {
                   "column": 15015,
-                  "line": 4,
+                  "line": 3,
                 },
               },
               "text": "Promise<Sponsor>",
@@ -3635,11 +3698,11 @@ describe('resolveType', () => {
                   "position": {
                     "end": {
                       "column": 15356,
-                      "line": 4,
+                      "line": 3,
                     },
                     "start": {
                       "column": 15015,
-                      "line": 4,
+                      "line": 3,
                     },
                   },
                   "text": "Promise<Sponsor>",
@@ -4635,11 +4698,11 @@ describe('resolveType', () => {
                 "position": {
                   "end": {
                     "column": 15356,
-                    "line": 4,
+                    "line": 3,
                   },
                   "start": {
                     "column": 15015,
-                    "line": 4,
+                    "line": 3,
                   },
                 },
                 "text": "Promise<Foo>",
@@ -5597,46 +5660,22 @@ describe('resolveType', () => {
               },
               "text": "props?: TextProps",
               "type": {
-                "kind": "TypeLiteral",
-                "members": [
-                  {
-                    "filePath": "test.ts",
-                    "isOptional": false,
-                    "isReadonly": false,
-                    "kind": "PropertySignature",
-                    "name": "color",
-                    "position": {
-                      "end": {
-                        "column": 16,
-                        "line": 4,
-                      },
-                      "start": {
-                        "column": 3,
-                        "line": 4,
-                      },
-                    },
-                    "text": "color: Color;",
-                    "type": {
-                      "filePath": "test.ts",
-                      "kind": "TypeReference",
-                      "moduleSpecifier": "library",
-                      "name": "Color",
-                      "position": {
-                        "end": {
-                          "column": 15,
-                          "line": 4,
-                        },
-                        "start": {
-                          "column": 10,
-                          "line": 4,
-                        },
-                      },
-                      "text": "Color",
-                      "typeArguments": [],
-                    },
+                "filePath": "test.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "TextProps",
+                "position": {
+                  "end": {
+                    "column": 39,
+                    "line": 7,
                   },
-                ],
-                "text": "TextProps",
+                  "start": {
+                    "column": 30,
+                    "line": 7,
+                  },
+                },
+                "text": "TextProps | undefined",
+                "typeArguments": [],
               },
             },
             "position": {
@@ -5668,7 +5707,7 @@ describe('resolveType', () => {
             "thisType": undefined,
           },
         ],
-        "text": "(props?: TextProps) => void",
+        "text": "(props?: TextProps | undefined) => void",
       }
     `)
   })
@@ -6677,6 +6716,176 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "node_modules/styled-components/dist/types.d.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "isRest": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 7,
+                  "line": 148,
+                },
+                "start": {
+                  "column": 6,
+                  "line": 145,
+                },
+              },
+              "text": "props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+              as?: void;
+              forwardedAs?: void;
+          }>",
+              "type": {
+                "kind": "IntersectionType",
+                "text": "Omit<FastOmit<FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never>>, keyof ExecutionProps> & FastOmit<ExecutionProps, "as" | "forwardedAs"> & { as?: void; forwardedAs?: void; }, "style"> & { style?: CSSProperties | CSSPropertiesWithVars; }",
+                "types": [
+                  {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "Pick",
+                    "position": {
+                      "end": {
+                        "column": 450,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 424,
+                        "line": 5,
+                      },
+                    },
+                    "text": "Pick<T,Exclude<keyof T,K>>",
+                    "typeArguments": [
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 430,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 429,
+                            "line": 5,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "Exclude",
+                        "position": {
+                          "end": {
+                            "column": 449,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 431,
+                            "line": 5,
+                          },
+                        },
+                        "text": "Exclude<keyof T, K>",
+                        "typeArguments": [
+                          {
+                            "kind": "TypeOperator",
+                            "operator": "keyof",
+                            "text": "keyof T",
+                            "type": {
+                              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                              "kind": "TypeReference",
+                              "moduleSpecifier": undefined,
+                              "name": "T",
+                              "position": {
+                                "end": {
+                                  "column": 446,
+                                  "line": 5,
+                                },
+                                "start": {
+                                  "column": 445,
+                                  "line": 5,
+                                },
+                              },
+                              "text": "T",
+                              "typeArguments": [],
+                            },
+                          },
+                          {
+                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
+                            "name": "K",
+                            "position": {
+                              "end": {
+                                "column": 448,
+                                "line": 5,
+                              },
+                              "start": {
+                                "column": 447,
+                                "line": 5,
+                              },
+                            },
+                            "text": "K",
+                            "typeArguments": [],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "__type",
+                    "text": "{ style?: CSSProperties | CSSPropertiesWithVars; }",
+                    "typeArguments": [],
+                  },
+                ],
+              },
+            },
+            "position": {
+              "end": {
+                "column": 28,
+                "line": 148,
+              },
+              "start": {
+                "column": 5,
+                "line": 145,
+              },
+            },
+            "returnType": {
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": "react",
+              "name": "React.JSX.Element",
+              "position": {
+                "end": {
+                  "column": 27,
+                  "line": 148,
+                },
+                "start": {
+                  "column": 10,
+                  "line": 148,
+                },
+              },
+              "text": "React.JSX.Element",
+              "typeArguments": [],
+            },
+            "text": "(props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+              as?: void;
+              forwardedAs?: void;
+          }>) => React.JSX.Element",
+            "thisType": undefined,
+          },
+          {
             "filePath": "node_modules/@types/react/index.d.ts",
             "kind": "ComponentSignature",
             "parameter": {
@@ -6700,141 +6909,164 @@ describe('resolveType', () => {
               "text": "props: P",
               "type": {
                 "kind": "IntersectionType",
-                "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>",
+                "text": "FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never>> & { as?: WebTarget; forwardedAs?: WebTarget; }",
                 "types": [
                   {
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "FastOmit",
-                    "position": {
-                      "end": {
-                        "column": 90,
-                        "line": 214,
-                      },
-                      "start": {
-                        "column": 70,
-                        "line": 214,
-                      },
-                    },
-                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight">",
-                    "typeArguments": [
-                      {
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "MappedType",
+                    "text": "FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never>",
+                    "type": {
+                      "indexType": {
                         "filePath": "node_modules/styled-components/dist/types.d.ts",
                         "kind": "TypeReference",
                         "moduleSpecifier": undefined,
-                        "name": "A",
+                        "name": "K",
                         "position": {
                           "end": {
-                            "column": 80,
-                            "line": 214,
+                            "column": 51,
+                            "line": 24,
                           },
                           "start": {
-                            "column": 79,
-                            "line": 214,
+                            "column": 50,
+                            "line": 24,
                           },
                         },
-                        "text": "A",
+                        "text": "K",
                         "typeArguments": [],
                       },
-                      {
+                      "kind": "IndexedAccessType",
+                      "objectType": {
+                        "filePath": "node_modules/styled-components/dist/types.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 49,
+                            "line": 24,
+                          },
+                          "start": {
+                            "column": 48,
+                            "line": 24,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      "text": "T[K]",
+                    },
+                    "typeParameter": {
+                      "constraintType": {
                         "kind": "TypeOperator",
                         "operator": "keyof",
-                        "text": "keyof B",
+                        "text": "keyof T",
                         "type": {
                           "filePath": "node_modules/styled-components/dist/types.d.ts",
                           "kind": "TypeReference",
                           "moduleSpecifier": undefined,
-                          "name": "B",
+                          "name": "T",
                           "position": {
                             "end": {
-                              "column": 89,
-                              "line": 214,
+                              "column": 18,
+                              "line": 24,
                             },
                             "start": {
-                              "column": 88,
-                              "line": 214,
+                              "column": 17,
+                              "line": 24,
                             },
                           },
-                          "text": "B",
+                          "text": "T",
                           "typeArguments": [],
                         },
                       },
-                    ],
+                      "defaultType": undefined,
+                      "kind": "TypeParameter",
+                      "name": "K",
+                      "text": "K in keyof T",
+                    },
                   },
                   {
-                    "kind": "TypeLiteral",
-                    "members": [
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "fontSize",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "MappedType",
+                    "text": "Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never>>",
+                    "type": {
+                      "indexType": {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "P",
                         "position": {
                           "end": {
-                            "column": 52,
-                            "line": 2,
+                            "column": 124,
+                            "line": 5,
                           },
                           "start": {
-                            "column": 35,
-                            "line": 2,
+                            "column": 123,
+                            "line": 5,
                           },
                         },
-                        "text": "fontSize: number;",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "Number",
-                          "position": {
-                            "end": {
-                              "column": 51,
-                              "line": 2,
-                            },
-                            "start": {
-                              "column": 45,
-                              "line": 2,
-                            },
-                          },
-                          "text": "number",
-                          "value": undefined,
-                        },
+                        "text": "P",
+                        "typeArguments": [],
                       },
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "fontWeight",
+                      "kind": "IndexedAccessType",
+                      "objectType": {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
                         "position": {
                           "end": {
-                            "column": 72,
-                            "line": 2,
+                            "column": 122,
+                            "line": 5,
                           },
                           "start": {
-                            "column": 53,
-                            "line": 2,
+                            "column": 121,
+                            "line": 5,
                           },
                         },
-                        "text": "fontWeight?: number",
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      "text": "T[P]",
+                    },
+                    "typeParameter": {
+                      "constraintType": {
+                        "kind": "TypeOperator",
+                        "operator": "keyof",
+                        "text": "keyof T",
                         "type": {
-                          "filePath": "test.ts",
-                          "kind": "Number",
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "T",
                           "position": {
                             "end": {
-                              "column": 72,
-                              "line": 2,
+                              "column": 118,
+                              "line": 5,
                             },
                             "start": {
-                              "column": 66,
-                              "line": 2,
+                              "column": 117,
+                              "line": 5,
                             },
                           },
-                          "text": "number",
-                          "value": undefined,
+                          "text": "T",
+                          "typeArguments": [],
                         },
                       },
-                    ],
-                    "text": "{ fontSize: number; fontWeight?: number; }",
+                      "defaultType": undefined,
+                      "kind": "TypeParameter",
+                      "name": "P",
+                      "text": "P in keyof T",
+                    },
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "__type",
+                    "text": "{ as?: WebTarget; forwardedAs?: WebTarget; }",
+                    "typeArguments": [],
                   },
                 ],
               },
@@ -6871,7 +7103,7 @@ describe('resolveType', () => {
             "thisType": undefined,
           },
         ],
-        "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, { fontSize: number; fontWeight?: number; }>> & string",
+        "text": "IStyledComponentBase<"web", FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLSpanElement>, HTMLSpanElement>, "fontSize" | "fontWeight"> & { fontSize: number; fontWeight?: number; }, never>>> & string",
       }
     `)
   }, 60_000)
@@ -8007,11 +8239,11 @@ describe('resolveType', () => {
                 "position": {
                   "end": {
                     "column": 15356,
-                    "line": 4,
+                    "line": 3,
                   },
                   "start": {
                     "column": 15015,
-                    "line": 4,
+                    "line": 3,
                   },
                 },
                 "text": "Promise<{ slug: string; filePath: string; }>",
@@ -10603,6 +10835,176 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "node_modules/styled-components/dist/types.d.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "isRest": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 7,
+                  "line": 148,
+                },
+                "start": {
+                  "column": 6,
+                  "line": 145,
+                },
+              },
+              "text": "props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+              as?: void;
+              forwardedAs?: void;
+          }>",
+              "type": {
+                "kind": "IntersectionType",
+                "text": "Omit<FastOmit<FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>>, keyof ExecutionProps> & FastOmit<ExecutionProps, "as" | "forwardedAs"> & { as?: void; forwardedAs?: void; }, "style"> & { style?: CSSProperties | CSSPropertiesWithVars; }",
+                "types": [
+                  {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "Pick",
+                    "position": {
+                      "end": {
+                        "column": 450,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 424,
+                        "line": 5,
+                      },
+                    },
+                    "text": "Pick<T,Exclude<keyof T,K>>",
+                    "typeArguments": [
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 430,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 429,
+                            "line": 5,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "Exclude",
+                        "position": {
+                          "end": {
+                            "column": 449,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 431,
+                            "line": 5,
+                          },
+                        },
+                        "text": "Exclude<keyof T, K>",
+                        "typeArguments": [
+                          {
+                            "kind": "TypeOperator",
+                            "operator": "keyof",
+                            "text": "keyof T",
+                            "type": {
+                              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                              "kind": "TypeReference",
+                              "moduleSpecifier": undefined,
+                              "name": "T",
+                              "position": {
+                                "end": {
+                                  "column": 446,
+                                  "line": 5,
+                                },
+                                "start": {
+                                  "column": 445,
+                                  "line": 5,
+                                },
+                              },
+                              "text": "T",
+                              "typeArguments": [],
+                            },
+                          },
+                          {
+                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
+                            "name": "K",
+                            "position": {
+                              "end": {
+                                "column": 448,
+                                "line": 5,
+                              },
+                              "start": {
+                                "column": 447,
+                                "line": 5,
+                              },
+                            },
+                            "text": "K",
+                            "typeArguments": [],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "__type",
+                    "text": "{ style?: CSSProperties | CSSPropertiesWithVars; }",
+                    "typeArguments": [],
+                  },
+                ],
+              },
+            },
+            "position": {
+              "end": {
+                "column": 28,
+                "line": 148,
+              },
+              "start": {
+                "column": 5,
+                "line": 145,
+              },
+            },
+            "returnType": {
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": "react",
+              "name": "React.JSX.Element",
+              "position": {
+                "end": {
+                  "column": 27,
+                  "line": 148,
+                },
+                "start": {
+                  "column": 10,
+                  "line": 148,
+                },
+              },
+              "text": "React.JSX.Element",
+              "typeArguments": [],
+            },
+            "text": "(props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+              as?: void;
+              forwardedAs?: void;
+          }>) => React.JSX.Element",
+            "thisType": undefined,
+          },
+          {
             "filePath": "node_modules/@types/react/index.d.ts",
             "kind": "ComponentSignature",
             "parameter": {
@@ -10626,141 +11028,164 @@ describe('resolveType', () => {
               "text": "props: P",
               "type": {
                 "kind": "IntersectionType",
-                "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>",
+                "text": "FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>> & { as?: WebTarget; forwardedAs?: WebTarget; }",
                 "types": [
                   {
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "FastOmit",
-                    "position": {
-                      "end": {
-                        "column": 90,
-                        "line": 214,
-                      },
-                      "start": {
-                        "column": 70,
-                        "line": 214,
-                      },
-                    },
-                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
-                    "typeArguments": [
-                      {
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "MappedType",
+                    "text": "FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>",
+                    "type": {
+                      "indexType": {
                         "filePath": "node_modules/styled-components/dist/types.d.ts",
                         "kind": "TypeReference",
                         "moduleSpecifier": undefined,
-                        "name": "A",
+                        "name": "K",
                         "position": {
                           "end": {
-                            "column": 80,
-                            "line": 214,
+                            "column": 51,
+                            "line": 24,
                           },
                           "start": {
-                            "column": 79,
-                            "line": 214,
+                            "column": 50,
+                            "line": 24,
                           },
                         },
-                        "text": "A",
+                        "text": "K",
                         "typeArguments": [],
                       },
-                      {
+                      "kind": "IndexedAccessType",
+                      "objectType": {
+                        "filePath": "node_modules/styled-components/dist/types.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 49,
+                            "line": 24,
+                          },
+                          "start": {
+                            "column": 48,
+                            "line": 24,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      "text": "T[K]",
+                    },
+                    "typeParameter": {
+                      "constraintType": {
                         "kind": "TypeOperator",
                         "operator": "keyof",
-                        "text": "keyof B",
+                        "text": "keyof T",
                         "type": {
                           "filePath": "node_modules/styled-components/dist/types.d.ts",
                           "kind": "TypeReference",
                           "moduleSpecifier": undefined,
-                          "name": "B",
+                          "name": "T",
                           "position": {
                             "end": {
-                              "column": 89,
-                              "line": 214,
+                              "column": 18,
+                              "line": 24,
                             },
                             "start": {
-                              "column": 88,
-                              "line": 214,
+                              "column": 17,
+                              "line": 24,
                             },
                           },
-                          "text": "B",
+                          "text": "T",
                           "typeArguments": [],
                         },
                       },
-                    ],
+                      "defaultType": undefined,
+                      "kind": "TypeParameter",
+                      "name": "K",
+                      "text": "K in keyof T",
+                    },
                   },
                   {
-                    "kind": "TypeLiteral",
-                    "members": [
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "gridTemplateColumns",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "MappedType",
+                    "text": "Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>>",
+                    "type": {
+                      "indexType": {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "P",
                         "position": {
                           "end": {
-                            "column": 30,
-                            "line": 4,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 4,
-                          },
-                        },
-                        "text": "gridTemplateColumns: string",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
-                          "position": {
-                            "end": {
-                              "column": 30,
-                              "line": 4,
-                            },
-                            "start": {
-                              "column": 24,
-                              "line": 4,
-                            },
-                          },
-                          "text": "string",
-                          "value": undefined,
-                        },
-                      },
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": true,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "gridTemplateRows",
-                        "position": {
-                          "end": {
-                            "column": 28,
+                            "column": 124,
                             "line": 5,
                           },
                           "start": {
-                            "column": 3,
+                            "column": 123,
                             "line": 5,
                           },
                         },
-                        "text": "gridTemplateRows?: string",
+                        "text": "P",
+                        "typeArguments": [],
+                      },
+                      "kind": "IndexedAccessType",
+                      "objectType": {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 122,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 121,
+                            "line": 5,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      "text": "T[P]",
+                    },
+                    "typeParameter": {
+                      "constraintType": {
+                        "kind": "TypeOperator",
+                        "operator": "keyof",
+                        "text": "keyof T",
                         "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "T",
                           "position": {
                             "end": {
-                              "column": 28,
+                              "column": 118,
                               "line": 5,
                             },
                             "start": {
-                              "column": 22,
+                              "column": 117,
                               "line": 5,
                             },
                           },
-                          "text": "string",
-                          "value": undefined,
+                          "text": "T",
+                          "typeArguments": [],
                         },
                       },
-                    ],
-                    "text": "GridProps",
+                      "defaultType": undefined,
+                      "kind": "TypeParameter",
+                      "name": "P",
+                      "text": "P in keyof T",
+                    },
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "__type",
+                    "text": "{ as?: WebTarget; forwardedAs?: WebTarget; }",
+                    "typeArguments": [],
                   },
                 ],
               },
@@ -10797,7 +11222,7 @@ describe('resolveType', () => {
             "thisType": undefined,
           },
         ],
-        "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>> & string",
+        "text": "IStyledComponentBase<"web", FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>>> & string",
       }
     `)
   })
@@ -10847,6 +11272,176 @@ describe('resolveType', () => {
         },
         "signatures": [
           {
+            "filePath": "node_modules/styled-components/dist/types.d.ts",
+            "kind": "ComponentSignature",
+            "parameter": {
+              "description": undefined,
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "initializer": undefined,
+              "isOptional": false,
+              "isRest": false,
+              "kind": "Parameter",
+              "name": "props",
+              "position": {
+                "end": {
+                  "column": 7,
+                  "line": 148,
+                },
+                "start": {
+                  "column": 6,
+                  "line": 145,
+                },
+              },
+              "text": "props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+              as?: void;
+              forwardedAs?: void;
+          }>",
+              "type": {
+                "kind": "IntersectionType",
+                "text": "Omit<FastOmit<FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>>, keyof ExecutionProps> & FastOmit<ExecutionProps, "as" | "forwardedAs"> & { as?: void; forwardedAs?: void; }, "style"> & { style?: CSSProperties | CSSPropertiesWithVars; }",
+                "types": [
+                  {
+                    "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "Pick",
+                    "position": {
+                      "end": {
+                        "column": 450,
+                        "line": 5,
+                      },
+                      "start": {
+                        "column": 424,
+                        "line": 5,
+                      },
+                    },
+                    "text": "Pick<T,Exclude<keyof T,K>>",
+                    "typeArguments": [
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 430,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 429,
+                            "line": 5,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "Exclude",
+                        "position": {
+                          "end": {
+                            "column": 449,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 431,
+                            "line": 5,
+                          },
+                        },
+                        "text": "Exclude<keyof T, K>",
+                        "typeArguments": [
+                          {
+                            "kind": "TypeOperator",
+                            "operator": "keyof",
+                            "text": "keyof T",
+                            "type": {
+                              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                              "kind": "TypeReference",
+                              "moduleSpecifier": undefined,
+                              "name": "T",
+                              "position": {
+                                "end": {
+                                  "column": 446,
+                                  "line": 5,
+                                },
+                                "start": {
+                                  "column": 445,
+                                  "line": 5,
+                                },
+                              },
+                              "text": "T",
+                              "typeArguments": [],
+                            },
+                          },
+                          {
+                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
+                            "name": "K",
+                            "position": {
+                              "end": {
+                                "column": 448,
+                                "line": 5,
+                              },
+                              "start": {
+                                "column": 447,
+                                "line": 5,
+                              },
+                            },
+                            "text": "K",
+                            "typeArguments": [],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "__type",
+                    "text": "{ style?: CSSProperties | CSSPropertiesWithVars; }",
+                    "typeArguments": [],
+                  },
+                ],
+              },
+            },
+            "position": {
+              "end": {
+                "column": 28,
+                "line": 148,
+              },
+              "start": {
+                "column": 5,
+                "line": 145,
+              },
+            },
+            "returnType": {
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "kind": "TypeReference",
+              "moduleSpecifier": "react",
+              "name": "React.JSX.Element",
+              "position": {
+                "end": {
+                  "column": 27,
+                  "line": 148,
+                },
+                "start": {
+                  "column": 10,
+                  "line": 148,
+                },
+              },
+              "text": "React.JSX.Element",
+              "typeArguments": [],
+            },
+            "text": "(props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+              as?: void;
+              forwardedAs?: void;
+          }>) => React.JSX.Element",
+            "thisType": undefined,
+          },
+          {
             "filePath": "node_modules/@types/react/index.d.ts",
             "kind": "ComponentSignature",
             "parameter": {
@@ -10870,84 +11465,163 @@ describe('resolveType', () => {
               "text": "props: P",
               "type": {
                 "kind": "IntersectionType",
-                "text": "Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>",
+                "text": "FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>> & { as?: WebTarget; forwardedAs?: WebTarget; }",
                 "types": [
                   {
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "FastOmit",
-                    "position": {
-                      "end": {
-                        "column": 90,
-                        "line": 214,
-                      },
-                      "start": {
-                        "column": 70,
-                        "line": 214,
-                      },
-                    },
-                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps>",
-                    "typeArguments": [
-                      {
+                    "isOptional": false,
+                    "isReadonly": false,
+                    "kind": "MappedType",
+                    "text": "FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>",
+                    "type": {
+                      "indexType": {
                         "filePath": "node_modules/styled-components/dist/types.d.ts",
                         "kind": "TypeReference",
                         "moduleSpecifier": undefined,
-                        "name": "A",
+                        "name": "K",
                         "position": {
                           "end": {
-                            "column": 80,
-                            "line": 214,
+                            "column": 51,
+                            "line": 24,
                           },
                           "start": {
-                            "column": 79,
-                            "line": 214,
+                            "column": 50,
+                            "line": 24,
                           },
                         },
-                        "text": "A",
+                        "text": "K",
                         "typeArguments": [],
                       },
-                      {
+                      "kind": "IndexedAccessType",
+                      "objectType": {
+                        "filePath": "node_modules/styled-components/dist/types.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 49,
+                            "line": 24,
+                          },
+                          "start": {
+                            "column": 48,
+                            "line": 24,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      "text": "T[K]",
+                    },
+                    "typeParameter": {
+                      "constraintType": {
                         "kind": "TypeOperator",
                         "operator": "keyof",
-                        "text": "keyof B",
+                        "text": "keyof T",
                         "type": {
                           "filePath": "node_modules/styled-components/dist/types.d.ts",
                           "kind": "TypeReference",
                           "moduleSpecifier": undefined,
-                          "name": "B",
+                          "name": "T",
                           "position": {
                             "end": {
-                              "column": 89,
-                              "line": 214,
+                              "column": 18,
+                              "line": 24,
                             },
                             "start": {
-                              "column": 88,
-                              "line": 214,
+                              "column": 17,
+                              "line": 24,
                             },
                           },
-                          "text": "B",
+                          "text": "T",
                           "typeArguments": [],
                         },
                       },
-                    ],
+                      "defaultType": undefined,
+                      "kind": "TypeParameter",
+                      "name": "K",
+                      "text": "K in keyof T",
+                    },
                   },
                   {
-                    "filePath": "test.ts",
+                    "isOptional": true,
+                    "isReadonly": false,
+                    "kind": "MappedType",
+                    "text": "Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>>",
+                    "type": {
+                      "indexType": {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "P",
+                        "position": {
+                          "end": {
+                            "column": 124,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 123,
+                            "line": 5,
+                          },
+                        },
+                        "text": "P",
+                        "typeArguments": [],
+                      },
+                      "kind": "IndexedAccessType",
+                      "objectType": {
+                        "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                        "kind": "TypeReference",
+                        "moduleSpecifier": undefined,
+                        "name": "T",
+                        "position": {
+                          "end": {
+                            "column": 122,
+                            "line": 5,
+                          },
+                          "start": {
+                            "column": 121,
+                            "line": 5,
+                          },
+                        },
+                        "text": "T",
+                        "typeArguments": [],
+                      },
+                      "text": "T[P]",
+                    },
+                    "typeParameter": {
+                      "constraintType": {
+                        "kind": "TypeOperator",
+                        "operator": "keyof",
+                        "text": "keyof T",
+                        "type": {
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "T",
+                          "position": {
+                            "end": {
+                              "column": 118,
+                              "line": 5,
+                            },
+                            "start": {
+                              "column": 117,
+                              "line": 5,
+                            },
+                          },
+                          "text": "T",
+                          "typeArguments": [],
+                        },
+                      },
+                      "defaultType": undefined,
+                      "kind": "TypeParameter",
+                      "name": "P",
+                      "text": "P in keyof T",
+                    },
+                  },
+                  {
                     "kind": "TypeReference",
                     "moduleSpecifier": undefined,
-                    "name": "GridProps",
-                    "position": {
-                      "end": {
-                        "column": 2,
-                        "line": 6,
-                      },
-                      "start": {
-                        "column": 1,
-                        "line": 3,
-                      },
-                    },
-                    "text": "GridProps",
+                    "name": "__type",
+                    "text": "{ as?: WebTarget; forwardedAs?: WebTarget; }",
                     "typeArguments": [],
                   },
                 ],
@@ -10985,20 +11659,18 @@ describe('resolveType', () => {
             "thisType": undefined,
           },
         ],
-        "text": "IStyledComponentBase<"web", Substitute<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, GridProps>> & string",
+        "text": "IStyledComponentBase<"web", FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never> & Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, keyof GridProps> & GridProps, never>>> & string",
       }
     `)
   })
 
-  test(
-    'library tagged template literal generic types',
-    () => {
-      const project = new Project({
-        tsConfigFilePath: renounTsConfigFilePath,
-      })
-      const sourceFile = project.createSourceFile(
-        getProjectTestFilePath(project),
-        dedent`
+  test('library tagged template literal generic types', () => {
+    const project = new Project({
+      tsConfigFilePath: renounTsConfigFilePath,
+    })
+    const sourceFile = project.createSourceFile(
+      getProjectTestFilePath(project),
+      dedent`
           import * as React from 'react'
           import styled from 'styled-components'
 
@@ -11011,232 +11683,422 @@ describe('resolveType', () => {
             grid-template-rows: \${({ $gridTemplateRows }) => $gridTemplateRows};
           \`
           `,
-        { overwrite: true }
-      )
-      const variableDeclaration =
-        sourceFile.getVariableDeclarationOrThrow('Grid')
-      const types = resolveType(
-        variableDeclaration.getType(),
-        variableDeclaration
-      )
+      { overwrite: true }
+    )
+    const variableDeclaration = sourceFile.getVariableDeclarationOrThrow('Grid')
+    const types = resolveType(
+      variableDeclaration.getType(),
+      variableDeclaration
+    )
 
-      expect(types).toMatchInlineSnapshot(`
-      {
-        "filePath": "test.ts",
-        "kind": "Component",
-        "name": "Grid",
-        "position": {
-          "end": {
-            "column": 2,
-            "line": 11,
+    expect(types).toMatchInlineSnapshot(`
+        {
+          "filePath": "test.ts",
+          "kind": "Component",
+          "name": "Grid",
+          "position": {
+            "end": {
+              "column": 2,
+              "line": 11,
+            },
+            "start": {
+              "column": 14,
+              "line": 4,
+            },
           },
-          "start": {
-            "column": 14,
-            "line": 4,
-          },
-        },
-        "signatures": [
-          {
-            "filePath": "node_modules/@types/react/index.d.ts",
-            "kind": "ComponentSignature",
-            "parameter": {
-              "description": undefined,
-              "filePath": "node_modules/@types/react/index.d.ts",
-              "initializer": undefined,
-              "isOptional": false,
-              "isRest": false,
-              "kind": "Parameter",
-              "name": "props",
-              "position": {
-                "end": {
-                  "column": 18,
-                  "line": 571,
+          "signatures": [
+            {
+              "filePath": "node_modules/styled-components/dist/types.d.ts",
+              "kind": "ComponentSignature",
+              "parameter": {
+                "description": undefined,
+                "filePath": "node_modules/styled-components/dist/types.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "isRest": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 7,
+                    "line": 148,
+                  },
+                  "start": {
+                    "column": 6,
+                    "line": 145,
+                  },
                 },
-                "start": {
-                  "column": 10,
-                  "line": 571,
+                "text": "props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+                as?: void;
+                forwardedAs?: void;
+            }>",
+                "type": {
+                  "kind": "IntersectionType",
+                  "text": "Omit<FastOmit<FastOmit<FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never> & Partial<Pick<FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never>>, keyof ExecutionProps> & FastOmit<ExecutionProps, "as" | "forwardedAs"> & { as?: void | undefined; forwardedAs?: void | undefined; }, "style"> & { style?: React.CSSProperties | CSSPropertiesWithVars | undefined; }",
+                  "types": [
+                    {
+                      "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Pick",
+                      "position": {
+                        "end": {
+                          "column": 450,
+                          "line": 5,
+                        },
+                        "start": {
+                          "column": 424,
+                          "line": 5,
+                        },
+                      },
+                      "text": "Pick<T,Exclude<keyof T,K>>",
+                      "typeArguments": [
+                        {
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "T",
+                          "position": {
+                            "end": {
+                              "column": 430,
+                              "line": 5,
+                            },
+                            "start": {
+                              "column": 429,
+                              "line": 5,
+                            },
+                          },
+                          "text": "T",
+                          "typeArguments": [],
+                        },
+                        {
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "Exclude",
+                          "position": {
+                            "end": {
+                              "column": 449,
+                              "line": 5,
+                            },
+                            "start": {
+                              "column": 431,
+                              "line": 5,
+                            },
+                          },
+                          "text": "Exclude<keyof T, K>",
+                          "typeArguments": [
+                            {
+                              "kind": "TypeOperator",
+                              "operator": "keyof",
+                              "text": "keyof T",
+                              "type": {
+                                "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                                "kind": "TypeReference",
+                                "moduleSpecifier": undefined,
+                                "name": "T",
+                                "position": {
+                                  "end": {
+                                    "column": 446,
+                                    "line": 5,
+                                  },
+                                  "start": {
+                                    "column": 445,
+                                    "line": 5,
+                                  },
+                                },
+                                "text": "T",
+                                "typeArguments": [],
+                              },
+                            },
+                            {
+                              "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                              "kind": "TypeReference",
+                              "moduleSpecifier": undefined,
+                              "name": "K",
+                              "position": {
+                                "end": {
+                                  "column": 448,
+                                  "line": 5,
+                                },
+                                "start": {
+                                  "column": 447,
+                                  "line": 5,
+                                },
+                              },
+                              "text": "K",
+                              "typeArguments": [],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "__type",
+                      "text": "{ style?: CSSProperties | CSSPropertiesWithVars | undefined; }",
+                      "typeArguments": [],
+                    },
+                  ],
                 },
               },
-              "text": "props: P",
-              "type": {
-                "kind": "IntersectionType",
-                "text": "Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>",
-                "types": [
-                  {
-                    "filePath": "node_modules/styled-components/dist/types.d.ts",
-                    "kind": "TypeReference",
-                    "moduleSpecifier": undefined,
-                    "name": "FastOmit",
-                    "position": {
-                      "end": {
-                        "column": 90,
-                        "line": 214,
-                      },
-                      "start": {
-                        "column": 70,
-                        "line": 214,
-                      },
-                    },
-                    "text": "FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows">",
-                    "typeArguments": [
-                      {
-                        "filePath": "node_modules/styled-components/dist/types.d.ts",
-                        "kind": "TypeReference",
-                        "moduleSpecifier": undefined,
-                        "name": "A",
-                        "position": {
-                          "end": {
-                            "column": 80,
-                            "line": 214,
-                          },
-                          "start": {
-                            "column": 79,
-                            "line": 214,
-                          },
-                        },
-                        "text": "A",
-                        "typeArguments": [],
-                      },
-                      {
-                        "kind": "TypeOperator",
-                        "operator": "keyof",
-                        "text": "keyof B",
-                        "type": {
+              "position": {
+                "end": {
+                  "column": 28,
+                  "line": 148,
+                },
+                "start": {
+                  "column": 5,
+                  "line": 145,
+                },
+              },
+              "returnType": {
+                "filePath": "node_modules/styled-components/dist/types.d.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": "react",
+                "name": "React.JSX.Element",
+                "position": {
+                  "end": {
+                    "column": 27,
+                    "line": 148,
+                  },
+                  "start": {
+                    "column": 10,
+                    "line": 148,
+                  },
+                },
+                "text": "React.JSX.Element",
+                "typeArguments": [],
+              },
+              "text": "(props: OverrideStyle<NoInfer<FastOmit<BaseProps, keyof ExecutionProps>> & FastOmit<ExecutionProps, 'as' | 'forwardedAs'> & {
+                as?: void;
+                forwardedAs?: void;
+            }>) => React.JSX.Element",
+              "thisType": undefined,
+            },
+            {
+              "filePath": "node_modules/@types/react/index.d.ts",
+              "kind": "ComponentSignature",
+              "parameter": {
+                "description": undefined,
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "initializer": undefined,
+                "isOptional": false,
+                "isRest": false,
+                "kind": "Parameter",
+                "name": "props",
+                "position": {
+                  "end": {
+                    "column": 18,
+                    "line": 571,
+                  },
+                  "start": {
+                    "column": 10,
+                    "line": 571,
+                  },
+                },
+                "text": "props: P",
+                "type": {
+                  "kind": "IntersectionType",
+                  "text": "FastOmit<FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never> & Partial<Pick<FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never>> & { as?: WebTarget | undefined; forwardedAs?: WebTarget | undefined; }",
+                  "types": [
+                    {
+                      "isOptional": false,
+                      "isReadonly": false,
+                      "kind": "MappedType",
+                      "text": "FastOmit<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never>",
+                      "type": {
+                        "indexType": {
                           "filePath": "node_modules/styled-components/dist/types.d.ts",
                           "kind": "TypeReference",
                           "moduleSpecifier": undefined,
-                          "name": "B",
+                          "name": "K",
                           "position": {
                             "end": {
-                              "column": 89,
-                              "line": 214,
+                              "column": 51,
+                              "line": 24,
                             },
                             "start": {
-                              "column": 88,
-                              "line": 214,
+                              "column": 50,
+                              "line": 24,
                             },
                           },
-                          "text": "B",
+                          "text": "K",
                           "typeArguments": [],
                         },
-                      },
-                    ],
-                  },
-                  {
-                    "kind": "TypeLiteral",
-                    "members": [
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "$gridTemplateColumns",
-                        "position": {
-                          "end": {
-                            "column": 31,
-                            "line": 5,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 5,
-                          },
-                        },
-                        "text": "$gridTemplateColumns: string",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
+                        "kind": "IndexedAccessType",
+                        "objectType": {
+                          "filePath": "node_modules/styled-components/dist/types.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "T",
                           "position": {
                             "end": {
-                              "column": 31,
+                              "column": 49,
+                              "line": 24,
+                            },
+                            "start": {
+                              "column": 48,
+                              "line": 24,
+                            },
+                          },
+                          "text": "T",
+                          "typeArguments": [],
+                        },
+                        "text": "T[K]",
+                      },
+                      "typeParameter": {
+                        "constraintType": {
+                          "kind": "TypeOperator",
+                          "operator": "keyof",
+                          "text": "keyof T",
+                          "type": {
+                            "filePath": "node_modules/styled-components/dist/types.d.ts",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
+                            "name": "T",
+                            "position": {
+                              "end": {
+                                "column": 18,
+                                "line": 24,
+                              },
+                              "start": {
+                                "column": 17,
+                                "line": 24,
+                              },
+                            },
+                            "text": "T",
+                            "typeArguments": [],
+                          },
+                        },
+                        "defaultType": undefined,
+                        "kind": "TypeParameter",
+                        "name": "K",
+                        "text": "K in keyof T",
+                      },
+                    },
+                    {
+                      "isOptional": true,
+                      "isReadonly": false,
+                      "kind": "MappedType",
+                      "text": "Partial<Pick<FastOmit<DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never>>",
+                      "type": {
+                        "indexType": {
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "P",
+                          "position": {
+                            "end": {
+                              "column": 124,
                               "line": 5,
                             },
                             "start": {
-                              "column": 25,
+                              "column": 123,
                               "line": 5,
                             },
                           },
-                          "text": "string",
-                          "value": undefined,
+                          "text": "P",
+                          "typeArguments": [],
                         },
-                      },
-                      {
-                        "filePath": "test.ts",
-                        "isOptional": false,
-                        "isReadonly": false,
-                        "kind": "PropertySignature",
-                        "name": "$gridTemplateRows",
-                        "position": {
-                          "end": {
-                            "column": 28,
-                            "line": 6,
-                          },
-                          "start": {
-                            "column": 3,
-                            "line": 6,
-                          },
-                        },
-                        "text": "$gridTemplateRows: string",
-                        "type": {
-                          "filePath": "test.ts",
-                          "kind": "String",
+                        "kind": "IndexedAccessType",
+                        "objectType": {
+                          "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "T",
                           "position": {
                             "end": {
-                              "column": 28,
-                              "line": 6,
+                              "column": 122,
+                              "line": 5,
                             },
                             "start": {
-                              "column": 22,
-                              "line": 6,
+                              "column": 121,
+                              "line": 5,
                             },
                           },
-                          "text": "string",
-                          "value": undefined,
+                          "text": "T",
+                          "typeArguments": [],
                         },
+                        "text": "T[P]",
                       },
-                    ],
-                    "text": "{ $gridTemplateColumns: string; $gridTemplateRows: string; }",
-                  },
-                ],
+                      "typeParameter": {
+                        "constraintType": {
+                          "kind": "TypeOperator",
+                          "operator": "keyof",
+                          "text": "keyof T",
+                          "type": {
+                            "filePath": "node_modules/typescript/lib/lib.es5.d.ts",
+                            "kind": "TypeReference",
+                            "moduleSpecifier": undefined,
+                            "name": "T",
+                            "position": {
+                              "end": {
+                                "column": 118,
+                                "line": 5,
+                              },
+                              "start": {
+                                "column": 117,
+                                "line": 5,
+                              },
+                            },
+                            "text": "T",
+                            "typeArguments": [],
+                          },
+                        },
+                        "defaultType": undefined,
+                        "kind": "TypeParameter",
+                        "name": "P",
+                        "text": "P in keyof T",
+                      },
+                    },
+                    {
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "__type",
+                      "text": "{ as?: WebTarget | undefined; forwardedAs?: WebTarget | undefined; }",
+                      "typeArguments": [],
+                    },
+                  ],
+                },
               },
-            },
-            "position": {
-              "end": {
-                "column": 31,
-                "line": 571,
-              },
-              "start": {
-                "column": 9,
-                "line": 571,
-              },
-            },
-            "returnType": {
-              "filePath": "node_modules/@types/react/index.d.ts",
-              "kind": "TypeReference",
-              "moduleSpecifier": undefined,
-              "name": "ReactNode",
               "position": {
                 "end": {
-                  "column": 30,
+                  "column": 31,
                   "line": 571,
                 },
                 "start": {
-                  "column": 21,
+                  "column": 9,
                   "line": 571,
                 },
               },
-              "text": "ReactNode",
-              "typeArguments": [],
+              "returnType": {
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "kind": "TypeReference",
+                "moduleSpecifier": undefined,
+                "name": "ReactNode",
+                "position": {
+                  "end": {
+                    "column": 30,
+                    "line": 571,
+                  },
+                  "start": {
+                    "column": 21,
+                    "line": 571,
+                  },
+                },
+                "text": "ReactNode",
+                "typeArguments": [],
+              },
+              "text": "(props: P) => ReactNode",
+              "thisType": undefined,
             },
-            "text": "(props: P) => ReactNode",
-            "thisType": undefined,
-          },
-        ],
-        "text": "IStyledComponentBase<"web", Substitute<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, { $gridTemplateColumns: string; $gridTemplateRows: string; }>> & string",
-      }
-    `)
-    },
-    30_000
-  )
+          ],
+          "text": "IStyledComponentBase<"web", FastOmit<FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never> & Partial<Pick<FastOmit<React.DetailedHTMLProps<React.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "$gridTemplateColumns" | "$gridTemplateRows"> & { $gridTemplateColumns: string; $gridTemplateRows: string; }, never>>> & string",
+        }
+      `)
+  }, 30_000)
 
   test('type aliases', () => {
     const sourceFile = project.createSourceFile(
@@ -13333,104 +14195,42 @@ describe('resolveType', () => {
                   "line": 2375,
                 },
               },
-              "text": "MouseEventHandler<HTMLButtonElement>",
+              "text": "MouseEventHandler<HTMLButtonElement> | undefined",
               "type": {
-                "isAsync": false,
-                "kind": "FunctionType",
-                "parameters": [
-                  {
-                    "description": undefined,
-                    "filePath": "node_modules/@types/react/index.d.ts",
-                    "initializer": undefined,
-                    "isOptional": false,
-                    "isRest": false,
-                    "kind": "Parameter",
-                    "name": "event",
-                    "position": {
-                      "end": {
-                        "column": 81,
-                        "line": 2222,
-                      },
-                      "start": {
-                        "column": 73,
-                        "line": 2222,
-                      },
-                    },
-                    "text": "event: E",
-                    "type": {
-                      "filePath": "node_modules/@types/react/index.d.ts",
-                      "kind": "TypeReference",
-                      "moduleSpecifier": "react",
-                      "name": "MouseEvent",
-                      "position": {
-                        "end": {
-                          "column": 52,
-                          "line": 2375,
-                        },
-                        "start": {
-                          "column": 9,
-                          "line": 2375,
-                        },
-                      },
-                      "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
-                      "typeArguments": [
-                        {
-                          "filePath": "node_modules/@types/react/index.d.ts",
-                          "kind": "TypeReference",
-                          "moduleSpecifier": undefined,
-                          "name": "HTMLButtonElement",
-                          "position": {
-                            "end": {
-                              "column": 52,
-                              "line": 2375,
-                            },
-                            "start": {
-                              "column": 9,
-                              "line": 2375,
-                            },
-                          },
-                          "text": "HTMLButtonElement",
-                          "typeArguments": [],
-                        },
-                        {
-                          "filePath": "node_modules/@types/react/index.d.ts",
-                          "kind": "TypeReference",
-                          "moduleSpecifier": undefined,
-                          "name": "MouseEvent",
-                          "position": {
-                            "end": {
-                              "column": 52,
-                              "line": 2375,
-                            },
-                            "start": {
-                              "column": 9,
-                              "line": 2375,
-                            },
-                          },
-                          "text": "globalThis.MouseEvent",
-                          "typeArguments": [],
-                        },
-                      ],
-                    },
+                "filePath": "node_modules/@types/react/index.d.ts",
+                "kind": "TypeReference",
+                "name": "MouseEventHandler",
+                "position": {
+                  "end": {
+                    "column": 71,
+                    "line": 2241,
                   },
-                ],
-                "returnType": {
-                  "filePath": "node_modules/@types/react/index.d.ts",
-                  "kind": "Void",
-                  "position": {
-                    "end": {
-                      "column": 88,
-                      "line": 2222,
-                    },
-                    "start": {
-                      "column": 84,
-                      "line": 2222,
-                    },
+                  "start": {
+                    "column": 5,
+                    "line": 2241,
                   },
-                  "text": "void",
                 },
                 "text": "MouseEventHandler<HTMLButtonElement>",
-                "thisType": undefined,
+                "typeArguments": [
+                  {
+                    "filePath": "node_modules/@types/react/index.d.ts",
+                    "kind": "TypeReference",
+                    "moduleSpecifier": undefined,
+                    "name": "HTMLButtonElement",
+                    "position": {
+                      "end": {
+                        "column": 52,
+                        "line": 2375,
+                      },
+                      "start": {
+                        "column": 9,
+                        "line": 2375,
+                      },
+                    },
+                    "text": "HTMLButtonElement",
+                    "typeArguments": [],
+                  },
+                ],
               },
             },
           ],
@@ -13555,104 +14355,42 @@ describe('resolveType', () => {
                         "line": 2375,
                       },
                     },
-                    "text": "MouseEventHandler<HTMLButtonElement>",
+                    "text": "MouseEventHandler<HTMLButtonElement> | undefined",
                     "type": {
-                      "isAsync": false,
-                      "kind": "FunctionType",
-                      "parameters": [
-                        {
-                          "description": undefined,
-                          "filePath": "node_modules/@types/react/index.d.ts",
-                          "initializer": undefined,
-                          "isOptional": false,
-                          "isRest": false,
-                          "kind": "Parameter",
-                          "name": "event",
-                          "position": {
-                            "end": {
-                              "column": 81,
-                              "line": 2222,
-                            },
-                            "start": {
-                              "column": 73,
-                              "line": 2222,
-                            },
-                          },
-                          "text": "event: E",
-                          "type": {
-                            "filePath": "node_modules/@types/react/index.d.ts",
-                            "kind": "TypeReference",
-                            "moduleSpecifier": "react",
-                            "name": "MouseEvent",
-                            "position": {
-                              "end": {
-                                "column": 52,
-                                "line": 2375,
-                              },
-                              "start": {
-                                "column": 9,
-                                "line": 2375,
-                              },
-                            },
-                            "text": "MouseEvent<HTMLButtonElement, globalThis.MouseEvent>",
-                            "typeArguments": [
-                              {
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "TypeReference",
-                                "moduleSpecifier": undefined,
-                                "name": "HTMLButtonElement",
-                                "position": {
-                                  "end": {
-                                    "column": 52,
-                                    "line": 2375,
-                                  },
-                                  "start": {
-                                    "column": 9,
-                                    "line": 2375,
-                                  },
-                                },
-                                "text": "HTMLButtonElement",
-                                "typeArguments": [],
-                              },
-                              {
-                                "filePath": "node_modules/@types/react/index.d.ts",
-                                "kind": "TypeReference",
-                                "moduleSpecifier": undefined,
-                                "name": "MouseEvent",
-                                "position": {
-                                  "end": {
-                                    "column": 52,
-                                    "line": 2375,
-                                  },
-                                  "start": {
-                                    "column": 9,
-                                    "line": 2375,
-                                  },
-                                },
-                                "text": "globalThis.MouseEvent",
-                                "typeArguments": [],
-                              },
-                            ],
-                          },
+                      "filePath": "node_modules/@types/react/index.d.ts",
+                      "kind": "TypeReference",
+                      "name": "MouseEventHandler",
+                      "position": {
+                        "end": {
+                          "column": 71,
+                          "line": 2241,
                         },
-                      ],
-                      "returnType": {
-                        "filePath": "node_modules/@types/react/index.d.ts",
-                        "kind": "Void",
-                        "position": {
-                          "end": {
-                            "column": 88,
-                            "line": 2222,
-                          },
-                          "start": {
-                            "column": 84,
-                            "line": 2222,
-                          },
+                        "start": {
+                          "column": 5,
+                          "line": 2241,
                         },
-                        "text": "void",
                       },
                       "text": "MouseEventHandler<HTMLButtonElement>",
-                      "thisType": undefined,
+                      "typeArguments": [
+                        {
+                          "filePath": "node_modules/@types/react/index.d.ts",
+                          "kind": "TypeReference",
+                          "moduleSpecifier": undefined,
+                          "name": "HTMLButtonElement",
+                          "position": {
+                            "end": {
+                              "column": 52,
+                              "line": 2375,
+                            },
+                            "start": {
+                              "column": 9,
+                              "line": 2375,
+                            },
+                          },
+                          "text": "HTMLButtonElement",
+                          "typeArguments": [],
+                        },
+                      ],
                     },
                   },
                 ],
@@ -16008,8 +16746,19 @@ describe('resolveType', () => {
             {
               "extends": [
                 {
+                  "filePath": "node_modules/@types/react/index.d.ts",
                   "kind": "TypeReference",
                   "name": "ButtonHTMLAttributes",
+                  "position": {
+                    "end": {
+                      "column": 6,
+                      "line": 3069,
+                    },
+                    "start": {
+                      "column": 5,
+                      "line": 3052,
+                    },
+                  },
                   "text": "React.ButtonHTMLAttributes<HTMLButtonElement>",
                 },
               ],
@@ -16120,10 +16869,10 @@ describe('resolveType', () => {
               "isOptional": false,
               "isReadonly": false,
               "kind": "MappedType",
-              "text": "{ h1: "h1" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; h2: "h2" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; p: "p" | ComponentType<DetailedHTMLProps<HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>; }",
+              "text": "{ h1: "h1" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; h2: "h2" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLHeadingElement>, HTMLHeadingElement>>; p: "p" | React.ComponentType<React.DetailedHTMLProps<React.HTMLAttributes<HTMLParagraphElement>, HTMLParagraphElement>>; }",
               "type": {
                 "kind": "UnionType",
-                "text": "Tag | ComponentType<ComponentProps<Tag>>",
+                "text": "Tag | React.ComponentType<React.ComponentProps<Tag>>",
                 "types": [
                   {
                     "filePath": "test.ts",
@@ -16158,7 +16907,7 @@ describe('resolveType', () => {
                         "line": 8,
                       },
                     },
-                    "text": "ComponentType<ComponentProps<Tag>>",
+                    "text": "React.ComponentType<React.ComponentProps<Tag>>",
                     "typeArguments": [
                       {
                         "filePath": "test.ts",
@@ -16175,7 +16924,7 @@ describe('resolveType', () => {
                             "line": 8,
                           },
                         },
-                        "text": "ComponentProps<Tag>",
+                        "text": "React.ComponentProps<Tag>",
                         "typeArguments": [
                           {
                             "filePath": "test.ts",
@@ -16302,7 +17051,7 @@ describe('resolveType', () => {
                                       "line": 4,
                                     },
                                   },
-                                  "text": "ReactNode",
+                                  "text": "React.ReactNode",
                                   "typeArguments": [],
                                 },
                               },
@@ -16378,7 +17127,7 @@ describe('resolveType', () => {
                                       "line": 4,
                                     },
                                   },
-                                  "text": "ReactNode",
+                                  "text": "React.ReactNode",
                                   "typeArguments": [],
                                 },
                               },
@@ -18953,11 +19702,11 @@ describe('resolveType', () => {
                       "position": {
                         "end": {
                           "column": 391,
-                          "line": 6,
+                          "line": 5,
                         },
                         "start": {
                           "column": 353,
-                          "line": 6,
+                          "line": 5,
                         },
                       },
                       "text": "Extract<keyof Types, string>",
@@ -19656,7 +20405,7 @@ describe('resolveType', () => {
                     },
                   },
                 ],
-                "text": "{ fontSize: number; fontWeight?: number; } & { as?: As; forwardedAs?: ForwardedAs; }",
+                "text": "{ fontSize: number; fontWeight?: number; } & { as?: As | undefined; forwardedAs?: ForwardedAs | undefined; }",
               },
             },
             "position": {
@@ -21989,24 +22738,45 @@ describe('resolveType', () => {
                   },
                 },
                 "returnType": {
-                  "filePath": "index.ts",
-                  "kind": "TypeReference",
-                  "moduleSpecifier": undefined,
-                  "name": "Date",
-                  "position": {
-                    "end": {
-                      "column": 31,
-                      "line": 2,
+                  "kind": "UnionType",
+                  "text": "Date | undefined",
+                  "types": [
+                    {
+                      "filePath": "index.ts",
+                      "kind": "TypeReference",
+                      "moduleSpecifier": undefined,
+                      "name": "Date",
+                      "position": {
+                        "end": {
+                          "column": 19,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 15,
+                          "line": 2,
+                        },
+                      },
+                      "text": "Date",
+                      "typeArguments": [],
                     },
-                    "start": {
-                      "column": 15,
-                      "line": 2,
+                    {
+                      "filePath": "index.ts",
+                      "kind": "Undefined",
+                      "position": {
+                        "end": {
+                          "column": 31,
+                          "line": 2,
+                        },
+                        "start": {
+                          "column": 22,
+                          "line": 2,
+                        },
+                      },
+                      "text": "undefined",
                     },
-                  },
-                  "text": "Date",
-                  "typeArguments": [],
+                  ],
                 },
-                "text": "() => Date",
+                "text": "() => Date | undefined",
                 "thisType": undefined,
               },
             ],
@@ -22678,8 +23448,8 @@ describe('resolveType', () => {
           name: 'uvNode',
           initializer: null,
           type: expect.objectContaining({
-            kind: 'Any',
-            text: 'any',
+            kind: 'Null',
+            text: 'null',
           }),
         }),
       ])
@@ -22723,8 +23493,8 @@ describe('resolveType', () => {
           name: 'uvNode',
           initializer: null,
           type: expect.objectContaining({
-            kind: 'Any',
-            text: 'any',
+            kind: 'Null',
+            text: 'null',
           }),
         }),
       ])
@@ -22889,7 +23659,7 @@ describe('resolveType', () => {
               },
             },
           ],
-          "text": "{ title?: string; children?: ReactNode | undefined; }",
+          "text": "{ title?: string | undefined; children?: React.ReactNode; }",
         },
         "typeParameters": [],
       }
@@ -23131,7 +23901,7 @@ describe('resolveType', () => {
               },
             },
           ],
-          "text": "{ children?: string; label: string; }",
+          "text": "{ children?: string | undefined; label: string; }",
         },
         "typeParameters": [],
       }
@@ -23269,8 +24039,19 @@ describe('resolveType', () => {
       {
         "extends": [
           {
+            "filePath": "node_modules/@types/react/index.d.ts",
             "kind": "TypeReference",
             "name": "ButtonHTMLAttributes",
+            "position": {
+              "end": {
+                "column": 6,
+                "line": 3069,
+              },
+              "start": {
+                "column": 5,
+                "line": 3052,
+              },
+            },
             "text": "React.ButtonHTMLAttributes<HTMLButtonElement>",
           },
         ],
