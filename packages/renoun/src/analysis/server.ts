@@ -10,9 +10,7 @@ import {
 } from '../utils/create-highlighter.ts'
 import { reportBestEffortError } from '../utils/best-effort.ts'
 import { getDebugLogger } from '../utils/debug.ts'
-import {
-  collapseInvalidationPaths,
-} from '../utils/collapse-invalidation-paths.ts'
+import { collapseInvalidationPaths } from '../utils/collapse-invalidation-paths.ts'
 import {
   isDevelopmentEnvironment,
   isProductionEnvironment,
@@ -241,7 +239,10 @@ async function runWithGitScopedRequestBackpressure<Type>(
 
       if (queueMap.size > GIT_SCOPED_REQUEST_QUEUE_MAX_KEYS) {
         for (const [key, value] of queueMap.entries()) {
-          if (now - value.lastAccessedAt > GIT_SCOPED_REQUEST_QUEUE_IDLE_TTL_MS) {
+          if (
+            now - value.lastAccessedAt >
+            GIT_SCOPED_REQUEST_QUEUE_IDLE_TTL_MS
+          ) {
             queueMap.delete(key)
           }
         }
@@ -270,20 +271,19 @@ type StartupRuntimeMetadataWarmupSample = {
   shouldFormat?: boolean
 }
 
-const STARTUP_RUNTIME_METADATA_WARMUP_SAMPLES: ReadonlyArray<
-  StartupRuntimeMetadataWarmupSample
-> = [
-  {
-    value: `export const answer = 42\n`,
-    language: 'ts',
-    shouldFormat: false,
-  },
-  {
-    value: `export function Example(){return <div />}\n`,
-    language: 'tsx',
-    shouldFormat: false,
-  },
-]
+const STARTUP_RUNTIME_METADATA_WARMUP_SAMPLES: ReadonlyArray<StartupRuntimeMetadataWarmupSample> =
+  [
+    {
+      value: `export const answer = 42\n`,
+      language: 'ts',
+      shouldFormat: false,
+    },
+    {
+      value: `export function Example(){return <div />}\n`,
+      language: 'tsx',
+      shouldFormat: false,
+    },
+  ]
 
 interface ResolveTypeAtLocationRpcRequest {
   filePath: string
@@ -340,10 +340,7 @@ function toFileExportDependencyPaths(
   const dependencyPaths = new Set<string>([filePath])
 
   for (const fileExport of fileExports) {
-    if (
-      typeof fileExport.path === 'string' &&
-      fileExport.path.length > 0
-    ) {
+    if (typeof fileExport.path === 'string' && fileExport.path.length > 0) {
       dependencyPaths.add(fileExport.path)
     }
   }
@@ -382,7 +379,8 @@ function unregisterActiveAnalysisServerRuntime(server: WebSocketServer): void {
     return
   }
 
-  const wasCurrentRuntime = runtimeIndex === activeAnalysisServerRuntimes.length - 1
+  const wasCurrentRuntime =
+    runtimeIndex === activeAnalysisServerRuntimes.length - 1
   activeAnalysisServerRuntimes.splice(runtimeIndex, 1)
 
   if (!wasCurrentRuntime) {
@@ -529,7 +527,8 @@ async function collectMarkdownFilesUnderDirectory(
 }
 
 async function readMarkdownCodeFenceLanguages(
-  markdownFilePaths: readonly string[]
+  markdownFilePaths: readonly string[],
+  shouldCancel?: () => boolean
 ): Promise<string[]> {
   if (markdownFilePaths.length === 0) {
     return []
@@ -543,6 +542,9 @@ async function readMarkdownCodeFenceLanguages(
       concurrency: CODE_FENCE_PREWARM_FILE_READ_CONCURRENCY,
     },
     async (filePath) => {
+      if (shouldCancel?.()) {
+        return
+      }
       const sourceTextPrefix = await getSharedFileTextPrefix(
         filePath,
         CODE_FENCE_PREWARM_FILE_READ_MAX_BYTES
@@ -867,10 +869,7 @@ export async function createServer(options?: CreateServerOptions) {
       clearTimeout(refreshFlushTimer)
     }
 
-    refreshFlushTimer = setTimeout(
-      flushRefreshNotifications,
-      requestedDelayMs
-    )
+    refreshFlushTimer = setTimeout(flushRefreshNotifications, requestedDelayMs)
     refreshFlushDelayMs = requestedDelayMs
     refreshFlushTimer.unref?.()
   }
@@ -979,14 +978,17 @@ export async function createServer(options?: CreateServerOptions) {
     }
 
     if (
-      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions) ||
+      !hasHighlighterInitializationOptions(
+        latestHighlighterInitializationOptions
+      ) ||
       !resolvedHighlighter
     ) {
       addDeferredCodeFencePrewarmPaths(paths)
       return
     }
 
-    const markdownFilePaths = await collectMarkdownFilesForCodeFencePrewarm(paths)
+    const markdownFilePaths =
+      await collectMarkdownFilesForCodeFencePrewarm(paths)
     if (cleanedUp || markdownFilePaths.length === 0) {
       return
     }
@@ -997,7 +999,10 @@ export async function createServer(options?: CreateServerOptions) {
       return
     }
 
-    const languages = await readMarkdownCodeFenceLanguages(markdownFilePaths)
+    const languages = await readMarkdownCodeFenceLanguages(
+      markdownFilePaths,
+      () => cleanedUp
+    )
     if (cleanedUp || languages.length === 0) {
       return
     }
@@ -1107,10 +1112,7 @@ export async function createServer(options?: CreateServerOptions) {
       }
       const isRootScopePath =
         normalizedPath === rootDirectory || rootRelativePath === '.'
-      if (
-        !isRootScopePath &&
-        !isMarkdownCodeFenceSourcePath(normalizedPath)
-      ) {
+      if (!isRootScopePath && !isMarkdownCodeFenceSourcePath(normalizedPath)) {
         continue
       }
 
@@ -1130,7 +1132,9 @@ export async function createServer(options?: CreateServerOptions) {
     }
 
     if (
-      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions) ||
+      !hasHighlighterInitializationOptions(
+        latestHighlighterInitializationOptions
+      ) ||
       !resolvedHighlighter
     ) {
       addDeferredCodeFencePrewarmPaths(
@@ -1167,7 +1171,9 @@ export async function createServer(options?: CreateServerOptions) {
     if (
       cleanedUp ||
       !resolvedHighlighter ||
-      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions)
+      !hasHighlighterInitializationOptions(
+        latestHighlighterInitializationOptions
+      )
     ) {
       return
     }
@@ -1230,12 +1236,16 @@ export async function createServer(options?: CreateServerOptions) {
     }
 
     if (
-      !hasHighlighterInitializationOptions(latestHighlighterInitializationOptions)
+      !hasHighlighterInitializationOptions(
+        latestHighlighterInitializationOptions
+      )
     ) {
       return
     }
 
-    const highlighter = await ensureHighlighter(latestHighlighterInitializationOptions)
+    const highlighter = await ensureHighlighter(
+      latestHighlighterInitializationOptions
+    )
     if (cleanedUp || !highlighter) {
       return
     }
@@ -1245,7 +1255,10 @@ export async function createServer(options?: CreateServerOptions) {
       return
     }
 
-    const discoveredLanguages = await readMarkdownCodeFenceLanguages(markdownFiles)
+    const discoveredLanguages = await readMarkdownCodeFenceLanguages(
+      markdownFiles,
+      () => cleanedUp
+    )
     if (cleanedUp) {
       return
     }
@@ -1255,7 +1268,9 @@ export async function createServer(options?: CreateServerOptions) {
     )
 
     for (const language of discoveredLanguages) {
-      if (warmupLanguageSet.size >= STARTUP_RUNTIME_PREWARM_MAX_LANGUAGE_COUNT) {
+      if (
+        warmupLanguageSet.size >= STARTUP_RUNTIME_PREWARM_MAX_LANGUAGE_COUNT
+      ) {
         break
       }
       warmupLanguageSet.add(language)
@@ -1303,7 +1318,11 @@ export async function createServer(options?: CreateServerOptions) {
   }
 
   const queueStartupRuntimePrewarm = (paths: readonly string[]): void => {
-    if (!isDevelopmentEnvironment() || startupRuntimePrewarmQueued || cleanedUp) {
+    if (
+      !isDevelopmentEnvironment() ||
+      startupRuntimePrewarmQueued ||
+      cleanedUp
+    ) {
       return
     }
 
@@ -1697,16 +1716,14 @@ export async function createServer(options?: CreateServerOptions) {
           if (includeClientRpcDependencies) {
             return toRpcValueWithDependenciesResponse(
               result,
-              [
-                filePath,
-                metadata.filePath,
-                sourcePath,
-              ].filter((dependencyPath): dependencyPath is string => {
-                return (
-                  typeof dependencyPath === 'string' &&
-                  dependencyPath.length > 0
-                )
-              })
+              [filePath, metadata.filePath, sourcePath].filter(
+                (dependencyPath): dependencyPath is string => {
+                  return (
+                    typeof dependencyPath === 'string' &&
+                    dependencyPath.length > 0
+                  )
+                }
+              )
             )
           }
 
@@ -1825,14 +1842,18 @@ export async function createServer(options?: CreateServerOptions) {
             async () => {
               const project = getProgram(analysisOptions)
 
-              getDebugLogger().info('Processing type resolution request', () => ({
-                data: {
-                  filePath: options.filePath,
-                  position: options.position,
-                  kind: SyntaxKind[options.kind],
-                  useInMemoryFileSystem: analysisOptions?.useInMemoryFileSystem,
-                },
-              }))
+              getDebugLogger().info(
+                'Processing type resolution request',
+                () => ({
+                  data: {
+                    filePath: options.filePath,
+                    position: options.position,
+                    kind: SyntaxKind[options.kind],
+                    useInMemoryFileSystem:
+                      analysisOptions?.useInMemoryFileSystem,
+                  },
+                })
+              )
 
               return resolveCachedTypeAtLocationWithDependencies(project, {
                 filePath: options.filePath,
@@ -2000,9 +2021,12 @@ export async function createServer(options?: CreateServerOptions) {
         },
         async () => {
           const project = getProgram(analysisOptions)
-          const result = await getCachedReferenceResolvedTypesArtifact(project, {
-            filePath,
-          })
+          const result = await getCachedReferenceResolvedTypesArtifact(
+            project,
+            {
+              filePath,
+            }
+          )
 
           if (includeClientRpcDependencies) {
             return toRpcValueWithDependenciesResponse(
@@ -2393,9 +2417,7 @@ function closeWatcher(watcher: FSWatcher): void {
   }
 }
 
-function shouldEmitRefreshNotifications(
-  explicitValue?: boolean
-): boolean {
+function shouldEmitRefreshNotifications(explicitValue?: boolean): boolean {
   if (typeof explicitValue === 'boolean') {
     return explicitValue
   }
