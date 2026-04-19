@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "turbo run build --concurrency=1",
+  "buildCommand": "turbo run build --filter=@apps/site...",
   "redirects": [
     {
       "source": "/docs",
