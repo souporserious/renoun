@@ -970,6 +970,10 @@ function analyzeGetFileUsageNode(
     return analyzeGetFileUsageNode(parent, methods, visitedSymbols)
   }
 
+  if (isIgnorableGetFileGuardUsage(node)) {
+    return false
+  }
+
   if (
     Node.isPropertyAccessExpression(parent) &&
     parent.getExpression() === node
@@ -1079,6 +1083,10 @@ function analyzeIdentifierValueUsage(
     return analyzeIdentifierValueUsage(parent, methods, visitedSymbols)
   }
 
+  if (isIgnorableGetFileGuardUsage(identifier)) {
+    return false
+  }
+
   if (
     Node.isPropertyAccessExpression(parent) &&
     parent.getExpression() === identifier
@@ -1122,6 +1130,34 @@ function analyzeIdentifierValueUsage(
   }
 
   return true
+}
+
+function isIgnorableGetFileGuardUsage(expression: Expression): boolean {
+  let guardExpression: Expression = expression
+  const parent = expression.getParent()
+
+  if (
+    Node.isPrefixUnaryExpression(parent) &&
+    parent.getOperand() === expression &&
+    parent.getOperatorToken() === ts.SyntaxKind.ExclamationToken
+  ) {
+    guardExpression = parent
+  }
+
+  const guardParent = guardExpression.getParent()
+
+  return (
+    (Node.isIfStatement(guardParent) &&
+      guardParent.getExpression() === guardExpression) ||
+    (Node.isConditionalExpression(guardParent) &&
+      guardParent.getCondition() === guardExpression) ||
+    (Node.isWhileStatement(guardParent) &&
+      guardParent.getExpression() === guardExpression) ||
+    (Node.isDoStatement(guardParent) &&
+      guardParent.getExpression() === guardExpression) ||
+    (Node.isForStatement(guardParent) &&
+      guardParent.getCondition() === guardExpression)
+  )
 }
 
 function applyGetFileConsumerWarmMethods(

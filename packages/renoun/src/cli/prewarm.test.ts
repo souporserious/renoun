@@ -2847,6 +2847,41 @@ describe('collectRenounPrewarmTargets', () => {
     ])
   })
 
+  test('ignores simple getFile truthiness guards when inferring warm methods', async () => {
+    project.createSourceFile(
+      '/repo/src/guarded-get-file-usage.tsx',
+      `
+        import { Directory } from 'renoun'
+
+        const docs = new Directory('/repo/docs')
+
+        async function Page() {
+          const sourceFile = await docs.getFile('index', 'tsx')
+
+          if (!sourceFile) {
+            return null
+          }
+
+          return sourceFile.getExports()
+        }
+
+        void Page
+      `,
+      { overwrite: true }
+    )
+
+    const targets = await collectRenounPrewarmTargets!(project, analysisOptions)
+
+    expect(targets.fileGetFile).toEqual([
+      {
+        directoryPath: '/repo/docs',
+        path: 'index',
+        extensions: ['tsx'],
+        methods: ['getExports'],
+      },
+    ])
+  })
+
   test('falls back to directory-wide prewarm for dynamic getFile paths with inferred consumers', async () => {
     project.createSourceFile(
       '/repo/src/dynamic-reference.tsx',

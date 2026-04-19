@@ -341,7 +341,7 @@ describe('GitFileSystem', () => {
     }
   })
 
-  it('stores Next app clone caches under the app .renoun/cache directory', () => {
+  it('stores Next app clone caches under the app .next/cache/renoun directory', () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-next-app-'))
     const workspaceRoot = join(tmpDirectory, 'workspace')
     const appRoot = join(workspaceRoot, 'apps', 'site')
@@ -374,7 +374,7 @@ describe('GitFileSystem', () => {
         const store = new GitFileSystem({ repository: '.' })
         try {
           expect(store.cacheDirectory).toBe(
-            resolve(canonicalAppRoot, '.renoun', 'cache', 'git')
+            resolve(canonicalAppRoot, '.next', 'cache', 'renoun', 'git')
           )
         } finally {
           store.close()
@@ -385,7 +385,7 @@ describe('GitFileSystem', () => {
     }
   })
 
-  it('stores remote explicit-ref clone caches under the project .renoun/cache root in Next apps', () => {
+  it('stores remote explicit-ref clone caches under the project .next/cache/renoun root in Next apps', () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-git-next-remote-'))
     const workspaceRoot = join(tmpDirectory, 'workspace')
     const appRoot = join(workspaceRoot, 'apps', 'site')
@@ -421,7 +421,7 @@ describe('GitFileSystem', () => {
         })
         try {
           expect(store.cacheDirectory).toBe(
-            resolve(canonicalAppRoot, '.renoun', 'cache', 'git')
+            resolve(canonicalAppRoot, '.next', 'cache', 'renoun', 'git')
           )
         } finally {
           store.close()

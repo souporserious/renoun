@@ -8775,7 +8775,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('stores Next app sqlite persistence under the app .renoun/cache directory', () => {
+  test('stores Next app sqlite persistence under the app .next/cache/renoun directory', () => {
     const tmpDirectory = mkdtempSync(join(tmpdir(), 'renoun-cache-next-app-'))
     const workspaceRoot = join(tmpDirectory, 'workspace')
     const appRoot = join(workspaceRoot, 'apps', 'site')
@@ -8806,7 +8806,13 @@ export type Metadata = Value`,
       const canonicalAppRoot = realpathSync(appRoot)
       withWorkingDirectory(appRoot, () => {
         expect(getDefaultCacheDatabasePath()).toBe(
-          join(canonicalAppRoot, '.renoun', 'cache', 'fs-cache.sqlite')
+          join(
+            canonicalAppRoot,
+            '.next',
+            'cache',
+            'renoun',
+            'fs-cache.sqlite'
+          )
         )
       })
     } finally {
@@ -8814,7 +8820,7 @@ export type Metadata = Value`,
     }
   })
 
-  test('uses the Next app .renoun/cache directory when projectRoot is passed directly', () => {
+  test('uses the Next app .next/cache/renoun directory when projectRoot is passed directly', () => {
     const tmpDirectory = mkdtempSync(
       join(tmpdir(), 'renoun-cache-next-project-root-')
     )
@@ -8846,7 +8852,13 @@ export type Metadata = Value`,
     try {
       const canonicalAppRoot = realpathSync(appRoot)
       expect(getDefaultCacheDatabasePath(appRoot)).toBe(
-        join(canonicalAppRoot, '.renoun', 'cache', 'fs-cache.sqlite')
+        join(
+          canonicalAppRoot,
+          '.next',
+          'cache',
+          'renoun',
+          'fs-cache.sqlite'
+        )
       )
     } finally {
       rmSync(tmpDirectory, { recursive: true, force: true })
@@ -8861,8 +8873,9 @@ export type Metadata = Value`,
     const appRoot = join(workspaceRoot, 'apps', 'site')
     const cachedRepoRoot = join(
       appRoot,
-      '.renoun',
+      '.next',
       'cache',
+      'renoun',
       'git',
       'repo'
     )
@@ -8903,8 +8916,9 @@ export type Metadata = Value`,
       const canonicalAppRoot = realpathSync(appRoot)
       const expectedDbPath = join(
         canonicalAppRoot,
-        '.renoun',
+        '.next',
         'cache',
+        'renoun',
         'fs-cache.sqlite'
       )
 

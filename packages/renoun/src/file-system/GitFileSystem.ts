@@ -894,7 +894,13 @@ function resolveDefaultGitCacheDirectory(
         resolvePersistentProjectRootDirectory(startDirectory)
 
       if (persistentProjectRoot !== resolve('/')) {
-        return join(persistentProjectRoot, '.renoun', 'cache', 'git')
+        return join(
+          resolveCacheRootDirectory({
+            startDirectory: persistentProjectRoot,
+            fallbackToStartDirectory: true,
+          }),
+          'git'
+        )
       }
     }
 
